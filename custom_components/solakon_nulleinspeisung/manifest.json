@@ -1,0 +1,13 @@
+{
+  "domain": "solakon_nulleinspeisung",
+  "name": "Solakon ONE Nulleinspeisung",
+  "version": "1.0.0",
+  "documentation": "https://github.com/D4nte85/Solakon-One-Nulleinspeisung-Blueprint-homeassistant",
+  "issue_tracker": "https://github.com/D4nte85/Solakon-One-Nulleinspeisung-Blueprint-homeassistant/issues",
+  "codeowners": ["@D4nte85"],
+  "config_flow": true,
+  "iot_class": "local_polling",
+  "requirements": [],
+  "dependencies": ["frontend"],
+  "after_dependencies": ["number", "select", "sensor", "switch", "input_number", "input_boolean"]
+}
