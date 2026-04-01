@@ -1,0 +1,79 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Solakon ONE — Required Entities",
+        "description": "Select the Solakon ONE entities and grid sensor.\n\n[Documentation]({doc_url})",
+        "data": {
+          "grid_power_sensor":             "🔌 Grid Power Sensor (e.g. Shelly 3EM)",
+          "actual_power_sensor":           "⚡ Actual Inverter Output Power",
+          "solar_power_sensor":            "☀️ Solar Power (PV Generation)",
+          "soc_sensor":                    "🔋 Battery State of Charge (SOC)",
+          "remote_timeout_countdown_sensor": "⏱️ Remote Timeout Countdown",
+          "active_power_number":           "⚙️ Output Power Controller",
+          "max_discharge_current_number":  "🔋 Max. Discharge Current",
+          "remote_timeout_set_number":     "⏲️ Mode Reset Timer",
+          "mode_select":                   "🔄 Operating Mode Select"
+        }
+      },
+      "pi": {
+        "title": "Solakon ONE — PI Controller Parameters",
+        "data": {
+          "p_factor":   "🎛️ P-Factor (Proportional Gain)",
+          "i_factor":   "🎛️ I-Factor (Integral Gain)",
+          "tolerance":  "📏 Deadband / Tolerance (W)",
+          "wait_time":  "⏱️ Wait time after output change (s)"
+        }
+      },
+      "soc": {
+        "title": "Solakon ONE — SOC Zones & Offsets",
+        "data": {
+          "soc_fast_limit":          "🔋 Zone 1 Threshold (%)",
+          "soc_conservation_limit":  "🔋 Zone 3 Threshold / Safety Stop (%)",
+          "discharge_current_max":   "🔋 Max Discharge Current Zone 1 (A)",
+          "offset_1":                "⚙️ Zone 1 Static Offset (W)",
+          "offset_1_entity":         "⚙️ Zone 1 Dynamic Offset (optional)",
+          "offset_2":                "⚙️ Zone 2 Static Offset (W)",
+          "offset_2_entity":         "⚙️ Zone 2 Dynamic Offset (optional)",
+          "pv_charge_reserve":       "⚙️ PV Charge Reserve / Night Threshold (W)",
+          "max_active_power_limit":  "🔒 Maximum Output Power — Hard Limit (W)"
+        }
+      },
+      "optional": {
+        "title": "Solakon ONE — Optional Features",
+        "data": {
+          "surplus_export_enabled":     "☀️ Enable Surplus Export (Zone 0)",
+          "soc_export_limit":           "☀️ Surplus SOC Threshold (%)",
+          "surplus_exit_hysteresis":    "☀️ Surplus Exit SOC Hysteresis (%)",
+          "surplus_pv_hysteresis":      "☀️ PV Surplus Hysteresis (W)",
+          "ac_charge_enabled":          "⚡ Enable AC Charging",
+          "soc_ac_charge_limit":        "⚡ AC Charge SOC Target (%)",
+          "ac_charge_power_limit":      "⚡ AC Charge Max Power (W)",
+          "ac_charge_hysteresis":       "⚡ AC Charge Hysteresis (W)",
+          "ac_charge_offset":           "⚡ AC Charge Static Offset (W)",
+          "ac_charge_offset_entity":    "⚡ AC Charge Dynamic Offset (optional)",
+          "ac_charge_p_factor":         "⚡ AC Charge P-Factor",
+          "ac_charge_i_factor":         "⚡ AC Charge I-Factor",
+          "tariff_arbitrage_enabled":   "💹 Enable Tariff Arbitrage",
+          "price_sensor":               "💹 Electricity Price Sensor",
+          "cheap_threshold":            "💹 Cheap Threshold (charge + lock)",
+          "expensive_threshold":        "💹 Expensive Threshold (unlock discharge)",
+          "tariff_soc_charge_target":   "💹 Tariff Charge SOC Target (%)",
+          "tariff_charge_power":        "💹 Tariff Charge Power (W)",
+          "night_shutdown_enabled":     "🌙 Enable Night Shutdown (Zone 2)"
+        }
+      }
+    },
+    "error": {
+      "soc_limits_invalid": "Zone 1 threshold must be greater than Zone 3 threshold!"
+    }
+  },
+  "options": {
+    "step": {
+      "entities":     { "title": "Entities" },
+      "pi_opts":      { "title": "PI Controller" },
+      "soc_opts":     { "title": "SOC Zones & Offsets" },
+      "optional_opts":{ "title": "Optional Features" }
+    }
+  }
+}
