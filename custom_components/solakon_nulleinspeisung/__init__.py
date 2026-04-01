@@ -37,7 +37,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         [StaticPathConfig(PANEL_JS_PATH, str(panel_js), cache_headers=False)]
     )
 
-try:
+    try:
         await panel_custom.async_register_panel(
             hass,
             webcomponent_name="solakon-panel",
