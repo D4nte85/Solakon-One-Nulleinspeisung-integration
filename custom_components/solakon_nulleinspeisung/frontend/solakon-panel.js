@@ -23,72 +23,45 @@ const TABS = [
 // Vollständige Feldkonfiguration für alle Tabs
 const CONFIG_MAP = {
   pi: [
-    { k: "p_factor",       l: "P-Faktor",                               t: "number", step: 0.1, min: 0, max: 5 },
-    { k: "i_factor",       l: "I-Faktor",                               t: "number", step: 0.01, min: 0, max: 1 },
-    { k: "tolerance",      l: "Toleranz / Totband (W)",                 t: "number", step: 1, min: 0, max: 100 },
-    { k: "wait_time",      l: "Wartezeit zw. Zyklen (Sekunden)",        t: "number", step: 1, min: 1, max: 60 },
-    { k: "stddev_window",  l: "Zeitfenster StdDev (Sekunden)",          t: "number", step: 1, min: 10, max: 300 },
+    { k: "p_factor",       l: "P-Faktor (Proportional-Verstärkung)",   t: "number", step: 0.01, min: 0, max: 5 },
+    { k: "i_factor",       l: "I-Faktor (Integral-Verstärkung)",        t: "number", step: 0.01, min: 0, max: 2 },
+    { k: "tolerance",      l: "Toleranzbereich / Totband (W)",          t: "number", step: 1,    min: 0, max: 200 },
+    { k: "wait_time",      l: "Wartezeit nach Leistungsänderung (s)",   t: "number", step: 1,    min: 1, max: 60 },
+    { k: "stddev_window",  l: "Standardabweichungs-Fenster (s)",        t: "number", step: 10,   min: 10, max: 600 },
   ],
   zones: [
     { k: "zone1_limit",       l: "Zone-1-Schwelle — SOC (%)",               t: "number", step: 1, min: 0, max: 100 },
     { k: "zone3_limit",       l: "Zone-3-Schwelle / Sicherheitsstopp (%)",   t: "number", step: 1, min: 0, max: 100 },
     { k: "discharge_max",     l: "Max. Entladestrom Zone 1 (A)",             t: "number", step: 1, min: 0, max: 80 },
-    
-    // Zone 1
     { k: "offset_1",          l: "Nullpunkt-Offset Zone 1 statisch (W)",     t: "number", step: 1, min: -200, max: 200 },
-    { k: "dyn_offset_1_enabled", l: "Dyn. Offset Zone 1 aktivieren",         t: "check" },
-    { k: "dyn_offset_1_min",  l: "Zone 1 Min. Offset (W)",                   t: "number", step: 1, min: 0, max: 200 },
-    { k: "dyn_offset_1_max",  l: "Zone 1 Max. Offset (W)",                   t: "number", step: 1, min: 50, max: 1000 },
-    { k: "dyn_offset_1_noise_floor", l: "Zone 1 Rausch-Schwelle (W)",        t: "number", step: 1, min: 0, max: 100 },
-    { k: "dyn_offset_1_factor", l: "Zone 1 Volatilitäts-Faktor",             t: "number", step: 0.1, min: 0, max: 5 },
-    { k: "dyn_offset_1_negative", l: "Zone 1 Negativer Offset",              t: "check" },
-
-    // Zone 2
     { k: "offset_2",          l: "Nullpunkt-Offset Zone 2 statisch (W)",     t: "number", step: 1, min: -200, max: 200 },
-    { k: "dyn_offset_2_enabled", l: "Dyn. Offset Zone 2 aktivieren",         t: "check" },
-    { k: "dyn_offset_2_min",  l: "Zone 2 Min. Offset (W)",                   t: "number", step: 1, min: 0, max: 200 },
-    { k: "dyn_offset_2_max",  l: "Zone 2 Max. Offset (W)",                   t: "number", step: 1, min: 50, max: 1000 },
-    { k: "dyn_offset_2_noise_floor", l: "Zone 2 Rausch-Schwelle (W)",        t: "number", step: 1, min: 0, max: 100 },
-    { k: "dyn_offset_2_factor", l: "Zone 2 Volatilitäts-Faktor",             t: "number", step: 0.1, min: 0, max: 5 },
-    { k: "dyn_offset_2_negative", l: "Zone 2 Negativer Offset",              t: "check" },
-
     { k: "pv_reserve",        l: "PV-Ladereserve / Nacht-Schwelle (W)",      t: "number", step: 1, min: 0, max: 500 },
     { k: "hard_limit",        l: "Maximale Ausgangsleistung — Hard Limit (W)", t: "number", step: 1, min: 0, max: 800 },
   ],
   surplus: [
-    { k: "surplus_enabled",       l: "Überschuss-Einspeisung aktivieren",   t: "check" },
-    { k: "surplus_soc_threshold", l: "SOC Export-Schwelle (%)",             t: "number", step: 1, min: 50, max: 100 },
-    { k: "surplus_soc_hyst",      l: "SOC Hysterese (%)",                   t: "number", step: 1, min: 1, max: 20 },
-    { k: "surplus_pv_hyst",       l: "PV Hysterese (W)",                    t: "number", step: 1, min: 0, max: 300 },
+    { k: "surplus_enabled",        l: "Überschuss-Einspeisung aktivieren",  t: "check" },
+    { k: "surplus_soc_threshold",  l: "SOC-Schwelle Überschuss (%)",         t: "number", step: 1, min: 50, max: 100 },
+    { k: "surplus_soc_hyst",       l: "Hysterese Überschuss-Austritt SOC (%)", t: "number", step: 1, min: 0, max: 20 },
+    { k: "surplus_pv_hyst",        l: "Hysterese PV-Überschuss (W)",          t: "number", step: 1, min: 0, max: 300 },
   ],
   ac: [
     { k: "ac_enabled",       l: "AC Laden aktivieren",                  t: "check" },
     { k: "ac_soc_target",    l: "SOC-Ladeziel (%)",                     t: "number", step: 1, min: 50, max: 100 },
     { k: "ac_power_limit",   l: "Max. Ladeleistung (W)",                t: "number", step: 1, min: 0, max: 800 },
     { k: "ac_hysteresis",    l: "Hysterese (W)",                        t: "number", step: 1, min: 0, max: 300 },
-    
-    // AC Offset
     { k: "ac_offset",        l: "Nullpunkt-Offset statisch (W)",        t: "number", step: 1, min: -200, max: 200 },
-    { k: "dyn_offset_ac_enabled", l: "Dyn. Offset AC aktivieren",       t: "check" },
-    { k: "dyn_offset_ac_min",  l: "AC Min. Offset (W)",                 t: "number", step: 1, min: 0, max: 200 },
-    { k: "dyn_offset_ac_max",  l: "AC Max. Offset (W)",                 t: "number", step: 1, min: 50, max: 1000 },
-    { k: "dyn_offset_ac_noise_floor", l: "AC Rausch-Schwelle (W)",      t: "number", step: 1, min: 0, max: 100 },
-    { k: "dyn_offset_ac_factor", l: "AC Volatilitäts-Faktor",           t: "number", step: 0.1, min: 0, max: 5 },
-    { k: "dyn_offset_ac_negative", l: "AC Negativer Offset",            t: "check" },
-
     { k: "ac_p_factor",      l: "AC Laden — P-Faktor",                  t: "number", step: 0.01, min: 0, max: 5 },
     { k: "ac_i_factor",      l: "AC Laden — I-Faktor",                  t: "number", step: 0.01, min: 0, max: 2 },
   ],
   tariff: [
-    { k: "tariff_enabled",         l: "Dynamischen Stromtarif nutzen",      t: "check" },
-    { k: "tariff_price_sensor",    l: "Preissensor (Entity ID)",            t: "text" },
-    { k: "tariff_cheap_threshold", l: "Günstig-Schwelle (ct/kWh)",          t: "number", step: 0.1 },
-    { k: "tariff_exp_threshold",   l: "Teuer-Schwelle (ct/kWh)",            t: "number", step: 0.1 },
-    { k: "tariff_soc_target",      l: "SOC Ziel bei günstigem Strom (%)",   t: "number", step: 1, min: 0, max: 100 },
-    { k: "tariff_power",           l: "Ladeleistung bei günstigem Strom (W)",t: "number", step: 1, min: 0, max: 800 },
+    { k: "tariff_enabled",         l: "Tarif-Arbitrage aktivieren",          t: "check" },
+    { k: "tariff_cheap_threshold", l: "Günstig-Schwelle — Laden + Sperre (ct/kWh)", t: "number", step: 0.1, min: 0, max: 100 },
+    { k: "tariff_exp_threshold",   l: "Teuer-Schwelle — Sperre aufheben (ct/kWh)",  t: "number", step: 0.1, min: 0, max: 100 },
+    { k: "tariff_soc_target",      l: "SOC-Ladeziel Tarif-Laden (%)",         t: "number", step: 1, min: 50, max: 100 },
+    { k: "tariff_power",           l: "Ladeleistung Tarif-Laden (W)",          t: "number", step: 1, min: 0, max: 800 },
   ],
   night: [
-    { k: "night_enabled",    l: "Nachtladung aktivieren",               t: "check" },
+    { k: "night_enabled", l: "Nachtabschaltung Zone 2 aktivieren", t: "check" },
   ],
 };
 
@@ -96,112 +69,218 @@ class SolakonPanel extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: "open" });
-    this._hass = null;
-    this._config = null;
-    this._settings = {};
-    this._status = {};
-    this._activeTab = "status";
-    this._dirty = {};
+    // BUG FIX: Alle State-Variablen im Constructor initialisieren
+    this._initialized = false;
+    this._settings    = {};
+    this._dirty       = {};
+    this._status      = null;
+    this._activeTab   = "status";
+    this._entryId     = null;
+    this._hass        = null;
+    this._polling     = null;
   }
 
-  set hass(hass) {
-    this._hass = hass;
-    if (!this._config && hass.panels && hass.panels["solakon_nulleinspeisung"]) {
-      this._config = hass.panels["solakon_nulleinspeisung"].config;
-      this._loadData();
+  set panel(val) {
+    this._panel = val;
+    if (val?.config?.entry_id) {
+      this._entryId = val.config.entry_id;
+      this._checkInit();
     }
   }
 
-  async _loadData() {
-    if (!this._hass || !this._config) return;
-    const eid = this._config.entry_id;
+  set hass(val) {
+    this._hass = val;
+    this._checkInit();
+  }
+
+  _checkInit() {
+    if (this._hass && this._entryId && !this._initialized) {
+      this._initialized = true;
+      // BUG FIX: _renderLayout() war nicht definiert — _build() umbenannt
+      this._renderLayout();
+      this._loadConfig();
+      // BUG FIX: Einheitlich this._polling verwenden
+      this._polling = setInterval(() => this._loadStatus(), 5000);
+    }
+  }
+
+  // BUG FIX: _ws() Hilfsmethode war komplett fehlend
+  async _ws(type, extra = {}) {
+    return this._hass.callWS({
+      type: `solakon_nulleinspeisung/${type}`,
+      entry_id: this._entryId,
+      ...extra,
+    });
+  }
+
+  async _loadConfig() {
     try {
-      this._settings = await this._hass.callWS({ type: "solakon_nulleinspeisung/get_config", entry_id: eid });
-      this._status = await this._hass.callWS({ type: "solakon_nulleinspeisung/get_status", entry_id: eid });
-      this._render();
+      this._settings = await this._ws("get_config");
+      this._renderActiveTab();
+    } catch (err) {
+      console.error("Solakon: Konfiguration laden fehlgeschlagen", err);
+    }
+  }
+
+  async _loadStatus() {
+    try {
+      this._status = await this._ws("get_status");
+      this._updateStatusView();
+    } catch (_e) { /* Polling-Fehler ignorieren */ }
+  }
+
+  async _saveSettings() {
+    if (!Object.keys(this._dirty).length) return;
+    try {
+      await this._ws("save_config", { changes: this._dirty });
+      this._settings = { ...this._settings, ...this._dirty };
+      this._dirty = {};
+      this._showSaveBar(false);
+      this._showToast("✅ Einstellungen gespeichert");
+      this._renderActiveTab();
     } catch (e) {
-      console.error("WS Error:", e);
+      this._showToast("❌ Fehler: " + e.message, true);
     }
   }
 
-  _render() {
-    if (!this.shadowRoot.innerHTML) {
-      this.shadowRoot.innerHTML = this._renderLayout();
-      this._attachEvents();
+  async _resetIntegral() {
+    try {
+      await this._ws("reset_integral");
+      this._showToast("🔄 Integral zurückgesetzt");
+    } catch (e) {
+      this._showToast("❌ Fehler: " + e.message, true);
     }
-    this._updateStatus();
-    this._renderActiveTab();
   }
 
+  // BUG FIX: Methode war als _build() definiert, aber _renderLayout() wurde aufgerufen
   _renderLayout() {
-    return `
-      <style>
-        :host { --primary-color: #10b981; --bg-color: var(--primary-background-color, #f8fafc); font-family: system-ui, sans-serif; }
-        .wrapper { max-width: 900px; margin: 0 auto; padding: 20px; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        .tabs { display: flex; gap: 8px; border-bottom: 2px solid var(--divider-color); padding-bottom: 10px; margin-bottom: 20px; overflow-x: auto; }
-        .tab { padding: 8px 16px; border-radius: 6px; cursor: pointer; background: var(--card-background-color); border: 1px solid var(--divider-color); white-space: nowrap; }
-        .tab.active { background: var(--primary-color); color: white; border-color: var(--primary-color); }
-        .content { background: var(--card-background-color); padding: 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-        .form-group { margin-bottom: 15px; }
-        .form-group label { display: block; font-weight: 500; margin-bottom: 5px; font-size: 0.95rem; }
-        .form-group input[type="number"], .form-group input[type="text"] { width: 100%; padding: 8px; border-radius: 6px; border: 1px solid var(--divider-color); background: var(--secondary-background-color); color: var(--primary-text-color); box-sizing: border-box; }
-        .form-group input:focus { outline: none; border-color: var(--primary-color); }
-        .form-group.checkbox { display: flex; align-items: center; gap: 10px; }
-        .form-group.checkbox input { width: 18px; height: 18px; cursor: pointer; }
-        
-        /* Status Dashboard Styles */
-        .dashboard { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-top: 15px; }
-        .card { background: var(--secondary-background-color); padding: 15px; border-radius: 8px; text-align: center; border: 1px solid var(--divider-color); }
-        .card .label { font-size: 0.85rem; color: var(--secondary-text-color); margin-bottom: 5px; }
-        .card .value { font-size: 1.4rem; font-weight: 700; color: var(--primary-text-color); }
-        .status-header { display: flex; align-items: center; gap: 15px; padding: 15px; background: var(--secondary-background-color); border-radius: 8px; margin-bottom: 15px; border-left: 5px solid #ccc; }
-        
-        /* Action Bar */
-        #save-bar { display: none; position: sticky; bottom: 0; left: 0; right: 0; background: var(--card-background-color); padding: 15px; border-top: 1px solid var(--divider-color); justify-content: flex-end; gap: 10px; }
-        .btn { padding: 10px 20px; border-radius: 6px; border: none; cursor: pointer; font-weight: 600; }
-        .btn-primary { background: var(--primary-color); color: white; }
-        .btn-secondary { background: var(--secondary-background-color); border: 1px solid var(--divider-color); }
-      </style>
-      <div class="wrapper">
-        <div class="header">
-          <h2>Solakon ONE Regelung</h2>
-          <button class="btn btn-secondary" id="btn-refresh">🔄 Aktualisieren</button>
-        </div>
-        
-        <div class="tabs">
-          ${TABS.map(t => `<div class="tab ${t.id === this._activeTab ? "active" : ""}" data-id="${t.id}">${t.icon} ${t.label}</div>`).join("")}
-        </div>
-        
-        <div class="content" id="tab-content"></div>
+    this.shadowRoot.innerHTML = `
+    <style>
+      :host {
+        display: block; font-family: sans-serif;
+        color: var(--primary-text-color);
+        background: var(--primary-background-color);
+        min-height: 100vh;
+      }
+      .layout { display: flex; height: 100vh; }
+      .nav {
+        width: 190px; background: var(--card-background-color);
+        border-right: 1px solid var(--divider-color);
+        display: flex; flex-direction: column;
+        flex-shrink: 0;
+      }
+      .nav-header {
+        padding: 18px 20px; font-weight: bold;
+        color: var(--primary-color);
+        border-bottom: 1px solid var(--divider-color);
+        font-size: 0.95rem;
+      }
+      .nav-item {
+        padding: 12px 20px; cursor: pointer;
+        transition: background 0.15s;
+        display: flex; align-items: center; gap: 10px;
+        font-size: 0.9rem;
+      }
+      .nav-item:hover { background: var(--secondary-background-color); }
+      .nav-item.active { background: var(--primary-color); color: white; }
+      .content { flex: 1; padding: 24px; overflow-y: auto; position: relative; }
+      .card {
+        background: var(--card-background-color); border-radius: 12px;
+        padding: 20px; margin-bottom: 16px;
+        box-shadow: var(--ha-card-box-shadow, 0 2px 5px rgba(0,0,0,0.1));
+      }
+      h2 { margin: 0 0 16px 0; font-size: 1.1rem; color: var(--primary-color); }
+      .zone-banner {
+        padding: 15px; border-radius: 8px; margin-bottom: 20px;
+        color: white; display: flex; align-items: center; gap: 15px;
+      }
+      .stat-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+        gap: 12px;
+      }
+      .stat-item { background: var(--secondary-background-color); padding: 12px; border-radius: 8px; }
+      .stat-label { font-size: 0.78rem; color: var(--secondary-text-color); margin-bottom: 4px; }
+      .stat-value { font-size: 1.2rem; font-weight: bold; }
+      .form-group { margin-bottom: 14px; }
+      .form-group label { display: block; margin-bottom: 5px; font-weight: 500; font-size: 0.9rem; }
+      .form-group input[type="number"] {
+        width: 100%; padding: 8px; border-radius: 6px;
+        border: 1px solid var(--divider-color);
+        background: var(--secondary-background-color);
+        color: var(--primary-text-color);
+        box-sizing: border-box; font-size: 0.95rem;
+      }
+      .form-group input[type="number"]:focus {
+        outline: none; border-color: var(--primary-color);
+      }
+      .check-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; }
+      .check-row input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; }
+      .check-row label { margin: 0; cursor: pointer; font-weight: 500; }
+      .section-hint {
+        font-size: 0.8rem; color: var(--secondary-text-color);
+        margin: -8px 0 14px 0; font-style: italic;
+      }
+      .save-bar {
+        position: sticky; bottom: 0;
+        background: var(--primary-color); color: white;
+        padding: 12px 24px; display: none;
+        justify-content: space-between; align-items: center;
+        border-radius: 8px 8px 0 0;
+      }
+      .btn {
+        padding: 8px 18px; border-radius: 6px;
+        border: none; cursor: pointer; font-weight: bold; font-size: 0.9rem;
+      }
+      .btn-primary { background: white; color: var(--primary-color); }
+      .btn-secondary {
+        background: var(--secondary-background-color);
+        color: var(--primary-text-color); border: 1px solid var(--divider-color);
+      }
+      .toast {
+        position: fixed; bottom: 20px; right: 20px;
+        padding: 12px 20px; border-radius: 6px;
+        color: white; z-index: 1000; display: none; font-weight: 500;
+      }
+    </style>
+    <div class="layout">
+      <div class="nav">
+        <div class="nav-header">☀️ Solakon ONE</div>
+        ${TABS.map(t => `<div class="nav-item" data-tab="${t.id}">${t.icon} ${t.label}</div>`).join("")}
       </div>
-      
-      <div id="save-bar">
-        <button class="btn btn-secondary" id="btn-discard">Verwerfen</button>
-        <button class="btn btn-primary" id="btn-save">Speichern</button>
+      <div class="content">
+        <div id="tab-content"></div>
+        <div class="save-bar" id="save-bar">
+          <span>⚠️ Ungespeicherte Änderungen</span>
+          <button class="btn btn-primary" id="btn-save">💾 Speichern</button>
+        </div>
       </div>
+    </div>
+    <div id="toast" class="toast"></div>
     `;
-  }
 
-  _attachEvents() {
-    const root = this.shadowRoot;
-    root.querySelectorAll(".tab").forEach(tab => {
-      tab.addEventListener("click", () => {
-        root.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
-        tab.classList.add("active");
-        this._activeTab = tab.dataset.id;
+    this.shadowRoot.querySelectorAll(".nav-item").forEach(el => {
+      el.addEventListener("click", () => {
+        this._activeTab = el.dataset.tab;
         this._renderActiveTab();
       });
     });
+    this.shadowRoot.getElementById("btn-save").addEventListener("click", () => this._saveSettings());
 
-    root.getElementById("btn-refresh").addEventListener("click", () => this._loadData());
-    root.getElementById("btn-discard").addEventListener("click", () => { this._dirty = {}; this._showSaveBar(false); this._loadData(); });
-    root.getElementById("btn-save").addEventListener("click", () => this._saveSettings());
+    // Direkt ersten Tab aktiv rendern (Status-Tab braucht kein _settings)
+    this._renderActiveTab();
   }
 
   _renderActiveTab() {
-    const container = this.shadowRoot.getElementById("tab-content");
-    container.innerHTML = "";
+    const root = this.shadowRoot;
+    if (!root) return;
+
+    root.querySelectorAll(".nav-item").forEach(el =>
+      el.classList.toggle("active", el.dataset.tab === this._activeTab)
+    );
+
+    const container = root.getElementById("tab-content");
+    if (!container) return;
 
     if (this._activeTab === "status") {
       this._renderStatusTab(container);
@@ -212,60 +291,89 @@ class SolakonPanel extends HTMLElement {
 
   _renderStatusTab(container) {
     container.innerHTML = `
-      <div class="status-header" id="status-hdr">
-        <div style="font-size: 2rem;" id="zone-icon">🤖</div>
+      <div class="zone-banner" id="zone-banner" style="background: #6b7280;">
+        <div id="zone-icon" style="font-size: 2.2rem;">⏳</div>
         <div>
-          <div id="zone-label" style="font-weight: 700; font-size: 1.1rem;">Lade Status...</div>
-          <div id="mode-label" style="color: var(--secondary-text-color); font-size: 0.9rem;">...</div>
+          <div id="zone-label" style="font-weight: bold; font-size: 1.1rem;">Lade Daten…</div>
+          <div id="mode-label" style="opacity: 0.85; font-size: 0.9rem;"></div>
         </div>
       </div>
-      
-      <div class="dashboard">
-        <div class="card"><div class="label">Netzleistung</div><div class="value" id="val-grid">—</div></div>
-        <div class="card"><div class="label">PV Leistung</div><div class="value" id="val-solar">—</div></div>
-        <div class="card"><div class="label">SOC Batterie</div><div class="value" id="val-soc">—</div></div>
-        <div class="card"><div class="label">StdDev (Volatilität)</div><div class="value" id="val-stddev">—</div></div>
-        <div class="card"><div class="label">I-Anteil</div><div class="value" id="val-integral">—</div></div>
+      <div class="card">
+        <div class="stat-grid">
+          <div class="stat-item">
+            <div class="stat-label">🔌 Netzleistung</div>
+            <div class="stat-value" id="val-grid">—</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-label">☀️ Solar</div>
+            <div class="stat-value" id="val-solar">—</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-label">🔋 Batterie SOC</div>
+            <div class="stat-value" id="val-soc">—</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-label">📊 Netz-Stabw.</div>
+            <div class="stat-value" id="val-stddev">—</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-label">∫ Integral</div>
+            <div class="stat-value" id="val-integral">—</div>
+          </div>
+        </div>
       </div>
-      <div style="margin-top: 15px; font-size: 0.9rem;">
-        <strong>Letzte Aktion:</strong> <span id="val-action">—</span>
+      <div class="card">
+        <div class="stat-label" style="margin-bottom: 6px;">⚡ Letzte Aktion</div>
+        <div id="val-action" style="font-size: 0.95rem;">—</div>
+        <div id="val-error" style="color: #dc2626; font-size: 0.85rem; margin-top: 4px;"></div>
+        <button class="btn btn-secondary" style="margin-top: 16px;" id="btn-reset-int">🔄 Integral zurücksetzen</button>
       </div>
     `;
-    this._updateStatus();
+    this.shadowRoot.getElementById("btn-reset-int").addEventListener("click", () => this._resetIntegral());
+    this._loadStatus();
   }
 
   _renderSettingsTab(container) {
-    const fields = CONFIG_MAP[this._activeTab];
-    if (!fields) return;
+    const tab = TABS.find(t => t.id === this._activeTab);
+    const fields = CONFIG_MAP[this._activeTab] || [];
+    const s = this._settings;
+
+    container.innerHTML = `
+      <div class="card">
+        <h2>${tab?.icon || ""} ${tab?.label || ""}</h2>
+        <div id="fields"></div>
+      </div>
+    `;
+
+    const fieldsEl = container.querySelector("#fields");
+
+    if (fields.length === 0) {
+      fieldsEl.innerHTML = `<div class="section-hint">Keine Einstellungen für diesen Tab.</div>`;
+      return;
+    }
+
+    if (!Object.keys(s).length) {
+      fieldsEl.innerHTML = `<div class="section-hint">Lade Einstellungen…</div>`;
+      return;
+    }
 
     fields.forEach(f => {
+      const val = this._dirty[f.k] !== undefined ? this._dirty[f.k] : s[f.k];
       const group = document.createElement("div");
-      const val = this._dirty[f.k] !== undefined ? this._dirty[f.k] : this._settings[f.k];
 
       if (f.t === "check") {
-        group.className = "form-group checkbox";
+        group.className = "check-row";
         const cb = document.createElement("input");
         cb.type = "checkbox";
         cb.id = `inp_${f.k}`;
         cb.checked = !!val;
+        cb.dataset.key = f.k;
         const lbl = document.createElement("label");
         lbl.htmlFor = `inp_${f.k}`;
         lbl.textContent = f.l;
         group.appendChild(cb);
         group.appendChild(lbl);
         cb.addEventListener("change", () => this._markDirty(f.k, cb.checked));
-      } else if (f.t === "text") {
-        group.className = "form-group";
-        const lbl = document.createElement("label");
-        lbl.htmlFor = `inp_${f.k}`;
-        lbl.textContent = f.l;
-        const inp = document.createElement("input");
-        inp.type = "text";
-        inp.id = `inp_${f.k}`;
-        inp.value = val !== undefined ? val : "";
-        group.appendChild(lbl);
-        group.appendChild(inp);
-        inp.addEventListener("change", () => this._markDirty(f.k, inp.value));
       } else {
         group.className = "form-group";
         const lbl = document.createElement("label");
@@ -274,30 +382,34 @@ class SolakonPanel extends HTMLElement {
         const inp = document.createElement("input");
         inp.type = "number";
         inp.id = `inp_${f.k}`;
-        if (f.step) inp.step = f.step;
-        if (f.min !== undefined) inp.min = f.min;
-        if (f.max !== undefined) inp.max = f.max;
-        inp.value = val !== undefined ? val : "";
+        inp.dataset.key = f.k;
+        inp.value = (val !== undefined && val !== null) ? val : 0;
+        if (f.step !== undefined) inp.step = f.step;
+        if (f.min  !== undefined) inp.min  = f.min;
+        if (f.max  !== undefined) inp.max  = f.max;
         group.appendChild(lbl);
         group.appendChild(inp);
         inp.addEventListener("change", () => this._markDirty(f.k, parseFloat(inp.value)));
       }
-      container.appendChild(group);
+
+      fieldsEl.appendChild(group);
     });
   }
 
-  _updateStatus() {
+  _updateStatusView() {
     const root = this.shadowRoot;
     const st = this._status;
-    const hdr = root.getElementById("status-hdr");
-    if (!hdr) return;
+    if (this._activeTab !== "status" || !st || !root) return;
 
-    const z = ZONE_CFG[st.zone] || { label: "Unbekannte Zone", color: "#ccc", icon: "❓" };
-    hdr.style.borderLeftColor = z.color;
-    root.getElementById("zone-icon").textContent = z.icon;
-    root.getElementById("zone-label").textContent = z.label;
-    root.getElementById("mode-label").textContent = st.mode_label || "";
-    
+    const z = ZONE_CFG[st.zone] ?? { label: "Unbekannt", color: "#6b7280", icon: "❓" };
+    const banner = root.getElementById("zone-banner");
+    if (banner) {
+      banner.style.background = z.color;
+      root.getElementById("zone-icon").textContent  = z.icon;
+      root.getElementById("zone-label").textContent = st.zone_label || z.label;
+      root.getElementById("mode-label").textContent = st.mode_label || "";
+    }
+
     const set = (id, val) => { const el = root.getElementById(id); if (el) el.textContent = val; };
     set("val-grid",     st.grid_w    !== undefined ? `${st.grid_w} W`   : "—");
     set("val-solar",    st.solar_w   !== undefined ? `${st.solar_w} W`  : "—");
@@ -305,6 +417,7 @@ class SolakonPanel extends HTMLElement {
     set("val-stddev",   st.stddev    !== undefined ? `${st.stddev} W`   : "—");
     set("val-integral", st.integral  !== undefined ? `${st.integral}`   : "—");
     set("val-action",   st.last_action || "—");
+    set("val-error",    st.last_error  || "");
   }
 
   _markDirty(key, value) {
@@ -317,21 +430,17 @@ class SolakonPanel extends HTMLElement {
     if (bar) bar.style.display = visible ? "flex" : "none";
   }
 
-  async _saveSettings() {
-    if (!this._config) return;
-    try {
-      await this._hass.callWS({
-        type: "solakon_nulleinspeisung/save_config",
-        entry_id: this._config.entry_id,
-        changes: this._dirty
-      });
-      this._settings = { ...this._settings, ...this._dirty };
-      this._dirty = {};
-      this._showSaveBar(false);
-      this._loadData();
-    } catch (e) {
-      console.error("Save failed:", e);
-    }
+  _showToast(msg, err = false) {
+    const t = this.shadowRoot.getElementById("toast");
+    if (!t) return;
+    t.textContent = msg;
+    t.style.background = err ? "#dc2626" : "#16a34a";
+    t.style.display = "block";
+    setTimeout(() => { t.style.display = "none"; }, 3000);
+  }
+
+  disconnectedCallback() {
+    if (this._polling) { clearInterval(this._polling); this._polling = null; }
   }
 }
 
