@@ -24,16 +24,10 @@ class SolakonPanel extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: "open" });
-    this._hass      = null;
-    this._entryId   = null;
-    this._settings  = {};
-    this._status    = {};
-    this._dirty     = {};
-    this._activeTab = "status";
     this._initialized = false;
   }
 
-  // Home Assistant setzt diese Eigenschaft beim Laden des Panels
+  // WICHTIG: Home Assistant ruft dies auf, wenn das Panel geladen wird
   set panel(val) {
     this._panel = val;
     if (val && val.config && val.config.entry_id) {
@@ -42,45 +36,32 @@ class SolakonPanel extends HTMLElement {
     }
   }
 
-  set hass(hass) {
-    this._hass = hass;
+  set hass(val) {
+    this._hass = val;
     this._checkInit();
   }
 
   _checkInit() {
+    // Starte erst, wenn BEIDE (hass und entryId) vorhanden sind
     if (this._hass && this._entryId && !this._initialized) {
       this._initialized = true;
-      this._build();
+      this._renderLayout();
       this._loadConfig();
-      this._startPolling();
+      // Polling für Status alle 5 Sek
+      this._statusInterval = setInterval(() => this._loadStatus(), 5000);
     }
-  }
-
-  connectedCallback() {
-    if (this._initialized) this._startPolling();
-  }
-
-  disconnectedCallback() {
-    this._stopPolling();
-  }
-
-  async _ws(type, extra = {}) {
-    if (!this._hass || !this._entryId) throw new Error("Not initialized");
-    return this._hass.callWS({
-      type: type,
-      entry_id: this._entryId,
-      ...extra
-    });
   }
 
   async _loadConfig() {
     try {
-      const res = await this._ws("solakon_nulleinspeisung/get_config");
-      this._settings = res || {};
-      this._dirty = {};
+      const config = await this._hass.callWS({
+        type: "solakon_nulleinspeisung/get_config",
+        entry_id: this._entryId
+      });
+      this._settings = config;
       this._renderActiveTab();
-    } catch (e) {
-      console.error("Solakon: load config failed", e);
+    } catch (err) {
+      console.error("Solakon: load config failed", err);
     }
   }
 
