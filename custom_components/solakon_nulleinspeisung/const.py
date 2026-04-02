@@ -72,6 +72,10 @@ S_TARIFF_POWER = "tariff_power"
 
 S_NIGHT_ENABLED = "night_enabled"
 
+# -- Self-Adjusting Wait -------------------------------------------------------
+S_SELF_ADJUST = "self_adjust_enabled"
+S_SELF_ADJUST_TOL = "self_adjust_tolerance"
+
 # -- Dynamic Offset Settings (pro Zone) ---------------------------------------
 S_DYN_OFFSET_ENABLED = "dyn_offset_enabled"
 
