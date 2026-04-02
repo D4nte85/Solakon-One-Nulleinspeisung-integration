@@ -536,7 +536,7 @@ class SolakonCoordinator:
             grid_error = grid - target_offset
             grid_error_abs = abs(grid_error)
 
-            if grid_error_abs > tolerance and not at_max_limit and not at_min_limit:
+            if grid_error_abs > tolerance and not (at_max_limit and grid__error > 0) and not (at_min_limit and grid_error < 0 ):
                 new_pw = self._pi_calculate(
                     grid, current_power, target_offset, dynamic_max,
                     tolerance, p_factor, i_factor, ac_charge_mode=False,
