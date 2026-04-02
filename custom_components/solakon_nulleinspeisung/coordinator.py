@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
+from collections import deque
 from typing import Any, Callable
 
 from homeassistant.core import HomeAssistant, Event, callback
@@ -16,7 +18,7 @@ from .const import (
     CONF_DISCHARGE_CURRENT, CONF_TIMEOUT_SET, CONF_MODE_SELECT,
     MODE_DISABLED, MODE_DISCHARGE, MODE_AC_CHARGE,
     S_REGULATION_ENABLED,
-    S_P_FACTOR, S_I_FACTOR, S_TOLERANCE, S_WAIT_TIME,
+    S_P_FACTOR, S_I_FACTOR, S_TOLERANCE, S_WAIT_TIME, S_STDDEV_WINDOW,
     S_ZONE1_LIMIT, S_ZONE3_LIMIT, S_DISCHARGE_MAX, S_HARD_LIMIT,
     S_OFFSET_1, S_OFFSET_2, S_PV_RESERVE,
     S_SURPLUS_ENABLED, S_SURPLUS_SOC_THRESHOLD, S_SURPLUS_SOC_HYST, S_SURPLUS_PV_HYST,
@@ -25,6 +27,10 @@ from .const import (
     S_TARIFF_ENABLED, S_TARIFF_PRICE_SENSOR, S_TARIFF_CHEAP_THRESHOLD,
     S_TARIFF_EXP_THRESHOLD, S_TARIFF_SOC_TARGET, S_TARIFF_POWER,
     S_NIGHT_ENABLED,
+    S_DYN_OFFSET_ENABLED,
+    S_DYN_Z1_MIN, S_DYN_Z1_MAX, S_DYN_Z1_NOISE, S_DYN_Z1_FACTOR, S_DYN_Z1_NEGATIVE,
+    S_DYN_Z2_MIN, S_DYN_Z2_MAX, S_DYN_Z2_NOISE, S_DYN_Z2_FACTOR, S_DYN_Z2_NEGATIVE,
+    S_DYN_AC_MIN, S_DYN_AC_MAX, S_DYN_AC_NOISE, S_DYN_AC_FACTOR, S_DYN_AC_NEGATIVE,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -53,10 +59,20 @@ class SolakonCoordinator:
         self.ac_charge_active: bool = False
         self.tariff_charge_active: bool = False
 
+        # StdDev-Ringpuffer für Netz-Standardabweichung
+        self._grid_samples: deque[tuple[float, float]] = deque()  # (timestamp, value)
+        self.grid_stddev: float = 0.0
+
+        # Dynamischer Offset (berechnete Werte)
+        self.dyn_offset_z1: float = 0.0
+        self.dyn_offset_z2: float = 0.0
+        self.dyn_offset_ac: float = 0.0
+
         # Interne Mechanik
         self._lock = asyncio.Lock()
         self._listeners: list[Callable[[], None]] = []
         self._unsub_trackers: list[Callable] = []
+        self._tariff_unsub: Callable | None = None
 
     # ── Setup / Teardown ─────────────────────────────────────────────────────
 
@@ -88,20 +104,50 @@ class SolakonCoordinator:
             )
             self._unsub_trackers.append(unsub)
 
+        # Tarif-Sensor dynamisch tracken
+        self._update_tariff_tracker()
+
     async def async_shutdown(self) -> None:
         """Listener abräumen, Integral speichern."""
         for unsub in self._unsub_trackers:
             unsub()
         self._unsub_trackers.clear()
+        if self._tariff_unsub:
+            self._tariff_unsub()
+            self._tariff_unsub = None
         await self._save_integral()
 
     # ── Settings-Management ──────────────────────────────────────────────────
 
     async def async_update_settings(self, changes: dict[str, Any]) -> None:
+        old_tariff = self.settings.get(S_TARIFF_PRICE_SENSOR, "")
+        old_tariff_enabled = self.settings.get(S_TARIFF_ENABLED, False)
+
         self.settings.update(changes)
         await self._store.async_save({**self.settings, "integral": self.integral})
         _LOGGER.info("Solakon: Einstellungen gespeichert")
+
+        # Tarif-Tracker aktualisieren wenn sich Sensor oder Aktivierung ändert
+        new_tariff = self.settings.get(S_TARIFF_PRICE_SENSOR, "")
+        new_tariff_enabled = self.settings.get(S_TARIFF_ENABLED, False)
+        if old_tariff != new_tariff or old_tariff_enabled != new_tariff_enabled:
+            self._update_tariff_tracker()
+
         self.notify_listeners()
+
+    def _update_tariff_tracker(self) -> None:
+        """Tarif-Sensor-Listener dynamisch (de-)registrieren."""
+        if self._tariff_unsub:
+            self._tariff_unsub()
+            self._tariff_unsub = None
+
+        tariff_enabled = self.settings.get(S_TARIFF_ENABLED, False)
+        tariff_sensor = self.settings.get(S_TARIFF_PRICE_SENSOR, "")
+
+        if tariff_enabled and tariff_sensor:
+            self._tariff_unsub = async_track_state_change_event(
+                self.hass, [tariff_sensor], self._on_state_change
+            )
 
     async def _save_integral(self) -> None:
         await self._store.async_save({**self.settings, "integral": self.integral})
@@ -123,6 +169,66 @@ class SolakonCoordinator:
         self.integral = 0.0
         self.last_action = "Integral manuell zurückgesetzt"
         self.notify_listeners()
+
+    # ── StdDev-Berechnung (Ringpuffer) ───────────────────────────────────────
+
+    def _update_stddev(self, grid_value: float) -> None:
+        """Neuen Grid-Messwert in Ringpuffer aufnehmen und StdDev berechnen."""
+        now = time.monotonic()
+        window = int(self.settings.get(S_STDDEV_WINDOW, 60))
+        cutoff = now - window
+
+        self._grid_samples.append((now, grid_value))
+
+        # Alte Samples entfernen
+        while self._grid_samples and self._grid_samples[0][0] < cutoff:
+            self._grid_samples.popleft()
+
+        # StdDev berechnen (mind. 2 Samples)
+        n = len(self._grid_samples)
+        if n < 2:
+            self.grid_stddev = 0.0
+            return
+
+        values = [s[1] for s in self._grid_samples]
+        mean = sum(values) / n
+        variance = sum((v - mean) ** 2 for v in values) / n
+        self.grid_stddev = round(variance ** 0.5, 1)
+
+    # ── Dynamic Offset-Berechnung ────────────────────────────────────────────
+
+    def _calc_dynamic_offset(
+        self, stddev: float, min_off: int, max_off: int,
+        noise: float, factor: float, negative: bool,
+    ) -> float:
+        """Offset-Formel identisch zum Dynamic Offset Blueprint."""
+        if stddev < 0:
+            result = min_off
+        else:
+            buf = max(0.0, (stddev - noise) * factor)
+            result = min(max(min_off, round(min_off + buf)), max_off)
+        return float(result * (-1 if negative else 1))
+
+    def _update_dynamic_offsets(self) -> None:
+        """Dynamische Offsets für alle drei Zonen berechnen."""
+        s = self.settings
+        sd = self.grid_stddev
+
+        self.dyn_offset_z1 = self._calc_dynamic_offset(
+            sd, int(s[S_DYN_Z1_MIN]), int(s[S_DYN_Z1_MAX]),
+            float(s[S_DYN_Z1_NOISE]), float(s[S_DYN_Z1_FACTOR]),
+            bool(s[S_DYN_Z1_NEGATIVE]),
+        )
+        self.dyn_offset_z2 = self._calc_dynamic_offset(
+            sd, int(s[S_DYN_Z2_MIN]), int(s[S_DYN_Z2_MAX]),
+            float(s[S_DYN_Z2_NOISE]), float(s[S_DYN_Z2_FACTOR]),
+            bool(s[S_DYN_Z2_NEGATIVE]),
+        )
+        self.dyn_offset_ac = self._calc_dynamic_offset(
+            sd, int(s[S_DYN_AC_MIN]), int(s[S_DYN_AC_MAX]),
+            float(s[S_DYN_AC_NOISE]), float(s[S_DYN_AC_FACTOR]),
+            bool(s[S_DYN_AC_NEGATIVE]),
+        )
 
     # ── State-Helpers ────────────────────────────────────────────────────────
 
@@ -208,6 +314,11 @@ class SolakonCoordinator:
         mode = self._str(cfg[CONF_MODE_SELECT])
         timer_val = self._flt(cfg[CONF_TIMEOUT_COUNTDOWN])
 
+        # ── 1b. StdDev aktualisieren + dynamische Offsets berechnen ──────────
+        self._update_stddev(grid)
+        if bool(s.get(S_DYN_OFFSET_ENABLED, False)):
+            self._update_dynamic_offsets()
+
         # ── 2. Settings auslesen ─────────────────────────────────────────────
         zone1_limit = int(s[S_ZONE1_LIMIT])
         zone3_limit = int(s[S_ZONE3_LIMIT])
@@ -216,10 +327,13 @@ class SolakonCoordinator:
         wait_time = int(s[S_WAIT_TIME])
         p_factor = float(s[S_P_FACTOR])
         i_factor = float(s[S_I_FACTOR])
-        offset_1 = float(s[S_OFFSET_1])
-        offset_2 = float(s[S_OFFSET_2])
         pv_reserve = int(s[S_PV_RESERVE])
         discharge_max = int(s[S_DISCHARGE_MAX])
+
+        # Offsets: dynamisch (wenn aktiv) oder statisch
+        dyn_active = bool(s.get(S_DYN_OFFSET_ENABLED, False))
+        offset_1 = self.dyn_offset_z1 if dyn_active else float(s[S_OFFSET_1])
+        offset_2 = self.dyn_offset_z2 if dyn_active else float(s[S_OFFSET_2])
 
         surplus_enabled = bool(s[S_SURPLUS_ENABLED])
         surplus_threshold = int(s[S_SURPLUS_SOC_THRESHOLD])
@@ -230,7 +344,8 @@ class SolakonCoordinator:
         ac_soc_target = int(s[S_AC_SOC_TARGET])
         ac_power_limit = int(s[S_AC_POWER_LIMIT])
         ac_hysteresis = int(s[S_AC_HYSTERESIS])
-        ac_offset = float(s[S_AC_OFFSET])
+        ac_offset_raw = float(s[S_AC_OFFSET])
+        ac_offset = self.dyn_offset_ac if dyn_active else ac_offset_raw
         ac_p = float(s[S_AC_P_FACTOR])
         ac_i = float(s[S_AC_I_FACTOR])
 
@@ -262,12 +377,7 @@ class SolakonCoordinator:
         self.last_error = ""
 
         # ── 4. Abgeleitete Variablen ─────────────────────────────────────────
-        dynamic_max = hard_limit if self.cycle_active else max(0, solar - pv_reserve)
         target_offset = offset_1 if self.cycle_active else offset_2
-        grid_error = grid - target_offset
-        grid_error_abs = abs(grid_error)
-        at_max_limit = current_power >= hard_limit
-        at_min_limit = current_power <= 0
 
         # Surplus-Berechnung
         surplus_entry = False
@@ -304,8 +414,8 @@ class SolakonCoordinator:
             ac_enabled=ac_enabled, ac_soc_target=ac_soc_target,
             ac_hysteresis=ac_hysteresis, ac_offset=ac_offset,
             tariff_enabled=tariff_enabled, tariff_price=tariff_price,
-            tariff_cheap=tariff_cheap, tariff_soc=tariff_soc,
-            tariff_power=tariff_power,
+            tariff_cheap=tariff_cheap, tariff_exp=tariff_exp,
+            tariff_soc=tariff_soc, tariff_power=tariff_power,
             is_night=is_night, pv_reserve=pv_reserve,
         )
 
@@ -325,26 +435,44 @@ class SolakonCoordinator:
 
         target_offset = offset_1 if self.cycle_active else offset_2
 
+        # FIX #6: at_max/at_min mit frischen Werten neu berechnen
+        at_max_limit = current_power >= hard_limit
+        at_min_limit = current_power <= 0
+
         # ── 7. PI-Gate + Berechnung ──────────────────────────────────────────
         if mode not in (MODE_DISCHARGE, MODE_AC_CHARGE):
-            # Kein aktiver Modus → kein PI
             self._update_zone_display(soc, zone1_limit, zone3_limit, mode)
             self.notify_listeners()
             return
 
+        # FIX #3: Surplus-spezifischer Entladestrom (2A Stabilitätspuffer)
+        if self.surplus_active:
+            await self._set_discharge(2)
+        elif self.cycle_active and mode != MODE_AC_CHARGE:
+            await self._set_discharge(discharge_max)
+        elif not self.ac_charge_active and not self.tariff_charge_active:
+            await self._set_discharge(0)
+
+        # ── 9. Timeout-Reset ─────────────────────────────────────────────────
+        if timer_val < 120 and self._entity_ok(cfg[CONF_TIMEOUT_COUNTDOWN]):
+            await self._set_number(cfg[CONF_TIMEOUT_SET], 10)
+            await asyncio.sleep(1)
+            await self._set_number(cfg[CONF_TIMEOUT_SET], 3599)
+
+        # ── PI-Pfade ─────────────────────────────────────────────────────────
         if self.surplus_active:
             # Zone 0 — Surplus: Hard Limit, Integral einfrieren
             await self._set_output(hard_limit)
             self.mode_label = "Überschuss-Einspeisung"
             self.last_action = f"Zone 0: Output → {hard_limit} W"
+            await asyncio.sleep(wait_time)
 
         elif self.ac_charge_active:
             # AC Laden — invertierter PI, keine at_max/at_min Guards
-            ac_target = ac_offset
-            ac_grid_err = grid - ac_target
+            ac_grid_err = grid - ac_offset
             if abs(ac_grid_err) > tolerance:
                 new_pw = self._pi_calculate(
-                    grid, current_power, ac_target, ac_power_limit,
+                    grid, current_power, ac_offset, ac_power_limit,
                     tolerance, ac_p, ac_i, ac_charge_mode=True,
                 )
                 await self._set_output(new_pw)
@@ -352,7 +480,7 @@ class SolakonCoordinator:
             await asyncio.sleep(wait_time)
 
         elif self.tariff_charge_active:
-            # Tarif-Laden — direktes Setzen
+            # Tarif-Laden — direktes Setzen (kein PI, feste Leistung)
             await self._set_output(tariff_power)
             self.last_action = f"Tarif-Laden: {tariff_power} W"
 
@@ -374,18 +502,6 @@ class SolakonCoordinator:
                 if abs(self.integral) > 10:
                     self.integral *= 0.95
                     self.last_action = "Integral-Decay (5%)"
-
-        # ── 8. Entladestrom-Management ───────────────────────────────────────
-        if self.cycle_active:
-            await self._set_discharge(discharge_max)
-        elif not self.ac_charge_active and not self.tariff_charge_active:
-            await self._set_discharge(0)
-
-        # ── 9. Timeout-Reset ─────────────────────────────────────────────────
-        if timer_val < 120 and self._entity_ok(cfg[CONF_TIMEOUT_COUNTDOWN]):
-            await self._set_number(cfg[CONF_TIMEOUT_SET], 10)
-            await asyncio.sleep(1)
-            await self._set_number(cfg[CONF_TIMEOUT_SET], 3599)
 
         # ── 10. Integral persistieren + Display aktualisieren ────────────────
         await self._save_integral()
@@ -417,13 +533,19 @@ class SolakonCoordinator:
         # ── Fall 0B: Surplus Exit ────────────────────────────────────────────
         if v["surplus_enabled"] and self.surplus_active and not v["new_surplus"]:
             self.surplus_active = False
+            self.integral = 0.0  # FIX #4: Integral-Reset bei Surplus-Ende
             if self.cycle_active:
                 await self._set_discharge(discharge_max)
             self.last_action = "Zone 0: Surplus beendet"
             return "0B"
 
         # ── Fall A: Zone 1 Start ─────────────────────────────────────────────
-        if soc > zone1 and not self.cycle_active:
+        # FIX #1: ac_charge_active Guard
+        if (
+            not self.ac_charge_active
+            and soc > zone1
+            and not self.cycle_active
+        ):
             self.integral = 0.0
             self.cycle_active = True
             self.surplus_active = False
@@ -435,7 +557,12 @@ class SolakonCoordinator:
             return "A"
 
         # ── Fall B: Zone 3 Stop (Zyklus on) ──────────────────────────────────
-        if soc < zone3 and self.cycle_active:
+        # FIX #1: ac_charge_active Guard
+        if (
+            not self.ac_charge_active
+            and soc < zone3
+            and self.cycle_active
+        ):
             self.integral = 0.0
             self.cycle_active = False
             self.surplus_active = False
@@ -448,7 +575,13 @@ class SolakonCoordinator:
             return "B"
 
         # ── Fall C: Zone 3 Absicherung ───────────────────────────────────────
-        if soc < zone3 and not self.cycle_active and mode != MODE_DISABLED:
+        # FIX #1: ac_charge_active Guard
+        if (
+            not self.ac_charge_active
+            and soc < zone3
+            and not self.cycle_active
+            and mode != MODE_DISABLED
+        ):
             self.surplus_active = False
             self.ac_charge_active = False
             self.tariff_charge_active = False
@@ -480,6 +613,7 @@ class SolakonCoordinator:
             and mode != MODE_AC_CHARGE
         ):
             self.tariff_charge_active = True
+            self.cycle_active = True  # Zyklus aktivieren damit Recovery greift
             await self._timer_toggle()
             await self._set_output(0)
             await self._set_mode(MODE_AC_CHARGE)
@@ -505,6 +639,24 @@ class SolakonCoordinator:
                 await self._set_mode(MODE_DISABLED)
             self.last_action = "Fall HT: Tarif-Laden beendet"
             return "HT"
+
+        # ── FIX #7: Mittlere Tarifstufe — Discharge-Lock ────────────────────
+        # Bei nicht-teurem Tarif: Entladung sperren (Modus → Disabled, Output 0)
+        # Nur wenn Tarif aktiv, Preis < teuer-Schwelle, nicht im Ladebetrieb
+        if (
+            v["tariff_enabled"]
+            and v["tariff_price"] >= v["tariff_cheap"]
+            and v["tariff_price"] < v["tariff_exp"]
+            and not self.tariff_charge_active
+            and not self.ac_charge_active
+            and mode == MODE_DISCHARGE
+            and not self.cycle_active  # Nur Zone 2, Zone 1 läuft weiter
+        ):
+            self.integral = 0.0
+            await self._set_output(0)
+            await self._set_mode(MODE_DISABLED)
+            self.last_action = f"Tarif: Discharge-Lock (Preis {v['tariff_price']:.1f})"
+            return "TM"
 
         # ── Fall G: AC Laden Start ───────────────────────────────────────────
         if (
@@ -541,7 +693,7 @@ class SolakonCoordinator:
             self.last_action = "Fall H: AC Laden Ende"
             return "H"
 
-        # ── Fall I: AC Safety ────────────────────────────────────────────────
+        # ── Fall I: Safety — Modus '3' ohne aktive Lade-Session ──────────────
         if (
             mode == MODE_AC_CHARGE
             and not self.ac_charge_active
@@ -555,12 +707,14 @@ class SolakonCoordinator:
             else:
                 await self._set_output(0)
                 await self._set_mode(MODE_DISABLED)
-            self.last_action = "Fall I: AC Safety"
+            self.last_action = "Fall I: Safety-Korrektur (Modus 3 ohne Session)"
             return "I"
 
         # ── Fall E: Zone 2 Start ─────────────────────────────────────────────
+        # FIX #1: ac_charge_active Guard
         if (
-            zone3 < soc <= zone1
+            not self.ac_charge_active
+            and zone3 < soc <= zone1
             and not self.cycle_active
             and mode == MODE_DISABLED
             and not v["is_night"]
@@ -568,11 +722,17 @@ class SolakonCoordinator:
             self.integral = 0.0
             await self._timer_toggle()
             await self._set_mode(MODE_DISCHARGE)
-            self.last_action = f"Fall E: Zone 2 Start (SOC {soc:.0f}%)"
+            self.last_action = "Fall E: Zone 2 Start"
             return "E"
 
         # ── Fall F: Nachtabschaltung ─────────────────────────────────────────
-        if v["is_night"] and mode != MODE_DISABLED:
+        # FIX #1: ac_charge_active Guard
+        if (
+            not self.ac_charge_active
+            and v["is_night"]
+            and not self.cycle_active
+            and mode != MODE_DISABLED
+        ):
             self.integral = 0.0
             await self._set_output(0)
             await self._set_mode(MODE_DISABLED)
@@ -581,7 +741,7 @@ class SolakonCoordinator:
 
         return None
 
-    # ── PI-Berechnung (identisch zum PI-Script-Blueprint) ────────────────────
+    # ── PI-Berechnung ────────────────────────────────────────────────────────
 
     def _pi_calculate(
         self,
@@ -594,7 +754,7 @@ class SolakonCoordinator:
         i_factor: float,
         ac_charge_mode: bool = False,
     ) -> float:
-        """PI-Regler-Berechnung — gibt die neue Ausgangsleistung zurück."""
+        """PI-Regler-Berechnung — identisch zum Blueprint PI-Script."""
         if ac_charge_mode:
             raw_error = target_offset - grid_power  # invertiert für AC Laden
         else:
