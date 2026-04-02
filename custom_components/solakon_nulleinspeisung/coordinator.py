@@ -1,0 +1,644 @@
+"""Coordinator — vollständige Nulleinspeisung-Regellogik mit Schreibguard."""
+from __future__ import annotations
+
+import asyncio
+import logging
+from typing import Any, Callable
+
+from homeassistant.core import HomeAssistant, Event, callback
+from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.helpers.storage import Store
+
+from .const import (
+    DOMAIN, STORAGE_VERSION, SETTINGS_DEFAULTS,
+    CONF_GRID_SENSOR, CONF_ACTUAL_SENSOR, CONF_SOLAR_SENSOR,
+    CONF_SOC_SENSOR, CONF_TIMEOUT_COUNTDOWN, CONF_ACTIVE_POWER,
+    CONF_DISCHARGE_CURRENT, CONF_TIMEOUT_SET, CONF_MODE_SELECT,
+    MODE_DISABLED, MODE_DISCHARGE, MODE_AC_CHARGE,
+    S_REGULATION_ENABLED,
+    S_P_FACTOR, S_I_FACTOR, S_TOLERANCE, S_WAIT_TIME,
+    S_ZONE1_LIMIT, S_ZONE3_LIMIT, S_DISCHARGE_MAX, S_HARD_LIMIT,
+    S_OFFSET_1, S_OFFSET_2, S_PV_RESERVE,
+    S_SURPLUS_ENABLED, S_SURPLUS_SOC_THRESHOLD, S_SURPLUS_SOC_HYST, S_SURPLUS_PV_HYST,
+    S_AC_ENABLED, S_AC_SOC_TARGET, S_AC_POWER_LIMIT, S_AC_HYSTERESIS,
+    S_AC_OFFSET, S_AC_P_FACTOR, S_AC_I_FACTOR,
+    S_TARIFF_ENABLED, S_TARIFF_PRICE_SENSOR, S_TARIFF_CHEAP_THRESHOLD,
+    S_TARIFF_EXP_THRESHOLD, S_TARIFF_SOC_TARGET, S_TARIFF_POWER,
+    S_NIGHT_ENABLED,
+)
+
+_LOGGER = logging.getLogger(__name__)
+
+
+class SolakonCoordinator:
+    """Zentrale Logik-Klasse — PI-Regler, SOC-Zonen, Modbus-Steuerung."""
+
+    def __init__(self, hass: HomeAssistant, entry: Any) -> None:
+        self.hass = hass
+        self.entry = entry
+        self.settings: dict[str, Any] = SETTINGS_DEFAULTS.copy()
+        self._store = Store(hass, STORAGE_VERSION, f"{DOMAIN}_{entry.entry_id}")
+
+        # Laufzeit-Zustände
+        self.current_zone: int = 2
+        self.zone_label: str = "Initialisierung…"
+        self.mode_label: str = "Warten auf Daten"
+        self.last_action: str = "Keine"
+        self.last_error: str = ""
+        self.integral: float = 0.0
+
+        # Boolsche Status-Flags
+        self.cycle_active: bool = False
+        self.surplus_active: bool = False
+        self.ac_charge_active: bool = False
+        self.tariff_charge_active: bool = False
+
+        # Interne Mechanik
+        self._lock = asyncio.Lock()
+        self._listeners: list[Callable[[], None]] = []
+        self._unsub_trackers: list[Callable] = []
+
+    # ── Setup / Teardown ─────────────────────────────────────────────────────
+
+    async def async_setup(self) -> None:
+        """Einstellungen laden, State-Listener starten."""
+        stored = await self._store.async_load()
+        if stored:
+            self.settings = {**SETTINGS_DEFAULTS, **stored}
+            _LOGGER.debug("Solakon: Einstellungen aus Speicher geladen")
+        else:
+            self.settings = SETTINGS_DEFAULTS.copy()
+            _LOGGER.info("Solakon: Standardwerte geladen")
+
+        if "integral" in (stored or {}):
+            self.integral = float(stored["integral"])
+
+        cfg = self.entry.data
+        entities_to_track = [
+            cfg.get(CONF_GRID_SENSOR, ""),
+            cfg.get(CONF_SOLAR_SENSOR, ""),
+            cfg.get(CONF_SOC_SENSOR, ""),
+            cfg.get(CONF_MODE_SELECT, ""),
+        ]
+        entities_to_track = [e for e in entities_to_track if e]
+
+        if entities_to_track:
+            unsub = async_track_state_change_event(
+                self.hass, entities_to_track, self._on_state_change
+            )
+            self._unsub_trackers.append(unsub)
+
+    async def async_shutdown(self) -> None:
+        """Listener abräumen, Integral speichern."""
+        for unsub in self._unsub_trackers:
+            unsub()
+        self._unsub_trackers.clear()
+        await self._save_integral()
+
+    # ── Settings-Management ──────────────────────────────────────────────────
+
+    async def async_update_settings(self, changes: dict[str, Any]) -> None:
+        self.settings.update(changes)
+        await self._store.async_save({**self.settings, "integral": self.integral})
+        _LOGGER.info("Solakon: Einstellungen gespeichert")
+        self.notify_listeners()
+
+    async def _save_integral(self) -> None:
+        await self._store.async_save({**self.settings, "integral": self.integral})
+
+    # ── Entity-Listener-Pattern ──────────────────────────────────────────────
+
+    def register_entity_listener(self, cb: Callable[[], None]) -> None:
+        self._listeners.append(cb)
+
+    def unregister_entity_listener(self, cb: Callable[[], None]) -> None:
+        if cb in self._listeners:
+            self._listeners.remove(cb)
+
+    def notify_listeners(self) -> None:
+        for cb in self._listeners:
+            cb()
+
+    def reset_integral(self) -> None:
+        self.integral = 0.0
+        self.last_action = "Integral manuell zurückgesetzt"
+        self.notify_listeners()
+
+    # ── State-Helpers ────────────────────────────────────────────────────────
+
+    def _flt(self, entity_id: str, default: float = 0.0) -> float:
+        state = self.hass.states.get(entity_id)
+        if state is None or state.state in ("unknown", "unavailable"):
+            return default
+        try:
+            return float(state.state)
+        except (ValueError, TypeError):
+            return default
+
+    def _str(self, entity_id: str) -> str:
+        state = self.hass.states.get(entity_id)
+        return state.state if state and state.state not in ("unknown", "unavailable") else "unknown"
+
+    def _entity_ok(self, entity_id: str) -> bool:
+        state = self.hass.states.get(entity_id)
+        return state is not None and state.state not in ("unknown", "unavailable")
+
+    # ── Modbus-Schreibbefehle (nur wenn regulation_enabled) ──────────────────
+
+    async def _set_number(self, entity_id: str, value: float) -> None:
+        if not self.settings.get(S_REGULATION_ENABLED, False):
+            return
+        await self.hass.services.async_call(
+            "number", "set_value",
+            {"entity_id": entity_id, "value": value},
+        )
+
+    async def _set_mode(self, mode: str) -> None:
+        if not self.settings.get(S_REGULATION_ENABLED, False):
+            return
+        await self.hass.services.async_call(
+            "select", "select_option",
+            {"entity_id": self.entry.data[CONF_MODE_SELECT], "option": mode},
+        )
+
+    async def _set_output(self, value: float) -> None:
+        await self._set_number(self.entry.data[CONF_ACTIVE_POWER], max(0, round(value)))
+
+    async def _set_discharge(self, amps: float) -> None:
+        current = self._flt(self.entry.data[CONF_DISCHARGE_CURRENT], -1)
+        if abs(current - amps) > 0.5:
+            await self._set_number(self.entry.data[CONF_DISCHARGE_CURRENT], amps)
+
+    async def _timer_toggle(self) -> None:
+        """Timer-Wechsel 3598↔3599 — erzwingt sichere Modus-Übernahme."""
+        timer_eid = self.entry.data[CONF_TIMEOUT_SET]
+        current = self._flt(timer_eid, 3599)
+        new_val = 3598.0 if current >= 3599 else 3599.0
+        await self._set_number(timer_eid, new_val)
+        await asyncio.sleep(1)
+
+    # ── Haupt-Trigger ────────────────────────────────────────────────────────
+
+    @callback
+    def _on_state_change(self, event: Event) -> None:
+        self.hass.async_create_task(self._async_regulate())
+
+    async def _async_regulate(self) -> None:
+        """Komplette Regelschleife — identisch zum Blueprint-Ablauf."""
+        if self._lock.locked():
+            return
+        async with self._lock:
+            try:
+                await self._run_regulation_cycle()
+            except Exception:
+                _LOGGER.exception("Solakon: Fehler in Regelschleife")
+
+    # ── Regelzyklus ──────────────────────────────────────────────────────────
+
+    async def _run_regulation_cycle(self) -> None:
+        cfg = self.entry.data
+        s = self.settings
+
+        # ── 1. Sensor-Werte lesen ────────────────────────────────────────────
+        soc = self._flt(cfg[CONF_SOC_SENSOR])
+        grid = self._flt(cfg[CONF_GRID_SENSOR])
+        solar = self._flt(cfg[CONF_SOLAR_SENSOR])
+        actual = self._flt(cfg[CONF_ACTUAL_SENSOR])
+        current_power = self._flt(cfg[CONF_ACTIVE_POWER])
+        mode = self._str(cfg[CONF_MODE_SELECT])
+        timer_val = self._flt(cfg[CONF_TIMEOUT_COUNTDOWN])
+
+        # ── 2. Settings auslesen ─────────────────────────────────────────────
+        zone1_limit = int(s[S_ZONE1_LIMIT])
+        zone3_limit = int(s[S_ZONE3_LIMIT])
+        hard_limit = int(s[S_HARD_LIMIT])
+        tolerance = int(s[S_TOLERANCE])
+        wait_time = int(s[S_WAIT_TIME])
+        p_factor = float(s[S_P_FACTOR])
+        i_factor = float(s[S_I_FACTOR])
+        offset_1 = float(s[S_OFFSET_1])
+        offset_2 = float(s[S_OFFSET_2])
+        pv_reserve = int(s[S_PV_RESERVE])
+        discharge_max = int(s[S_DISCHARGE_MAX])
+
+        surplus_enabled = bool(s[S_SURPLUS_ENABLED])
+        surplus_threshold = int(s[S_SURPLUS_SOC_THRESHOLD])
+        surplus_soc_hyst = int(s[S_SURPLUS_SOC_HYST])
+        surplus_pv_hyst = int(s[S_SURPLUS_PV_HYST])
+
+        ac_enabled = bool(s[S_AC_ENABLED])
+        ac_soc_target = int(s[S_AC_SOC_TARGET])
+        ac_power_limit = int(s[S_AC_POWER_LIMIT])
+        ac_hysteresis = int(s[S_AC_HYSTERESIS])
+        ac_offset = float(s[S_AC_OFFSET])
+        ac_p = float(s[S_AC_P_FACTOR])
+        ac_i = float(s[S_AC_I_FACTOR])
+
+        tariff_enabled = bool(s[S_TARIFF_ENABLED])
+        tariff_sensor = str(s[S_TARIFF_PRICE_SENSOR])
+        tariff_cheap = float(s[S_TARIFF_CHEAP_THRESHOLD])
+        tariff_exp = float(s[S_TARIFF_EXP_THRESHOLD])
+        tariff_soc = int(s[S_TARIFF_SOC_TARGET])
+        tariff_power = int(s[S_TARIFF_POWER])
+
+        night_enabled = bool(s[S_NIGHT_ENABLED])
+
+        # ── 3. Validierung ───────────────────────────────────────────────────
+        if zone1_limit <= zone3_limit:
+            self.last_error = "SOC-Limits ungültig (Zone1 muss > Zone3)"
+            self.notify_listeners()
+            return
+
+        if not self._entity_ok(cfg[CONF_SOC_SENSOR]):
+            self.last_error = "SOC-Sensor nicht verfügbar"
+            self.notify_listeners()
+            return
+
+        if not self._entity_ok(cfg[CONF_MODE_SELECT]):
+            self.last_error = "Modus-Selektor nicht verfügbar"
+            self.notify_listeners()
+            return
+
+        self.last_error = ""
+
+        # ── 4. Abgeleitete Variablen ─────────────────────────────────────────
+        dynamic_max = hard_limit if self.cycle_active else max(0, solar - pv_reserve)
+        target_offset = offset_1 if self.cycle_active else offset_2
+        grid_error = grid - target_offset
+        grid_error_abs = abs(grid_error)
+        at_max_limit = current_power >= hard_limit
+        at_min_limit = current_power <= 0
+
+        # Surplus-Berechnung
+        surplus_entry = False
+        surplus_exit = False
+        if surplus_enabled:
+            surplus_entry = (
+                soc >= surplus_threshold
+                and (solar > (actual + grid + surplus_pv_hyst) or solar == 0)
+            )
+            surplus_exit = (
+                soc < (surplus_threshold - surplus_soc_hyst)
+                or solar <= (actual + grid - surplus_pv_hyst)
+            )
+            new_surplus = (self.surplus_active and not surplus_exit) or surplus_entry
+        else:
+            new_surplus = False
+
+        # Nacht-Bedingung
+        is_night = night_enabled and solar < pv_reserve and not self.cycle_active
+
+        # Tarif-Preis lesen
+        tariff_price = 0.0
+        if tariff_enabled and tariff_sensor:
+            tariff_price = self._flt(tariff_sensor, 999.0)
+
+        # ── 5. Falls / Zonenwechsel (choose-Block) ──────────────────────────
+        fall_executed = await self._execute_falls(
+            soc=soc, grid=grid, solar=solar, actual=actual, mode=mode,
+            current_power=current_power,
+            zone1_limit=zone1_limit, zone3_limit=zone3_limit,
+            hard_limit=hard_limit, discharge_max=discharge_max,
+            surplus_enabled=surplus_enabled, new_surplus=new_surplus,
+            surplus_pv_hyst=surplus_pv_hyst,
+            ac_enabled=ac_enabled, ac_soc_target=ac_soc_target,
+            ac_hysteresis=ac_hysteresis, ac_offset=ac_offset,
+            tariff_enabled=tariff_enabled, tariff_price=tariff_price,
+            tariff_cheap=tariff_cheap, tariff_soc=tariff_soc,
+            tariff_power=tariff_power,
+            is_night=is_night, pv_reserve=pv_reserve,
+        )
+
+        # ── 6. Frische Werte nach Falls ──────────────────────────────────────
+        grid = self._flt(cfg[CONF_GRID_SENSOR])
+        solar = self._flt(cfg[CONF_SOLAR_SENSOR])
+        current_power = self._flt(cfg[CONF_ACTIVE_POWER])
+        mode = self._str(cfg[CONF_MODE_SELECT])
+
+        # Dynamisches Limit neu berechnen
+        if mode == MODE_AC_CHARGE:
+            dynamic_max = ac_power_limit
+        elif self.cycle_active:
+            dynamic_max = hard_limit
+        else:
+            dynamic_max = max(0, solar - pv_reserve)
+
+        target_offset = offset_1 if self.cycle_active else offset_2
+
+        # ── 7. PI-Gate + Berechnung ──────────────────────────────────────────
+        if mode not in (MODE_DISCHARGE, MODE_AC_CHARGE):
+            # Kein aktiver Modus → kein PI
+            self._update_zone_display(soc, zone1_limit, zone3_limit, mode)
+            self.notify_listeners()
+            return
+
+        if self.surplus_active:
+            # Zone 0 — Surplus: Hard Limit, Integral einfrieren
+            await self._set_output(hard_limit)
+            self.mode_label = "Überschuss-Einspeisung"
+            self.last_action = f"Zone 0: Output → {hard_limit} W"
+
+        elif self.ac_charge_active:
+            # AC Laden — invertierter PI, keine at_max/at_min Guards
+            ac_target = ac_offset
+            ac_grid_err = grid - ac_target
+            if abs(ac_grid_err) > tolerance:
+                new_pw = self._pi_calculate(
+                    grid, current_power, ac_target, ac_power_limit,
+                    tolerance, ac_p, ac_i, ac_charge_mode=True,
+                )
+                await self._set_output(new_pw)
+                self.last_action = f"AC-PI: {current_power:.0f} → {new_pw:.0f} W"
+            await asyncio.sleep(wait_time)
+
+        elif self.tariff_charge_active:
+            # Tarif-Laden — direktes Setzen
+            await self._set_output(tariff_power)
+            self.last_action = f"Tarif-Laden: {tariff_power} W"
+
+        else:
+            # Normaler PI-Regler
+            grid_error = grid - target_offset
+            grid_error_abs = abs(grid_error)
+
+            if grid_error_abs > tolerance and not at_max_limit and not at_min_limit:
+                new_pw = self._pi_calculate(
+                    grid, current_power, target_offset, dynamic_max,
+                    tolerance, p_factor, i_factor, ac_charge_mode=False,
+                )
+                await self._set_output(new_pw)
+                self.last_action = f"PI: {current_power:.0f} → {new_pw:.0f} W"
+                await asyncio.sleep(wait_time)
+            else:
+                # Integral-Decay
+                if abs(self.integral) > 10:
+                    self.integral *= 0.95
+                    self.last_action = "Integral-Decay (5%)"
+
+        # ── 8. Entladestrom-Management ───────────────────────────────────────
+        if self.cycle_active:
+            await self._set_discharge(discharge_max)
+        elif not self.ac_charge_active and not self.tariff_charge_active:
+            await self._set_discharge(0)
+
+        # ── 9. Timeout-Reset ─────────────────────────────────────────────────
+        if timer_val < 120 and self._entity_ok(cfg[CONF_TIMEOUT_COUNTDOWN]):
+            await self._set_number(cfg[CONF_TIMEOUT_SET], 10)
+            await asyncio.sleep(1)
+            await self._set_number(cfg[CONF_TIMEOUT_SET], 3599)
+
+        # ── 10. Integral persistieren + Display aktualisieren ────────────────
+        await self._save_integral()
+        self._update_zone_display(soc, zone1_limit, zone3_limit, mode)
+        self.notify_listeners()
+
+    # ── Falls (Zonenwechsel-Logik) ───────────────────────────────────────────
+
+    async def _execute_falls(self, **v) -> str | None:
+        """Prüft alle Falls in der Blueprint-Reihenfolge. Gibt den Fall-Name zurück oder None."""
+
+        soc = v["soc"]
+        mode = v["mode"]
+        grid = v["grid"]
+        actual = v["actual"]
+        zone1 = v["zone1_limit"]
+        zone3 = v["zone3_limit"]
+        hard = v["hard_limit"]
+        discharge_max = v["discharge_max"]
+
+        # ── Fall 0A: Surplus Entry ───────────────────────────────────────────
+        if v["surplus_enabled"] and v["new_surplus"] and not self.surplus_active:
+            self.surplus_active = True
+            if self.cycle_active:
+                await self._set_discharge(2)  # Stabilitätspuffer
+            self.last_action = "Zone 0: Surplus aktiviert"
+            return "0A"
+
+        # ── Fall 0B: Surplus Exit ────────────────────────────────────────────
+        if v["surplus_enabled"] and self.surplus_active and not v["new_surplus"]:
+            self.surplus_active = False
+            if self.cycle_active:
+                await self._set_discharge(discharge_max)
+            self.last_action = "Zone 0: Surplus beendet"
+            return "0B"
+
+        # ── Fall A: Zone 1 Start ─────────────────────────────────────────────
+        if soc > zone1 and not self.cycle_active:
+            self.integral = 0.0
+            self.cycle_active = True
+            self.surplus_active = False
+            self.ac_charge_active = False
+            self.tariff_charge_active = False
+            await self._timer_toggle()
+            await self._set_mode(MODE_DISCHARGE)
+            self.last_action = f"Fall A: Zone 1 Start (SOC {soc:.0f}%)"
+            return "A"
+
+        # ── Fall B: Zone 3 Stop (Zyklus on) ──────────────────────────────────
+        if soc < zone3 and self.cycle_active:
+            self.integral = 0.0
+            self.cycle_active = False
+            self.surplus_active = False
+            self.ac_charge_active = False
+            self.tariff_charge_active = False
+            # Output → 0W VOR Modus → Disabled (Modbus-Reihenfolge!)
+            await self._set_output(0)
+            await self._set_mode(MODE_DISABLED)
+            self.last_action = f"Fall B: Zone 3 Stop (SOC {soc:.0f}%)"
+            return "B"
+
+        # ── Fall C: Zone 3 Absicherung ───────────────────────────────────────
+        if soc < zone3 and not self.cycle_active and mode != MODE_DISABLED:
+            self.surplus_active = False
+            self.ac_charge_active = False
+            self.tariff_charge_active = False
+            await self._set_output(0)
+            await self._set_mode(MODE_DISABLED)
+            self.last_action = "Fall C: Zone 3 Absicherung"
+            return "C"
+
+        # ── Fall D: Recovery ─────────────────────────────────────────────────
+        if (
+            self.cycle_active
+            and mode not in (MODE_DISCHARGE, MODE_AC_CHARGE)
+            and soc > zone3
+        ):
+            await self._timer_toggle()
+            if self.ac_charge_active:
+                await self._set_mode(MODE_AC_CHARGE)
+            else:
+                await self._set_mode(MODE_DISCHARGE)
+            self.last_action = "Fall D: Recovery"
+            return "D"
+
+        # ── Fall GT: Tarif-Laden Start ───────────────────────────────────────
+        if (
+            v["tariff_enabled"]
+            and v["tariff_price"] < v["tariff_cheap"]
+            and soc < v["tariff_soc"]
+            and not self.tariff_charge_active
+            and mode != MODE_AC_CHARGE
+        ):
+            self.tariff_charge_active = True
+            await self._timer_toggle()
+            await self._set_output(0)
+            await self._set_mode(MODE_AC_CHARGE)
+            self.last_action = f"Fall GT: Tarif-Laden (Preis {v['tariff_price']:.1f})"
+            return "GT"
+
+        # ── Fall HT: Tarif-Laden Ende ────────────────────────────────────────
+        if (
+            self.tariff_charge_active
+            and (
+                v["tariff_price"] >= v["tariff_cheap"]
+                or soc >= v["tariff_soc"]
+            )
+        ):
+            self.integral = 0.0
+            self.tariff_charge_active = False
+            if self.cycle_active:
+                await self._set_output(0)
+                await self._timer_toggle()
+                await self._set_mode(MODE_DISCHARGE)
+            else:
+                await self._set_output(0)
+                await self._set_mode(MODE_DISABLED)
+            self.last_action = "Fall HT: Tarif-Laden beendet"
+            return "HT"
+
+        # ── Fall G: AC Laden Start ───────────────────────────────────────────
+        if (
+            v["ac_enabled"]
+            and soc < v["ac_soc_target"]
+            and mode != MODE_AC_CHARGE
+            and (grid + actual) < -v["ac_hysteresis"]
+        ):
+            self.ac_charge_active = True
+            await self._timer_toggle()
+            await self._set_output(0)
+            await self._set_mode(MODE_AC_CHARGE)
+            self.last_action = "Fall G: AC Laden Start"
+            return "G"
+
+        # ── Fall H: AC Laden Ende ────────────────────────────────────────────
+        if (
+            mode == MODE_AC_CHARGE
+            and self.ac_charge_active
+            and (
+                soc >= v["ac_soc_target"]
+                or (grid >= (v["ac_offset"] + v["ac_hysteresis"]) and actual <= 0)
+            )
+        ):
+            self.integral = 0.0
+            self.ac_charge_active = False
+            if self.cycle_active:
+                await self._set_output(0)
+                await self._timer_toggle()
+                await self._set_mode(MODE_DISCHARGE)
+            else:
+                await self._set_output(0)
+                await self._set_mode(MODE_DISABLED)
+            self.last_action = "Fall H: AC Laden Ende"
+            return "H"
+
+        # ── Fall I: AC Safety ────────────────────────────────────────────────
+        if (
+            mode == MODE_AC_CHARGE
+            and not self.ac_charge_active
+            and not self.tariff_charge_active
+        ):
+            self.integral = 0.0
+            if self.cycle_active:
+                await self._set_output(0)
+                await self._timer_toggle()
+                await self._set_mode(MODE_DISCHARGE)
+            else:
+                await self._set_output(0)
+                await self._set_mode(MODE_DISABLED)
+            self.last_action = "Fall I: AC Safety"
+            return "I"
+
+        # ── Fall E: Zone 2 Start ─────────────────────────────────────────────
+        if (
+            zone3 < soc <= zone1
+            and not self.cycle_active
+            and mode == MODE_DISABLED
+            and not v["is_night"]
+        ):
+            self.integral = 0.0
+            await self._timer_toggle()
+            await self._set_mode(MODE_DISCHARGE)
+            self.last_action = f"Fall E: Zone 2 Start (SOC {soc:.0f}%)"
+            return "E"
+
+        # ── Fall F: Nachtabschaltung ─────────────────────────────────────────
+        if v["is_night"] and mode != MODE_DISABLED:
+            self.integral = 0.0
+            await self._set_output(0)
+            await self._set_mode(MODE_DISABLED)
+            self.last_action = "Fall F: Nachtabschaltung"
+            return "F"
+
+        return None
+
+    # ── PI-Berechnung (identisch zum PI-Script-Blueprint) ────────────────────
+
+    def _pi_calculate(
+        self,
+        grid_power: float,
+        current_power: float,
+        target_offset: float,
+        max_power: float,
+        tolerance: float,
+        p_factor: float,
+        i_factor: float,
+        ac_charge_mode: bool = False,
+    ) -> float:
+        """PI-Regler-Berechnung — gibt die neue Ausgangsleistung zurück."""
+        if ac_charge_mode:
+            raw_error = target_offset - grid_power  # invertiert für AC Laden
+        else:
+            raw_error = grid_power - target_offset
+
+        # Kapazitäts-Clamping
+        if raw_error > 0:
+            error = min(raw_error, max_power - current_power)
+        else:
+            error = max(raw_error, 0 - current_power)
+
+        # Integral aktualisieren (Anti-Windup ±1000)
+        integral_new = max(-1000, min(1000, self.integral + error))
+        self.integral = integral_new
+
+        # Korrektur berechnen
+        correction = error * p_factor + integral_new * i_factor
+        new_power = current_power + correction
+
+        # Begrenzen
+        final = max(0, min(max_power, new_power))
+        return round(final, 1)
+
+    # ── Zonen-Display ────────────────────────────────────────────────────────
+
+    def _update_zone_display(
+        self, soc: float, zone1: int, zone3: int, mode: str
+    ) -> None:
+        if self.surplus_active:
+            self.current_zone = 0
+            self.zone_label = "Zone 0 — Überschuss-Einspeisung"
+        elif self.cycle_active:
+            self.current_zone = 1
+            self.zone_label = "Zone 1 — Aggressive Entladung"
+        elif soc <= zone3:
+            self.current_zone = 3
+            self.zone_label = "Zone 3 — Sicherheitsstopp"
+        else:
+            self.current_zone = 2
+            self.zone_label = "Zone 2 — Batterieschonend"
+
+        mode_map = {
+            MODE_DISABLED: "Disabled",
+            MODE_DISCHARGE: "INV Discharge PV Priority",
+            MODE_AC_CHARGE: "AC Charge (Netzladung)",
+        }
+        self.mode_label = mode_map.get(mode, f"Modus: {mode}")

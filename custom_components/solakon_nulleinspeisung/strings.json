@@ -1,0 +1,42 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Solakon ONE — Entitäten zuordnen",
+        "description": "Ordne die Solakon ONE Entitäten zu.\n\nAlle weiteren Parameter (PI, Zonen, AC Laden, Tarif, Überschuss …) werden **im Sidebar-Panel** konfiguriert.\n\n[Dokumentation]({hint})",
+        "data": {
+          "grid_power_sensor": "🔌 Netz-Leistungssensor (z.B. Shelly 3EM)",
+          "actual_power_sensor": "⚡ Tatsächliche WR-Ausgangsleistung",
+          "solar_power_sensor": "☀️ Solarleistung (PV-Erzeugung)",
+          "soc_sensor": "🔋 Batterieladestand (SOC)",
+          "remote_timeout_countdown_sensor": "⏱️ Remote Timeout Countdown",
+          "active_power_number": "⚙️ Ausgangsleistungsregler",
+          "max_discharge_current_number": "🔋 Max. Entladestrom",
+          "remote_timeout_set_number": "⏲️ Modus-Reset-Timer",
+          "mode_select": "🔄 Betriebsmodus-Auswahl"
+        }
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Nur eine Instanz erlaubt."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Solakon ONE — Entitäten anpassen",
+        "data": {
+          "grid_power_sensor": "🔌 Netz-Leistungssensor",
+          "actual_power_sensor": "⚡ Ausgangsleistung",
+          "solar_power_sensor": "☀️ Solarleistung",
+          "soc_sensor": "🔋 SOC",
+          "remote_timeout_countdown_sensor": "⏱️ Timeout Countdown",
+          "active_power_number": "⚙️ Ausgangsleistungsregler",
+          "max_discharge_current_number": "🔋 Max. Entladestrom",
+          "remote_timeout_set_number": "⏲️ Modus-Reset-Timer",
+          "mode_select": "🔄 Betriebsmodus-Auswahl"
+        }
+      }
+    }
+  }
+}
