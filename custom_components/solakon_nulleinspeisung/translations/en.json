@@ -1,0 +1,42 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Solakon ONE — Entity Assignment",
+        "description": "Assign your Solakon ONE entities.\n\nAll further parameters (PI, zones, AC charging, tariff, surplus …) are configured in the **sidebar panel**.\n\n[Documentation]({hint})",
+        "data": {
+          "grid_power_sensor": "🔌 Grid power sensor (e.g. Shelly 3EM)",
+          "actual_power_sensor": "⚡ Actual inverter output power",
+          "solar_power_sensor": "☀️ Solar power (PV generation)",
+          "soc_sensor": "🔋 Battery state of charge (SOC)",
+          "remote_timeout_countdown_sensor": "⏱️ Remote timeout countdown",
+          "active_power_number": "⚙️ Active power control",
+          "max_discharge_current_number": "🔋 Max. discharge current",
+          "remote_timeout_set_number": "⏲️ Mode reset timer",
+          "mode_select": "🔄 Operating mode selector"
+        }
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Only one instance allowed."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Solakon ONE — Update Entities",
+        "data": {
+          "grid_power_sensor": "🔌 Grid power sensor",
+          "actual_power_sensor": "⚡ Output power",
+          "solar_power_sensor": "☀️ Solar power",
+          "soc_sensor": "🔋 SOC",
+          "remote_timeout_countdown_sensor": "⏱️ Timeout countdown",
+          "active_power_number": "⚙️ Active power control",
+          "max_discharge_current_number": "🔋 Max. discharge current",
+          "remote_timeout_set_number": "⏲️ Mode reset timer",
+          "mode_select": "🔄 Operating mode"
+        }
+      }
+    }
+  }
+}
