@@ -23,7 +23,7 @@ REQUIRED_ENTITY_DEFAULTS = {
     CONF_ACTIVE_POWER:      "number.solakon_one_fernsteuerung_leistung",
     CONF_DISCHARGE_CURRENT: "number.solakon_one_maximaler_entladestrom",
     CONF_TIMEOUT_SET:       "number.solakon_one_fernsteuerung_zeituberschreitung",
-    CONF_MODE_SELECT:       "select.solakon_one_betriebsmodus",
+    CONF_MODE_SELECT:       "select.solakon_one_modus_fernsteuern",
 }
 
 PLATFORMS = ["sensor", "number", "switch"]
