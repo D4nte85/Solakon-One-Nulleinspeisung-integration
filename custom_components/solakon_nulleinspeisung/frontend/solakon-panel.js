@@ -244,7 +244,7 @@ class SolakonPanel extends HTMLElement {
       this._initialized = true;
       this._build();
       this._loadConfig();
-      this._polling = setInterval(() => this._loadStatus(), 3000);
+      this._polling = setInterval(() => this._loadStatus(), 1000);
     }
   }
 
@@ -303,6 +303,15 @@ class SolakonPanel extends HTMLElement {
         .reg-dot { width:12px; height:12px; border-radius:50%; flex-shrink:0; }
         .reg-bar.on  .reg-dot { background:#16a34a; }
         .reg-bar.off .reg-dot { background:#dc2626; }
+
+        .global-info { border:1px solid var(--divider-color,#ddd); border-radius:10px; overflow:hidden; margin-bottom:12px; }
+        .global-info summary { padding:9px 14px; cursor:pointer; font-weight:600; font-size:.88em; background:var(--secondary-background-color,#f5f5f5); color:var(--primary-color,#03a9f4); list-style:none; display:flex; align-items:center; gap:8px; user-select:none; }
+        .global-info summary::-webkit-details-marker { display:none; }
+        .global-info summary::before { content:"▶"; font-size:.7em; transition:transform .2s; }
+        .global-info[open] summary::before { transform:rotate(90deg); }
+        .global-info .global-body { padding:12px 14px; font-size:.83em; line-height:1.7; color:var(--secondary-text-color,#555); border-top:1px solid var(--divider-color,#ddd); display:flex; flex-direction:column; gap:8px; }
+        .global-info .global-body strong { color:var(--primary-text-color,#333); }
+
         .tabs { display:flex; gap:2px; flex-wrap:wrap; margin-bottom:12px; }
         .tab { padding:7px 12px; border-radius:8px 8px 0 0; cursor:pointer; background:var(--card-background-color,#f5f5f5); border:1px solid var(--divider-color,#ddd); border-bottom:none; font-size:.85em; white-space:nowrap; }
         .tab.active { background:var(--primary-color,#03a9f4); color:#fff; }
@@ -336,18 +345,31 @@ class SolakonPanel extends HTMLElement {
         .field .toggle { display:inline-flex; align-items:center; gap:8px; cursor:pointer; }
         .field .toggle input { width:17px; height:17px; }
 
+        .stat-col-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:12px; }
+        @media (max-width:680px) { .stat-col-grid { grid-template-columns:1fr; } }
+        .stat-col-card { border:1px solid var(--divider-color,#ddd); border-radius:10px; overflow:hidden; }
+        .stat-col-header { padding:8px 12px; font-weight:600; font-size:.85em; color:#fff; display:flex; align-items:center; gap:6px; }
+        .stat-col-body { padding:10px 12px; display:flex; flex-direction:column; gap:8px; }
+
+        .stat-row { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+        .stat { padding:7px 10px; border-radius:6px; background:var(--secondary-background-color,#f0f0f0); }
+        .stat .val { font-size:1.15em; font-weight:600; }
+        .stat .lbl { font-size:.76em; color:var(--secondary-text-color,#888); margin-top:2px; }
+        .stat-full { padding:7px 10px; border-radius:6px; background:var(--secondary-background-color,#f0f0f0); }
+        .stat-full .val { font-size:1.15em; font-weight:600; }
+        .stat-full .lbl { font-size:.76em; color:var(--secondary-text-color,#888); margin-top:2px; }
+
+        .flag-row { display:flex; flex-wrap:wrap; gap:5px; }
+        .flag { padding:3px 9px; border-radius:12px; font-size:.8em; font-weight:500; }
+        .flag.on  { background:#16a34a22; color:#16a34a; }
+        .flag.off { background:#6b728022; color:#6b7280; }
+
+        .mode-row { font-size:.83em; }
+        .mode-lbl { color:var(--secondary-text-color,#888); margin-bottom:2px; font-size:.9em; }
+        .mode-val { color:var(--primary-text-color,#333); }
+        .mode-err { color:#dc2626; }
+
         .zone-banner { padding:12px; border-radius:8px; color:#fff; font-weight:600; font-size:1.1em; margin-bottom:12px; text-align:center; }
-        .stat-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
-        .stat { padding:8px 12px; border-radius:6px; background:var(--secondary-background-color,#f0f0f0); }
-        .stat .val { font-size:1.2em; font-weight:600; }
-        .stat .lbl { font-size:.78em; color:var(--secondary-text-color,#888); }
-        .stat-ac { margin-top:8px; padding:8px 12px; border-radius:6px; background:#7c3aed18; border:1px solid #7c3aed55; }
-        .stat-ac .val { font-size:1.1em; font-weight:600; color:#7c3aed; }
-        .stat-ac .lbl { font-size:.78em; color:var(--secondary-text-color,#888); }
-        .flags { margin-top:10px; display:flex; flex-wrap:wrap; gap:6px; }
-        .flags span { padding:3px 10px; border-radius:12px; font-size:.82em; }
-        .flags .on  { background:#16a34a22; color:#16a34a; }
-        .flags .off { background:#6b728022; color:#6b7280; }
         .btn { padding:8px 18px; border:none; border-radius:6px; cursor:pointer; font-size:.9em; }
         .btn-secondary { background:var(--secondary-background-color,#eee); color:var(--primary-text-color,#333); }
         #save-bar { display:none; position:sticky; bottom:0; background:var(--primary-color,#03a9f4); color:#fff; padding:10px 16px; border-radius:8px; margin-top:12px; align-items:center; justify-content:space-between; z-index:10; }
@@ -357,6 +379,16 @@ class SolakonPanel extends HTMLElement {
       <div class="wrap">
         <h1>⚡ Solakon ONE Nulleinspeisung</h1>
         <div class="reg-bar off" id="reg-bar"><div class="reg-dot"></div><span id="reg-text">Regelung inaktiv</span></div>
+
+        <details class="global-info">
+          <summary>ℹ️ Über diese Integration</summary>
+          <div class="global-body">
+            <p>Die <strong>Solakon ONE Nulleinspeisung</strong> regelt die Ausgangsleistung des Wechselrichters vollautomatisch so, dass der Netzbezug möglichst bei 0 W gehalten wird — ohne Einspeisung ins öffentliche Netz.</p>
+            <p>Kern ist ein <strong>PI-Regler</strong> mit der Netzleistung als Regelgröße und der WR-Ausgangsleistung als Stellgröße. Das Verhalten richtet sich nach vier <strong>SOC-Zonen</strong>: Zone 1 entlädt aggressiv, Zone 2 batterieschonend, Zone 3 sperrt die Entladung, Zone 0 speist aktiv Überschuss ein.</p>
+            <p>Optionale Module: <strong>AC-Laden</strong> bei erkanntem externem Überschuss, <strong>Tarif-Arbitrage</strong> (Tibber, aWATTar …), <strong>Dynamischer Offset</strong> aus der Netz-Volatilität, <strong>Nachtabschaltung</strong>. Alle Parameter werden persistent hier im Panel gespeichert — kein YAML, keine Helfer-Entitäten.</p>
+          </div>
+        </details>
+
         <div class="tabs" id="tabs"></div>
         <div class="content" id="content"></div>
         <div id="save-bar"><span>Ungespeicherte Änderungen</span><button onclick="this.getRootNode().host._saveSettings()">💾 Speichern</button></div>
@@ -488,24 +520,78 @@ class SolakonPanel extends HTMLElement {
   _renderStatus(c) {
     c.innerHTML = `
       <div class="zone-banner" id="zone-banner">Lade…</div>
-      <div class="stat-grid">
-        <div class="stat"><div class="lbl">Netzleistung</div><div class="val" id="st-grid">—</div></div>
-        <div class="stat"><div class="lbl">Ausgangsleistung</div><div class="val" id="st-actual">—</div></div>
-        <div class="stat"><div class="lbl">Solarleistung</div><div class="val" id="st-solar">—</div></div>
-        <div class="stat"><div class="lbl">SOC</div><div class="val" id="st-soc">—</div></div>
-        <div class="stat"><div class="lbl">PI Integral</div><div class="val" id="st-int">—</div></div>
-        <div class="stat"><div class="lbl">Netz-StdDev</div><div class="val" id="st-stddev">—</div></div>
-        <div class="stat"><div class="lbl">Dyn. Offset Z1 / Z2</div><div class="val" id="st-dynoff">—</div></div>
-        <div class="stat"><div class="lbl">Seit letzter Änderung</div><div class="val" id="st-elapsed">—</div></div>
+      <div class="stat-col-grid">
+
+        <div class="stat-col-card">
+          <div class="stat-col-header" style="background:#0891b2">⚡ Messwerte</div>
+          <div class="stat-col-body">
+            <div class="stat-row">
+              <div class="stat"><div class="val" id="st-grid">—</div><div class="lbl">Netzleistung</div></div>
+              <div class="stat"><div class="val" id="st-soc">—</div><div class="lbl">SOC</div></div>
+            </div>
+            <div class="stat-row">
+              <div class="stat"><div class="val" id="st-actual">—</div><div class="lbl">Ausgangsleistung</div></div>
+              <div class="stat"><div class="val" id="st-solar">—</div><div class="lbl">Solarleistung</div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="stat-col-card">
+          <div class="stat-col-header" style="background:#7c3aed">📈 Regelzustand</div>
+          <div class="stat-col-body">
+            <div class="stat-row">
+              <div class="stat"><div class="val" id="st-int">—</div><div class="lbl">PI Integral</div></div>
+              <div class="stat"><div class="val" id="st-stddev">—</div><div class="lbl">Netz-StdDev</div></div>
+            </div>
+            <div class="stat-row">
+              <div class="stat"><div class="val" id="st-dynoff-z1">—</div><div class="lbl">Offset Z1</div></div>
+              <div class="stat"><div class="val" id="st-dynoff-z2">—</div><div class="lbl">Offset Z2</div></div>
+            </div>
+            <div class="stat-row">
+              <div class="stat"><div class="val" id="st-elapsed">—</div><div class="lbl">Seit letztem Output</div></div>
+              <div class="stat"><div class="val" id="st-mode-elapsed">—</div><div class="lbl">Seit Moduswechsel</div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="stat-col-card">
+          <div class="stat-col-header" style="background:#b45309">🚦 Module & Status</div>
+          <div class="stat-col-body">
+            <div>
+              <div class="mode-lbl">Aktive Module</div>
+              <div class="flag-row" id="st-flags"></div>
+            </div>
+            <div>
+              <div class="mode-lbl">Betriebsmodus</div>
+              <div class="mode-val" id="st-mode">—</div>
+            </div>
+            <div>
+              <div class="mode-lbl">Letzte Aktion</div>
+              <div class="mode-val" id="st-action">—</div>
+            </div>
+            <div>
+              <div class="mode-lbl">Fehler</div>
+              <div class="mode-val mode-err" id="st-error">—</div>
+            </div>
+          </div>
+        </div>
+
       </div>
-      <div id="st-ac-row" style="display:none" class="stat-ac">
-        <div class="lbl">AC Lade-Offset (aktiv)</div><div class="val" id="st-ac-offset">—</div>
+      <div id="st-ac-row" style="display:none; margin-bottom:10px; padding:8px 12px; border-radius:6px; background:#7c3aed18; border:1px solid #7c3aed55;">
+        <span style="font-size:.78em; color:var(--secondary-text-color,#888)">AC Lade-Offset (aktiv):</span>
+        <span id="st-ac-offset" style="font-weight:600; color:#7c3aed; margin-left:6px;">—</span>
       </div>
-      <div style="margin-top:10px"><span class="lbl">Letzte Aktion:</span> <span id="st-action">—</span></div>
-      <div style="margin-top:4px"><span class="lbl">Fehler:</span> <span id="st-error" style="color:#dc2626">—</span></div>
-      <div class="flags" id="st-flags"></div>
-      <div style="margin-top:12px"><button class="btn btn-secondary" onclick="this.getRootNode().host._resetIntegral()">🔄 Integral zurücksetzen</button></div>
+      <button class="btn btn-secondary" onclick="this.getRootNode().host._resetIntegral()">🔄 Integral zurücksetzen</button>
     `;
+  }
+
+  _fmt_elapsed(ts) {
+    if (!ts) return "—";
+    const el = Math.round(Date.now() / 1000 - ts);
+    if (el < 0)         return "—";
+    if (el < 60)        return `${el} s`;
+    if (el < 3600)      return `${Math.floor(el / 60)} min ${el % 60} s`;
+    return `${Math.floor(el / 3600)} h ${Math.floor((el % 3600) / 60)} min`;
   }
 
   _updateStatusView() {
@@ -514,35 +600,50 @@ class SolakonPanel extends HTMLElement {
     const z = ZONE_CFG[st.zone] || ZONE_CFG[2];
     const b = this.shadowRoot.getElementById("zone-banner");
     if (b) { b.textContent = `${z.icon} ${z.label}`; b.style.background = z.color; }
+
     const set = (id, v) => { const e = this.shadowRoot.getElementById(id); if (e) e.textContent = v; };
+
     set("st-grid",   `${st.grid ?? "—"} W`);
     set("st-actual", `${st.actual_power ?? "—"} W`);
     set("st-solar",  `${st.solar ?? "—"} W`);
     set("st-soc",    `${st.soc ?? "—"} %`);
     set("st-int",    `${(st.integral ?? 0).toFixed(2)}`);
     set("st-stddev", `${(st.stddev ?? 0).toFixed(1)} W`);
-    set("st-dynoff", st.dyn_offset_enabled ? `${st.dyn_z1?.toFixed(0) ?? "—"} / ${st.dyn_z2?.toFixed(0) ?? "—"} W` : "inaktiv");
+
+    if (st.dyn_offset_enabled) {
+      set("st-dynoff-z1", `${(st.dyn_z1 ?? 0).toFixed(0)} W`);
+      set("st-dynoff-z2", `${(st.dyn_z2 ?? 0).toFixed(0)} W`);
+    } else {
+      set("st-dynoff-z1", "inaktiv");
+      set("st-dynoff-z2", "inaktiv");
+    }
+
+    set("st-elapsed",      this._fmt_elapsed(st.last_output_ts));
+    set("st-mode-elapsed", this._fmt_elapsed(st.mode_label_ts));
+
+    set("st-mode",   st.mode_label  || "—");
     set("st-action", st.last_action || "—");
     set("st-error",  st.last_error  || "Keine");
+
     const acRow = this.shadowRoot.getElementById("st-ac-row");
     if (acRow) {
       if (st.ac_charge) {
-        acRow.style.display = "";
+        acRow.style.display = "block";
         set("st-ac-offset", st.dyn_offset_enabled
-          ? `${st.dyn_ac?.toFixed(0) ?? "—"} W (dynamisch)`
+          ? `${(st.dyn_ac ?? 0).toFixed(0)} W (dynamisch)`
           : `${this._settings.ac_offset ?? "—"} W (statisch)`);
-      } else { acRow.style.display = "none"; }
+      } else {
+        acRow.style.display = "none";
+      }
     }
-    if (st.last_action_ts) {
-      const el = Math.round(Date.now() / 1000 - st.last_action_ts);
-      if (el < 0)    set("st-elapsed", "—");
-      else if (el < 60)   set("st-elapsed", `${el} s`);
-      else if (el < 3600) set("st-elapsed", `${Math.floor(el/60)} min ${el%60} s`);
-      else                set("st-elapsed", `${Math.floor(el/3600)} h ${Math.floor((el%3600)/60)} min`);
-    } else set("st-elapsed", "—");
+
     const fl = this.shadowRoot.getElementById("st-flags");
-    if (fl) fl.innerHTML = [["Zyklus",st.cycle_active],["Surplus",st.surplus_active],["AC Laden",st.ac_charge],["Tarif-Laden",st.tariff_charge]]
-      .map(([n,v]) => `<span class="${v?"on":"off"}">${v?"●":"○"} ${n}</span>`).join("");
+    if (fl) fl.innerHTML = [
+      ["Zyklus", st.cycle_active],
+      ["Surplus", st.surplus_active],
+      ["AC Laden", st.ac_charge],
+      ["Tarif-Laden", st.tariff_charge],
+    ].map(([n, v]) => `<span class="flag ${v ? "on" : "off"}">${v ? "●" : "○"} ${n}</span>`).join("");
   }
 
   _updateRegBanner() {
