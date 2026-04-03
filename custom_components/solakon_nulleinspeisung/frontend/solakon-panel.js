@@ -45,7 +45,7 @@ const TAB_DOCS = {
   },
   dynoff: {
     summary: "Dynamischer Offset — automatisch aus Netz-Volatilität — optional",
-    text: "Berechnet den Nullpunkt-Offset automatisch aus der Standardabweichung der Netzleistung. Bei ruhigem Netz bleibt der Offset auf dem Minimum. Bei unruhigem Netz (Kompressoren, Waschmaschinen) steigt er automatisch.\n\nFormel: offset = clamp(min + max(0, (StdDev − Rausch) × Faktor), min, max)\n\nÜberschreibt die statischen Offsets aus den Zonen-Einstellungen. Zone 1, Zone 2 und Zone AC sind separat konfigurierbar.",
+    text: "Berechnet den Nullpunkt-Offset automatisch aus der Standardabweichung der Netzleistung. Bei ruhigem Netz bleibt der Offset auf dem Minimum. Bei unruhigem Netz (Kompressoren, Waschmaschinen) steigt er automatisch.\n\nFormel: offset = clamp(min + max(0, (StdDev − Rausch) × Faktor), min, max)\n\nJede Zone (Zone 1, Zone 2, Zone AC) ist einzeln aktivierbar und überschreibt den statischen Offset der jeweiligen Zone.",
   },
   night: {
     summary: "Nachtabschaltung — Zone 2 bei PV-Mangel deaktivieren — optional",
@@ -175,39 +175,40 @@ const TAB_LAYOUT = {
 
   dynoff: {
     top: [
-      { k: "dyn_offset_enabled", l: "Dynamischen Offset aktivieren", d: "Offset automatisch aus Netz-Volatilität berechnen. Überschreibt statische Offsets in Zone 1, Zone 2 und AC Laden.", t: "bool" },
-      { k: "stddev_window",       l: "Stabw.-Fenster (s)",            d: "Zeitfenster für die Standardabweichungs-Berechnung (30–300 s). Längeres Fenster = trägere Reaktion.", t: "num", min: 30, max: 300, step: 10 },
+      { k: "stddev_window", l: "Stabw.-Fenster (s)", d: "Zeitfenster für die Standardabweichungs-Berechnung (30–300 s). Gilt für alle Zonen.", t: "num", min: 30, max: 300, step: 10 },
     ],
-    enabledKey: "dyn_offset_enabled",
     cols: [
       {
         title: "Zone 1", icon: "⚡", color: "#16a34a",
         fields: [
-          { k: "dyn_z1_min",      l: "Min. Offset (W)",     d: "Grundpuffer bei ruhigem Netz", t: "num", min: 0, max: 500, step: 1 },
-          { k: "dyn_z1_max",      l: "Max. Offset (W)",     d: "Obergrenze bei unruhigem Netz", t: "num", min: 50, max: 1000, step: 10 },
-          { k: "dyn_z1_noise",    l: "Rausch-Schwelle (W)", d: "StdDev darunter = Messrauschen, kein Anstieg", t: "num", min: 0, max: 100, step: 1 },
-          { k: "dyn_z1_factor",   l: "Volatilitäts-Faktor", d: "Verstärkung oberhalb Rausch-Schwelle", t: "num", min: 0.5, max: 5, step: 0.1 },
-          { k: "dyn_z1_negative", l: "Negativer Offset",    d: "Offset negieren (Regelziel < 0 W)", t: "bool" },
+          { k: "dyn_z1_enabled", l: "Aktivieren",          d: "Dynamischen Offset für Zone 1 verwenden. Überschreibt den statischen Zone-1-Offset.", t: "bool" },
+          { k: "dyn_z1_min",     l: "Min. Offset (W)",     d: "Grundpuffer bei ruhigem Netz", t: "num", min: 0, max: 500, step: 1 },
+          { k: "dyn_z1_max",     l: "Max. Offset (W)",     d: "Obergrenze bei unruhigem Netz", t: "num", min: 50, max: 1000, step: 10 },
+          { k: "dyn_z1_noise",   l: "Rausch-Schwelle (W)", d: "StdDev darunter = Messrauschen, kein Anstieg", t: "num", min: 0, max: 100, step: 1 },
+          { k: "dyn_z1_factor",  l: "Volatilitäts-Faktor", d: "Verstärkung oberhalb Rausch-Schwelle", t: "num", min: 0.5, max: 5, step: 0.1 },
+          { k: "dyn_z1_negative",l: "Negativer Offset",    d: "Offset negieren (Regelziel < 0 W)", t: "bool" },
         ],
       },
       {
         title: "Zone 2", icon: "🔋", color: "#0891b2",
         fields: [
-          { k: "dyn_z2_min",      l: "Min. Offset (W)",     d: "Grundpuffer bei ruhigem Netz", t: "num", min: 0, max: 500, step: 1 },
-          { k: "dyn_z2_max",      l: "Max. Offset (W)",     d: "Obergrenze bei unruhigem Netz", t: "num", min: 50, max: 1000, step: 10 },
-          { k: "dyn_z2_noise",    l: "Rausch-Schwelle (W)", d: "StdDev darunter = Messrauschen, kein Anstieg", t: "num", min: 0, max: 100, step: 1 },
-          { k: "dyn_z2_factor",   l: "Volatilitäts-Faktor", d: "Verstärkung oberhalb Rausch-Schwelle", t: "num", min: 0.5, max: 5, step: 0.1 },
-          { k: "dyn_z2_negative", l: "Negativer Offset",    d: "Offset negieren (Regelziel < 0 W)", t: "bool" },
+          { k: "dyn_z2_enabled", l: "Aktivieren",          d: "Dynamischen Offset für Zone 2 verwenden. Überschreibt den statischen Zone-2-Offset.", t: "bool" },
+          { k: "dyn_z2_min",     l: "Min. Offset (W)",     d: "Grundpuffer bei ruhigem Netz", t: "num", min: 0, max: 500, step: 1 },
+          { k: "dyn_z2_max",     l: "Max. Offset (W)",     d: "Obergrenze bei unruhigem Netz", t: "num", min: 50, max: 1000, step: 10 },
+          { k: "dyn_z2_noise",   l: "Rausch-Schwelle (W)", d: "StdDev darunter = Messrauschen, kein Anstieg", t: "num", min: 0, max: 100, step: 1 },
+          { k: "dyn_z2_factor",  l: "Volatilitäts-Faktor", d: "Verstärkung oberhalb Rausch-Schwelle", t: "num", min: 0.5, max: 5, step: 0.1 },
+          { k: "dyn_z2_negative",l: "Negativer Offset",    d: "Offset negieren (Regelziel < 0 W)", t: "bool" },
         ],
       },
       {
         title: "Zone AC", icon: "🔌", color: "#7c3aed",
         fields: [
-          { k: "dyn_ac_min",      l: "Min. Offset (W)",     d: "Grundpuffer bei ruhigem Netz", t: "num", min: 0, max: 500, step: 1 },
-          { k: "dyn_ac_max",      l: "Max. Offset (W)",     d: "Obergrenze bei unruhigem Netz", t: "num", min: 50, max: 1000, step: 10 },
-          { k: "dyn_ac_noise",    l: "Rausch-Schwelle (W)", d: "StdDev darunter = Messrauschen, kein Anstieg", t: "num", min: 0, max: 100, step: 1 },
-          { k: "dyn_ac_factor",   l: "Volatilitäts-Faktor", d: "Verstärkung oberhalb Rausch-Schwelle", t: "num", min: 0.5, max: 5, step: 0.1 },
-          { k: "dyn_ac_negative", l: "Negativer Offset",    d: "Offset negieren (Regelziel < 0 W)", t: "bool" },
+          { k: "dyn_ac_enabled", l: "Aktivieren",          d: "Dynamischen Offset für AC Laden verwenden. Überschreibt den statischen AC-Offset.", t: "bool" },
+          { k: "dyn_ac_min",     l: "Min. Offset (W)",     d: "Grundpuffer bei ruhigem Netz", t: "num", min: 0, max: 500, step: 1 },
+          { k: "dyn_ac_max",     l: "Max. Offset (W)",     d: "Obergrenze bei unruhigem Netz", t: "num", min: 50, max: 1000, step: 10 },
+          { k: "dyn_ac_noise",   l: "Rausch-Schwelle (W)", d: "StdDev darunter = Messrauschen, kein Anstieg", t: "num", min: 0, max: 100, step: 1 },
+          { k: "dyn_ac_factor",  l: "Volatilitäts-Faktor", d: "Verstärkung oberhalb Rausch-Schwelle", t: "num", min: 0.5, max: 5, step: 0.1 },
+          { k: "dyn_ac_negative",l: "Negativer Offset",    d: "Offset negieren (Regelziel < 0 W)", t: "bool" },
         ],
       },
     ],
@@ -364,10 +365,9 @@ class SolakonPanel extends HTMLElement {
         .flag.on  { background:#16a34a22; color:#16a34a; }
         .flag.off { background:#6b728022; color:#6b7280; }
 
-        .mode-row { font-size:.83em; }
-        .mode-lbl { color:var(--secondary-text-color,#888); margin-bottom:2px; font-size:.9em; }
-        .mode-val { color:var(--primary-text-color,#333); }
-        .mode-err { color:#dc2626; }
+        .mode-lbl { color:var(--secondary-text-color,#888); margin-bottom:2px; font-size:.85em; }
+        .mode-val { font-size:.88em; color:var(--primary-text-color,#333); }
+        .mode-err { font-size:.88em; color:#dc2626; }
 
         .zone-banner { padding:12px; border-radius:8px; color:#fff; font-weight:600; font-size:1.1em; margin-bottom:12px; text-align:center; }
         .btn { padding:8px 18px; border:none; border-radius:6px; cursor:pointer; font-size:.9em; }
@@ -385,7 +385,7 @@ class SolakonPanel extends HTMLElement {
           <div class="global-body">
             <p>Die <strong>Solakon ONE Nulleinspeisung</strong> regelt die Ausgangsleistung des Wechselrichters vollautomatisch so, dass der Netzbezug möglichst bei 0 W gehalten wird — ohne Einspeisung ins öffentliche Netz.</p>
             <p>Kern ist ein <strong>PI-Regler</strong> mit der Netzleistung als Regelgröße und der WR-Ausgangsleistung als Stellgröße. Das Verhalten richtet sich nach vier <strong>SOC-Zonen</strong>: Zone 1 entlädt aggressiv, Zone 2 batterieschonend, Zone 3 sperrt die Entladung, Zone 0 speist aktiv Überschuss ein.</p>
-            <p>Optionale Module: <strong>AC-Laden</strong> bei erkanntem externem Überschuss, <strong>Tarif-Arbitrage</strong> (Tibber, aWATTar …), <strong>Dynamischer Offset</strong> aus der Netz-Volatilität, <strong>Nachtabschaltung</strong>. Alle Parameter werden persistent hier im Panel gespeichert — kein YAML, keine Helfer-Entitäten.</p>
+            <p>Optionale Module: <strong>AC-Laden</strong> bei erkanntem externem Überschuss, <strong>Tarif-Arbitrage</strong> (Tibber, aWATTar …), <strong>Dynamischer Offset</strong> aus der Netz-Volatilität (pro Zone einzeln aktivierbar), <strong>Nachtabschaltung</strong>. Alle Parameter werden persistent hier im Panel gespeichert — kein YAML, keine Helfer-Entitäten.</p>
           </div>
         </details>
 
@@ -571,7 +571,7 @@ class SolakonPanel extends HTMLElement {
             </div>
             <div>
               <div class="mode-lbl">Fehler</div>
-              <div class="mode-val mode-err" id="st-error">—</div>
+              <div class="mode-err" id="st-error">—</div>
             </div>
           </div>
         </div>
@@ -610,13 +610,8 @@ class SolakonPanel extends HTMLElement {
     set("st-int",    `${(st.integral ?? 0).toFixed(2)}`);
     set("st-stddev", `${(st.stddev ?? 0).toFixed(1)} W`);
 
-    if (st.dyn_offset_enabled) {
-      set("st-dynoff-z1", `${(st.dyn_z1 ?? 0).toFixed(0)} W`);
-      set("st-dynoff-z2", `${(st.dyn_z2 ?? 0).toFixed(0)} W`);
-    } else {
-      set("st-dynoff-z1", "inaktiv");
-      set("st-dynoff-z2", "inaktiv");
-    }
+    set("st-dynoff-z1", st.dyn_z1_enabled ? `${(st.dyn_z1 ?? 0).toFixed(0)} W` : "inaktiv");
+    set("st-dynoff-z2", st.dyn_z2_enabled ? `${(st.dyn_z2 ?? 0).toFixed(0)} W` : "inaktiv");
 
     set("st-elapsed",      this._fmt_elapsed(st.last_output_ts));
     set("st-mode-elapsed", this._fmt_elapsed(st.mode_label_ts));
@@ -629,7 +624,7 @@ class SolakonPanel extends HTMLElement {
     if (acRow) {
       if (st.ac_charge) {
         acRow.style.display = "block";
-        set("st-ac-offset", st.dyn_offset_enabled
+        set("st-ac-offset", st.dyn_ac_enabled
           ? `${(st.dyn_ac ?? 0).toFixed(0)} W (dynamisch)`
           : `${this._settings.ac_offset ?? "—"} W (statisch)`);
       } else {
