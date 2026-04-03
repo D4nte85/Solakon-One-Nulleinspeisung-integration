@@ -76,21 +76,22 @@ S_NIGHT_ENABLED = "night_enabled"
 S_SELF_ADJUST = "self_adjust_enabled"
 S_SELF_ADJUST_TOL = "self_adjust_tolerance"
 
-# -- Dynamic Offset Settings (pro Zone) ---------------------------------------
-S_DYN_OFFSET_ENABLED = "dyn_offset_enabled"
-
+# -- Dynamic Offset Settings (pro Zone, einzeln schaltbar) --------------------
+S_DYN_Z1_ENABLED = "dyn_z1_enabled"
 S_DYN_Z1_MIN = "dyn_z1_min"
 S_DYN_Z1_MAX = "dyn_z1_max"
 S_DYN_Z1_NOISE = "dyn_z1_noise"
 S_DYN_Z1_FACTOR = "dyn_z1_factor"
 S_DYN_Z1_NEGATIVE = "dyn_z1_negative"
 
+S_DYN_Z2_ENABLED = "dyn_z2_enabled"
 S_DYN_Z2_MIN = "dyn_z2_min"
 S_DYN_Z2_MAX = "dyn_z2_max"
 S_DYN_Z2_NOISE = "dyn_z2_noise"
 S_DYN_Z2_FACTOR = "dyn_z2_factor"
 S_DYN_Z2_NEGATIVE = "dyn_z2_negative"
 
+S_DYN_AC_ENABLED = "dyn_ac_enabled"
 S_DYN_AC_MIN = "dyn_ac_min"
 S_DYN_AC_MAX = "dyn_ac_max"
 S_DYN_AC_NOISE = "dyn_ac_noise"
@@ -141,21 +142,22 @@ SETTINGS_DEFAULTS: dict = {
     S_SELF_ADJUST: False,
     S_SELF_ADJUST_TOL: 2,
 
-    # Dynamic Offset
-    S_DYN_OFFSET_ENABLED: False,
-
+    # Dynamic Offset (pro Zone einzeln schaltbar)
+    S_DYN_Z1_ENABLED: False,
     S_DYN_Z1_MIN: 30,
     S_DYN_Z1_MAX: 250,
     S_DYN_Z1_NOISE: 15,
     S_DYN_Z1_FACTOR: 1.5,
     S_DYN_Z1_NEGATIVE: False,
 
+    S_DYN_Z2_ENABLED: False,
     S_DYN_Z2_MIN: 30,
     S_DYN_Z2_MAX: 250,
     S_DYN_Z2_NOISE: 15,
     S_DYN_Z2_FACTOR: 1.5,
     S_DYN_Z2_NEGATIVE: False,
 
+    S_DYN_AC_ENABLED: False,
     S_DYN_AC_MIN: 30,
     S_DYN_AC_MAX: 250,
     S_DYN_AC_NOISE: 15,
