@@ -295,8 +295,53 @@ class SolakonPanel extends HTMLElement {
   _build() {
     this.shadowRoot.innerHTML = `
       <style>
-        :host { display:block; font-family:var(--paper-font-body1_-_font-family,Roboto,sans-serif); color:var(--primary-text-color,#333); }
-        .wrap { max-width:940px; margin:0 auto; padding:16px; }
+        :host { 
+          display:block; 
+          font-family:var(--paper-font-body1_-_font-family,Roboto,sans-serif); 
+          color:var(--primary-text-color,#333); 
+          height: 100vh;
+          overflow-y: auto;
+          background-color: var(--primary-background-color, #fafafa);
+        }
+        .app-header {
+          background-color: var(--app-header-background-color, var(--primary-color, #03a9f4));
+          color: var(--app-header-text-color, #ffffff);
+          height: var(--header-height, 56px);
+          display: flex;
+          align-items: center;
+          padding: 0 16px;
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          z-index: 100;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .header-title {
+          font-size: 20px;
+          font-weight: 400;
+        }
+        .menu-button {
+          margin-right: 24px;
+          cursor: pointer;
+          font-size: 20px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 40px;
+          height: 40px;
+          border-radius: 50%;
+          transition: background-color 0.2s;
+        }
+        .menu-button:hover {
+          background-color: rgba(255, 255, 255, 0.1);
+        }
+        .wrap { 
+          max-width:940px; 
+          margin:0 auto; 
+          padding:16px; 
+          margin-top: var(--header-height, 56px); /* Platz für den Header */
+        }
         h1 { margin:0 0 8px; font-size:1.5em; }
         .reg-bar { display:flex; align-items:center; gap:12px; padding:10px 16px; border-radius:10px; margin-bottom:12px; cursor:pointer; user-select:none; }
         .reg-bar.on  { background:#16a34a22; border:1px solid #16a34a; }
