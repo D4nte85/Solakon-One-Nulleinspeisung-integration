@@ -87,9 +87,12 @@ async def _ws_get_status(
         "ac_charge": coord.ac_charge_active,
         "tariff_charge": coord.tariff_charge_active,
         "regulation_enabled": coord.settings.get(S_REGULATION_ENABLED, False),
-        # StdDev + Dynamic Offset
+        # StdDev
         "stddev": coord.grid_stddev,
-        "dyn_offset_enabled": coord.settings.get("dyn_offset_enabled", False),
+        # Dynamic Offset — pro Zone einzeln
+        "dyn_z1_enabled": coord.settings.get("dyn_z1_enabled", False),
+        "dyn_z2_enabled": coord.settings.get("dyn_z2_enabled", False),
+        "dyn_ac_enabled": coord.settings.get("dyn_ac_enabled", False),
         "dyn_z1": coord.dyn_offset_z1,
         "dyn_z2": coord.dyn_offset_z2,
         "dyn_ac": coord.dyn_offset_ac,
@@ -126,13 +129,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
 
-    # Statische JS-Datei registrieren
     panel_js_file = Path(__file__).parent / "frontend" / "solakon-panel.js"
     await hass.http.async_register_static_paths(
         [StaticPathConfig(PANEL_JS_URL, str(panel_js_file), False)]
     )
 
-    # Sidebar-Panel registrieren
     await panel_custom.async_register_panel(
         hass,
         webcomponent_name="solakon-panel",
@@ -144,7 +145,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         require_admin=False,
     )
 
-    # WebSocket APIs registrieren
     websocket_api.async_register_command(hass, _ws_get_config)
     websocket_api.async_register_command(hass, _ws_save_config)
     websocket_api.async_register_command(hass, _ws_get_status)
