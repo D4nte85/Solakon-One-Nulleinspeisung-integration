@@ -114,6 +114,27 @@ async def _ws_reset_integral(
     else:
         connection.send_error(msg["id"], "not_found", "Coordinator not found")
 
+@websocket_api.websocket_command({
+    vol.Required("type"): f"{DOMAIN}/set_cycle",
+    vol.Required("entry_id"): str,
+    vol.Required("active"): bool,
+})
+@websocket_api.async_response
+async def _ws_set_cycle(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    coord = hass.data.get(DOMAIN, {}).get(msg["entry_id"])
+    if not coord:
+        connection.send_error(msg["id"], "not_found", "Coordinator not found")
+        return
+    coord.cycle_active = bool(msg["active"])
+    coord.integral = 0.0
+    coord._set_last_action(
+        f"Debug: Zone {'1' if coord.cycle_active else '2'} manuell aktiviert"
+    )
+    coord.notify_listeners()
+    connection.send_result(msg["id"], {"success": True, "cycle_active": coord.cycle_active})
+
 
 # ── Setup / Unload ───────────────────────────────────────────────────────────
 
@@ -149,6 +170,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     websocket_api.async_register_command(hass, _ws_save_config)
     websocket_api.async_register_command(hass, _ws_get_status)
     websocket_api.async_register_command(hass, _ws_reset_integral)
+    websocket_api.async_register_command(hass, _ws_set_cycle)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
