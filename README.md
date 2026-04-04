@@ -273,7 +273,7 @@ Die Regellogik arbeitet mit einer geordneten Liste von Falls (ähnlich einem `ch
 | **A** — Zone 1 Start | SOC > Zone-1-Schwelle UND `cycle_active = False` UND kein AC Laden | `cycle_active → True`. Integral = 0. Timer-Toggle. Modus → `'1'`. |
 | **B** — Zone 3 Stop | SOC < Zone-3-Schwelle UND `cycle_active = True` UND kein AC Laden | `cycle_active → False`. Integral = 0. Output → 0 W. Modus → `'0'`. |
 | **C** — Zone 3 Absicherung | SOC < Zone-3-Schwelle UND `cycle_active = False` UND Modus ≠ `'0'` UND kein AC Laden | Output → 0 W. Modus → `'0'`. Kein Integral-Reset. |
-| **D** — Recovery | `cycle_active = True` UND Modus ∉ `{'1','3'}` UND SOC > Zone-3-Schwelle | Timer-Toggle. Modus → `'3'` (wenn `ac_charge_active`) sonst `'1'`. Kein Integral-Reset. |
+| **D** — Recovery | `(cycle_active = True ODER ac_charge_active = True)` UND Modus ∉ `{'1','3'}` UND SOC > Zone-3-Schwelle | Timer-Toggle. Modus → `'3'` (wenn `ac_charge_active`) sonst `'1'`. Kein Integral-Reset. |
 | **GT** — Tarif-Laden Start | Tarif aktiv UND Preis < Günstig-Schwelle UND SOC < Tarif-SOC-Ziel UND Modus ≠ `'3'` | `tariff_charge_active → True`. `cycle_active → True`. Timer-Toggle. Output → 0 W. Modus → `'3'`. |
 | **HT** — Tarif-Laden Ende | `tariff_charge_active = True` UND (Preis ≥ Günstig-Schwelle ODER SOC ≥ Tarif-SOC-Ziel) | `tariff_charge_active → False`. Integral = 0. Zone 1 → `'1'` / Zone 2 → `'0'` + 0 W. |
 | **TM** — Discharge-Lock | Tarif aktiv UND Günstig ≤ Preis < Teuer-Schwelle UND kein AC/Tarif-Laden UND Modus = `'1'` UND `cycle_active = False` | Integral = 0. Output → 0 W. Modus → `'0'`. |
