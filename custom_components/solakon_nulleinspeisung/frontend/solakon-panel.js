@@ -541,7 +541,7 @@ class SolakonPanel extends HTMLElement {
 
     this.shadowRoot.getElementById("reg-bar").addEventListener("click", () => this._toggleRegulation());
     this.shadowRoot.getElementById("menu-btn").addEventListener("click", () => {
-      this.dispatchEvent(new Event("hass-open-menu", { bubbles: true, composed: true }));
+      this.dispatchEvent(new Event("hass-sidebar-toggle", { bubbles: true, composed: true }));
     });
 
     const tabWrap = this.shadowRoot.getElementById("tabs");
