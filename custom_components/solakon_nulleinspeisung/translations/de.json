@@ -14,6 +14,17 @@
           "max_discharge_current_number": "🔋 Max. Entladestrom",
           "remote_timeout_set_number": "⏲️ Modus-Reset-Timer",
           "mode_select": "🔄 Betriebsmodus-Auswahl"
+        },
+        "data_description": {
+          "grid_power_sensor": "Sensor der die aktuelle Netzleistung misst. Positiv = Bezug, negativ = Einspeisung.",
+          "actual_power_sensor": "Tatsächliche Ausgangsleistung des Wechselrichters — wird für Self-Adjusting Wait benötigt.",
+          "solar_power_sensor": "PV-Erzeugungsleistung — wird für Überschuss-Erkennung und Zone-2-Limit verwendet.",
+          "soc_sensor": "Batterieladestand in Prozent — steuert den Zonenwechsel.",
+          "remote_timeout_countdown_sensor": "Verbleibende Zeit bis der Fernsteuerungs-Modus automatisch zurückgesetzt wird.",
+          "active_power_number": "Zielleistung für den Wechselrichter — wird vom PI-Regler geschrieben.",
+          "max_discharge_current_number": "Maximaler Entladestrom in Ampere — zonenabhängig gesetzt.",
+          "remote_timeout_set_number": "Timer-Wert für den Modus-Reset (3598/3599 Toggle-Mechanismus).",
+          "mode_select": "Betriebsmodus des Wechselrichters: Disabled / Discharge / AC Charge."
         }
       }
     },
@@ -35,6 +46,17 @@
           "max_discharge_current_number": "🔋 Max. Entladestrom",
           "remote_timeout_set_number": "⏲️ Modus-Reset-Timer",
           "mode_select": "🔄 Betriebsmodus-Auswahl"
+        },
+        "data_description": {
+          "grid_power_sensor": "Sensor der die aktuelle Netzleistung misst. Positiv = Bezug, negativ = Einspeisung.",
+          "actual_power_sensor": "Tatsächliche Ausgangsleistung des Wechselrichters — wird für Self-Adjusting Wait benötigt.",
+          "solar_power_sensor": "PV-Erzeugungsleistung — wird für Überschuss-Erkennung und Zone-2-Limit verwendet.",
+          "soc_sensor": "Batterieladestand in Prozent — steuert den Zonenwechsel.",
+          "remote_timeout_countdown_sensor": "Verbleibende Zeit bis der Fernsteuerungs-Modus automatisch zurückgesetzt wird.",
+          "active_power_number": "Zielleistung für den Wechselrichter — wird vom PI-Regler geschrieben.",
+          "max_discharge_current_number": "Maximaler Entladestrom in Ampere — zonenabhängig gesetzt.",
+          "remote_timeout_set_number": "Timer-Wert für den Modus-Reset (3598/3599 Toggle-Mechanismus).",
+          "mode_select": "Betriebsmodus des Wechselrichters: Disabled / Discharge / AC Charge."
         }
       }
     }
