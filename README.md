@@ -35,11 +35,26 @@ Das Verhalten wird abhängig vom Batterie-Ladestand in vier Zonen eingeteilt:
 
 **⚡ AC-Laden** — Steuert den Wechselrichter in den Lademodus, wenn der SOC unter ein Ziel fällt und externer Überschuss erkannt wird (`Grid + Output < −Hysterese`). Eigener PI-Regler mit separaten P/I-Faktoren, eigenem Offset und konfigurierbarer Leistungsobergrenze.
 
-**💹 Tarif-Arbitrage** — Wertet einen externen Strompreis-Sensor aus und lädt bei günstigem Tarif automatisch auf, sperrt die Entladung bei mittlerem Tarif und gibt sie bei teurem Tarif wieder frei.
+**💹 Tarif-Arbitrage** — Wertet einen externen Strompreis-Sensor aus und lädt bei günstigem Tarif automatisch auf, sperrt die Entladung bei mittlerem Tarif in Zone 1 und Zone 2, und gibt sie bei teurem Tarif wieder frei.
 
 **📈 Dynamischer Offset** — Berechnet den Nullpunkt-Offset automatisch aus der Netz-Volatilität (Standardabweichung). Ersetzt den separaten Dynamic-Offset-Blueprint — alle Parameter sind pro Zone (Zone 1, Zone 2, Zone AC) einzeln konfigurierbar, inklusive optionalem negativem Offset.
 
 **🌙 Nachtabschaltung** — Unterdrückt in Zone 2 den Entladebetrieb unterhalb einer konfigurierbaren PV-Erzeugungsschwelle. Zone 1 und AC Laden laufen auch nachts weiter.
+
+**Priorität und gegenseitige Blockierung der optionalen Module:**
+
+Die Module werden in fest definierter Prioritätsreihenfolge ausgewertet — ein aktives Modul höherer Priorität blockiert den Start niedrigerer Module:
+
+| Priorität | Modul | Blockiert |
+|:---------:|-------|-----------|
+| 1 (höchste) | ☀️ Überschuss-Einspeisung | Tarif-Laden (GT), Discharge-Lock (TM), AC Laden (G) |
+| 2 | 💹 Tarif-Laden (günstig) | AC Laden (via Modus `'3'`), Discharge-Lock |
+| 3 | 💹 Discharge-Lock (mittel) | Zone-1/2-Recovery (Fall D), Zone-2-Start (Fall E) |
+| 4 | ⚡ AC Laden | Tarif-Laden (via Modus `'3'`), Discharge-Lock |
+| 5 | 🌙 Nachtabschaltung | Zone-2-Start (Fall E) |
+| 6 (niedrigste) | Zone 1 / Zone 2 | — |
+
+AC Laden und Tarif-Laden blockieren sich gegenseitig über den Modus-Guard (`Modus ≠ '3'`). Überschuss-Einspeisung hat absoluten Vorrang — kein anderes optionales Modul kann während Zone 0 starten.
 
 ---
 
@@ -96,23 +111,13 @@ Im Einrichtungsformular werden die neun Pflichtentitäten zugewiesen. Alle weite
 
 ## Konfiguration im Sidebar-Panel
 
-Nach der Einrichtung erscheint in der HA-Seitenleiste der Eintrag **Solakon ONE**. Das Panel ist in acht Tabs gegliedert. Änderungen werden erst nach Klick auf **💾 Speichern** übernommen — die Speicherleiste erscheint automatisch sobald ein Wert geändert wurde.
+Nach der Einrichtung erscheint in der HA-Seitenleiste der Eintrag **Solakon ONE**. Das Panel ist in neun Tabs gegliedert. Änderungen werden erst nach Klick auf **💾 Speichern** übernommen — die Speicherleiste erscheint automatisch sobald ein Wert geändert wurde.
 
 ---
 
 ### 📊 Status
 
-Echtzeit-Übersicht aller Regelzustände:
-
-- Aktive Zone mit farblichem Banner (Zone 0–3)
-- Netzleistung, Solarleistung, Ausgangsleistung, SOC
-- Netz-Standardabweichung (Stabilitätsindikator)
-- PI-Integral-Wert
-- Aktiver Offset (Zone 1 / Zone 2 / Zone AC) mit Quelle (dynamisch / statisch)
-- Zeitabstand seit letzter Regelaktion und seit letztem Moduswechsel
-- Letzte Aktion und etwaige Fehlermeldungen
-- Status-Flags: Zyklus, Surplus, AC Laden, Tarif-Laden
-- Schaltfläche zum manuellen Zurücksetzen des PI-Integrals
+Echtzeit-Übersicht aller Regelzustände: aktive Zone mit farblichem Banner (Zone 0–3), Netzleistung, Solarleistung, Ausgangsleistung, SOC, Netz-Standardabweichung (Stabilitätsindikator), PI-Integral-Wert, aktiver Offset (Zone 1 / Zone 2 / Zone AC) mit Quelle (dynamisch / statisch), Zeitabstand seit letzter Regelaktion und seit letztem Moduswechsel, letzte Aktion und etwaige Fehlermeldungen, Status-Flags: Zyklus, Surplus, AC Laden, Tarif-Laden, Schaltfläche zum manuellen Zurücksetzen des PI-Integrals.
 
 ---
 
@@ -130,12 +135,6 @@ Kern des Regelkreises. Vollständige Einstellhilfe → [PI-Regler Einstellung](#
 | Self-Adjusting Wait | Wartet auf die tatsächliche WR-Ausgangsleistung statt fester Wartezeit | Empfohlen |
 | Zielwert-Toleranz (W) | Abweichung, ab der der Zielwert als erreicht gilt (nur bei Self-Adjust) | 2–5 |
 
-**PI-Verhalten intern:**
-- Anti-Windup: Integral begrenzt auf ±1000
-- Integral-Reset bei jedem Zonenwechsel
-- Toleranz-Decay: Integral um 5 % pro Zyklus abgebaut, wenn Fehler ≤ Totband und `|Integral| > 10`
-- Zone 0: Integral eingefroren (kein Decay, kein PI-Aufruf)
-
 ---
 
 ### 🔋 Zonen
@@ -152,7 +151,7 @@ SOC-Zonenlogik mit allen Leistungs- und Offset-Parametern.
 | Zone 2 Offset (W) | Statischer Zielwert in Zone 2 | 10–30 |
 | PV-Ladereserve (W) | Zone-2-Output-Limit: `max(0, PV − Reserve)`. Dient auch als Schwelle für Nachtabschaltung | 30–100 |
 
-**Zum Nullpunkt-Offset:** Ein positiver Wert von z. B. 30 W lässt den Regler auf 30 W Netzbezug regeln (Sicherheitspuffer gegen versehentliche Einspeisung). Ein negativer Wert lässt den Regler gezielt leicht einspeisen.
+Ein positiver Offset von z. B. 30 W lässt den Regler auf 30 W Netzbezug regeln (Sicherheitspuffer gegen versehentliche Einspeisung). Ein negativer Wert lässt den Regler gezielt leicht einspeisen.
 
 **Wichtig:** Zone-1-Schwelle muss größer als Zone-3-Schwelle sein. Die Integration prüft dies beim Start.
 
@@ -160,7 +159,7 @@ SOC-Zonenlogik mit allen Leistungs- und Offset-Parametern.
 
 ### ☀️ Überschuss
 
-Optionale Überschuss-Einspeisung (Zone 0).
+Optionale Überschuss-Einspeisung (Zone 0). **Hat absoluten Vorrang vor allen anderen optionalen Modulen** — Tarif-Laden, Discharge-Lock und AC Laden werden blockiert solange Zone 0 aktiv ist.
 
 **Eintritts-Bedingung:** SOC ≥ Export-Schwelle UND (PV > Output + Grid + PV-Hysterese ODER PV = 0)
 
@@ -179,9 +178,9 @@ Optionale Überschuss-Einspeisung (Zone 0).
 
 ### ⚡ AC Laden
 
-Optionales Laden bei erkanntem externem Überschuss. Aktiv in Zone 1 und Zone 2.
+Optionales Laden bei erkanntem externem Überschuss. Aktiv in Zone 1 und Zone 2. **Startet nicht wenn Überschuss-Einspeisung (Zone 0) oder Tarif-Laden aktiv ist.**
 
-**Eintritts-Bedingung:** SOC < Ladeziel UND Modus ≠ `'3'` UND (Grid + Output) < −Hysterese
+**Eintritts-Bedingung:** SOC < Ladeziel UND kein Überschuss aktiv UND Modus ≠ `'3'` UND (Grid + Output) < −Hysterese
 
 > Der Modus-Guard `≠ '3'` verhindert einen Re-Eintritt wenn AC Laden bereits aktiv ist.
 
@@ -205,12 +204,9 @@ Der Lademodus verwendet einen **eigenen invertierten PI-Regler**: `raw_error = a
 
 ### 💹 Tarif
 
-Optionale Tarif-Arbitrage für dynamische Stromtarife (Tibber, aWATTar …).
+Optionale Tarif-Arbitrage für dynamische Stromtarife (Tibber, aWATTar …). **Wird blockiert solange Überschuss-Einspeisung (Zone 0) aktiv ist.**
 
-Drei Preisstufen:
-- **Günstig** (Preis < Günstig-Schwelle): AC-Laden mit fester Leistung bis SOC-Ziel
-- **Mittel** (Günstig ≤ Preis < Teuer): Discharge-Lock in Zone 2 — Entladung gesperrt. Zone 1 läuft weiter.
-- **Teuer** (Preis ≥ Teuer-Schwelle): normale SOC-Logik, keine Einschränkung
+Drei Preisstufen: **Günstig** (Preis < Günstig-Schwelle): Tarif-Laden mit fester Leistung bis SOC-Ziel. **Mittel** (Günstig ≤ Preis < Teuer): Discharge-Lock — Zone 1 und Zone 2 gesperrt (Output 0 W, Modus Disabled). Wenn der Preis die Teuer-Schwelle überschreitet, wird der Betrieb automatisch wiederhergestellt. **Teuer** (Preis ≥ Teuer-Schwelle): normale SOC-Logik, keine Einschränkung.
 
 | Parameter | Beschreibung | Empfehlung |
 |-----------|-------------|------------|
@@ -258,13 +254,13 @@ Jede Zone (Zone 1, Zone 2, Zone AC) hat einen eigenen Parameterblock:
 
 ### 🌙 Nacht
 
-Optionale Nachtabschaltung. Deaktiviert **nur Zone 2** wenn PV < PV-Ladereserve (aus den Zonen-Einstellungen — kein separater Parameter). Zone 1 (aggressive Entladung) und AC Laden laufen auch nachts weiter.
+Optionale Nachtabschaltung. Deaktiviert **nur Zone 2** wenn PV < PV-Ladereserve (aus den Zonen-Einstellungen — kein separater Parameter). Zone 1 (aggressive Entladung) und AC Laden laufen auch nachts weiter. Zone 2 wird nicht reaktiviert solange ein Tarif-Lock (mittlerer/günstiger Preis) aktiv ist.
 
 ---
 
 ## SOC-Zonen und Steuerlogik (Falls)
 
-Die Regellogik arbeitet mit einer geordneten Liste von Falls (ähnlich einem `choose`-Block). Die Reihenfolge ist entscheidend — der erste zutreffende Fall wird ausgeführt.
+Die Regellogik arbeitet mit einer geordneten Liste von Falls. Die Reihenfolge ist entscheidend — der erste zutreffende Fall wird ausgeführt.
 
 | Fall | Bedingung | Aktion |
 |:-----|:----------|:-------|
@@ -273,134 +269,40 @@ Die Regellogik arbeitet mit einer geordneten Liste von Falls (ähnlich einem `ch
 | **A** — Zone 1 Start | SOC > Zone-1-Schwelle UND `cycle_active = False` UND kein AC Laden | `cycle_active → True`. Integral = 0. Timer-Toggle. Modus → `'1'`. |
 | **B** — Zone 3 Stop | SOC < Zone-3-Schwelle UND `cycle_active = True` UND kein AC Laden | `cycle_active → False`. Integral = 0. Output → 0 W. Modus → `'0'`. |
 | **C** — Zone 3 Absicherung | SOC < Zone-3-Schwelle UND `cycle_active = False` UND Modus ≠ `'0'` UND kein AC Laden | Output → 0 W. Modus → `'0'`. Kein Integral-Reset. |
-| **D** — Recovery | `(cycle_active = True ODER ac_charge_active = True)` UND Modus ∉ `{'1','3'}` UND SOC > Zone-3-Schwelle | Timer-Toggle. Modus → `'3'` (wenn `ac_charge_active`) sonst `'1'`. Kein Integral-Reset. |
-| **GT** — Tarif-Laden Start | Tarif aktiv UND Preis < Günstig-Schwelle UND SOC < Tarif-SOC-Ziel UND Modus ≠ `'3'` | `tariff_charge_active → True`. `cycle_active → True`. Timer-Toggle. Output → 0 W. Modus → `'3'`. |
+| **D** — Recovery | `(cycle_active = True ODER ac_charge_active = True)` UND Modus ∉ `{'1','3'}` UND SOC > Zone-3-Schwelle UND kein aktiver Tarif-Lock (außer `ac_charge_active = True`) | Timer-Toggle. Modus → `'3'` (wenn `ac_charge_active`) sonst `'1'`. Kein Integral-Reset. |
+| **GT** — Tarif-Laden Start | Tarif aktiv UND Preis < Günstig-Schwelle UND SOC < Tarif-SOC-Ziel UND kein Überschuss aktiv UND Modus ≠ `'3'` | `tariff_charge_active → True`. `cycle_active → True`. Timer-Toggle. Output → 0 W. Modus → `'3'`. |
 | **HT** — Tarif-Laden Ende | `tariff_charge_active = True` UND (Preis ≥ Günstig-Schwelle ODER SOC ≥ Tarif-SOC-Ziel) | `tariff_charge_active → False`. Integral = 0. Zone 1 → `'1'` / Zone 2 → `'0'` + 0 W. |
-| **TM** — Discharge-Lock | Tarif aktiv UND Günstig ≤ Preis < Teuer-Schwelle UND kein AC/Tarif-Laden UND Modus = `'1'` UND `cycle_active = False` | Integral = 0. Output → 0 W. Modus → `'0'`. |
-| **G** — AC Laden Start | AC aktiv UND SOC < Ladeziel UND **Modus ≠ `'3'`** UND (Grid + Output) < −Hysterese | `ac_charge_active → True`. Timer-Toggle. Output → 0 W. Modus → `'3'`. |
+| **TM** — Discharge-Lock | Tarif aktiv UND Günstig ≤ Preis < Teuer-Schwelle UND kein AC/Tarif-Laden UND kein Überschuss UND Modus = `'1'` | Integral = 0. Output → 0 W. Modus → `'0'`. Sperrt Zone 1 und Zone 2. |
+| **G** — AC Laden Start | AC aktiv UND SOC < Ladeziel UND kein Überschuss aktiv UND **Modus ≠ `'3'`** UND (Grid + Output) < −Hysterese | `ac_charge_active → True`. Timer-Toggle. Output → 0 W. Modus → `'3'`. |
 | **H** — AC Laden Ende | Modus = `'3'` UND (SOC ≥ Ladeziel ODER (Grid ≥ ac_offset + Hysterese UND Output = 0)) | `ac_charge_active → False`. Integral = 0. Zone 1 → `'1'` / Zone 2 → `'0'` + 0 W. |
 | **I** — Safety | Modus = `'3'` UND kein aktives AC Laden UND kein Tarif-Laden | Integral = 0. Zone 1 → Timer-Toggle + `'1'` / Zone 2 → `'0'` + 0 W. |
-| **E** — Zone 2 Start | Zone-3 < SOC ≤ Zone-1 UND `cycle_active = False` UND Modus = `'0'` UND kein AC Laden UND kein Nacht | Integral = 0. Timer-Toggle. Modus → `'1'`. |
+| **E** — Zone 2 Start | Zone-3 < SOC ≤ Zone-1 UND `cycle_active = False` UND Modus = `'0'` UND kein AC Laden UND kein Nacht UND kein Tarif-Lock | Integral = 0. Timer-Toggle. Modus → `'1'`. |
 | **F** — Nachtabschaltung | Nacht aktiv UND `cycle_active = False` UND Modus ≠ `'0'` UND kein AC Laden | Integral = 0. Output → 0 W. Modus → `'0'`. |
 
 **Reihenfolge-Begründungen:**
 - Fall D liegt vor Falls G/H, damit Recovery nur Modus ∉ `{'1','3'}` prüft — der AC-Lade-Modus `'3'` wird durch Recovery nie überschrieben.
 - Fall I fängt jeden `'3'`-Zustand ohne legitime Lade-Session auf — egal ob durch externe Modussetzung oder Fehlzustand entstanden.
+- Fall D ist gegen Tarif-Lock geblockt (außer wenn `ac_charge_active = True`) — verhindert, dass Recovery den Discharge-Lock durch Modus-Wiederherstellung umgeht.
+- Fall E ist gegen Tarif-Lock geblockt — verhindert, dass Zone 2 bei aktivem Lock neu startet.
+- Falls GT und G sind gegen aktiven Überschuss geblockt — Zone-0-Einspeisung hat absoluten Vorrang vor Tarif-Laden und AC Laden.
 
 ---
 
 ## PI-Regler Einstellung
 
-Der Regler wird in drei Schritten eingestellt. Ziel: schnelle, präzise Reaktion ohne dauerhaftes Schwingen. **Grundprinzip: klein anfangen, langsam steigern, beim ersten stabilen Zittern stoppen und einen Schritt zurückgehen.**
+Der Regler wird in drei Schritten eingestellt. Ziel ist ein System, das schnell und präzise auf Änderungen reagiert, aber nicht dauerhaft hin- und herschwingt.
 
-### Schritt 1: Wartezeit bestimmen (P = 1, I = 0)
+### Schritt 1: Wartezeit finden (P = 1, I = 0)
 
-Die Wartezeit deckt die Gesamtverzögerung zwischen dem Schreibbefehl an den Wechselrichter und dem stabilen Messwert ab:
+Die **Wartezeit** deckt Wechselrichter-Reaktion und Messlatenz ab. Sinnvolle Wartezeit: 1–3 s.
 
-```
-number.set_value gesendet
-  + 0,5–2,0 s   Modbus-Schreiben + Bestätigung (automatisch, zählt NICHT zur Wartezeit)
-  + 0,5–1,5 s   Wechselrichter passt Ausgangsleistung an (Hardware-Flanke)       ┐
-  + 0,5–1,5 s   Shelly + Solakon-Integration lesen neue Werte per Polling        ┘ → Wartezeit
-─────────────────────────────────────────────────────────────────────────────────
-  Sinnvolle Wartezeit: 1–5 s (je nach Bus-Last und Polling-Intervall)
-```
+### Schritt 2: P-Faktor finden (I = 0)
 
-> Mit aktiviertem **Self-Adjusting Wait** wird die Wartezeit zum Max-Timeout — der Regler geht automatisch weiter sobald die Ausgangsleistung den Zielwert erreicht. Das ist die empfohlene Einstellung.
+Schrittweise erhöhen bis das System leicht anfängt zu pendeln — dann einen Schritt zurück. Typischer Arbeitsbereich: **0.8–1.5**.
 
-### Schritt 2: P-Faktor finden (I = 0, Startpunkt: P = 0,5)
+### Schritt 3: I-Faktor hinzufügen
 
-| Beobachtung | Bedeutung | Aktion |
-|:------------|:----------|:-------|
-| Output reagiert kaum, Netz weit vom Ziel | P zu klein | P erhöhen (+0,2 pro Schritt) |
-| Output schwingt kurz, pendelt sich aber ein | Guter Bereich | Halten oder minimal erhöhen |
-| Output und Netz pendeln dauerhaft ohne Einpendeln | P zu groß | Einen Schritt zurück |
-
-**Ziel:** Den Punkt finden, wo das System gerade eben anfängt leicht zu zittern — dann P um einen Schritt zurücknehmen. Typischer Arbeitsbereich nach diesem Verfahren: **0,8–1,5**.
-
-> Das Schwingen sieht man am besten in einem Verlaufsgraph der Netzleistung (HA Verlaufsgraph für den Shelly-Sensor). Stabiles Pendeln mit kleiner Amplitude um den Zielwert ist normal. Erst wenn der Output dauerhaft auf und ab fährt ohne Tendenz zum Einpendeln ist es zu viel.
-
-### Schritt 3: I-Faktor hinzufügen (Startpunkt: I = 0,02)
-
-Mit P allein verbleibt eine bleibende Regelabweichung bei Lastwechseln. Der I-Anteil korrigiert diese langsam aber sicher.
-
-| Beobachtung | Bedeutung | Aktion |
-|:------------|:----------|:-------|
-| Regler trifft Zielwert nicht dauerhaft | I zu klein | I erhöhen (+0,01 pro Schritt) |
-| Zielwert wird zuverlässig gehalten | Optimal | Fertig |
-| Langsames, lang-periodisches Schwingen (Minuten) | I zu groß | Leicht reduzieren |
-
-Typischer Arbeitsbereich: **0,03–0,08**. Zeichen für zu hohes I: langsame Schwingungen mit langer Periode. Der Anti-Windup (±1000) und der Toleranz-Decay (5 %/Zyklus) begrenzen Windup-Effekte automatisch.
-
-**AC Laden separat tunen:** Wegen der langen Hardware-Flanke des Wechselrichters (~25 s von Minimum auf Maximum) P-Faktor besonders klein halten (~0,3–0,5) und den I-Anteil die eigentliche Regelarbeit machen lassen.
-
----
-
-## Technische Details
-
-### Timer-Toggle Mechanismus
-
-Moduswechsel werden durch einen Toggle zwischen den Werten **3598 und 3599** am Modus-Reset-Timer erzwungen — nicht durch einen festen Wert. Dies erzeugt eine Zustandsänderung, die den Solakon ONE zur stabilen Modus-Übernahme veranlasst.
-
-```
-Aktueller Timer-Wert = 3599 → schreibe 3598
-Aktueller Timer-Wert < 3599 → schreibe 3599
-→ anschließend: Modus setzen
-```
-
-Der Toggle wird bei jedem Moduswechsel (Falls A, D, E, G, GT, H-Zone1, HT-Zone1, I-Zone1) direkt vor dem `select.select_option`-Aufruf durchgeführt. Zusätzlich: Wenn der Timeout-Countdown unter 120 s fällt, wird ebenfalls ein Toggle ausgeführt um den Remote-Betrieb aufrechtzuerhalten.
-
-**Modbus-Befehlsreihenfolge:** Bei allen Wechseln in Modus `'0'` (Disabled) muss immer zuerst `Output → 0 W` und dann `Modus → '0'` gesetzt werden, da der Solakon ONE Output-Befehle ignoriert wenn er bereits in Modus `'0'` ist.
-
-### PI-Regler Formeln
-
-**Fehlerberechnung (modusabhängig):**
-```
-Normal (ac_charge_mode = false):
-  raw_error = grid_power − target_offset
-
-AC Laden (ac_charge_mode = true):
-  raw_error = target_offset − grid_power   ← invertiert
-```
-
-**Kapazitäts-Clamping:**
-```
-raw_error > 0: error = min(raw_error, max_power − current_power)
-raw_error < 0: error = max(raw_error, 0 − current_power)
-```
-
-**Integral und Korrektur:**
-```
-integral_new = clamp(integral_old + error, −1000, 1000)
-correction   = error × P_Faktor + integral_new × I_Faktor
-new_power    = current_power + correction
-final_power  = clamp(new_power, 0, max_power)
-```
-
-**Dynamisches Power-Limit (max_power):**
-```
-Modus '3' (AC Laden):   max_power = ac_power_limit
-Zone 1 (cycle = True):  max_power = hard_limit
-Zone 2 (cycle = False): max_power = max(0, PV − pv_reserve)
-```
-
-### Recovery-Mechanismus (Fall D)
-
-Falls der Modus des Wechselrichters extern zurückgesetzt wird (z. B. durch einen Neustart der Integration) während `cycle_active = True` gilt, erkennt die Integration diesen Zustand automatisch und reaktiviert den Modus über den Timer-Toggle — ohne Zonenwechsel oder Integral-Reset. Der wiederhergestellte Modus richtet sich nach dem internen Zustand: `ac_charge_active = True` → `'3'`, sonst `'1'`.
-
-### Safety-Mechanismus (Fall I)
-
-Fängt den Zustand ab, in dem der Wechselrichter Modus `'3'` hat, aber weder `ac_charge_active` noch `tariff_charge_active` gesetzt ist. Tritt auf bei externer Modussetzung oder nach einem Neustart. Aktion: Integral = 0, anschließend Zone 1 → Timer-Toggle + Modus `'1'`, Zone 2 → Output 0 W + Modus `'0'`.
-
-### Entladestrom-Steuerung
-
-| Zustand | Entladestrom | Bedingung |
-|:--------|:------------|:----------|
-| Surplus aktiv (Zone 0) | 2 A | Stabilitätspuffer |
-| Zone 1 (cycle aktiv) | Konfigurierter Maximalwert | Nur wenn nicht Surplus, nicht AC Laden |
-| Zone 2 / AC Laden / Tarif-Laden | 0 A | — |
-
-Stromänderungen werden nur geschrieben wenn der aktuelle Wert um mehr als 0,5 A abweicht.
+Typischer Arbeitsbereich: **0.03–0.08**. Für AC Laden separat tunen — P besonders klein halten (~0.3–0.5). Tarif-Laden verwendet keinen PI-Regler.
 
 ---
 
@@ -409,11 +311,11 @@ Stromänderungen werden nur geschrieben wenn der aktuelle Wert um mehr als 0,5 A
 1. **Schreibteil erst nach Konfigurationsprüfung aktivieren.** Die Regelung startet mit `Regelung aktiv = Aus`. Nach Einrichtung im Panel den Schreibteil erst dann einschalten wenn alle Parameter geprüft sind.
 2. **Zone-1-Schwelle > Zone-3-Schwelle.** Die Integration prüft dies und gibt im Status-Tab einen Fehler aus falls die Limits ungültig sind.
 3. **Netzleistungssensor-Polarität.** Positiv = Bezug, negativ = Einspeisung — abweichende Polarität führt zu umgekehrtem Regelverhalten.
-4. **AC Laden Eintritts-Guard.** Eintritt in AC Laden ist nur möglich wenn Modus ≠ `'3'`. Das verhindert einen Re-Eintritt wenn AC Laden bereits aktiv ist (Ausgangsleistung = 0 W während PI noch hochregelt würde sonst als Eintritts-Bedingung interpretiert).
+4. **AC Laden Eintritts-Guard.** Eintritt in AC Laden ist nur möglich wenn Modus ≠ `'3'`. Das verhindert einen Re-Eintritt wenn AC Laden bereits aktiv ist.
 5. **AC Laden P/I-Tuning.** Separates Tuning erforderlich — P klein halten (~0,3–0,5) wegen der langen Hardware-Flanke des Solakon ONE im AC-Lade-Modus (~25 s). I-Faktor macht die eigentliche Regelarbeit. Standard I-Faktor: 0,0 als sicherer Startpunkt.
-6. **at_max_limit-Guard.** Greift nur am absoluten Hard Limit (800 W), nicht am dynamischen `max_power`. Dadurch kein Deadlock wenn das dynamic ceiling sinkt (z. B. weil PV nachlässt).
+6. **at_max_limit-Guard.** Greift nur am absoluten Hard Limit (800 W), nicht am dynamischen `max_power`. Dadurch kein Deadlock wenn das dynamic ceiling sinkt.
 7. **at_max/at_min-Guards im AC-Lade-Modus.** Beide Guards sind während AC Laden deaktiviert — Fall I übernimmt die Safety-Funktion für unlegitimierte `'3'`-Zustände.
-8. **Tarif-Discharge-Lock.** Der Lock gilt für mittlere UND günstige Preiszonen (alles unterhalb der Teuer-Schwelle), nicht nur für die mittlere Zone. Zone 1 läuft in allen Tarifstufen weiter.
+8. **Tarif-Discharge-Lock.** Der Lock gilt für mittlere UND günstige Preiszonen (alles unterhalb der Teuer-Schwelle) und sperrt sowohl Zone 1 als auch Zone 2 (Output 0 W, Modus Disabled). Solange Überschuss-Einspeisung aktiv ist, wird kein Lock ausgelöst. Die Sperre hebt sich automatisch wenn der Preis die Teuer-Schwelle überschreitet — Recovery (Fall D) stellt dann den vorherigen Modus wieder her.
 9. **Dynamischer Offset.** Jede Zone wird einzeln aktiviert. Die Netz-Standardabweichung wird intern berechnet — kein externer Statistik-Sensor erforderlich. Nach dem ersten Start einige Minuten warten bis genug Samples gesammelt sind.
 10. **Self-Adjusting Wait.** Polls die tatsächliche Ausgangsleistung nach einem Setpoint-Befehl statt einer festen Wartezeit zu schlafen. Die konfigurierte Wartezeit wird zum maximalen Timeout als Sicherheitsnetz.
 
@@ -458,22 +360,25 @@ P-Faktor reduzieren oder Wartezeit erhöhen. Der Standardabweichungs-Sensor im S
 Zone-3-Schwelle im Zonen-Tab prüfen. Wert muss kleiner als Zone-1-Schwelle sein.
 
 **AC Laden startet nicht trotz Überschuss**
-Prüfen ob AC Laden im Tab aktiviert ist. (Grid + Output) muss unter −Hysterese liegen. SOC muss unter Ladeziel sein. Status-Flag „AC Laden aktiv" im Status-Tab beobachten.
+Prüfen ob Überschuss-Einspeisung (Zone 0) aktiv ist — AC Laden wird durch Zone 0 blockiert. Sonst: AC Laden im Tab aktiviert? (Grid + Output) muss unter −Hysterese liegen. SOC muss unter Ladeziel sein. Status-Flag „AC Laden aktiv" im Status-Tab beobachten.
 
 **AC Laden bricht sofort wieder ab**
-Eintritts-Hysterese zu klein — Grid-Wert schwankt bereits über der Abbruch-Schwelle. Hysterese erhöhen oder P/I kleiner setzen damit der Regler nicht zu aggressiv hochregelt.
+Eintritts-Hysterese zu klein — Grid-Wert schwankt bereits über der Abbruch-Schwelle. Hysterese erhöhen oder P/I kleiner setzen.
 
 **Tarif-Laden reagiert nicht auf Preisänderungen**
-Preis-Sensor im Tarif-Tab prüfen — muss eine gültige Sensor-Entität mit numerischem Wert in ct/kWh sein. Günstig-Schwelle muss über dem aktuellen Preis liegen.
+Preis-Sensor im Tarif-Tab prüfen. Günstig-Schwelle muss über dem aktuellen Preis liegen. Prüfen ob Überschuss-Einspeisung aktiv ist — blockiert Tarif-Laden.
+
+**Discharge-Lock greift nicht in Zone 1**
+Preis muss zwischen Günstig- und Teuer-Schwelle liegen. Überschuss-Einspeisung darf nicht aktiv sein. Prüfen ob der Lock auch wirklich für Zone 1 gewünscht ist — er setzt mode = Disabled und wartet auf Preisanstieg zur Recovery.
 
 **Dynamischer Offset bleibt auf Minimum**
-Stabw.-Sensor im Status-Tab prüfen. Nach dem ersten Start braucht der Sensor einige Minuten bis genug Samples gesammelt sind. Volatilitäts-Faktor erhöhen oder Rausch-Schwelle senken falls der Offset zu träge reagiert.
+Stabw.-Sensor im Status-Tab prüfen. Nach dem ersten Start einige Minuten warten bis genug Samples gesammelt sind. Volatilitäts-Faktor erhöhen oder Rausch-Schwelle senken.
+
+**Recovery (Fall D) greift zu oft**
+Der Modus-Reset-Timer läuft ab bevor der Regler ihn zurücksetzen kann. Solakon-Integration auf Polling-Intervall prüfen.
 
 **Integration taucht nach Installation nicht auf**
 Home Assistant vollständig neu starten (nicht nur neu laden). HACS-Download-Status überprüfen.
-
-**Recovery (Fall D) greift zu oft**
-Der Modus-Reset-Timer läuft ab bevor der Regler ihn zurücksetzen kann. Solakon-Integration auf Polling-Intervall prüfen — der Timeout-Countdown-Sensor muss zuverlässig in HA ankommen.
 
 ---
 
