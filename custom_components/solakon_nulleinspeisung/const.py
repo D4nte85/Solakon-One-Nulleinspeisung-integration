@@ -15,15 +15,27 @@ CONF_DISCHARGE_CURRENT = "max_discharge_current_number"
 CONF_TIMEOUT_SET = "remote_timeout_set_number"
 CONF_MODE_SELECT = "mode_select"
 
-REQUIRED_ENTITY_DEFAULTS = {
-    CONF_ACTUAL_SENSOR: "sensor.solakon_one_leistung",
-    CONF_SOLAR_SENSOR: "sensor.solakon_one_pv_leistung",
-    CONF_SOC_SENSOR: "sensor.solakon_one_batterie_ladestand",
+# -- Config-Entry Entity Defaults (sprachabhängig) ----------------------------
+REQUIRED_ENTITY_DEFAULTS_DE = {
+    CONF_ACTUAL_SENSOR:     "sensor.solakon_one_leistung",
+    CONF_SOLAR_SENSOR:      "sensor.solakon_one_pv_leistung",
+    CONF_SOC_SENSOR:        "sensor.solakon_one_batterie_ladestand",
     CONF_TIMEOUT_COUNTDOWN: "sensor.solakon_one_fernsteuerung_zeituberschreitung",
-    CONF_ACTIVE_POWER: "number.solakon_one_fernsteuerung_leistung",
+    CONF_ACTIVE_POWER:      "number.solakon_one_fernsteuerung_leistung",
     CONF_DISCHARGE_CURRENT: "number.solakon_one_maximaler_entladestrom",
-    CONF_TIMEOUT_SET: "number.solakon_one_fernsteuerung_zeituberschreitung",
-    CONF_MODE_SELECT: "select.solakon_one_modus_fernsteuern",
+    CONF_TIMEOUT_SET:       "number.solakon_one_fernsteuerung_zeituberschreitung",
+    CONF_MODE_SELECT:       "select.solakon_one_modus_fernsteuern",
+}
+
+REQUIRED_ENTITY_DEFAULTS_EN = {
+    CONF_ACTUAL_SENSOR:     "sensor.solakon_one_active_power",
+    CONF_SOLAR_SENSOR:      "sensor.solakon_one_pv_power",
+    CONF_SOC_SENSOR:        "sensor.solakon_one_battery_state_of_charge",
+    CONF_TIMEOUT_COUNTDOWN: "sensor.solakon_one_remote_timeout_countdown",
+    CONF_ACTIVE_POWER:      "number.solakon_one_remote_control_power",
+    CONF_DISCHARGE_CURRENT: "number.solakon_one_maximum_discharge_current",
+    CONF_TIMEOUT_SET:       "number.solakon_one_remote_control_timeout",
+    CONF_MODE_SELECT:       "select.solakon_one_remote_control_mode",
 }
 
 PLATFORMS = ["sensor", "number", "switch"]
