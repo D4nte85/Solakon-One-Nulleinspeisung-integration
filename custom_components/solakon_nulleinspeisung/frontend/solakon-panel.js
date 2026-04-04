@@ -541,7 +541,24 @@ class SolakonPanel extends HTMLElement {
 
     this.shadowRoot.getElementById("reg-bar").addEventListener("click", () => this._toggleRegulation());
     this.shadowRoot.getElementById("menu-btn").addEventListener("click", () => {
-      this.dispatchEvent(new Event("hass-sidebar-toggle", { bubbles: true, composed: true }));
+      // Traversiert Shadow DOM zu HA's eigenem Menüknopf und klickt ihn
+      try {
+        const ha = document.querySelector("home-assistant");
+        // HA 2024.x: ha-drawer → ha-sidebar → ha-icon-button
+        const btn =
+          ha?.shadowRoot?.querySelector("ha-drawer ha-icon-button[slot='navigationIcon']") ||
+          ha?.shadowRoot?.querySelector("ha-top-app-bar-fixed ha-icon-button") ||
+          ha?.shadowRoot?.querySelector("app-toolbar ha-icon-button") ||
+          ha?.shadowRoot?.querySelector("ha-menu-button");
+        if (btn) {
+          btn.click();
+        } else {
+          // Fallback: Event auf dem home-assistant-Element selbst
+          ha?.dispatchEvent(new CustomEvent("hass-open-menu", { bubbles: true, composed: true }));
+        }
+      } catch (e) {
+        console.warn("Solakon: Menü-Button nicht gefunden", e);
+      }
     });
 
     const tabWrap = this.shadowRoot.getElementById("tabs");
