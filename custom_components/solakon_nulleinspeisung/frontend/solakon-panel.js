@@ -475,6 +475,9 @@ class SolakonPanel extends HTMLElement {
         .stat-full .val { font-size: 1.15em; font-weight: 600; }
         .stat-full .lbl { font-size: .76em; color: var(--secondary-text-color, #888); margin-top: 2px; }
         .stat-full .lbl-src { font-size: .76em; color: var(--secondary-text-color, #888); margin-top: 1px; font-style: italic; }
+        .offset-src-tag { display: inline-block; padding: 2px 7px; border-radius: 10px; font-size: .75em; font-style: normal; margin-right: 4px; font-weight: 500; }
+        .offset-src-tag.active   { background: #16a34a22; color: #16a34a; }
+        .offset-src-tag.inactive { background: #6b728022; color: #6b7280; }
 
         /* ── Flags ───────────────────────────────────────────────────────── */
         .flag-row { display: flex; flex-wrap: wrap; gap: 5px; }
@@ -799,10 +802,12 @@ class SolakonPanel extends HTMLElement {
     }
     set("st-offset-val", `${offsetActive} W`);
     set("st-offset-lbl", `Aktiver Offset — ${offsetLabel}`);
-    set("st-offset-src", isDyn
-      ? `dynamisch ● statisch: ${offsetStatic} W`
-      : `statisch ● dyn. inaktiv`
-    );
+    const srcEl = this.shadowRoot.getElementById("st-offset-src");
+    if (srcEl) srcEl.innerHTML = isDyn
+      ? `<span class="offset-src-tag active">⚡ dynamisch</span><span class="offset-src-tag inactive">statisch: ${offsetStatic} W</span>`
+      : `<span class="offset-src-tag inactive">dyn. inaktiv</span><span class="offset-src-tag active">statisch: ${offsetStatic} W</span>`;
+
+
 
     const fl = this.shadowRoot.getElementById("st-flags");
     if (fl) fl.innerHTML = [
