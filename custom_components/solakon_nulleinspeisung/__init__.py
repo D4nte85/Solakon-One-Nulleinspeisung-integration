@@ -10,6 +10,7 @@ from homeassistant.components import websocket_api, panel_custom
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryNotReady
 
 from .const import (
     DOMAIN, PLATFORMS, S_REGULATION_ENABLED,
@@ -146,7 +147,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     from .coordinator import SolakonCoordinator
 
     coordinator = SolakonCoordinator(hass, entry)
-    await coordinator.async_setup()
+    try:
+        await coordinator.async_setup()
+    except Exception as ex:
+        raise ConfigEntryNotReady(f"Solakon: Setup fehlgeschlagen: {ex}") from ex
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
 
@@ -190,3 +194,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.data[DOMAIN].pop(entry.entry_id, None)
 
     return unload_ok
+    
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    from homeassistant.helpers.storage import Store
+    store = Store(hass, STORAGE_VERSION, f"{DOMAIN}_{entry.entry_id}")
+    await store.async_remove()
