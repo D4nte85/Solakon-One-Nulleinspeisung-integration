@@ -593,7 +593,7 @@ class SolakonCoordinator:
         # ── Fall A: Zone 1 Start ─────────────────────────────────────────────
         if (
             not self.ac_charge_active
-            and v["tariff_price_valid"]
+            and v.get("tariff_price_valid", False)
             and not self.tariff_charge_active
             and not (v["tariff_enabled"] and v["tariff_price"] < v["tariff_exp"])
             and soc > zone1
@@ -651,7 +651,7 @@ class SolakonCoordinator:
             and not (
                 not self.ac_charge_active
                 and not self.tariff_charge_active
-                and v["tariff_price_valid"]
+                and v.get("tariff_price_valid", False)
                 and v["tariff_enabled"]
                 and v["tariff_price"] >= v["tariff_cheap"]
                 and v["tariff_price"] < v["tariff_exp"]
@@ -669,7 +669,7 @@ class SolakonCoordinator:
         # Überschuss-Einspeisung hat Vorrang — kein Tarif-Laden während Zone 0 aktiv
         if (
             v["tariff_enabled"]
-            and v["tariff_price_valid"]
+            and v.get("tariff_price_valid", False)
             and v["tariff_price"] < v["tariff_cheap"]
             and soc < v["tariff_soc"]
             and not self.tariff_charge_active
@@ -689,7 +689,7 @@ class SolakonCoordinator:
             self.tariff_charge_active
             and (
                 soc >= v["tariff_soc"]
-                or (v["tariff_price_valid"] and v["tariff_price"] >= v["tariff_cheap"])
+                or (v.get("tariff_price_valid", False) and v["tariff_price"] >= v["tariff_cheap"])
             )
         ):
             self.integral = 0.0
@@ -708,7 +708,7 @@ class SolakonCoordinator:
         # Sperrt Zone 1 und Zone 2 (cycle_active egal). Überschuss hat Vorrang.
         if (
             v["tariff_enabled"]
-            and v["tariff_price_valid"]
+            and v.get("tariff_price_valid", False)
             and v["tariff_price"] >= v["tariff_cheap"]
             and v["tariff_price"] < v["tariff_exp"]
             and not self.tariff_charge_active
@@ -784,7 +784,7 @@ class SolakonCoordinator:
         if (
             not self.ac_charge_active
             and not self.tariff_charge_active
-            and v["tariff_price_valid"]
+            and v.get("tariff_price_valid", False)
             and not (v["tariff_enabled"] and v["tariff_price"] < v["tariff_exp"])
             and zone3 < soc <= zone1
             and not self.cycle_active
