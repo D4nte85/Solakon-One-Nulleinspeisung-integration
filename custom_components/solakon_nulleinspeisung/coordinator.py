@@ -454,8 +454,11 @@ class SolakonCoordinator:
         is_night = night_enabled and solar < pv_reserve and not self.cycle_active
 
         tariff_price = 0.0
+        tariff_price_valid = False
         if tariff_enabled and tariff_sensor:
-            tariff_price = self._flt(tariff_sensor, 999.0)
+            raw = self.hass.states.get(tariff_sensor)
+            tariff_price_valid = raw is not None and raw.state not in ("unknown", "unavailable")
+            tariff_price = float(raw.state) if tariff_price_valid else 0.0
 
         # ── 5. Falls / Zonenwechsel ──────────────────────────────────────────
         fall_executed = await self._execute_falls(
@@ -590,6 +593,9 @@ class SolakonCoordinator:
         # ── Fall A: Zone 1 Start ─────────────────────────────────────────────
         if (
             not self.ac_charge_active
+            and v["tariff_price_valid"]
+            and not self.tariff_charge_active
+            and not (v["tariff_enabled"] and v["tariff_price"] < v["tariff_exp"])
             and soc > zone1
             and not self.cycle_active
         ):
@@ -606,6 +612,7 @@ class SolakonCoordinator:
         # ── Fall B: Zone 3 Stop (Zyklus on) ──────────────────────────────────
         if (
             not self.ac_charge_active
+            and not self.tariff_charge_active
             and soc < zone3
             and self.cycle_active
         ):
@@ -622,6 +629,7 @@ class SolakonCoordinator:
         # ── Fall C: Zone 3 Absicherung ───────────────────────────────────────
         if (
             not self.ac_charge_active
+            and not self.tariff_charge_active
             and soc < zone3
             and not self.cycle_active
             and mode != MODE_DISABLED
@@ -643,13 +651,14 @@ class SolakonCoordinator:
             and not (
                 not self.ac_charge_active
                 and not self.tariff_charge_active
+                and v["tariff_price_valid"]
                 and v["tariff_enabled"]
                 and v["tariff_price"] >= v["tariff_cheap"]
                 and v["tariff_price"] < v["tariff_exp"]
             )
         ):
             await self._timer_toggle()
-            if self.ac_charge_active:
+            if self.ac_charge_active or self.tariff_charge_active:
                 await self._set_mode(MODE_AC_CHARGE)
             else:
                 await self._set_mode(MODE_DISCHARGE)
@@ -660,6 +669,7 @@ class SolakonCoordinator:
         # Überschuss-Einspeisung hat Vorrang — kein Tarif-Laden während Zone 0 aktiv
         if (
             v["tariff_enabled"]
+            and v["tariff_price_valid"]
             and v["tariff_price"] < v["tariff_cheap"]
             and soc < v["tariff_soc"]
             and not self.tariff_charge_active
@@ -678,8 +688,8 @@ class SolakonCoordinator:
         if (
             self.tariff_charge_active
             and (
-                v["tariff_price"] >= v["tariff_cheap"]
-                or soc >= v["tariff_soc"]
+                soc >= v["tariff_soc"]
+                or (v["tariff_price_valid"] and v["tariff_price"] >= v["tariff_cheap"])
             )
         ):
             self.integral = 0.0
@@ -698,6 +708,7 @@ class SolakonCoordinator:
         # Sperrt Zone 1 und Zone 2 (cycle_active egal). Überschuss hat Vorrang.
         if (
             v["tariff_enabled"]
+            and v["tariff_price_valid"]
             and v["tariff_price"] >= v["tariff_cheap"]
             and v["tariff_price"] < v["tariff_exp"]
             and not self.tariff_charge_active
@@ -716,6 +727,7 @@ class SolakonCoordinator:
         if (
             v["ac_enabled"]
             and not self.ac_charge_active
+            and not self.tariff_charge_active
             and not self.surplus_active
             and soc < v["ac_soc_target"]
             and mode != MODE_AC_CHARGE
@@ -732,6 +744,7 @@ class SolakonCoordinator:
         if (
             mode == MODE_AC_CHARGE
             and self.ac_charge_active
+            and not self.tariff_charge_active
             and (
                 soc >= v["ac_soc_target"]
                 or (grid >= (v["ac_offset"] + v["ac_hysteresis"]) and actual == 0)
@@ -770,15 +783,13 @@ class SolakonCoordinator:
         # Tarif-Lock verhindert Re-Aktivierung bei mittlerem/günstigem Preis
         if (
             not self.ac_charge_active
+            and not self.tariff_charge_active
+            and v["tariff_price_valid"]
+            and not (v["tariff_enabled"] and v["tariff_price"] < v["tariff_exp"])
             and zone3 < soc <= zone1
             and not self.cycle_active
             and mode == MODE_DISABLED
             and not v["is_night"]
-            and not (
-                v["tariff_enabled"]
-                and v["tariff_price"] >= v["tariff_cheap"]
-                and v["tariff_price"] < v["tariff_exp"]
-            )
         ):
             self.integral = 0.0
             await self._timer_toggle()
@@ -789,6 +800,7 @@ class SolakonCoordinator:
         # ── Fall F: Nachtabschaltung ─────────────────────────────────────────
         if (
             not self.ac_charge_active
+            and not self.tariff_charge_active
             and v["is_night"]
             and not self.cycle_active
             and mode != MODE_DISABLED
