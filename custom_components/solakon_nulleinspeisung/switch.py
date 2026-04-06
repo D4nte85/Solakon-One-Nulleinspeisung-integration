@@ -22,6 +22,7 @@ async def async_setup_entry(
         DiagBoolSwitch(coord, "surplus_active", "Überschuss-Modus", "mdi:solar-power"),
         DiagBoolSwitch(coord, "ac_charge_active", "AC Laden aktiv", "mdi:lightning-bolt"),
         DiagBoolSwitch(coord, "tariff_charge_active", "Tarif-Laden aktiv", "mdi:currency-eur"),
+        DiagBoolSwitch(coord, "is_night",             "Nachtabschaltung",    "mdi:weather-night"),
     ])
 
 
