@@ -641,6 +641,10 @@ class SolakonPanel extends HTMLElement {
               <div class="flag-row" id="st-flags"></div>
             </div>
             <div>
+              <div class="mode-lbl">Aktiver Fall</div>
+              <div class="mode-val" id="st-active-fall">—</div>
+            </div>
+            <div>
               <div class="mode-lbl">Betriebsmodus</div>
               <div class="mode-val" id="st-mode">—</div>
             </div>
@@ -677,7 +681,16 @@ class SolakonPanel extends HTMLElement {
     if (b) { b.textContent = `${z.icon} ${z.label}`; b.style.background = z.color; }
 
     const set = (id, v) => { const e = this.shadowRoot.getElementById(id); if (e) e.textContent = v; };
+    const fl = this.shadowRoot.getElementById("st-flags");
+    if (fl) fl.innerHTML = [
+      ["Zyklus",        st.cycle_active],
+      ["Surplus",       st.surplus_active],
+      ["AC Laden",      st.ac_charge],
+      ["Tarif-Laden",   st.tariff_charge],
+      ["Nacht",         st.is_night],
+    ].map(([n, v]) => `<span class="flag ${v ? "on" : "off"}">${v ? "●" : "○"} ${n}</span>`).join("");
 
+    set("st-active-fall", st.active_fall || "—");
     set("st-grid",         `${(st.grid ?? 0).toFixed(0)} W`);
     set("st-actual",       `${st.actual_power ?? "—"} W`);
     set("st-solar",        `${st.solar ?? "—"} W`);
