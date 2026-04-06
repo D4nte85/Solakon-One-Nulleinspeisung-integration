@@ -593,7 +593,7 @@ class SolakonCoordinator:
         # ── Fall A: Zone 1 Start ─────────────────────────────────────────────
         if (
             not self.ac_charge_active
-            and v.get("tariff_price_valid", False)
+            and (not v["tariff_enabled"] or v.get("tariff_price_valid", False))
             and not self.tariff_charge_active
             and not (v["tariff_enabled"] and v["tariff_price"] < v["tariff_exp"])
             and soc > zone1
@@ -784,7 +784,7 @@ class SolakonCoordinator:
         if (
             not self.ac_charge_active
             and not self.tariff_charge_active
-            and v.get("tariff_price_valid", False)
+            and (not v["tariff_enabled"] or v.get("tariff_price_valid", False))
             and not (v["tariff_enabled"] and v["tariff_price"] < v["tariff_exp"])
             and zone3 < soc <= zone1
             and not self.cycle_active
