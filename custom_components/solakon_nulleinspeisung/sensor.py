@@ -28,6 +28,7 @@ async def async_setup_entry(
         ModeTextSensor(coord),
         LastActionSensor(coord),
         GridStdDevSensor(coord),
+        ActiveFallSensor(coord),
     ])
 
 
@@ -56,6 +57,39 @@ class ZoneSensor(SolakonEntity, SensorEntity):
             "integral": round(self._coordinator.integral, 2),
             "regulation_enabled": self._coordinator.settings.get("regulation_enabled", False),
         }
+_FALL_LABELS: dict[str, str] = {
+    "0A": "Zone 0: Überschuss Start",
+    "0B": "Zone 0: Überschuss Ende",
+    "A":  "Zone 1: Entladezyklus Start",
+    "B":  "Zone 3: Stopp (Zyklus aktiv)",
+    "C":  "Zone 3: Stopp",
+    "D":  "Recovery: Modus wiederhergestellt",
+    "E":  "Nacht: Abschaltung",
+    "F":  "Zone 2: Regelung aktiv",
+    "G":  "AC Laden: Start",
+    "H":  "AC Laden: Ende",
+    "I":  "Safety: Modus-Korrektur",
+    "GT": "Tarif-Laden: Start",
+    "HT": "Tarif-Laden: Ende",
+    "BT": "Discharge-Lock: Preis zu hoch",
+}
+
+
+class ActiveFallSensor(SolakonEntity, SensorEntity):
+    _attr_name = "Aktiver Fall"
+    _attr_icon = "mdi:state-machine"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, coord: SolakonCoordinator) -> None:
+        super().__init__(coord, "active_fall")
+
+    @property
+    def native_value(self) -> str:
+        return _FALL_LABELS.get(self._coordinator.active_fall, self._coordinator.active_fall)
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        return {"fall_id": self._coordinator.active_fall}
 
 
 class ModeTextSensor(SolakonEntity, SensorEntity):
