@@ -100,6 +100,7 @@ async def _ws_get_status(
         "dyn_ac": coord.dyn_offset_ac,
         "active_fall": coord.active_fall,
         "is_night": coord.is_night,
+        "forecast_tariff_suppressed": coord.forecast_tariff_suppressed,
     })
 
 
