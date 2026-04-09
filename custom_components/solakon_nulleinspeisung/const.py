@@ -38,7 +38,7 @@ REQUIRED_ENTITY_DEFAULTS_EN = {
     CONF_MODE_SELECT:       "select.solakon_one_remote_control_mode",
 }
 
-PLATFORMS = ["sensor", "number", "switch", "binary_sensor"]
+PLATFORMS = ["sensor", "switch", "binary_sensor"]
 
 # -- Inverter Mode Values ------------------------------------------------------
 MODE_DISABLED = "0"
