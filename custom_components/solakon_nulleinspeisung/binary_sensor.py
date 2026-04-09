@@ -28,7 +28,6 @@ async def async_setup_entry(
 
 class DiagBoolSensor(SolakonEntity, BinarySensorEntity):
     """Zeigt internen Coordinator-Zustand als read-only Binärsensor an."""
-    _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(
         self, coord: SolakonCoordinator, attr: str, name: str, icon: str
