@@ -182,7 +182,9 @@ const TAB_LAYOUT = {
         title: "Preisschwellen", icon: "💹", color: "#0891b2",
         fields: [
           { k: "tariff_cheap_threshold", l: "Günstig-Schwelle (ct/kWh)", d: "Tarif-Laden startet wenn Preis diese Schwelle unterschreitet UND SOC < Ladeziel. Auch untere Grenze des Discharge-Locks.", t: "num", min: 0, max: 100, step: 0.5 },
+          { k: "tariff_cheap_entity",    l: "Günstig-Schwelle dynamisch", d: "Optionale input_number-Entität. Wenn gesetzt und verfügbar, überschreibt sie den statischen Wert.", t: "entity", domain: "input_number" },
           { k: "tariff_exp_threshold",   l: "Teuer-Schwelle (ct/kWh)",   d: "Über dieser Schwelle: normale SOC-Logik, Discharge-Lock hebt sich. Dazwischen (Günstig ≤ Preis < Teuer): Discharge-Lock Zone 1 und Zone 2. Muss größer als Günstig-Schwelle sein.", t: "num", min: 0, max: 100, step: 0.5 },
+          { k: "tariff_exp_entity",      l: "Teuer-Schwelle dynamisch",  d: "Optionale input_number-Entität. Wenn gesetzt und verfügbar, überschreibt sie den statischen Wert.", t: "entity", domain: "input_number" },
         ],
       },
       {
