@@ -1,8 +1,17 @@
-
 <style>
+:root {
+  --color-background-primary: #1e1e1e;
+  --color-background-secondary: #252525;
+  --color-background-tertiary: #333333;
+  --color-text-primary: #e0e0e0;
+  --color-text-secondary: #a0a0a0;
+  --color-text-tertiary: #777777;
+  --color-border-secondary: #555555;
+  --color-border-tertiary: #333333;
+}
 *{box-sizing:border-box;margin:0;padding:0}
 .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}
-body{font-family:Roboto,sans-serif;font-size:13px;color:var(--color-text-primary);background:transparent}
+body{font-family:Roboto,sans-serif;font-size:13px;color:var(--color-text-primary);background:#121212;padding:20px}
 .shell{display:flex;border:0.5px solid var(--color-border-tertiary);border-radius:12px;overflow:hidden;min-height:720px}
 .sb{width:148px;background:var(--color-background-secondary);border-right:0.5px solid var(--color-border-tertiary);display:flex;flex-direction:column;flex-shrink:0}
 .sb-logo{padding:14px 12px 8px;font-size:10px;font-weight:500;color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:.08em}
