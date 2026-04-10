@@ -1,4 +1,4 @@
-"""Config flow — 9 Pflicht-Entitäten. Alles weitere im Sidebar-Panel."""
+"""Config flow — Instanzname + 9 Pflicht-Entitäten. Alles weitere im Sidebar-Panel."""
 from __future__ import annotations
 
 import voluptuous as vol
@@ -8,6 +8,7 @@ from homeassistant.helpers import selector
 
 from .const import (
     DOMAIN,
+    CONF_INSTANCE_NAME,
     CONF_GRID_SENSOR, CONF_ACTUAL_SENSOR, CONF_SOLAR_SENSOR,
     CONF_SOC_SENSOR, CONF_TIMEOUT_COUNTDOWN, CONF_ACTIVE_POWER,
     CONF_DISCHARGE_CURRENT, CONF_TIMEOUT_SET, CONF_MODE_SELECT,
@@ -16,14 +17,17 @@ from .const import (
 
 
 def _get_defaults(hass: HomeAssistant) -> dict:
-    """Sprachabhängige Entity-ID-Defaults — DE oder EN."""
     lang = hass.config.language or "de"
     return REQUIRED_ENTITY_DEFAULTS_EN if lang.startswith("en") else REQUIRED_ENTITY_DEFAULTS_DE
 
 
 def _schema(current: dict, defaults: dict) -> vol.Schema:
-    """Erstellt das Voluptuous-Schema für Config- und Options-Flow."""
     return vol.Schema({
+        vol.Required(
+            CONF_INSTANCE_NAME,
+            default=current.get(CONF_INSTANCE_NAME, "Speicher 1"),
+        ): selector.selector({"text": {}}),
+
         vol.Required(
             CONF_GRID_SENSOR,
             default=current.get(CONF_GRID_SENSOR, ""),
@@ -72,19 +76,14 @@ def _schema(current: dict, defaults: dict) -> vol.Schema:
 
 
 class SolakonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Single-step Config-Flow — nur Pflicht-Entitäten."""
-
     VERSION = 1
 
     async def async_step_user(
         self, user_input: dict | None = None
     ) -> config_entries.FlowResult:
-        if self._async_current_entries():
-            return self.async_abort(reason="single_instance_allowed")
-
         if user_input is not None:
             return self.async_create_entry(
-                title="Solakon ONE Nulleinspeisung",
+                title=user_input.get(CONF_INSTANCE_NAME, "Solakon ONE"),
                 data=user_input,
             )
 
@@ -106,8 +105,6 @@ class SolakonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class SolakonOptionsFlow(config_entries.OptionsFlow):
-    """Options-Flow — Entitäten nachträglich ändern."""
-
     def __init__(self, entry: config_entries.ConfigEntry) -> None:
         self._entry = entry
 
