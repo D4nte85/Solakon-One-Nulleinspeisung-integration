@@ -37,7 +37,6 @@ const TABS = [
   { id: "tariff",     label: "Tarif",       icon: "💹" },
   { id: "dynoff",     label: "Dyn. Offset", icon: "📈" },
   { id: "night",      label: "Nacht",       icon: "🌙" },
-  { id: "verteilung", label: "Verteilung",  icon: "⚖️" },
   { id: "debug",      label: "Debug",       icon: "🔧" },
 ];
 
@@ -369,6 +368,12 @@ class SolakonPanel extends HTMLElement {
     c.querySelectorAll(".ov-card").forEach(card => {
       card.addEventListener("click", () => this._switchInstance(card.dataset.eid));
     });
+
+    // Verteilung als zweiter Block
+    const distContainer = document.createElement("div");
+    distContainer.style.marginTop = "16px";
+    c.appendChild(distContainer);
+    this._renderVerteilung(distContainer);
   }
 
   // ── Config / Status Laden ─────────────────────────────────────────────────
@@ -639,11 +644,6 @@ class SolakonPanel extends HTMLElement {
     if (this._activeTab === "debug") {
       this._renderDebug();
       this._updateSaveBar();
-      return;
-    }
-
-    if (this._activeTab === "verteilung") {
-      this._renderVerteilung(c);
       return;
     }
 
