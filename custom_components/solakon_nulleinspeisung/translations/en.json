@@ -29,7 +29,7 @@
       }
     },
     "abort": {
-      "single_instance_allowed": "Only one instance allowed."
+      "already_configured": "This entity combination is already configured."
     }
   },
   "options": {
