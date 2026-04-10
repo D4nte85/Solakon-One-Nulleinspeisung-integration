@@ -207,7 +207,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             sidebar_icon="mdi:solar-power",
             frontend_url_path=DOMAIN,
             module_url=PANEL_JS_URL,
-            config={},
+            config={"entry_id": entry.entry_id},
             require_admin=False,
         )
         hass.data[f"{DOMAIN}_panel_registered"] = True
