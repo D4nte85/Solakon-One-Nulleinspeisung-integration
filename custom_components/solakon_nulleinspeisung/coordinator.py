@@ -565,7 +565,7 @@ class SolakonCoordinator:
         at_min_limit = current_power <= 0
 
         # ── 7. PI-Gate ───────────────────────────────────────────────────────
-        if mode not in (MODE_DISCHARGE, MODE_AC_CHARGE) or self.tariff_charge_active:
+        if mode not in (MODE_DISCHARGE, MODE_AC_CHARGE):
             self._update_zone_display(soc, zone1_limit, zone3_limit, mode)
             self.notify_listeners()
             return
@@ -644,7 +644,13 @@ class SolakonCoordinator:
         discharge_max = v["discharge_max"]
 
         # ── Fall 0A: Surplus Entry ───────────────────────────────────────────
-        if v["surplus_enabled"] and v["new_surplus"] and not self.surplus_active:
+        if (
+            v["surplus_enabled"]
+            and v["new_surplus"]
+            and not self.surplus_active
+            and not self.ac_charge_active
+            and not self.tariff_charge_active
+        ):
             self.surplus_active = True
             if self.cycle_active:
                 await self._set_discharge(2)
