@@ -51,11 +51,11 @@ const TAB_DOCS = {
   },
   surplus: {
     summary: "Überschuss-Einspeisung — Zone 0 aktivieren",
-    text: "Höchste Priorität — blockiert Tarif-Laden, Discharge-Lock und AC Laden solange Zone 0 aktiv.\n\nEintritt: SOC ≥ SOC-Schwelle UND PV > Output + Grid + PV-Hysterese.\nAustritt: SOC < (Schwelle − SOC-Hysterese) ODER PV ≤ Output + Grid − PV-Hysterese.\n\nOutput wird auf Hard Limit gesetzt. Integral eingefroren (kein PI-Aufruf).",
+    text: "Höchste Priorität — blockiert Tarif-Laden, Discharge-Lock und AC Laden solange Zone 0 aktiv.\n\nEintritt: SOC ≥ SOC-Schwelle UND (PV > Output + Grid + PV-Hysterese ODER PV = 0 ODER Output = 0 ODER PV-Vorhersage erzwingt).\nAustritt: SOC < (Schwelle − SOC-Hysterese) ODER (PV ≤ Output + Grid − PV-Hysterese UND PV ≠ 0 UND Output ≠ 0 UND keine Vorhersage-Erzwingung).\n\nOutput wird auf Hard Limit gesetzt. Integral eingefroren (kein PI-Aufruf).",
   },
   ac: {
     summary: "AC Laden — Netz lädt die Batterie",
-    text: "Eintritt (Fall G): SOC < Ladeziel UND kein Überschuss aktiv UND Modus ≠ '3' UND (Grid + Output) < −Hysterese.\nAbbruch (Fall H): SOC ≥ Ladeziel ODER (Grid ≥ Offset + Hysterese UND Output = 0 W).\n\nPI-Regler läuft invertiert — Positiver Fehler → Ladeleistung erhöhen.\nat_max/at_min-Guards entfallen — Fall I übernimmt die Safety-Funktion.\n\nRückkehr: Zone 1 → Timer-Toggle + Modus '1'. Zone 2 → Output 0 W + Modus '0'. Integral = 0.\n\nSOC-Schutz (Zone 3) bleibt vollständig aktiv.\n\nWegen der Hardware-Flanke des Solakon ONE (~25 s von Min auf Max) P-Faktor klein halten. Der I-Anteil macht die eigentliche Regelarbeit.\n\nPriorität: AC Laden startet nicht wenn Überschuss-Einspeisung (Zone 0) aktiv ist. AC Laden und Tarif-Laden blockieren sich gegenseitig über den Modus-Guard (Modus ≠ '3').",
+    text: "Eintritt (Fall G): SOC < Ladeziel UND kein Überschuss aktiv UND kein AC/Tarif-Laden aktiv UND Modus ≠ '3' UND (Grid + Output) < −Hysterese.\nAbbruch (Fall H): Modus = '3' UND ac_charge_active UND kein Tarif-Laden UND (SOC ≥ Ladeziel ODER (Grid ≥ Offset + Hysterese UND Output = 0 W)).\n\nPI-Regler läuft invertiert — Positiver Fehler → Ladeleistung erhöhen.\nat_max/at_min-Guards entfallen — Fall I übernimmt die Safety-Funktion.\n\nRückkehr: Zone 1 → Timer-Toggle + Modus '1'. Zone 2 → Output 0 W + Modus '0'. Integral = 0.\n\nSOC-Schutz (Zone 3) bleibt vollständig aktiv.\n\nWegen der Hardware-Flanke des Solakon ONE (~25 s von Min auf Max) P-Faktor klein halten. Der I-Anteil macht die eigentliche Regelarbeit.\n\nPriorität: AC Laden startet nicht wenn Überschuss-Einspeisung (Zone 0) aktiv ist. AC Laden und Tarif-Laden blockieren sich gegenseitig über den Modus-Guard (Modus ≠ '3').",
   },
   tariff: {
     summary: "Tarif-Arbitrage (Tibber, aWATTar …) — drei Preisstufen",
@@ -126,7 +126,7 @@ const TAB_LAYOUT = {
 
   surplus: {
     top: [
-      { k: "surplus_enabled", l: "Überschuss-Einspeisung aktivieren", d: "Höchste Priorität — blockiert Tarif-Laden, Discharge-Lock und AC Laden solange Zone 0 aktiv. Eintritt: SOC ≥ SOC-Schwelle UND PV > Output + Grid + PV-Hysterese. Austritt: SOC < (Schwelle − SOC-Hysterese) ODER PV ≤ Output + Grid − PV-Hysterese.", t: "bool" },
+      { k: "surplus_enabled", l: "Überschuss-Einspeisung aktivieren", d: "Höchste Priorität — blockiert Tarif-Laden, Discharge-Lock und AC Laden solange Zone 0 aktiv. Eintritt: SOC ≥ SOC-Schwelle UND (PV > Output + Grid + PV-Hysterese ODER PV = 0 ODER Output = 0 ODER Vorhersage erzwingt). Austritt: SOC < (Schwelle − SOC-Hysterese) ODER (PV-Exit UND PV ≠ 0 UND Output ≠ 0 UND keine Vorhersage-Erzwingung).", t: "bool" },
     ],
     enabledKey: "surplus_enabled",
     cols: [
@@ -146,9 +146,9 @@ const TAB_LAYOUT = {
       {
       title: "PV-Vorhersage", icon: "🌤️", color: "#65a30d",
       fields: [
-        { k: "surplus_forecast_enabled",   l: "Forecast-Sperre aktivieren",  d: "Surplus wird automatisch deaktiviert wenn der Vorhersage-Sensor unterhalb der Schwelle liegt. Bei Sensor-Fehler oder unavailable bleibt Surplus aktiv.", t: "bool" },
+        { k: "surplus_forecast_enabled",   l: "Forecast-Erzwingung aktivieren",  d: "Surplus-Eintritt wird erzwungen wenn der Vorhersage-Sensor ≥ Schwelle meldet. PV-basierter Exit wird blockiert — nur SOC-Exit greift. Bei Sensor-Fehler oder unavailable keine Erzwingung.", t: "bool" },
         { k: "surplus_forecast_sensor",    l: "Vorhersage-Sensor",           d: "Sensor mit dem prognostizierten PV-Ertrag (z. B. Forecast.Solar, Solcast). Einheit muss zur Schwelle passen (z. B. kWh).", t: "entity" },
-        { k: "surplus_forecast_threshold", l: "Mindest-Ertrag für Surplus",  d: "Liegt der Forecast-Wert darunter, wird Surplus für den Tag deaktiviert.", t: "num", min: 0, max: 100, step: 0.5 },
+        { k: "surplus_forecast_threshold", l: "Mindest-Ertrag für Surplus",  d: "Surplus wird erzwungen wenn die Vorhersage diesen Wert erreicht oder überschreitet.", t: "num", min: 0, max: 100, step: 0.5 },
       ],
     },
     ],
@@ -156,7 +156,7 @@ const TAB_LAYOUT = {
 
   ac: {
     top: [
-      { k: "ac_enabled", l: "AC Laden aktivieren", d: "Eintritt (Fall G): SOC < Ladeziel UND kein Überschuss aktiv UND Modus ≠ '3' UND (Grid + Output) < −Hysterese. Abbruch (Fall H): SOC ≥ Ladeziel ODER (Grid ≥ Offset + Hysterese UND Output = 0 W). SOC-Schutz (Zone 3) bleibt vollständig aktiv. Startet nicht wenn Überschuss-Einspeisung (Zone 0) oder Tarif-Laden aktiv ist.", t: "bool" },
+      { k: "ac_enabled", l: "AC Laden aktivieren", d: "Eintritt (Fall G): SOC < Ladeziel UND kein Überschuss aktiv UND kein AC/Tarif-Laden UND Modus ≠ '3' UND (Grid + Output) < −Hysterese. Abbruch (Fall H): Modus = '3' UND ac_charge_active UND kein Tarif-Laden UND (SOC ≥ Ladeziel ODER (Grid ≥ Offset + Hysterese UND Output = 0 W)). SOC-Schutz (Zone 3) bleibt vollständig aktiv. Startet nicht wenn Überschuss-Einspeisung (Zone 0) oder Tarif-Laden aktiv ist.", t: "bool" },
     ],
     enabledKey: "ac_enabled",
     cols: [
@@ -854,7 +854,8 @@ class SolakonPanel extends HTMLElement {
       ["AC Laden",    st.ac_charge],
       ["Tarif-Laden", st.tariff_charge],
       ["Nacht",       st.is_night],
-      ["PV-Forecast", st.forecast_tariff_suppressed],
+      ["PV→Tarif",    st.forecast_tariff_suppressed],
+      ["PV→Surplus",  st.forecast_surplus_forced],
     ].map(([n, v]) => `<span class="flag ${v ? "on" : "off"}">${v ? "●" : "○"} ${n}</span>`).join("");
 
     set("st-active-fall", FALL_LABELS[st.active_fall] || st.active_fall || "—");
