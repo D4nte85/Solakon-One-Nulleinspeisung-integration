@@ -51,7 +51,7 @@ const TAB_DOCS = {
   },
   surplus: {
     summary: "Überschuss-Einspeisung — Zone 0 aktivieren",
-    text: "Höchste Priorität — blockiert Tarif-Laden, Discharge-Lock und AC Laden solange Zone 0 aktiv.\n\nEintritt: SOC ≥ SOC-Schwelle UND (PV > Output + Grid + PV-Hysterese ODER PV = 0 ODER Output = 0 ODER PV-Vorhersage erzwingt).\nAustritt: SOC < (Schwelle − SOC-Hysterese) ODER (PV ≤ Output + Grid − PV-Hysterese UND PV ≠ 0 UND Output ≠ 0 UND keine Vorhersage-Erzwingung).\n\nOutput wird auf Hard Limit gesetzt. Integral eingefroren (kein PI-Aufruf).",
+    text: "Höchste Priorität — blockiert Tarif-Laden, Discharge-Lock und AC Laden solange Zone 0 aktiv.\n\nNormaler Eintritt: SOC ≥ SOC-Schwelle UND (PV > Output + Grid + PV-Hysterese ODER PV = 0 ODER Output = 0).\nForecast-Eintritt: Vorhersage ≥ Schwelle UND PV > Hard Limit (kein SOC-Gate).\n\nAustritt (nur ohne Forecast): SOC < (Schwelle − SOC-Hysterese) ODER PV ≤ Output + Grid − PV-Hysterese (wenn PV ≠ 0 und Output ≠ 0).\nBei aktivem Forecast: Exit komplett blockiert — nur Zone 3 (Safety) beendet Surplus. Sobald Forecast-Sensor unter Schwelle fällt, greift die normale Exit-Logik.\n\nOutput wird auf Hard Limit gesetzt. Integral eingefroren (kein PI-Aufruf).",
   },
   ac: {
     summary: "AC Laden — Netz lädt die Batterie",
@@ -126,7 +126,7 @@ const TAB_LAYOUT = {
 
   surplus: {
     top: [
-      { k: "surplus_enabled", l: "Überschuss-Einspeisung aktivieren", d: "Höchste Priorität — blockiert Tarif-Laden, Discharge-Lock und AC Laden solange Zone 0 aktiv. Eintritt: SOC ≥ SOC-Schwelle UND (PV > Output + Grid + PV-Hysterese ODER PV = 0 ODER Output = 0 ODER Vorhersage erzwingt). Austritt: SOC < (Schwelle − SOC-Hysterese) ODER (PV-Exit UND PV ≠ 0 UND Output ≠ 0 UND keine Vorhersage-Erzwingung).", t: "bool" },
+      { k: "surplus_enabled", l: "Überschuss-Einspeisung aktivieren", d: "Höchste Priorität — blockiert Tarif-Laden, Discharge-Lock und AC Laden solange Zone 0 aktiv. Normal: SOC ≥ Schwelle + PV-Überschuss. Mit Forecast: PV > Hard Limit genügt (kein SOC-Gate), Exit blockiert bis Forecast wegfällt.", t: "bool" },
     ],
     enabledKey: "surplus_enabled",
     cols: [
@@ -146,9 +146,9 @@ const TAB_LAYOUT = {
       {
       title: "PV-Vorhersage", icon: "🌤️", color: "#65a30d",
       fields: [
-        { k: "surplus_forecast_enabled",   l: "Forecast-Erzwingung aktivieren",  d: "Surplus-Eintritt wird erzwungen wenn der Vorhersage-Sensor ≥ Schwelle meldet. PV-basierter Exit wird blockiert — nur SOC-Exit greift. Bei Sensor-Fehler oder unavailable keine Erzwingung.", t: "bool" },
+        { k: "surplus_forecast_enabled",   l: "Forecast-Erzwingung aktivieren",  d: "Wenn Vorhersage ≥ Schwelle: Surplus startet sobald PV > Hard Limit (kein SOC-Gate). Exit komplett blockiert — nur Zone 3 (Safety) beendet Surplus. Abends fällt der Forecast-Sensor unter die Schwelle → normale Exit-Logik greift sofort.", t: "bool" },
         { k: "surplus_forecast_sensor",    l: "Vorhersage-Sensor",           d: "Sensor mit dem prognostizierten PV-Ertrag (z. B. Forecast.Solar, Solcast). Einheit muss zur Schwelle passen (z. B. kWh).", t: "entity" },
-        { k: "surplus_forecast_threshold", l: "Mindest-Ertrag für Surplus",  d: "Surplus wird erzwungen wenn die Vorhersage diesen Wert erreicht oder überschreitet.", t: "num", min: 0, max: 100, step: 0.5 },
+        { k: "surplus_forecast_threshold", l: "Mindest-Ertrag für Surplus",  d: "PV > Hard Limit + Forecast ≥ Schwelle → Surplus startet ohne SOC-Bedingung und bleibt aktiv bis Forecast unter Schwelle fällt.", t: "num", min: 0, max: 100, step: 0.5 },
       ],
     },
     ],
