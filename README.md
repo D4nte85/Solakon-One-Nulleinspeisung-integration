@@ -191,11 +191,13 @@ Ein positiver Offset von z. B. 30 W lässt den Regler auf 30 W Netzbezug regeln 
 
 Optionale Überschuss-Einspeisung (Zone 0). **Hat absoluten Vorrang vor allen anderen optionalen Modulen** — Tarif-Laden, Discharge-Lock und AC Laden werden blockiert solange Zone 0 aktiv ist.
 
-**Eintritts-Bedingung:** SOC ≥ Export-Schwelle UND (PV > Output + Grid + PV-Hysterese ODER PV = 0)
+**Eintritts-Bedingung:** SOC ≥ Export-Schwelle UND (PV > Output + Grid + PV-Hysterese ODER PV = 0 ODER Output = 0 ODER PV-Vorhersage erzwingt)
 
-> Der `PV = 0`-Zweig deckt den Fall ab, dass das MPPT die PV bei vollem Akku auf 0 W drosselt.
+> Der `PV = 0`-Zweig deckt den Fall ab, dass das MPPT die PV bei vollem Akku auf 0 W drosselt. Der `Output = 0`-Zweig fängt den Fall ab, dass der Solakon keinen Output hat obwohl die Batterie über der Surplus-Schwelle liegt (z.B. PV durch andere Anlage abgeriegelt). Die PV-Vorhersage erzwingt den Eintritt bei erwarteter hoher Erzeugung.
 
-**Austritts-Bedingung:** SOC < (Export-Schwelle − SOC-Hysterese) ODER PV ≤ Output + Grid − PV-Hysterese
+**Austritts-Bedingung:** SOC < (Export-Schwelle − SOC-Hysterese) ODER (PV ≤ Output + Grid − PV-Hysterese UND PV ≠ 0 UND Output ≠ 0 UND keine Vorhersage-Erzwingung)
+
+> Der PV-basierte Exit greift nur wenn keine der Bypass-Bedingungen (PV = 0, Output = 0, Vorhersage) aktiv ist. SOC-basierter Exit greift immer.
 
 | Parameter | Beschreibung | Empfehlung |
 |-----------|-------------|------------|
@@ -210,11 +212,11 @@ Optionale Überschuss-Einspeisung (Zone 0). **Hat absoluten Vorrang vor allen an
 
 Optionales Laden bei erkanntem externem Überschuss. Aktiv in Zone 1 und Zone 2. **Startet nicht wenn Überschuss-Einspeisung (Zone 0) oder Tarif-Laden aktiv ist.**
 
-**Eintritts-Bedingung:** SOC < Ladeziel UND kein Überschuss aktiv UND Modus ≠ `'3'` UND (Grid + Output) < −Hysterese
+**Eintritts-Bedingung:** SOC < Ladeziel UND kein Überschuss aktiv UND kein AC/Tarif-Laden aktiv UND Modus ≠ `'3'` UND (Grid + Output) < −Hysterese
 
 > Der Modus-Guard `≠ '3'` verhindert einen Re-Eintritt wenn AC Laden bereits aktiv ist.
 
-**Abbruch-Bedingung:** SOC ≥ Ladeziel ODER (Grid ≥ ac_offset + Hysterese UND Output = 0 W)
+**Abbruch-Bedingung:** Modus = `'3'` UND `ac_charge_active` UND kein Tarif-Laden UND (SOC ≥ Ladeziel ODER (Grid ≥ ac_offset + Hysterese UND Output = 0 W))
 
 > Der `Output = 0 W`-Guard verhindert Fehlauslösung während der PI noch aktiv regelt.
 
@@ -294,20 +296,20 @@ Die Regellogik arbeitet mit einer geordneten Liste von Falls. Die Reihenfolge is
 
 | Fall | Bedingung | Aktion |
 |:-----|:----------|:-------|
-| **0A** — Surplus Start | `surplus_enabled` UND `new_surplus = True` UND `surplus_active = False` | `surplus_active → True`. Integral eingefroren. |
+| **0A** — Surplus Start | `surplus_enabled` UND `new_surplus = True` UND `surplus_active = False` UND kein AC/Tarif-Laden | `surplus_active → True`. Integral eingefroren. |
 | **0B** — Surplus Ende | `surplus_enabled` UND `surplus_active = True` UND Austritts-Bedingung erfüllt | `surplus_active → False`. Integral = 0. |
-| **A** — Zone 1 Start | SOC > Zone-1-Schwelle UND `cycle_active = False` UND kein AC Laden | `cycle_active → True`. Integral = 0. Timer-Toggle. Modus → `'1'`. |
-| **B** — Zone 3 Stop | SOC < Zone-3-Schwelle UND `cycle_active = True` UND kein AC Laden | `cycle_active → False`. Integral = 0. Output → 0 W. Modus → `'0'`. |
-| **C** — Zone 3 Absicherung | SOC < Zone-3-Schwelle UND `cycle_active = False` UND Modus ≠ `'0'` UND kein AC Laden | Output → 0 W. Modus → `'0'`. Kein Integral-Reset. |
-| **D** — Recovery | `(cycle_active = True ODER ac_charge_active = True)` UND Modus ∉ `{'1','3'}` UND SOC > Zone-3-Schwelle UND kein aktiver Tarif-Lock (außer `ac_charge_active = True`) | Timer-Toggle. Modus → `'3'` (wenn `ac_charge_active`) sonst `'1'`. Kein Integral-Reset. |
-| **GT** — Tarif-Laden Start | Tarif aktiv UND Preis < Günstig-Schwelle UND SOC < Tarif-SOC-Ziel UND kein Überschuss aktiv UND Modus ≠ `'3'` | `tariff_charge_active → True`. `cycle_active → True`. Timer-Toggle. Output → 0 W. Modus → `'3'`. |
-| **HT** — Tarif-Laden Ende | `tariff_charge_active = True` UND (Preis ≥ Günstig-Schwelle ODER SOC ≥ Tarif-SOC-Ziel) | `tariff_charge_active → False`. Integral = 0. Zone 1 → `'1'` / Zone 2 → `'0'` + 0 W. |
-| **TM** — Discharge-Lock | Tarif aktiv UND Günstig ≤ Preis < Teuer-Schwelle UND kein AC/Tarif-Laden UND kein Überschuss UND Modus = `'1'` | Integral = 0. Output → 0 W. Modus → `'0'`. Sperrt Zone 1 und Zone 2. |
-| **G** — AC Laden Start | AC aktiv UND SOC < Ladeziel UND kein Überschuss aktiv UND **Modus ≠ `'3'`** UND (Grid + Output) < −Hysterese | `ac_charge_active → True`. Timer-Toggle. Output → 0 W. Modus → `'3'`. |
-| **H** — AC Laden Ende | Modus = `'3'` UND (SOC ≥ Ladeziel ODER (Grid ≥ ac_offset + Hysterese UND Output = 0)) | `ac_charge_active → False`. Integral = 0. Zone 1 → `'1'` / Zone 2 → `'0'` + 0 W. |
+| **A** — Zone 1 Start | SOC > Zone-1-Schwelle UND `cycle_active = False` UND kein AC/Tarif-Laden UND (Tarif deaktiviert ODER Preis gültig) UND kein aktiver Tarif-Block (Preis < Teuer) | `cycle_active → True`. Integral = 0. Timer-Toggle. Modus → `'1'`. |
+| **B** — Zone 3 Stop | SOC < Zone-3-Schwelle UND `cycle_active = True` UND kein AC/Tarif-Laden | `cycle_active → False`. Integral = 0. Output → 0 W. Modus → `'0'`. |
+| **C** — Zone 3 Absicherung | SOC < Zone-3-Schwelle UND `cycle_active = False` UND Modus ≠ `'0'` UND kein AC/Tarif-Laden | Output → 0 W. Modus → `'0'`. Kein Integral-Reset. |
+| **D** — Recovery | `(cycle_active = True ODER ac_charge_active = True)` UND Modus ∉ `{'1','3'}` UND SOC > Zone-3-Schwelle UND kein aktiver Tarif-Lock (außer `ac_charge_active = True`) | Timer-Toggle. Modus → `'3'` (wenn `ac_charge_active` oder `tariff_charge_active`) sonst `'1'`. Kein Integral-Reset. |
+| **GT** — Tarif-Laden Start | Tarif aktiv UND Preis gültig UND Preis < Günstig-Schwelle UND SOC < Tarif-SOC-Ziel UND kein Tarif-Laden aktiv UND kein Überschuss aktiv UND Modus ≠ `'3'` | `tariff_charge_active → True`. `cycle_active → True`. Timer-Toggle. Output → Tarif-Ladeleistung. Modus → `'3'`. |
+| **HT** — Tarif-Laden Ende | `tariff_charge_active = True` UND (Preis gültig UND Preis ≥ Günstig-Schwelle ODER SOC ≥ Tarif-SOC-Ziel) | `tariff_charge_active → False`. Integral = 0. Zone 1 → `'1'` / Zone 2 → `'0'` + 0 W. |
+| **TM** — Discharge-Lock | Tarif aktiv UND Preis gültig UND Günstig ≤ Preis < Teuer-Schwelle UND kein AC/Tarif-Laden UND kein Überschuss UND Modus = `'1'` | Integral = 0. Output → 0 W. Modus → `'0'`. Sperrt Zone 1 und Zone 2. |
+| **G** — AC Laden Start | AC aktiv UND kein AC/Tarif-Laden aktiv UND kein Überschuss aktiv UND SOC < Ladeziel UND **Modus ≠ `'3'`** UND (Grid + Output) < −Hysterese | `ac_charge_active → True`. Timer-Toggle. Output → 0 W. Modus → `'3'`. |
+| **H** — AC Laden Ende | Modus = `'3'` UND `ac_charge_active = True` UND kein Tarif-Laden UND (SOC ≥ Ladeziel ODER (Grid ≥ ac_offset + Hysterese UND Output = 0)) | `ac_charge_active → False`. Integral = 0. Zone 1 → `'1'` / Zone 2 → `'0'` + 0 W. |
 | **I** — Safety | Modus = `'3'` UND kein aktives AC Laden UND kein Tarif-Laden | Integral = 0. Zone 1 → Timer-Toggle + `'1'` / Zone 2 → `'0'` + 0 W. |
-| **E** — Zone 2 Start | Zone-3 < SOC ≤ Zone-1 UND `cycle_active = False` UND Modus = `'0'` UND kein AC Laden UND kein Nacht UND kein Tarif-Lock | Integral = 0. Timer-Toggle. Modus → `'1'`. |
-| **F** — Nachtabschaltung | Nacht aktiv UND `cycle_active = False` UND Modus ≠ `'0'` UND kein AC Laden | Integral = 0. Output → 0 W. Modus → `'0'`. |
+| **E** — Zone 2 Start | Zone-3 < SOC ≤ Zone-1 UND `cycle_active = False` UND Modus = `'0'` UND kein AC/Tarif-Laden UND kein Nacht UND kein Tarif-Lock | Integral = 0. Timer-Toggle. Modus → `'1'`. |
+| **F** — Nachtabschaltung | Nacht aktiv UND `cycle_active = False` UND Modus ≠ `'0'` UND kein AC/Tarif-Laden | Integral = 0. Output → 0 W. Modus → `'0'`. |
 
 **Reihenfolge-Begründungen:**
 - Fall D liegt vor Falls G/H, damit Recovery nur Modus ∉ `{'1','3'}` prüft — der AC-Lade-Modus `'3'` wird durch Recovery nie überschrieben.
@@ -370,6 +372,7 @@ Die Integration erzeugt automatisch folgende Entitäten unter dem Gerät **Solak
 | `binary_sensor.solakon_one_tarif_laden_aktiv` | Binary Sensor | Flag Tarif-Laden aktiv |
 | `binary_sensor.solakon_one_nachtabschaltung` | Binary Sensor | Flag Nachtabschaltung aktiv |
 | `binary_sensor.solakon_one_pv_vorhersage_tarif_gesperrt` | Binary Sensor | PV-Vorhersage sperrt Tarif-Laden |
+| `binary_sensor.solakon_one_pv_vorhersage_surplus_erzwungen` | Binary Sensor | PV-Vorhersage erzwingt Surplus-Eintritt |
 
 Die Diagnose-Binärsensoren sind read-only — sie spiegeln interne Coordinator-Zustände wider.
 
