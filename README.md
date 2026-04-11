@@ -99,7 +99,7 @@ Die folgenden Solakon-Entitäten müssen in HA vorhanden sein und werden beim Ei
 ### Über HACS (empfohlen)
 
 1. HACS öffnen → **Integrationen** → drei Punkte oben rechts → **Benutzerdefiniertes Repository hinzufügen**
-2. URL eintragen: `https://github.com/D4nte85/Solakon-One-Nulleinspeisung-Blueprint-homeassistant`
+2. URL eintragen: `https://github.com/D4nte85/Solakon-One-Nulleispeisung-integration`
 3. Kategorie: **Integration** → **Hinzufügen**
 4. Die Integration **Solakon ONE Nulleinspeisung** erscheint in der Liste → **Herunterladen**
 5. Home Assistant neu starten
