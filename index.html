@@ -305,7 +305,7 @@ function rZones(){
 }
 
 function rSurplus(){
-  return acc('Überschuss-Einspeisung — Zone 0','Höchste Priorität. Eintritt: SOC ≥ Schwelle UND PV > Output + Grid + PV-Hysterese.\nAustritt: SOC < (Schwelle − SOC-Hysterese) ODER PV ≤ Output + Grid − PV-Hysterese.\nOutput auf Hard Limit. Integral eingefroren.')+
+  return acc('Überschuss-Einspeisung — Zone 0','Höchste Priorität. Eintritt: SOC ≥ Schwelle UND (PV > Output + Grid + PV-Hysterese ODER PV = 0 ODER Output = 0 ODER Vorhersage erzwingt).\nAustritt: SOC < (Schwelle − SOC-Hysterese) ODER (PV ≤ Output + Grid − PV-Hysterese UND PV ≠ 0 UND Output ≠ 0 UND keine Erzwingung).\nOutput auf Hard Limit. Integral eingefroren.')+
   card('⚙️ Allgemein','#475569',fb('Überschuss-Einspeisung aktivieren','Höchste Priorität — blockiert Tarif-Laden, Discharge-Lock und AC Laden solange Zone 0 aktiv.',false,'cb-surplus'))+
   `<div id="blk-surplus-cols" class="dimmed" style="margin-top:10px"><div class="cg2">
     ${card('🔋 SOC-Bedingung','#0891b2',
@@ -317,8 +317,8 @@ function rSurplus(){
 }
 
 function rAC(){
-  return acc('AC Laden — Netz lädt die Batterie','Eintritt: SOC < Ladeziel UND kein Überschuss UND Modus ≠ 3 UND (Grid + Output) < −Hysterese.\nAbbruch: SOC ≥ Ladeziel ODER (Grid ≥ Offset + Hysterese UND Output = 0 W).\nPI läuft invertiert. P-Faktor klein halten (~0.3) wegen Hardware-Flanke (~25 s).')+
-  card('⚙️ Allgemein','#475569',fb('AC Laden aktivieren','Eintritt: SOC < Ladeziel UND kein Überschuss UND Modus ≠ 3. SOC-Schutz (Zone 3) bleibt aktiv.',false,'cb-ac'))+
+  return acc('AC Laden — Netz lädt die Batterie','Eintritt: SOC < Ladeziel UND kein Überschuss UND kein AC/Tarif-Laden UND Modus ≠ 3 UND (Grid + Output) < −Hysterese.\nAbbruch: Modus = 3 UND ac_charge_active UND kein Tarif-Laden UND (SOC ≥ Ladeziel ODER (Grid ≥ Offset + Hysterese UND Output = 0 W)).\nPI läuft invertiert. P-Faktor klein halten (~0.3) wegen Hardware-Flanke (~25 s).')+
+  card('⚙️ Allgemein','#475569',fb('AC Laden aktivieren','Eintritt: SOC < Ladeziel UND kein Überschuss UND kein AC/Tarif-Laden UND Modus ≠ 3. SOC-Schutz (Zone 3) bleibt aktiv.',false,'cb-ac'))+
   `<div id="blk-ac-cols" class="dimmed" style="margin-top:10px"><div class="cg2">
     ${card('⚡ Eintritt & Grenzen','#7c3aed',
       fi('Ladeziel SOC (%)','Laden stoppt wenn SOC diesen Wert erreicht. Empfohlen: > Zone-1-Schwelle.','number',90,'min=50 max=100 step=1')+
