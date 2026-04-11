@@ -265,7 +265,7 @@ function rStatus(d){
     </div></div>
     <div class="sc"><div class="sc-hdr" style="background:#b45309">🚦 Module & Status</div><div class="sc-body">
       <div class="mlbl">Aktive Module</div>
-      <div class="flags"><span class="flag ${d.cy?'on':'off'}">${d.cy?'●':'○'} Zyklus</span><span class="flag off">○ Surplus</span><span class="flag off">○ AC Laden</span><span class="flag off">○ Tarif-Laden</span><span class="flag off">○ Nacht</span><span class="flag off">○ PV-Forecast</span></div>
+      <div class="flags"><span class="flag ${d.cy?'on':'off'}">${d.cy?'●':'○'} Zyklus</span><span class="flag off">○ Surplus</span><span class="flag off">○ AC Laden</span><span class="flag off">○ Tarif-Laden</span><span class="flag off">○ Nacht</span><span class="flag off">○ PV→Tarif</span><span class="flag off">○ PV→Surplus</span></div>
       <div class="mlbl" style="margin-top:4px">Aktiver Fall</div><div class="mval">${d.fl}</div>
       <div class="mlbl" style="margin-top:4px">Betriebsmodus</div><div class="mval">Modus ${d.mode} — INV Discharge PV Priority</div>
       <div class="mlbl" style="margin-top:4px">Letzte Aktion</div><div class="mval">Output ${d.out} W gesetzt</div>
@@ -307,12 +307,16 @@ function rZones(){
 function rSurplus(){
   return acc('Überschuss-Einspeisung — Zone 0','Höchste Priorität. Eintritt: SOC ≥ Schwelle UND (PV > Output + Grid + PV-Hysterese ODER PV = 0 ODER Output = 0 ODER Vorhersage erzwingt).\nAustritt: SOC < (Schwelle − SOC-Hysterese) ODER (PV ≤ Output + Grid − PV-Hysterese UND PV ≠ 0 UND Output ≠ 0 UND keine Erzwingung).\nOutput auf Hard Limit. Integral eingefroren.')+
   card('⚙️ Allgemein','#475569',fb('Überschuss-Einspeisung aktivieren','Höchste Priorität — blockiert Tarif-Laden, Discharge-Lock und AC Laden solange Zone 0 aktiv.',false,'cb-surplus'))+
-  `<div id="blk-surplus-cols" class="dimmed" style="margin-top:10px"><div class="cg2">
+  `<div id="blk-surplus-cols" class="dimmed" style="margin-top:10px"><div class="cg3">
     ${card('🔋 SOC-Bedingung','#0891b2',
       fi('SOC-Schwelle (%)','Zone 0 startet ab diesem SOC. Empfohlen: > Zone-1-Schwelle. Typisch: 90–98 %.','number',95,'min=50 max=100 step=1')+
       fi('SOC-Hysterese (%)','Austritt erst wenn SOC < (Schwelle − Hysterese). Verhindert Flackern. Typisch: 3–5 %.','number',5,'min=1 max=20 step=1'))}
     ${card('☀️ PV-Bedingung','#f59e0b',
       fi('PV-Hysterese (W)','Eintritt: PV > Output + Grid + Hysterese. Austritt: PV ≤ Output + Grid − Hysterese.','number',50,'min=10 max=200 step=10'))}
+    ${card('🌤️ PV-Vorhersage','#65a30d',
+      fb('Forecast-Erzwingung aktivieren','Surplus-Eintritt wird erzwungen wenn Vorhersage ≥ Schwelle. PV-basierter Exit blockiert — nur SOC-Exit greift.',false)+
+      fi('Vorhersage-Sensor','Sensor mit prognostiziertem PV-Ertrag (z.B. Solcast). Einheit muss zur Schwelle passen.','text','','placeholder="sensor.solcast_prognose"')+
+      fi('Mindest-Ertrag für Surplus','Surplus wird erzwungen wenn die Vorhersage diesen Wert erreicht oder überschreitet.','number',5,'min=0 max=100 step=0.5'))}
   </div></div>`;
 }
 
