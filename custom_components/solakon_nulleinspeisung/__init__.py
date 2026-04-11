@@ -121,7 +121,7 @@ async def _ws_get_status(
         "active_fall":       coord.active_fall,
         "is_night":          coord.is_night,
         "forecast_tariff_suppressed": coord.forecast_tariff_suppressed,
-        "forecast_surplus_suppressed": coord.forecast_surplus_suppressed,
+        "forecast_surplus_forced": coord.forecast_surplus_forced,
     })
 
 
