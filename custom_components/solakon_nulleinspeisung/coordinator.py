@@ -549,13 +549,30 @@ class SolakonCoordinator:
         target_offset = offset_1 if self.cycle_active else offset_2
 
         if effective_surplus_enabled:
-            surplus_entry = (
+            normal_entry = (
                 soc >= surplus_threshold
-                and (solar > (actual + grid + surplus_pv_hyst) or solar == 0)
+                and (
+                    solar > (actual + grid + surplus_pv_hyst)
+                    or solar == 0
+                    or actual == 0
+                )
             )
+            forecast_entry = (
+                self.forecast_surplus_forced
+                and solar > hard_limit
+            )
+            surplus_entry = normal_entry or forecast_entry
+
             surplus_exit = (
-                soc < (surplus_threshold - surplus_soc_hyst)
-                or solar <= (actual + grid - surplus_pv_hyst)
+                not self.forecast_surplus_forced
+                and (
+                    soc < (surplus_threshold - surplus_soc_hyst)
+                    or (
+                        solar <= (actual + grid - surplus_pv_hyst)
+                        and solar != 0
+                        and actual != 0
+                    )
+                )
             )
             new_surplus = (self.surplus_active and not surplus_exit) or surplus_entry
         else:
