@@ -198,10 +198,10 @@ class SolakonCoordinator:
         if self._surplus_forecast_unsub:
             self._surplus_forecast_unsub()
             self._surplus_forecast_unsub = None
-    
+
         enabled = self.settings.get(S_SURPLUS_FORECAST_ENABLED, False)
         sensor  = self.settings.get(S_SURPLUS_FORECAST_SENSOR, "")
-    
+
         if enabled and sensor:
             self._surplus_forecast_unsub = async_track_state_change_event(
                 self.hass, [sensor], self._on_state_change
@@ -504,10 +504,8 @@ class SolakonCoordinator:
                 self.forecast_surplus_suppressed = False
         else:
             self.forecast_surplus_suppressed = False
-
-        effective_surplus_enabled = surplus_enabled and not self.forecast_surplus_suppressed
         
-        effective_surplus_enabled = surplus_enabled and not forecast_surplus_suppressed
+        effective_surplus_enabled = surplus_enabled and not self.forecast_surplus_suppressed
         
         if pv_forecast_enabled and pv_forecast_sensor:
             raw = self.hass.states.get(pv_forecast_sensor)
