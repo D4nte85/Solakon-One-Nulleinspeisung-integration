@@ -67,6 +67,26 @@ Die Module werden in fest definierter Prioritätsreihenfolge ausgewertet — ein
 
 AC Laden und Tarif-Laden blockieren sich gegenseitig über den Modus-Guard (`Modus ≠ '3'`). Überschuss-Einspeisung hat absoluten Vorrang — kein anderes optionales Modul kann während Zone 0 starten.
 
+## Multi-Instancing
+
+Bei mehr als einer installierten Instanz zeigt das Sidebar-Panel oben eine **Instanzleiste** sowie eine **Übersichtsseite** mit Echtzeit-Status aller Instanzen. Die Leistungsverteilung wird direkt im Panel konfiguriert.
+
+### `max_power_entity`
+
+Jede Instanz akzeptiert eine optionale `max_power_entity`. Ist sie gesetzt, ersetzt der aktuelle Wert dieser Entität den konfigurierten Hard Limit dynamisch. Ohne diese Entität verhält sich die Instanz identisch zur Einzelinstanz-Variante.
+
+### Leistungsverteilungs-Blueprint (`solakon_leistungsverteilung.yaml`)
+
+Berechnet die Aufteilung der zulässigen Gesamtleistung auf 2–4 Instanzen und schreibt den jeweiligen Anteil in die `max_power_entity` jeder Instanz.
+
+| Parameter | Beschreibung |
+|-----------|-------------|
+| Gesamte Max. Ausgangsleistung (W) | Absolute Obergrenze aller Instanzen zusammen |
+| Verteilungs-Modus | Gleichverteilung · Gewichtet (SOC/PV) · Manuell |
+| SOC ↔ PV Gewichtung | 0,0 = nur SOC · 1,0 = nur PV (nur Modus Gewichtet) |
+| Aktualisierungsintervall | Neuberechnung alle 10–300 s |
+
+
 ---
 
 ## Voraussetzungen
