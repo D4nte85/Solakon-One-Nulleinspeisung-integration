@@ -195,17 +195,17 @@ class SolakonCoordinator:
             )
 
     def _update_surplus_forecast_tracker(self) -> None:
-    if self._surplus_forecast_unsub:
-        self._surplus_forecast_unsub()
-        self._surplus_forecast_unsub = None
-
-    enabled = self.settings.get(S_SURPLUS_FORECAST_ENABLED, False)
-    sensor  = self.settings.get(S_SURPLUS_FORECAST_SENSOR, "")
-
-    if enabled and sensor:
-        self._surplus_forecast_unsub = async_track_state_change_event(
-            self.hass, [sensor], self._on_state_change
-        )
+        if self._surplus_forecast_unsub:
+            self._surplus_forecast_unsub()
+            self._surplus_forecast_unsub = None
+    
+        enabled = self.settings.get(S_SURPLUS_FORECAST_ENABLED, False)
+        sensor  = self.settings.get(S_SURPLUS_FORECAST_SENSOR, "")
+    
+        if enabled and sensor:
+            self._surplus_forecast_unsub = async_track_state_change_event(
+                self.hass, [sensor], self._on_state_change
+            )
 
     async def _save_integral(self) -> None:
         await self._store.async_save({**self.settings, "integral": self.integral})
@@ -497,13 +497,15 @@ class SolakonCoordinator:
             raw = self.hass.states.get(surplus_forecast_sensor)
             if raw and raw.state not in ("unknown", "unavailable"):
                 try:
-                    forecast_surplus_suppressed = float(raw.state) < surplus_forecast_threshold
+                    self.forecast_surplus_suppressed = float(raw.state) < surplus_forecast_threshold
                 except (ValueError, TypeError):
-                    forecast_surplus_suppressed = False
+                    self.forecast_surplus_suppressed = False
             else:
-                forecast_surplus_suppressed = False
+                self.forecast_surplus_suppressed = False
         else:
-            forecast_surplus_suppressed = False
+            self.forecast_surplus_suppressed = False
+
+        effective_surplus_enabled = surplus_enabled and not self.forecast_surplus_suppressed
         
         effective_surplus_enabled = surplus_enabled and not forecast_surplus_suppressed
         
@@ -547,7 +549,7 @@ class SolakonCoordinator:
         # ── 4. Abgeleitete Variablen ─────────────────────────────────────────
         target_offset = offset_1 if self.cycle_active else offset_2
 
-        if surplus_enabled:
+        if effective_surplus_enabled:
             surplus_entry = (
                 soc >= surplus_threshold
                 and (solar > (actual + grid + surplus_pv_hyst) or solar == 0)
