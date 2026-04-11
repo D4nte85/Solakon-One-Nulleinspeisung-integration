@@ -86,7 +86,7 @@ class SolakonCoordinator:
         self._forecast_unsub = None
         self.forecast_tariff_suppressed: bool = False
         self._surplus_forecast_unsub = None
-        self.forecast_surplus_suppressed: bool = False
+        self.forecast_surplus_forced: bool = False
 
     # ── Setup / Teardown ─────────────────────────────────────────────────────
 
@@ -498,15 +498,15 @@ class SolakonCoordinator:
             raw = self.hass.states.get(surplus_forecast_sensor)
             if raw and raw.state not in ("unknown", "unavailable"):
                 try:
-                    self.forecast_surplus_suppressed = float(raw.state) < surplus_forecast_threshold
+                    self.forecast_surplus_forced = float(raw.state) >= surplus_forecast_threshold
                 except (ValueError, TypeError):
-                    self.forecast_surplus_suppressed = False
+                    self.forecast_surplus_forced = False
             else:
-                self.forecast_surplus_suppressed = False
+                self.forecast_surplus_forced = False
         else:
-            self.forecast_surplus_suppressed = False
-        
-        effective_surplus_enabled = surplus_enabled and not self.forecast_surplus_suppressed
+            self.forecast_surplus_forced = False
+
+        effective_surplus_enabled = surplus_enabled
         
         if pv_forecast_enabled and pv_forecast_sensor:
             raw = self.hass.states.get(pv_forecast_sensor)
@@ -839,8 +839,6 @@ class SolakonCoordinator:
             self.integral = 0.0
             if self.cycle_active:
                 self.cycle_active = False
-            if self.surplus_active:
-                self.surplus_active = False
             await self._set_output(0)
             await self._set_mode(MODE_DISABLED)
             self._set_last_action(f"Tarif: Discharge-Lock (Preis {v['tariff_price']:.1f})")
