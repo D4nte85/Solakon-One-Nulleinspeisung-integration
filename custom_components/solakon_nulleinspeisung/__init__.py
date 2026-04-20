@@ -135,7 +135,8 @@ async def _ws_reset_integral(
 ) -> None:
     coord = hass.data.get(DOMAIN, {}).get(msg["entry_id"])
     if coord:
-        coord.integral = 0.0
+        async with coord._lock:
+            coord.integral = 0.0
         coord.notify_listeners()
         connection.send_result(msg["id"], {"success": True})
     else:
@@ -208,12 +209,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             sidebar_icon="mdi:solar-power",
             frontend_url_path=DOMAIN,
             module_url=PANEL_JS_URL,
-            config={"entry_id": entry.entry_id},
+            config={},
             require_admin=False,
         )
         hass.data[f"{DOMAIN}_panel_registered"] = True
 
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    try:
+        await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    except Exception as ex:
+        hass.data[DOMAIN].pop(entry.entry_id, None)
+        raise ConfigEntryNotReady(f"Solakon: Platform-Setup fehlgeschlagen: {ex}") from ex
+
     return True
 
 
@@ -227,11 +233,13 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
     if unload_ok:
-        hass.data[DOMAIN].pop(entry.entry_id, None)
+        hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
 
-        # Panel nur entfernen wenn keine Instanz mehr läuft
-        if not hass.data[DOMAIN]:
+        # Panel + Store nur entfernen wenn keine Instanz mehr läuft
+        if not hass.data.get(DOMAIN):
             async_remove_panel(hass, DOMAIN)
+            hass.data.pop(DOMAIN, None)
+            hass.data.pop(f"{DOMAIN}_dist_store", None)
             hass.data.pop(f"{DOMAIN}_panel_registered", None)
             hass.data.pop(f"{DOMAIN}_ws_registered", None)
             hass.data.pop(f"{DOMAIN}_static_registered", None)
@@ -247,7 +255,7 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
 
 DIST_DEFAULTS = {
     "global_max_power":  800,
-    "interval_seconds":  "30",
+    "interval_seconds":  30,
     "distribution_mode": "equal",
     "soc_pv_balance":    0.5,
 }

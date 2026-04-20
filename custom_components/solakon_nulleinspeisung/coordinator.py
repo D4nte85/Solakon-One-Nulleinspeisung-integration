@@ -9,6 +9,7 @@ from typing import Any, Callable
 
 from homeassistant.core import HomeAssistant, Event, callback
 from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.helpers.state import state_as_number
 from homeassistant.helpers.storage import Store
 
 from .const import (
@@ -95,13 +96,14 @@ class SolakonCoordinator:
         stored = await self._store.async_load()
         if stored:
             self.settings = {**SETTINGS_DEFAULTS, **stored}
+            self.cycle_active = bool(stored.get("cycle_active", False))
+            self.surplus_active = bool(stored.get("surplus_active", False))
+            self.ac_charge_active = bool(stored.get("ac_charge_active", False))
+            self.tariff_charge_active = bool(stored.get("tariff_charge_active", False))
             _LOGGER.debug("Solakon: Einstellungen aus Speicher geladen")
         else:
             self.settings = SETTINGS_DEFAULTS.copy()
             _LOGGER.info("Solakon: Standardwerte geladen")
-
-        if "integral" in (stored or {}):
-            self.integral = float(stored["integral"])
 
         cfg = self.entry.data
         entities_to_track = [
@@ -134,8 +136,6 @@ class SolakonCoordinator:
         if self._surplus_forecast_unsub:
             self._surplus_forecast_unsub()
             self._surplus_forecast_unsub = None
-        await self._save_integral()
-
     # ── Settings-Management ──────────────────────────────────────────────────
 
     async def async_update_settings(self, changes: dict[str, Any]) -> None:
@@ -143,7 +143,7 @@ class SolakonCoordinator:
         old_tariff_enabled = self.settings.get(S_TARIFF_ENABLED, False)
 
         self.settings.update(changes)
-        await self._store.async_save({**self.settings, "integral": self.integral})
+        await self._store.async_save(self._store_data())
         _LOGGER.info("Solakon: Einstellungen gespeichert")
 
         new_tariff = self.settings.get(S_TARIFF_PRICE_SENSOR, "")
@@ -208,8 +208,14 @@ class SolakonCoordinator:
                 self.hass, [sensor], self._on_state_change
             )
 
-    async def _save_integral(self) -> None:
-        await self._store.async_save({**self.settings, "integral": self.integral})
+    def _store_data(self) -> dict:
+        return {
+            **self.settings,
+            "cycle_active":        self.cycle_active,
+            "surplus_active":      self.surplus_active,
+            "ac_charge_active":    self.ac_charge_active,
+            "tariff_charge_active": self.tariff_charge_active,
+        }
 
     # ── Entity-Listener-Pattern ──────────────────────────────────────────────
 
@@ -221,8 +227,11 @@ class SolakonCoordinator:
             self._listeners.remove(cb)
 
     def notify_listeners(self) -> None:
-        for cb in self._listeners:
-            cb()
+        for cb in list(self._listeners):
+            try:
+                cb()
+            except Exception:
+                _LOGGER.exception("Solakon: Fehler in Entity-Listener")
 
     def reset_integral(self) -> None:
         self.integral = 0.0
@@ -303,7 +312,9 @@ class SolakonCoordinator:
         noise: float, factor: float, negative: bool,
     ) -> float:
         """Offset = clamp(min + max(0, (StdDev − Rausch) × Faktor), min, max)."""
-        if stddev < 0:
+        if min_off >= max_off:
+            result = min_off
+        elif stddev < 0:
             result = min_off
         else:
             buf = max(0.0, (stddev - noise) * factor)
@@ -334,14 +345,27 @@ class SolakonCoordinator:
     # ── State-Helpers ────────────────────────────────────────────────────────
 
     def _flt(self, entity_id: str, default: float = 0.0) -> float:
-        """Sicher Float-Wert aus HA-State lesen."""
+        """Sicher Float-Wert aus HA-State lesen; toleriert Unit-Suffixe."""
         state = self.hass.states.get(entity_id)
         if state is None or state.state in ("unknown", "unavailable"):
             return default
         try:
-            return float(state.state)
+            return state_as_number(state)
         except (ValueError, TypeError):
             return default
+
+    def _flt_power(self, entity_id: str, default: float = 0.0) -> float:
+        """Float-Wert lesen und bei kW-Sensor auf W normalisieren."""
+        state = self.hass.states.get(entity_id)
+        if state is None or state.state in ("unknown", "unavailable"):
+            return default
+        try:
+            value = state_as_number(state)
+        except (ValueError, TypeError):
+            return default
+        if state.attributes.get("unit_of_measurement") == "kW":
+            value *= 1000.0
+        return value
 
     def _str(self, entity_id: str) -> str:
         """State als String lesen, 'unknown' bei Fehler."""
@@ -413,12 +437,20 @@ class SolakonCoordinator:
     async def _run_regulation_cycle(self) -> None:
         cfg = self.entry.data
         s = self.settings
+        _prev_flags = (self.cycle_active, self.surplus_active, self.ac_charge_active, self.tariff_charge_active)
 
         # ── 1. Sensor-Werte lesen ────────────────────────────────────────────
+        # Kernsensoren müssen verfügbar sein — 0.0-Fallback würde Regler fehlleiten
+        if not all(self._entity_ok(cfg[k]) for k in (
+            CONF_GRID_SENSOR, CONF_SOLAR_SENSOR, CONF_ACTUAL_SENSOR, CONF_SOC_SENSOR
+        )):
+            _LOGGER.debug("Solakon: Kernsensoren nicht verfügbar, Zyklus übersprungen")
+            return
+
         soc = self._flt(cfg[CONF_SOC_SENSOR])
-        grid = self._flt(cfg[CONF_GRID_SENSOR])
-        solar = self._flt(cfg[CONF_SOLAR_SENSOR])
-        actual = self._flt(cfg[CONF_ACTUAL_SENSOR])
+        grid = self._flt_power(cfg[CONF_GRID_SENSOR])
+        solar = self._flt_power(cfg[CONF_SOLAR_SENSOR])
+        actual = self._flt_power(cfg[CONF_ACTUAL_SENSOR])
         current_power = self._flt(cfg[CONF_ACTIVE_POWER])
         mode = self._str(cfg[CONF_MODE_SELECT])
         timer_val = self._flt(cfg[CONF_TIMEOUT_COUNTDOWN])
@@ -506,8 +538,6 @@ class SolakonCoordinator:
         else:
             self.forecast_surplus_forced = False
 
-        effective_surplus_enabled = surplus_enabled
-        
         if pv_forecast_enabled and pv_forecast_sensor:
             raw = self.hass.states.get(pv_forecast_sensor)
             if raw and raw.state not in ("unknown", "unavailable"):
@@ -548,7 +578,7 @@ class SolakonCoordinator:
         # ── 4. Abgeleitete Variablen ─────────────────────────────────────────
         target_offset = offset_1 if self.cycle_active else offset_2
 
-        if effective_surplus_enabled:
+        if surplus_enabled:
             normal_entry = (
                 soc >= surplus_threshold
                 and (
@@ -567,14 +597,13 @@ class SolakonCoordinator:
                 not self.forecast_surplus_forced
                 and (
                     soc < (surplus_threshold - surplus_soc_hyst)
-                    or (
-                        solar <= (actual + grid - surplus_pv_hyst)
-                        and solar != 0
-                        and actual != 0
-                    )
+                    or solar <= (actual + grid - surplus_pv_hyst)
                 )
             )
-            new_surplus = (self.surplus_active and not surplus_exit) or surplus_entry
+            if self.surplus_active:
+                new_surplus = not surplus_exit
+            else:
+                new_surplus = surplus_entry
         else:
             new_surplus = False
 
@@ -585,8 +614,12 @@ class SolakonCoordinator:
         tariff_price_valid = False
         if tariff_enabled and tariff_sensor:
             raw = self.hass.states.get(tariff_sensor)
-            tariff_price_valid = raw is not None and raw.state not in ("unknown", "unavailable")
-            tariff_price = float(raw.state) if tariff_price_valid else 0.0
+            if raw and raw.state not in ("unknown", "unavailable"):
+                try:
+                    tariff_price = float(raw.state)
+                    tariff_price_valid = True
+                except (ValueError, TypeError):
+                    pass
 
         # ── 5. Falls / Zonenwechsel ──────────────────────────────────────────
         fall_executed = await self._execute_falls(
@@ -594,7 +627,7 @@ class SolakonCoordinator:
             current_power=current_power,
             zone1_limit=zone1_limit, zone3_limit=zone3_limit,
             hard_limit=hard_limit, discharge_max=discharge_max,
-            surplus_enabled=effective_surplus_enabled, new_surplus=new_surplus,
+            surplus_enabled=surplus_enabled, new_surplus=new_surplus,
             surplus_pv_hyst=surplus_pv_hyst,
             ac_enabled=ac_enabled, ac_soc_target=ac_soc_target,
             ac_hysteresis=ac_hysteresis, ac_offset=ac_offset,
@@ -608,8 +641,8 @@ class SolakonCoordinator:
             self.active_fall = fall_executed
 
         # ── 6. Frische Werte nach Falls ──────────────────────────────────────
-        grid = self._flt(cfg[CONF_GRID_SENSOR])
-        solar = self._flt(cfg[CONF_SOLAR_SENSOR])
+        grid = self._flt_power(cfg[CONF_GRID_SENSOR])
+        solar = self._flt_power(cfg[CONF_SOLAR_SENSOR])
         current_power = self._flt(cfg[CONF_ACTIVE_POWER])
         mode = self._str(cfg[CONF_MODE_SELECT])
 
@@ -622,7 +655,7 @@ class SolakonCoordinator:
 
         target_offset = offset_1 if self.cycle_active else offset_2
 
-        at_max_limit = current_power >= hard_limit
+        at_max_limit = current_power >= dynamic_max
         at_min_limit = current_power <= 0
 
         # ── 7. PI-Gate ───────────────────────────────────────────────────────
@@ -685,9 +718,10 @@ class SolakonCoordinator:
                     self.integral *= 0.95
                     self._set_last_action("Integral-Decay (5%)")
 
-        # ── 10. Persistieren + Display ───────────────────────────────────────
-        await self._save_integral()
+        # ── 10. Display + Flag-Persistenz ────────────────────────────────────
         self._update_zone_display(soc, zone1_limit, zone3_limit, mode)
+        if (self.cycle_active, self.surplus_active, self.ac_charge_active, self.tariff_charge_active) != _prev_flags:
+            self._store.async_delay_save(self._store_data, 5)
         self.notify_listeners()
 
     # ── Falls (Zonenwechsel-Logik) ───────────────────────────────────────────
@@ -732,7 +766,7 @@ class SolakonCoordinator:
             not self.ac_charge_active
             and (not v["tariff_enabled"] or v.get("tariff_price_valid", False))
             and not self.tariff_charge_active
-            and not (v["tariff_enabled"] and v["tariff_price"] < v["tariff_exp"])
+            and not (v["tariff_enabled"] and v.get("tariff_price_valid", False) and v["tariff_price"] < v["tariff_exp"])
             and soc > zone1
             and not self.cycle_active
         ):
@@ -780,19 +814,20 @@ class SolakonCoordinator:
             return "C"
 
         # ── Fall D: Recovery ─────────────────────────────────────────────────
-        # Tarif-Lock blockiert Recovery für normalen Discharge (ac_charge_active-Recovery bleibt erlaubt)
+        # Tarif-Lock blockiert Recovery für normalen Discharge (ac/tariff_charge_active-Recovery bleibt erlaubt)
+        tariff_lock_active = (
+            v["tariff_enabled"]
+            and v.get("tariff_price_valid", False)
+            and v["tariff_price"] >= v["tariff_cheap"]
+            and v["tariff_price"] < v["tariff_exp"]
+            and not self.ac_charge_active
+            and not self.tariff_charge_active
+        )
         if (
-            (self.cycle_active or self.ac_charge_active)
+            (self.cycle_active or self.ac_charge_active or self.tariff_charge_active)
             and mode not in (MODE_DISCHARGE, MODE_AC_CHARGE)
             and soc > zone3
-            and not (
-                not self.ac_charge_active
-                and not self.tariff_charge_active
-                and v.get("tariff_price_valid", False)
-                and v["tariff_enabled"]
-                and v["tariff_price"] >= v["tariff_cheap"]
-                and v["tariff_price"] < v["tariff_exp"]
-            )
+            and not tariff_lock_active
         ):
             await self._timer_toggle()
             if self.ac_charge_active or self.tariff_charge_active:
@@ -814,7 +849,6 @@ class SolakonCoordinator:
             and mode != MODE_AC_CHARGE
         ):
             self.tariff_charge_active = True
-            self.cycle_active = True
             await self._timer_toggle()
             await self._set_output(v["tariff_power"])
             await self._set_mode(MODE_AC_CHARGE)
@@ -924,7 +958,7 @@ class SolakonCoordinator:
             not self.ac_charge_active
             and not self.tariff_charge_active
             and (not v["tariff_enabled"] or v.get("tariff_price_valid", False))
-            and not (v["tariff_enabled"] and v["tariff_price"] < v["tariff_exp"])
+            and not (v["tariff_enabled"] and v.get("tariff_price_valid", False) and v["tariff_price"] < v["tariff_exp"])
             and zone3 < soc <= zone1
             and not self.cycle_active
             and mode == MODE_DISABLED
@@ -972,11 +1006,11 @@ class SolakonCoordinator:
             raw_error = grid_power - target_offset
 
         if raw_error > 0:
-            error = min(raw_error, max_power - current_power)
+            error = min(raw_error, max(0.0, max_power - current_power))
         else:
             error = max(raw_error, 0 - current_power)
 
-        integral_new = max(-1000, min(1000, self.integral + error))
+        integral_new = max(-max_power, min(max_power, self.integral + error))
         self.integral = integral_new
 
         correction = error * p_factor + integral_new * i_factor

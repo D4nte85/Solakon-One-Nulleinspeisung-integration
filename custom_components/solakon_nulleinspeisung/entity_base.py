@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from homeassistant.helpers.entity import Entity
 
-from .const import DOMAIN
+from .const import DOMAIN, CONF_INSTANCE_NAME
 from .coordinator import SolakonCoordinator
 
 
@@ -16,9 +16,9 @@ class SolakonEntity(Entity):
         self._attr_unique_id = f"{coordinator.entry.entry_id}_{suffix}"
         self._attr_device_info = {
             "identifiers": {(DOMAIN, coordinator.entry.entry_id)},
-            "name": "Solakon ONE",
+            "name": coordinator.entry.data.get(CONF_INSTANCE_NAME, "Solakon ONE"),
             "manufacturer": "D4nte",
-            "model": "Nulleinspeisung v2",
+            "model": "Nulleinspeisung v2.0.1",
         }
 
     async def async_added_to_hass(self) -> None:

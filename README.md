@@ -71,10 +71,6 @@ AC Laden und Tarif-Laden blockieren sich gegenseitig über den Modus-Guard (`Mod
 
 Bei mehr als einer installierten Instanz zeigt das Sidebar-Panel oben eine **Instanzleiste** sowie eine **Übersichtsseite** mit Echtzeit-Status aller Instanzen.
 
-### `max_power_entity`
-
-Jede Instanz akzeptiert eine optionale `max_power_entity`. Ist sie gesetzt, ersetzt der aktuelle Wert dieser Entität den konfigurierten Hard Limit dynamisch. Ohne diese Entität verhält sich die Instanz identisch zur Einzelinstanz-Variante.
-
 ### Leistungsverteilung
 
 Im Panel wird bei mehreren Instanzen ein zusätzlicher **Verteilungs-Tab** eingeblendet. Dort wird konfiguriert, wie die zulässige Gesamtleistung auf die aktiven Instanzen aufgeteilt wird.
@@ -349,7 +345,7 @@ Typischer Arbeitsbereich: **0.03–0.08**. Für AC Laden separat tunen — P bes
 3. **Netzleistungssensor-Polarität.** Positiv = Bezug, negativ = Einspeisung — abweichende Polarität führt zu umgekehrtem Regelverhalten.
 4. **AC Laden Eintritts-Guard.** Eintritt in AC Laden ist nur möglich wenn Modus ≠ `'3'`. Das verhindert einen Re-Eintritt wenn AC Laden bereits aktiv ist.
 5. **AC Laden P/I-Tuning.** Separates Tuning erforderlich — P klein halten (~0,3–0,5) wegen der langen Hardware-Flanke des Solakon ONE im AC-Lade-Modus (~25 s). I-Faktor macht die eigentliche Regelarbeit. Standard I-Faktor: 0,0 als sicherer Startpunkt.
-6. **at_max_limit-Guard.** Greift nur am absoluten Hard Limit (800 W), nicht am dynamischen `max_power`. Dadurch kein Deadlock wenn das dynamic ceiling sinkt.
+6. **at_max_limit-Guard.** Greift am zonenabhängigen `dynamic_max` (Zone 0: AC-Limit, Zone 1: Hard Limit, Zone 2: PV−Reserve). Dadurch kein Deadlock wenn das dynamic ceiling sinkt.
 7. **at_max/at_min-Guards im AC-Lade-Modus.** Beide Guards sind während AC Laden deaktiviert — Fall I übernimmt die Safety-Funktion für unlegitimierte `'3'`-Zustände.
 8. **Tarif-Discharge-Lock.** Der Lock gilt für mittlere UND günstige Preiszonen (alles unterhalb der Teuer-Schwelle) und sperrt sowohl Zone 1 als auch Zone 2 (Output 0 W, Modus Disabled). Solange Überschuss-Einspeisung aktiv ist, wird kein Lock ausgelöst. Die Sperre hebt sich automatisch wenn der Preis die Teuer-Schwelle überschreitet — Recovery (Fall D) stellt dann den vorherigen Modus wieder her.
 9. **Dynamischer Offset.** Jede Zone wird einzeln aktiviert. Die Netz-Standardabweichung wird intern berechnet — kein externer Statistik-Sensor erforderlich. Nach dem ersten Start einige Minuten warten bis genug Samples gesammelt sind.

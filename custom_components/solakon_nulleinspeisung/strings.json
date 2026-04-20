@@ -29,7 +29,7 @@
       }
     },
     "abort": {
-      "single_instance_allowed": "Nur eine Instanz erlaubt."
+      "already_configured": "Diese Entitätenkombination ist bereits konfiguriert."
     }
   },
   "options": {

@@ -4,7 +4,12 @@ from __future__ import annotations
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers import selector
+from homeassistant.data_entry_flow import FlowResult
+from homeassistant.helpers.selector import (
+    EntitySelector,
+    EntitySelectorConfig,
+    TextSelector,
+)
 
 from .const import (
     DOMAIN,
@@ -26,52 +31,52 @@ def _schema(current: dict, defaults: dict) -> vol.Schema:
         vol.Required(
             CONF_INSTANCE_NAME,
             default=current.get(CONF_INSTANCE_NAME, "Speicher 1"),
-        ): selector.selector({"text": {}}),
+        ): TextSelector(),
 
         vol.Required(
             CONF_GRID_SENSOR,
             default=current.get(CONF_GRID_SENSOR, ""),
-        ): selector.selector({"entity": {"domain": "sensor", "device_class": "power"}}),
+        ): EntitySelector(EntitySelectorConfig(domain="sensor", device_class="power")),
 
         vol.Required(
             CONF_ACTUAL_SENSOR,
             default=current.get(CONF_ACTUAL_SENSOR, defaults[CONF_ACTUAL_SENSOR]),
-        ): selector.selector({"entity": {"domain": "sensor", "device_class": "power"}}),
+        ): EntitySelector(EntitySelectorConfig(domain="sensor", device_class="power")),
 
         vol.Required(
             CONF_SOLAR_SENSOR,
             default=current.get(CONF_SOLAR_SENSOR, defaults[CONF_SOLAR_SENSOR]),
-        ): selector.selector({"entity": {"domain": "sensor", "device_class": "power"}}),
+        ): EntitySelector(EntitySelectorConfig(domain="sensor", device_class="power")),
 
         vol.Required(
             CONF_SOC_SENSOR,
             default=current.get(CONF_SOC_SENSOR, defaults[CONF_SOC_SENSOR]),
-        ): selector.selector({"entity": {"domain": "sensor", "device_class": "battery"}}),
+        ): EntitySelector(EntitySelectorConfig(domain="sensor", device_class="battery")),
 
         vol.Required(
             CONF_TIMEOUT_COUNTDOWN,
             default=current.get(CONF_TIMEOUT_COUNTDOWN, defaults[CONF_TIMEOUT_COUNTDOWN]),
-        ): selector.selector({"entity": {"domain": "sensor"}}),
+        ): EntitySelector(EntitySelectorConfig(domain="sensor")),
 
         vol.Required(
             CONF_ACTIVE_POWER,
             default=current.get(CONF_ACTIVE_POWER, defaults[CONF_ACTIVE_POWER]),
-        ): selector.selector({"entity": {"domain": "number"}}),
+        ): EntitySelector(EntitySelectorConfig(domain="number")),
 
         vol.Required(
             CONF_DISCHARGE_CURRENT,
             default=current.get(CONF_DISCHARGE_CURRENT, defaults[CONF_DISCHARGE_CURRENT]),
-        ): selector.selector({"entity": {"domain": "number"}}),
+        ): EntitySelector(EntitySelectorConfig(domain="number")),
 
         vol.Required(
             CONF_TIMEOUT_SET,
             default=current.get(CONF_TIMEOUT_SET, defaults[CONF_TIMEOUT_SET]),
-        ): selector.selector({"entity": {"domain": "number"}}),
+        ): EntitySelector(EntitySelectorConfig(domain="number")),
 
         vol.Required(
             CONF_MODE_SELECT,
             default=current.get(CONF_MODE_SELECT, defaults[CONF_MODE_SELECT]),
-        ): selector.selector({"entity": {"domain": "select"}}),
+        ): EntitySelector(EntitySelectorConfig(domain="select")),
     })
 
 
@@ -80,8 +85,12 @@ class SolakonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_user(
         self, user_input: dict | None = None
-    ) -> config_entries.FlowResult:
+    ) -> FlowResult:
         if user_input is not None:
+            mode_select = user_input.get(CONF_MODE_SELECT, "")
+            for entry in self.hass.config_entries.async_entries(DOMAIN):
+                if entry.data.get(CONF_MODE_SELECT) == mode_select:
+                    return self.async_abort(reason="already_configured")
             return self.async_create_entry(
                 title=user_input.get(CONF_INSTANCE_NAME, "Solakon ONE"),
                 data=user_input,
@@ -101,21 +110,18 @@ class SolakonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def async_get_options_flow(
         entry: config_entries.ConfigEntry,
     ) -> "SolakonOptionsFlow":
-        return SolakonOptionsFlow(entry)
+        return SolakonOptionsFlow()
 
 
 class SolakonOptionsFlow(config_entries.OptionsFlow):
-    def __init__(self, entry: config_entries.ConfigEntry) -> None:
-        self._entry = entry
-
     async def async_step_init(
         self, user_input: dict | None = None
-    ) -> config_entries.FlowResult:
+    ) -> FlowResult:
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
 
         defaults = _get_defaults(self.hass)
         return self.async_show_form(
             step_id="init",
-            data_schema=_schema(self._entry.data, defaults),
+            data_schema=_schema(self.config_entry.data, defaults),
         )
