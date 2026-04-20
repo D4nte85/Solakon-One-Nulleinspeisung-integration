@@ -4,94 +4,57 @@
 
 const DOMAIN = "solakon_nulleinspeisung";
 
-const ZONE_CFG = {
-  0: { label: "Zone 0 — Überschuss", color: "#f59e0b", icon: "☀️" },
-  1: { label: "Zone 1 — Aggressiv",  color: "#16a34a", icon: "⚡" },
-  2: { label: "Zone 2 — Schonend",   color: "#0891b2", icon: "🔋" },
-  3: { label: "Zone 3 — Stopp",      color: "#dc2626", icon: "⛔" },
-};
-
-const FALL_LABELS = {
-  "0A": "Zone 0: Überschuss Start",
-  "0B": "Zone 0: Überschuss Ende",
-  "A":  "Zone 1: Entladezyklus Start",
-  "B":  "Zone 3: Stopp (Zyklus aktiv)",
-  "C":  "Zone 3: Stopp",
-  "D":  "Recovery: Modus wiederhergestellt",
-  "E":  "Zone 2: Regelung aktiv",
-  "F":  "Nacht: Abschaltung",
-  "G":  "AC Laden: Start",
-  "H":  "AC Laden: Ende",
-  "I":  "Safety: Modus-Korrektur",
-  "GT": "Tarif-Laden: Start",
-  "HT": "Tarif-Laden: Ende",
-  "TM": "Discharge-Lock: Preis zu hoch",
+// Zone colors and icons — not translated
+const ZONE_STYLE = {
+  0: { color: "#f59e0b", icon: "☀️" },
+  1: { color: "#16a34a", icon: "⚡" },
+  2: { color: "#0891b2", icon: "🔋" },
+  3: { color: "#dc2626", icon: "⛔" },
 };
 
 const TABS = [
-  { id: "status",     label: "Status",      icon: "📊" },
-  { id: "pi",         label: "PI-Regler",   icon: "🎛️" },
-  { id: "zones",      label: "Zonen",       icon: "🔋" },
-  { id: "surplus",    label: "Überschuss",  icon: "☀️" },
-  { id: "ac",         label: "AC Laden",    icon: "⚡" },
-  { id: "tariff",     label: "Tarif",       icon: "💹" },
-  { id: "dynoff",     label: "Dyn. Offset", icon: "📈" },
-  { id: "night",      label: "Nacht",       icon: "🌙" },
-  { id: "debug",      label: "Debug",       icon: "🔧" },
+  { id: "status"  },
+  { id: "pi"      },
+  { id: "zones"   },
+  { id: "surplus" },
+  { id: "ac"      },
+  { id: "tariff"  },
+  { id: "dynoff"  },
+  { id: "night"   },
+  { id: "debug"   },
 ];
 
-const TAB_DOCS = {
-  pi: {
-    summary: "PI-Regler — Kern des Regelkreises",
-    text: "Regelgröße: Netzleistung (positiv = Bezug, negativ = Einspeisung). Stellgröße: AC-Ausgangsleistung des Wechselrichters.\n\nP-Anteil: reagiert sofort auf die aktuelle Abweichung (Grid − Offset).\nI-Anteil: summiert Abweichungen über die Zeit auf, eliminiert bleibende Regelabweichungen.\nAnti-Windup: Integral auf ±1000 begrenzt.\nIntegral-Reset: bei jedem Zonenwechsel auf 0.\nToleranz-Decay: −5 %/Zyklus wenn Fehler ≤ Totband und |Integral| > 10.\nZone 0: Integral eingefroren, kein PI-Aufruf.\n\nFehlerberechnung modusabhängig:\n• Normal: raw_error = Grid − Offset\n• AC Laden: raw_error = Offset − Grid (invertiert)\n\nSelf-Adjusting Wait: Nach einem Stelleingriff wird auf die tatsächliche WR-Ausgangsleistung gewartet statt einer fixen Pause. Sobald actual_power den Sollwert ±Toleranz erreicht, geht der Regler weiter. Die konfigurierte Wartezeit wirkt als maximales Timeout.\n\nEinstieg: P = 0.5, I = 0. P schrittweise erhöhen bis Output zu pendeln beginnt, dann einen Schritt zurück. I erst einführen wenn P-Regelung stabil ist.",
-  },
-  zones: {
-    summary: "SOC-Zonenlogik — Verhalten abhängig vom Batterieladestand",
-    text: "Zone 0 (Überschuss, optional): SOC ≥ Export-Schwelle UND PV-Überschuss → Output auf Hard Limit. Entladestrom 2 A. PI-Integral eingefroren.\n\nZone 1 (aggressiv): SOC > Zone-1-Schwelle → hoher Entladestrom, Offset 1. Läuft durch bis SOC ≤ Zone-3-Schwelle — kein Yo-Yo-Effekt.\n\nZone 2 (schonend): Zone-3 < SOC ≤ Zone-1 → 0 A Entladestrom, dynamisches Output-Limit (max PV − Reserve), Offset 2.\n\nZone 3 (Sicherheitsstopp): SOC ≤ Zone-3-Schwelle → Output 0 W, Modus Disabled. AC Laden bleibt trotzdem möglich.",
-  },
-  surplus: {
-    summary: "Überschuss-Einspeisung — Zone 0 aktivieren",
-    text: "Höchste Priorität — blockiert Tarif-Laden, Discharge-Lock und AC Laden solange Zone 0 aktiv.\n\nNormaler Eintritt: SOC ≥ SOC-Schwelle UND (PV > Output + Grid + PV-Hysterese ODER PV = 0 ODER Output = 0).\nForecast-Eintritt: Vorhersage ≥ Schwelle UND PV > Hard Limit (kein SOC-Gate).\n\nAustritt (nur ohne Forecast): SOC < (Schwelle − SOC-Hysterese) ODER PV ≤ Output + Grid − PV-Hysterese (wenn PV ≠ 0 und Output ≠ 0).\nBei aktivem Forecast: Exit komplett blockiert — nur Zone 3 (Safety) beendet Surplus. Sobald Forecast-Sensor unter Schwelle fällt, greift die normale Exit-Logik.\n\nOutput wird auf Hard Limit gesetzt. Integral eingefroren (kein PI-Aufruf).",
-  },
-  ac: {
-    summary: "AC Laden — Netz lädt die Batterie",
-    text: "Eintritt (Fall G): SOC < Ladeziel UND kein Überschuss aktiv UND kein AC/Tarif-Laden aktiv UND Modus ≠ '3' UND (Grid + Output) < −Hysterese.\nAbbruch (Fall H): Modus = '3' UND ac_charge_active UND kein Tarif-Laden UND (SOC ≥ Ladeziel ODER (Grid ≥ Offset + Hysterese UND Output = 0 W)).\n\nPI-Regler läuft invertiert — Positiver Fehler → Ladeleistung erhöhen.\nat_max/at_min-Guards entfallen — Fall I übernimmt die Safety-Funktion.\n\nRückkehr: Zone 1 → Timer-Toggle + Modus '1'. Zone 2 → Output 0 W + Modus '0'. Integral = 0.\n\nSOC-Schutz (Zone 3) bleibt vollständig aktiv.\n\nWegen der Hardware-Flanke des Solakon ONE (~25 s von Min auf Max) P-Faktor klein halten. Der I-Anteil macht die eigentliche Regelarbeit.\n\nPriorität: AC Laden startet nicht wenn Überschuss-Einspeisung (Zone 0) aktiv ist. AC Laden und Tarif-Laden blockieren sich gegenseitig über den Modus-Guard (Modus ≠ '3').",
-  },
-  tariff: {
-    summary: "Tarif-Arbitrage (Tibber, aWATTar …) — drei Preisstufen",
-    text: "Günstig (Preis < Günstig-Schwelle): Tarif-Laden startet — feste Ladeleistung bis SOC-Ziel. Kein PI-Regler.\nMittel (Günstig ≤ Preis < Teuer-Schwelle): Discharge-Lock — Zone 1 und Zone 2 gesperrt (Output 0 W, Modus Disabled). Sobald der Preis die Teuer-Schwelle überschreitet, wird der Betrieb automatisch wiederhergestellt.\nTeuer (Preis ≥ Teuer-Schwelle): normale SOC-Logik, keine Einschränkung.\n\nTarif-Laden und AC-Laden sind voneinander unabhängige Module und blockieren sich gegenseitig über den Modus-Guard.\n\nPriorität: Tarif-Laden und Discharge-Lock werden blockiert solange Überschuss-Einspeisung (Zone 0) aktiv ist.\n\nErfordert Preis-Sensor mit numerischem Wert in ct/kWh.",
-  },
-  dynoff: {
-    summary: "Dynamischer Offset — automatisch aus Netz-Volatilität berechnet",
-    text: "Berechnet den Nullpunkt-Offset aus der Standardabweichung der Netzleistung über das konfigurierte Zeitfenster.\n\nFormel: offset = clamp(min + max(0, (StdDev − Rausch) × Faktor), min, max)\n\nBeispiel (min=30, noise=15, factor=1.5):\n• StdDev 5 W → 30 W (Minimum)\n• StdDev 30 W → 53 W\n• StdDev 80 W → 128 W\n• StdDev 160 W → 228 W\n• StdDev 250 W+ → 250 W (Maximum)\n\nJede Zone (Zone 1, Zone 2, Zone AC) ist einzeln aktivierbar und überschreibt den statischen Offset der jeweiligen Zone.\n\nDer StdDev-Sensor wird intern berechnet — kein externer Statistik-Sensor erforderlich.",
-  },
-  night: {
-    summary: "Nachtabschaltung — Zone 2 bei PV < PV-Ladereserve deaktivieren",
-    text: "Betrifft ausschließlich Zone 2 (Fall F): Modus → Disabled, Output 0 W, Integral-Reset.\nZone 1 und AC Laden laufen auch nachts weiter.\n\nSchwelle: PV-Ladereserve aus den Zonen-Einstellungen — kein separater Parameter.\n\nReaktivierung: Sobald PV wieder über die PV-Ladereserve steigt, greift Fall E (Integral-Reset, Timer-Toggle, Modus → '1') — sofern kein Tarif-Lock aktiv ist.",
-  },
-  debug: {
-    summary: "Debug — manuelle Eingriffe in den Regelzustand",
-    text: "Integral zurücksetzen: Setzt den I-Anteil des PI-Reglers auf 0.\n\nZone manuell setzen: Schaltet den internen cycle_active-Flag und setzt das Integral zurück.\n• Zone 1 aktivieren: cycle_active = true → aggressiver Entladebetrieb, voller Entladestrom.\n• Zone 2 aktivieren: cycle_active = false → batterieschonender Betrieb, 0 A Entladestrom, dynamisches Output-Limit.\n\nAlle Aktionen werden unter 'Letzte Aktion' im Status-Tab protokolliert.",
-  },
+// Tab icons — not translated
+const TAB_ICONS = {
+  status:  "📊",
+  pi:      "🎛️",
+  zones:   "🔋",
+  surplus: "☀️",
+  ac:      "⚡",
+  tariff:  "💹",
+  dynoff:  "📈",
+  night:   "🌙",
+  debug:   "🔧",
 };
 
+// Layout: field keys + numeric constraints only — labels/descriptions in translation files
 const TAB_LAYOUT = {
   pi: {
     cols: [
       {
-        title: "Regelparameter", icon: "🎛️", color: "#0891b2",
+        tk: "pi_ctrl", icon: "🎛️", color: "#0891b2",
         fields: [
-          { k: "p_factor",  l: "P-Faktor (Proportional)", d: "Reagiert sofort auf die aktuelle Abweichung (Grid − Offset). Höher = aggressiver. Zu groß: Output pendelt dauerhaft. Typisch nach Einstellung: 0.8–1.5", t: "num", min: 0.1, max: 5, step: 0.1 },
-          { k: "i_factor",  l: "I-Faktor (Integral)",     d: "Summiert Abweichungen über die Zeit auf, eliminiert bleibende Regelabweichungen. Anti-Windup auf ±1000 begrenzt. Startwert: 0 — erst erhöhen wenn P-Regelung stabil ist. Typisch: 0.03–0.08", t: "num", min: 0, max: 0.5, step: 0.01 },
-          { k: "tolerance", l: "Toleranzbereich / Totband (W)", d: "Abweichungen innerhalb dieses Bereichs lösen keinen PI-Eingriff aus. Stattdessen greift der Integral-Decay (−5 %/Zyklus wenn |Integral| > 10).", t: "num", min: 0, max: 200, step: 1 },
-          { k: "wait_time", l: "Wartezeit / Max-Timeout (s)", d: "Kompensiert Hardware-Flanke + Sensor-Polling-Latenz nach einem Stelleingriff. Ohne Self-Adjust: feste Pause. Mit Self-Adjust: maximales Timeout als Sicherheitsnetz.", t: "num", min: 0, max: 30, step: 1 },
+          { k: "p_factor",  t: "num", min: 0.1, max: 5,   step: 0.1  },
+          { k: "i_factor",  t: "num", min: 0,   max: 0.5, step: 0.01 },
+          { k: "tolerance", t: "num", min: 0,   max: 200, step: 1    },
+          { k: "wait_time", t: "num", min: 0,   max: 30,  step: 1    },
         ],
       },
       {
-        title: "Self-Adjusting Wait", icon: "🎯", color: "#7c3aed",
+        tk: "pi_saw", icon: "🎯", color: "#7c3aed",
         fields: [
-          { k: "self_adjust_enabled",   l: "Self-Adjusting Wait aktivieren", d: "Wartet nach jedem Stelleingriff auf die tatsächliche WR-Ausgangsleistung. Sobald actual_power den Sollwert ±Toleranz erreicht, geht der Regler weiter. Die Wartezeit wirkt als maximales Timeout.", t: "bool" },
-          { k: "self_adjust_tolerance", l: "Zielwert-Toleranz (W)", d: "Abweichung zwischen actual_power und Sollwert in Watt, ab der der Zielwert als erreicht gilt und die Wartezeit endet. Typisch: 2–5 W.", t: "num", min: 1, max: 50, step: 1 },
+          { k: "self_adjust_enabled",   t: "bool" },
+          { k: "self_adjust_tolerance", t: "num", min: 1, max: 50, step: 1 },
         ],
       },
     ],
@@ -100,25 +63,25 @@ const TAB_LAYOUT = {
   zones: {
     cols: [
       {
-        title: "SOC-Grenzen", icon: "🔋", color: "#0891b2",
+        tk: "zones_soc", icon: "🔋", color: "#0891b2",
         fields: [
-          { k: "zone1_limit", l: "Zone 1 SOC-Schwelle (%)", d: "SOC überschreitet diesen Wert → Zone 1 startet. Zone 1 läuft durch bis SOC ≤ Zone-3-Schwelle — kein Yo-Yo-Effekt. Auch nachts aktiv.", t: "num", min: 1, max: 99, step: 1 },
-          { k: "zone3_limit", l: "Zone 3 SOC-Schwelle (%)", d: "SOC unterschreitet diesen Wert → Zone 3 (Sicherheitsstopp): Output 0 W, Modus Disabled. Muss kleiner als Zone-1-Schwelle sein. AC Laden bleibt trotz Zone 3 möglich.", t: "num", min: 1, max: 49, step: 1 },
-          { k: "pv_reserve",  l: "PV-Ladereserve (W)", d: "Zone-2-Output-Limit: max(0, PV − Reserve). Gleichzeitig Schwelle für Nachtabschaltung: Zone 2 deaktiviert wenn PV < Reserve.", t: "num", min: 0, max: 500, step: 10 },
+          { k: "zone1_limit", t: "num", min: 1,  max: 99,  step: 1  },
+          { k: "zone3_limit", t: "num", min: 1,  max: 49,  step: 1  },
+          { k: "pv_reserve",  t: "num", min: 0,  max: 500, step: 10 },
         ],
       },
       {
-        title: "Leistungsgrenzen", icon: "⚙️", color: "#b45309",
+        tk: "zones_power", icon: "⚙️", color: "#b45309",
         fields: [
-          { k: "hard_limit",    l: "Hard Limit (W)", d: "Absolute Ausgangsleistungs-Obergrenze in Zone 0 und Zone 1. Der at_max_limit-Guard greift nur an dieser Grenze, nicht am dynamischen Zone-2-Limit.", t: "num", min: 100, max: 2000, step: 50 },
-          { k: "discharge_max", l: "Max. Entladestrom Zone 1 (A)", d: "Entladestrom in Zone 1. Zone 2 und AC Laden setzen automatisch 0 A. Surplus setzt 2 A.", t: "num", min: 1, max: 100, step: 1 },
+          { k: "hard_limit",    t: "num", min: 100, max: 2000, step: 50 },
+          { k: "discharge_max", t: "num", min: 1,   max: 100,  step: 1  },
         ],
       },
       {
-        title: "Offsets", icon: "🎯", color: "#7c3aed",
+        tk: "zones_offsets", icon: "🎯", color: "#7c3aed",
         fields: [
-          { k: "offset_1", l: "Offset Zone 1 (W)", d: "Regelziel in Zone 1. Positiv = Regler hält leichten Netzbezug als Sicherheitspuffer. Negativ = Regler speist leicht ein. Wird überschrieben wenn Dyn. Offset für Zone 1 aktiv ist.", t: "num", min: -200, max: 300, step: 1 },
-          { k: "offset_2", l: "Offset Zone 2 (W)", d: "Regelziel in Zone 2. Empfohlen: etwas größer als Zone-1-Offset (stärkerer Bezugspuffer wenn Batterie schonend entladen wird). Wird überschrieben wenn Dyn. Offset für Zone 2 aktiv ist.", t: "num", min: -200, max: 300, step: 1 },
+          { k: "offset_1", t: "num", min: -200, max: 300, step: 1 },
+          { k: "offset_2", t: "num", min: -200, max: 300, step: 1 },
         ],
       },
     ],
@@ -126,54 +89,54 @@ const TAB_LAYOUT = {
 
   surplus: {
     top: [
-      { k: "surplus_enabled", l: "Überschuss-Einspeisung aktivieren", d: "Höchste Priorität — blockiert Tarif-Laden, Discharge-Lock und AC Laden solange Zone 0 aktiv. Normal: SOC ≥ Schwelle + PV-Überschuss. Mit Forecast: PV > Hard Limit genügt (kein SOC-Gate), Exit blockiert bis Forecast wegfällt.", t: "bool" },
+      { k: "surplus_enabled", t: "bool" },
     ],
     enabledKey: "surplus_enabled",
     cols: [
       {
-        title: "SOC-Bedingung", icon: "🔋", color: "#0891b2",
+        tk: "surplus_soc", icon: "🔋", color: "#0891b2",
         fields: [
-          { k: "surplus_soc_threshold", l: "SOC-Schwelle (%)",  d: "Zone 0 startet erst ab diesem SOC. Empfohlen: > Zone-1-Schwelle. Typisch: 90–98 %.", t: "num", min: 50, max: 100, step: 1 },
-          { k: "surplus_soc_hyst",      l: "SOC-Hysterese (%)", d: "Austritt erst wenn SOC < (Schwelle − Hysterese). Verhindert Flackern nahe der Schwelle. Typisch: 3–5 %.", t: "num", min: 1, max: 20, step: 1 },
+          { k: "surplus_soc_threshold", t: "num", min: 50,  max: 100, step: 1 },
+          { k: "surplus_soc_hyst",      t: "num", min: 1,   max: 20,  step: 1 },
         ],
       },
       {
-        title: "PV-Bedingung", icon: "☀️", color: "#f59e0b",
+        tk: "surplus_pv", icon: "☀️", color: "#f59e0b",
         fields: [
-          { k: "surplus_pv_hyst", l: "PV-Hysterese (W)", d: "Eintritt: PV > Output + Grid + Hysterese. Austritt: PV ≤ Output + Grid − Hysterese.", t: "num", min: 10, max: 200, step: 10 },
+          { k: "surplus_pv_hyst", t: "num", min: 10, max: 200, step: 10 },
         ],
       },
       {
-      title: "PV-Vorhersage", icon: "🌤️", color: "#65a30d",
-      fields: [
-        { k: "surplus_forecast_enabled",   l: "Forecast-Erzwingung aktivieren",  d: "Wenn Vorhersage ≥ Schwelle: Surplus startet sobald PV > Hard Limit (kein SOC-Gate). Exit komplett blockiert — nur Zone 3 (Safety) beendet Surplus. Abends fällt der Forecast-Sensor unter die Schwelle → normale Exit-Logik greift sofort.", t: "bool" },
-        { k: "surplus_forecast_sensor",    l: "Vorhersage-Sensor",           d: "Sensor mit dem prognostizierten PV-Ertrag (z. B. Forecast.Solar, Solcast). Einheit muss zur Schwelle passen (z. B. kWh).", t: "entity" },
-        { k: "surplus_forecast_threshold", l: "Mindest-Ertrag für Surplus",  d: "PV > Hard Limit + Forecast ≥ Schwelle → Surplus startet ohne SOC-Bedingung und bleibt aktiv bis Forecast unter Schwelle fällt.", t: "num", min: 0, max: 100, step: 0.5 },
-      ],
-    },
+        tk: "surplus_forecast", icon: "🌤️", color: "#65a30d",
+        fields: [
+          { k: "surplus_forecast_enabled",   t: "bool" },
+          { k: "surplus_forecast_sensor",    t: "entity" },
+          { k: "surplus_forecast_threshold", t: "num", min: 0, max: 100, step: 0.5 },
+        ],
+      },
     ],
   },
 
   ac: {
     top: [
-      { k: "ac_enabled", l: "AC Laden aktivieren", d: "Eintritt (Fall G): SOC < Ladeziel UND kein Überschuss aktiv UND kein AC/Tarif-Laden UND Modus ≠ '3' UND (Grid + Output) < −Hysterese. Abbruch (Fall H): Modus = '3' UND ac_charge_active UND kein Tarif-Laden UND (SOC ≥ Ladeziel ODER (Grid ≥ Offset + Hysterese UND Output = 0 W)). SOC-Schutz (Zone 3) bleibt vollständig aktiv. Startet nicht wenn Überschuss-Einspeisung (Zone 0) oder Tarif-Laden aktiv ist.", t: "bool" },
+      { k: "ac_enabled", t: "bool" },
     ],
     enabledKey: "ac_enabled",
     cols: [
       {
-        title: "Eintritt & Grenzen", icon: "⚡", color: "#7c3aed",
+        tk: "ac_entry", icon: "⚡", color: "#7c3aed",
         fields: [
-          { k: "ac_soc_target",  l: "Ladeziel SOC (%)", d: "Laden stoppt wenn SOC diesen Wert erreicht. Empfohlen: > Zone-1-Schwelle — so übernimmt Zone 1 direkt nach dem Laden und fährt Nulleinspeisung.", t: "num", min: 50, max: 100, step: 1 },
-          { k: "ac_power_limit", l: "Max. Ladeleistung (W)", d: "Absolute Obergrenze der AC-Ladeleistung. Wird als max_power an den PI-Regler übergeben.", t: "num", min: 100, max: 2000, step: 50 },
-          { k: "ac_hysteresis",  l: "Eintritts-Hysterese (W)", d: "Eintritt: (Grid + Output) < −Hysterese. Austritt: Grid ≥ (Offset + Hysterese) UND Output = 0 W. Der Output = 0 W-Guard verhindert Fehlauslösung während der PI noch regelt.", t: "num", min: 10, max: 500, step: 10 },
-          { k: "ac_offset",      l: "Regel-Offset (W)", d: "Regelziel für die Netzleistung im AC-Lade-Modus. Negativ = Einspeisung angestrebt → PI erhöht Ladeleistung. Wird überschrieben wenn Dyn. Offset für Zone AC aktiv ist.", t: "num", min: -500, max: 200, step: 5 },
+          { k: "ac_soc_target",  t: "num", min: 50,  max: 100,  step: 1   },
+          { k: "ac_power_limit", t: "num", min: 100, max: 2000, step: 50  },
+          { k: "ac_hysteresis",  t: "num", min: 10,  max: 500,  step: 10  },
+          { k: "ac_offset",      t: "num", min: -500,max: 200,  step: 5   },
         ],
       },
       {
-        title: "PI-Parameter", icon: "🎛️", color: "#0891b2",
+        tk: "ac_pi", icon: "🎛️", color: "#0891b2",
         fields: [
-          { k: "ac_p_factor", l: "AC P-Faktor", d: "Proportional-Verstärkung im AC-Lade-Modus. Wegen der Hardware-Flanke des Solakon ONE (~25 s von Min auf Max) klein halten (~0.3–0.5). Startwert: 0.3.", t: "num", min: 0.1, max: 3, step: 0.1 },
-          { k: "ac_i_factor", l: "AC I-Faktor", d: "Integral-Verstärkung im AC-Lade-Modus. Startwert: 0 — erst erhöhen wenn P allein eine bleibende Regelabweichung hinterlässt. Typisch: 0.05–0.1. Der I-Anteil macht die eigentliche Regelarbeit.", t: "num", min: 0, max: 0.5, step: 0.01 },
+          { k: "ac_p_factor", t: "num", min: 0.1, max: 3,   step: 0.1  },
+          { k: "ac_i_factor", t: "num", min: 0,   max: 0.5, step: 0.01 },
         ],
       },
     ],
@@ -181,33 +144,33 @@ const TAB_LAYOUT = {
 
   tariff: {
     top: [
-      { k: "tariff_enabled",      l: "Tarif-Steuerung aktivieren", d: "Günstig (< Günstig-Schwelle): Tarif-Laden. Mittel (dazwischen): Discharge-Lock — Zone 1 und Zone 2 gesperrt. Teuer (≥ Teuer-Schwelle): normale SOC-Logik. Wird blockiert solange Überschuss-Einspeisung (Zone 0) aktiv ist. Unabhängig vom AC-Laden-Modul.", t: "bool" },
-      { k: "tariff_price_sensor", l: "Preis-Sensor", d: "Sensor-Entität mit aktuellem Strompreis als numerischem Wert in ct/kWh.", t: "entity", domain: "sensor" },
+      { k: "tariff_enabled",      t: "bool" },
+      { k: "tariff_price_sensor", t: "entity", domain: "sensor" },
     ],
     enabledKey: "tariff_enabled",
     cols: [
       {
-        title: "Preisschwellen", icon: "💹", color: "#0891b2",
+        tk: "tariff_thresholds", icon: "💹", color: "#0891b2",
         fields: [
-          { k: "tariff_cheap_threshold", l: "Günstig-Schwelle (ct/kWh)", d: "Tarif-Laden startet wenn Preis diese Schwelle unterschreitet UND SOC < Ladeziel. Auch untere Grenze des Discharge-Locks.", t: "num", min: 0, max: 100, step: 0.5 },
-          { k: "tariff_cheap_entity",    l: "Günstig-Schwelle dynamisch", d: "Optionale input_number-Entität. Wenn gesetzt und verfügbar, überschreibt sie den statischen Wert.", t: "entity", domain: "input_number" },
-          { k: "tariff_exp_threshold",   l: "Teuer-Schwelle (ct/kWh)", d: "Über dieser Schwelle: normale SOC-Logik, Discharge-Lock hebt sich. Dazwischen (Günstig ≤ Preis < Teuer): Discharge-Lock Zone 1 und Zone 2. Muss größer als Günstig-Schwelle sein.", t: "num", min: 0, max: 100, step: 0.5 },
-          { k: "tariff_exp_entity",      l: "Teuer-Schwelle dynamisch", d: "Optionale input_number-Entität. Wenn gesetzt und verfügbar, überschreibt sie den statischen Wert.", t: "entity", domain: "input_number" },
+          { k: "tariff_cheap_threshold", t: "num",    min: 0, max: 100, step: 0.5 },
+          { k: "tariff_cheap_entity",    t: "entity", domain: "input_number" },
+          { k: "tariff_exp_threshold",   t: "num",    min: 0, max: 100, step: 0.5 },
+          { k: "tariff_exp_entity",      t: "entity", domain: "input_number" },
         ],
       },
       {
-        title: "Laden", icon: "🔋", color: "#16a34a",
+        tk: "tariff_charge", icon: "🔋", color: "#16a34a",
         fields: [
-          { k: "tariff_soc_target", l: "Ladeziel SOC (%)", d: "Tarif-Laden stoppt wenn dieser SOC erreicht wird. Unabhängig vom SOC-Ladeziel des AC-Lade-Moduls.", t: "num", min: 50, max: 100, step: 1 },
-          { k: "tariff_power",      l: "Ladeleistung (W)", d: "Feste Ladeleistung während Tarif-Laden — kein PI-Regler, keine dynamische Anpassung.", t: "num", min: 100, max: 2000, step: 50 },
+          { k: "tariff_soc_target", t: "num", min: 50,  max: 100,  step: 1  },
+          { k: "tariff_power",      t: "num", min: 100, max: 2000, step: 50 },
         ],
       },
       {
-        title: "PV-Vorhersage", icon: "☀️", color: "#f59e0b",
+        tk: "tariff_forecast", icon: "☀️", color: "#f59e0b",
         fields: [
-          { k: "pv_forecast_enabled",   l: "PV-Vorhersage aktivieren", d: "Wenn aktiv und der Vorhersage-Sensor einen Wert ≥ Schwelle meldet, wird Tarif-Laden und Discharge-Lock unterdrückt. Automatische Flexibilität für gute Wetterlagen.", t: "bool" },
-          { k: "pv_forecast_sensor",    l: "Vorhersage-Sensor", d: "input_number- oder sensor-Entität mit einem kWh-Wert (z.B. erwartete Solarproduktion heute). Kann von einer Wetter-Integration oder einem Solcast-Account kommen.", t: "entity" },
-          { k: "pv_forecast_threshold", l: "Schwellwert (kWh)", d: "Wenn Vorhersage ≥ diesem Wert, gilt: Tarif-Laden und Discharge-Lock sind gesperrt, normale Nulleinspeisung läuft weiter.", t: "num", min: 0, max: 50, step: 0.5 },
+          { k: "pv_forecast_enabled",   t: "bool" },
+          { k: "pv_forecast_sensor",    t: "entity" },
+          { k: "pv_forecast_threshold", t: "num", min: 0, max: 50, step: 0.5 },
         ],
       },
     ],
@@ -215,40 +178,40 @@ const TAB_LAYOUT = {
 
   dynoff: {
     top: [
-      { k: "stddev_window", l: "Stabw.-Fenster (s)", d: "Zeitfenster für die Standardabweichungs-Berechnung. Gilt für alle Zonen.", t: "num", min: 30, max: 300, step: 10 },
+      { k: "stddev_window", t: "num", min: 30, max: 300, step: 10 },
     ],
     cols: [
       {
-        title: "Zone 1", icon: "⚡", color: "#16a34a",
+        tk: "dynoff_z1", icon: "⚡", color: "#16a34a",
         fields: [
-          { k: "dyn_z1_enabled",  l: "Aktivieren", d: "Berechnet den Offset dynamisch aus der Netz-StdDev statt des statischen Werts. Überschreibt den statischen Zone-1-Offset.", t: "bool" },
-          { k: "dyn_z1_min",      l: "Min. Offset (W)", d: "Grundpuffer bei ruhigem Netz (StdDev ≤ Rausch-Schwelle). Offset sinkt nie unter diesen Wert.", t: "num", min: 0, max: 500, step: 1 },
-          { k: "dyn_z1_max",      l: "Max. Offset (W)", d: "Obergrenze des Offsets. Offset steigt nie über diesen Wert, auch bei sehr hoher StdDev.", t: "num", min: 50, max: 1000, step: 10 },
-          { k: "dyn_z1_noise",    l: "Rausch-Schwelle (W)", d: "StdDev unterhalb dieser Schwelle wird als Messrauschen gewertet und löst keinen Offset-Anstieg aus.", t: "num", min: 0, max: 100, step: 1 },
-          { k: "dyn_z1_factor",   l: "Volatilitäts-Faktor", d: "Verstärkung oberhalb der Rausch-Schwelle. Formel: buffer = (StdDev − Rausch) × Faktor.", t: "num", min: 0.5, max: 5, step: 0.1 },
-          { k: "dyn_z1_negative", l: "Negativer Offset", d: "Negiert den berechneten Offset (× −1). Das Regelziel liegt dann unterhalb von 0 W.", t: "bool" },
+          { k: "dyn_z1_enabled",  t: "bool" },
+          { k: "dyn_z1_min",      t: "num", min: 0,   max: 500,  step: 1   },
+          { k: "dyn_z1_max",      t: "num", min: 50,  max: 1000, step: 10  },
+          { k: "dyn_z1_noise",    t: "num", min: 0,   max: 100,  step: 1   },
+          { k: "dyn_z1_factor",   t: "num", min: 0.5, max: 5,    step: 0.1 },
+          { k: "dyn_z1_negative", t: "bool" },
         ],
       },
       {
-        title: "Zone 2", icon: "🔋", color: "#0891b2",
+        tk: "dynoff_z2", icon: "🔋", color: "#0891b2",
         fields: [
-          { k: "dyn_z2_enabled",  l: "Aktivieren", d: "Berechnet den Offset dynamisch aus der Netz-StdDev statt des statischen Werts. Überschreibt den statischen Zone-2-Offset.", t: "bool" },
-          { k: "dyn_z2_min",      l: "Min. Offset (W)", d: "Grundpuffer bei ruhigem Netz (StdDev ≤ Rausch-Schwelle). Offset sinkt nie unter diesen Wert.", t: "num", min: 0, max: 500, step: 1 },
-          { k: "dyn_z2_max",      l: "Max. Offset (W)", d: "Obergrenze des Offsets. Offset steigt nie über diesen Wert, auch bei sehr hoher StdDev.", t: "num", min: 50, max: 1000, step: 10 },
-          { k: "dyn_z2_noise",    l: "Rausch-Schwelle (W)", d: "StdDev unterhalb dieser Schwelle wird als Messrauschen gewertet und löst keinen Offset-Anstieg aus.", t: "num", min: 0, max: 100, step: 1 },
-          { k: "dyn_z2_factor",   l: "Volatilitäts-Faktor", d: "Verstärkung oberhalb der Rausch-Schwelle. Formel: buffer = (StdDev − Rausch) × Faktor.", t: "num", min: 0.5, max: 5, step: 0.1 },
-          { k: "dyn_z2_negative", l: "Negativer Offset", d: "Negiert den berechneten Offset (× −1). Das Regelziel liegt dann unterhalb von 0 W.", t: "bool" },
+          { k: "dyn_z2_enabled",  t: "bool" },
+          { k: "dyn_z2_min",      t: "num", min: 0,   max: 500,  step: 1   },
+          { k: "dyn_z2_max",      t: "num", min: 50,  max: 1000, step: 10  },
+          { k: "dyn_z2_noise",    t: "num", min: 0,   max: 100,  step: 1   },
+          { k: "dyn_z2_factor",   t: "num", min: 0.5, max: 5,    step: 0.1 },
+          { k: "dyn_z2_negative", t: "bool" },
         ],
       },
       {
-        title: "Zone AC Laden", icon: "⚡", color: "#7c3aed",
+        tk: "dynoff_ac", icon: "⚡", color: "#7c3aed",
         fields: [
-          { k: "dyn_ac_enabled",  l: "Aktivieren", d: "Berechnet den AC-Lade-Offset dynamisch aus der Netz-StdDev statt des statischen Werts. Überschreibt den statischen AC-Offset.", t: "bool" },
-          { k: "dyn_ac_min",      l: "Min. Offset (W)", d: "Grundpuffer bei ruhigem Netz (StdDev ≤ Rausch-Schwelle). Offset sinkt nie unter diesen Wert.", t: "num", min: 0, max: 500, step: 1 },
-          { k: "dyn_ac_max",      l: "Max. Offset (W)", d: "Obergrenze des Offsets. Offset steigt nie über diesen Wert, auch bei sehr hoher StdDev.", t: "num", min: 50, max: 1000, step: 10 },
-          { k: "dyn_ac_noise",    l: "Rausch-Schwelle (W)", d: "StdDev unterhalb dieser Schwelle wird als Messrauschen gewertet und löst keinen Offset-Anstieg aus.", t: "num", min: 0, max: 100, step: 1 },
-          { k: "dyn_ac_factor",   l: "Volatilitäts-Faktor", d: "Verstärkung oberhalb der Rausch-Schwelle. Formel: buffer = (StdDev − Rausch) × Faktor.", t: "num", min: 0.5, max: 5, step: 0.1 },
-          { k: "dyn_ac_negative", l: "Negativer Offset", d: "Negiert den berechneten Offset (× −1). Das Regelziel liegt dann unterhalb von 0 W.", t: "bool" },
+          { k: "dyn_ac_enabled",  t: "bool" },
+          { k: "dyn_ac_min",      t: "num", min: 0,   max: 500,  step: 1   },
+          { k: "dyn_ac_max",      t: "num", min: 50,  max: 1000, step: 10  },
+          { k: "dyn_ac_noise",    t: "num", min: 0,   max: 100,  step: 1   },
+          { k: "dyn_ac_factor",   t: "num", min: 0.5, max: 5,    step: 0.1 },
+          { k: "dyn_ac_negative", t: "bool" },
         ],
       },
     ],
@@ -256,7 +219,7 @@ const TAB_LAYOUT = {
 
   night: {
     top: [
-      { k: "night_enabled", l: "Nachtabschaltung aktivieren", d: "Zone 2 bei PV < PV-Ladereserve deaktivieren. Zone 1 und AC Laden laufen weiter. Zone 2 wird nicht reaktiviert solange ein Tarif-Lock (mittlerer/günstiger Preis) aktiv ist.", t: "bool" },
+      { k: "night_enabled", t: "bool" },
     ],
   },
 };
@@ -273,18 +236,19 @@ class SolakonPanel extends HTMLElement {
     this._status         = null;
     this._activeTab      = "status";
     this._polling        = null;
+    this._t              = {};
     // Multi-Instance
-    this._instances      = [];    // [{entry_id, instance_name}]
-    this._activeInstance = null;  // entry_id oder "__overview__"
-    this._allStatuses    = {};    // entry_id → status (für Übersicht)
-    this._distConfig     = {};    // globale Verteilungskonfiguration
-    this._distDirty      = {};    // ungespeicherte Änderungen Verteilung
+    this._instances      = [];
+    this._activeInstance = null;
+    this._allStatuses    = {};
+    this._distConfig     = {};
+    this._distDirty      = {};
   }
 
   set panel(val) {
     this._panel = val;
     if (val?.config?.entry_id) { this._entryId = val.config.entry_id; }
-    if (val?.config !== undefined)  { this._checkInit(); }
+    if (val?.config !== undefined) { this._checkInit(); }
   }
 
   set hass(val) { this._hass = val; this._checkInit(); }
@@ -292,11 +256,37 @@ class SolakonPanel extends HTMLElement {
   _checkInit() {
     if (this._hass && !this._initialized) {
       this._initialized = true;
-      this._build();
-      this._loadInstances();
-      this._polling = setInterval(() => this._loadStatus(), 1000);
+      this._loadTranslations().then(() => {
+        this._build();
+        this._loadInstances();
+        this._polling = setInterval(() => this._loadStatus(), 1000);
+      });
     }
   }
+
+  async _loadTranslations() {
+    const lang = (this._hass.language || "en").split("-")[0].toLowerCase();
+    const supported = ["de", "en"];
+    const locale = supported.includes(lang) ? lang : "en";
+    try {
+      const res = await fetch(`/${DOMAIN}/panel.${locale}.json`);
+      if (!res.ok) throw new Error("fetch failed");
+      this._t = await res.json();
+    } catch (_) {
+      if (locale !== "en") {
+        try {
+          const res = await fetch(`/${DOMAIN}/panel.en.json`);
+          this._t = await res.json();
+        } catch (_) { this._t = {}; }
+      } else {
+        this._t = {};
+      }
+    }
+  }
+
+  // Shorthand: look up a field's label or description
+  _fl(key) { return this._t.fields?.[key]?.l || key; }
+  _fd(key) { return this._t.fields?.[key]?.d || ""; }
 
   async _ws(cmd, extra = {}) {
     return this._hass.callWS({ type: `${DOMAIN}/${cmd}`, entry_id: this._entryId, ...extra });
@@ -335,7 +325,7 @@ class SolakonPanel extends HTMLElement {
       bar.appendChild(el);
     };
 
-    mkTab("__overview__", "📊 Übersicht");
+    mkTab("__overview__", this._t.ov?.btn || "Overview");
     for (const inst of this._instances) mkTab(inst.entry_id, inst.instance_name);
   }
 
@@ -358,17 +348,19 @@ class SolakonPanel extends HTMLElement {
   }
 
   _renderOverview(c) {
+    const ov = this._t.ov || {};
     const html = this._instances.map(inst => {
       const st = this._allStatuses[inst.entry_id] || {};
-      const z  = ZONE_CFG[st.zone] ?? ZONE_CFG[2];
-      const fl = FALL_LABELS[st.active_fall] || st.active_fall || "—";
+      const zs = ZONE_STYLE[st.zone] ?? ZONE_STYLE[2];
+      const zLabel = this._t.zone_cfg?.[st.zone] ?? `Zone ${st.zone}`;
+      const fl = this._t.fall_labels?.[st.active_fall] || st.active_fall || "—";
       return `<div class="ov-card" data-eid="${inst.entry_id}">
-        <div class="ov-hdr" style="background:${z.color}">${z.icon} ${inst.instance_name}</div>
+        <div class="ov-hdr" style="background:${zs.color}">${zs.icon} ${inst.instance_name}</div>
         <div class="ov-body">
-          <div class="ov-row"><span>SOC</span><strong>${st.soc ?? "—"} %</strong></div>
-          <div class="ov-row"><span>Ausgang</span><strong>${st.actual_power != null ? st.actual_power + " W" : "—"}</strong></div>
-          <div class="ov-row"><span>Netz</span><strong>${st.grid != null ? st.grid.toFixed(0) + " W" : "—"}</strong></div>
-          <div class="ov-row"><span>Fall</span><strong>${fl}</strong></div>
+          <div class="ov-row"><span>${ov.soc    || "SOC"}</span><strong>${st.soc ?? "—"} %</strong></div>
+          <div class="ov-row"><span>${ov.output || "Output"}</span><strong>${st.actual_power != null ? st.actual_power + " W" : "—"}</strong></div>
+          <div class="ov-row"><span>${ov.grid   || "Grid"}</span><strong>${st.grid != null ? st.grid.toFixed(0) + " W" : "—"}</strong></div>
+          <div class="ov-row"><span>${ov.fall   || "Case"}</span><strong>${fl}</strong></div>
         </div>
       </div>`;
     }).join("");
@@ -377,7 +369,6 @@ class SolakonPanel extends HTMLElement {
       card.addEventListener("click", () => this._switchInstance(card.dataset.eid));
     });
 
-    // Verteilung als zweiter Block
     const distContainer = document.createElement("div");
     distContainer.style.marginTop = "16px";
     c.appendChild(distContainer);
@@ -410,7 +401,8 @@ class SolakonPanel extends HTMLElement {
       if (this._activeTab === "debug") {
         const el = this.shadowRoot.getElementById("dbg-zone-state");
         if (el) el.textContent = this._status.cycle_active
-          ? "Zone 1 (Zyklus aktiv)" : "Zone 2";
+          ? (this._t.debug?.zone1_state || "Zone 1")
+          : (this._t.debug?.zone2_state || "Zone 2");
       }
       this._updateRegBanner();
     } catch (e) { /* ignore polling errors */ }
@@ -419,6 +411,14 @@ class SolakonPanel extends HTMLElement {
   // ── Build ─────────────────────────────────────────────────────────────────
 
   _build() {
+    const tc  = this._t.top_card   || {};
+    const sb  = this._t.save_bar   || {};
+    const reg = this._t.regulation || {};
+
+    const prioRows = (tc.prio_rows || []).map(([p, m, b]) =>
+      `<tr><td>${p}</td><td>${m}</td><td>${b}</td></tr>`
+    ).join("");
+
     this.shadowRoot.innerHTML = `
       <style>
         :host {
@@ -576,29 +576,28 @@ class SolakonPanel extends HTMLElement {
       <div class="wrap">
 
         <div class="top-card">
-          <div class="top-card-hdr">⚡ Solakon ONE Nulleinspeisung</div>
+          <div class="top-card-hdr">${tc.title || "⚡ Solakon ONE"}</div>
           <div class="top-card-body">
             <div class="reg-bar off" id="reg-bar">
               <div class="reg-dot"></div>
-              <span id="reg-text">Regelung inaktiv</span>
+              <span id="reg-text">${reg.inactive || ""}</span>
             </div>
             <details class="global-info">
-              <summary>ℹ️ Über diese Integration</summary>
+              <summary>${tc.info_summary || "ℹ️"}</summary>
               <div class="global-body">
-                <p>Die <strong>Solakon ONE Nulleinspeisung</strong> regelt die Ausgangsleistung des Wechselrichters vollautomatisch so, dass der Netzbezug möglichst bei 0 W gehalten wird — ohne Einspeisung ins öffentliche Netz.</p>
-                <p>Kern ist ein <strong>PI-Regler</strong> mit der Netzleistung als Regelgröße und der WR-Ausgangsleistung als Stellgröße. Das Verhalten richtet sich nach vier <strong>SOC-Zonen</strong>: Zone 1 entlädt aggressiv, Zone 2 batterieschonend, Zone 3 sperrt die Entladung, Zone 0 speist aktiv Überschuss ein.</p>
-                <p>Optionale Module: <strong>☀️ Überschuss</strong>, <strong>⚡ AC-Laden</strong>, <strong>💹 Tarif-Arbitrage</strong>, <strong>📈 Dynamischer Offset</strong> (pro Zone einzeln), <strong>🌙 Nachtabschaltung</strong>. Alle Parameter werden persistent hier im Panel gespeichert — kein YAML, keine Helfer-Entitäten.</p>
-                <p><strong>Priorität und gegenseitige Blockierung der optionalen Module:</strong></p>
+                <p>${tc.p1 || ""}</p>
+                <p>${tc.p2 || ""}</p>
+                <p>${tc.p3 || ""}</p>
+                <p><strong>${tc.prio_heading || ""}</strong></p>
                 <table class="prio-table">
-                  <tr><th>Priorität</th><th>Modul</th><th>Blockiert</th></tr>
-                  <tr><td>1 (höchste)</td><td>☀️ Überschuss (Zone 0)</td><td>Tarif-Laden (GT), Discharge-Lock (TM), AC Laden (G)</td></tr>
-                  <tr><td>2</td><td>💹 Tarif-Laden (günstig)</td><td>AC Laden (via Modus '3'), Discharge-Lock</td></tr>
-                  <tr><td>3</td><td>💹 Discharge-Lock (mittel)</td><td>Zone-1/2-Recovery (D), Zone-2-Start (E)</td></tr>
-                  <tr><td>4</td><td>⚡ AC Laden</td><td>Tarif-Laden (via Modus '3'), Discharge-Lock</td></tr>
-                  <tr><td>5</td><td>🌙 Nachtabschaltung</td><td>Zone-2-Start (E)</td></tr>
-                  <tr><td>6 (niedrigste)</td><td>Zone 1 / Zone 2</td><td>—</td></tr>
+                  <tr>
+                    <th>${tc.prio_priority || ""}</th>
+                    <th>${tc.prio_module   || ""}</th>
+                    <th>${tc.prio_blocks   || ""}</th>
+                  </tr>
+                  ${prioRows}
                 </table>
-                <p style="margin-top:4px">AC Laden und Tarif-Laden blockieren sich gegenseitig über den Modus-Guard (Modus ≠ '3'). Überschuss-Einspeisung hat absoluten Vorrang — kein anderes optionales Modul kann während Zone 0 starten.</p>
+                <p style="margin-top:4px">${tc.prio_note || ""}</p>
               </div>
             </details>
           </div>
@@ -610,8 +609,8 @@ class SolakonPanel extends HTMLElement {
         </div>
 
         <div id="save-bar">
-          <span>Ungespeicherte Änderungen</span>
-          <button onclick="this.getRootNode().host._saveSettings()">💾 Speichern</button>
+          <span>${sb.unsaved || ""}</span>
+          <button onclick="this.getRootNode().host._saveSettings()">${sb.save || "Save"}</button>
         </div>
       </div>
       <div id="toast"></div>
@@ -626,7 +625,7 @@ class SolakonPanel extends HTMLElement {
     for (const t of TABS) {
       const el = document.createElement("div");
       el.className = "tab" + (t.id === this._activeTab ? " active" : "");
-      el.textContent = `${t.icon} ${t.label}`;
+      el.textContent = `${TAB_ICONS[t.id] || ""} ${this._t.tabs?.[t.id] || t.id}`;
       el.dataset.id = t.id;
       el.addEventListener("click", () => {
         this._activeTab = t.id;
@@ -657,7 +656,7 @@ class SolakonPanel extends HTMLElement {
 
     c.innerHTML = "";
 
-    const doc = TAB_DOCS[this._activeTab];
+    const doc = this._t.tab_docs?.[this._activeTab];
     if (doc) {
       const details = document.createElement("details");
       details.className = "info-details";
@@ -679,7 +678,7 @@ class SolakonPanel extends HTMLElement {
       const topHdr = document.createElement("div");
       topHdr.className = "col-header";
       topHdr.style.background = "#475569";
-      topHdr.textContent = "⚙️ Allgemein";
+      topHdr.textContent = this._t.general_section || "⚙️ General";
       topCard.appendChild(topHdr);
       const topBody = document.createElement("div");
       topBody.className = "col-body";
@@ -701,7 +700,7 @@ class SolakonPanel extends HTMLElement {
       const hdr = document.createElement("div");
       hdr.className = "col-header";
       hdr.style.background = col.color;
-      hdr.textContent = `${col.icon} ${col.title}`;
+      hdr.textContent = `${col.icon} ${this._t.col_titles?.[col.tk] || col.tk}`;
       card.appendChild(hdr);
       const body = document.createElement("div");
       body.className = "col-body";
@@ -726,24 +725,26 @@ class SolakonPanel extends HTMLElement {
     const cur = this._effectiveValue(f.k);
     const div = document.createElement("div");
     div.className = "field";
+    const label = this._fl(f.k);
+    const desc  = this._fd(f.k);
 
     if (f.t === "bool") {
-      div.innerHTML = `<label class="toggle"><input type="checkbox" data-key="${f.k}" ${cur ? "checked" : ""}/> ${f.l}</label><div class="desc">${f.d || ""}</div>`;
+      div.innerHTML = `<label class="toggle"><input type="checkbox" data-key="${f.k}" ${cur ? "checked" : ""}/> ${label}</label><div class="desc">${desc}</div>`;
       div.querySelector("input").addEventListener("change", (e) => {
         this._dirty[f.k] = e.target.checked;
         this._updateSaveBar();
       });
     } else if (f.t === "num") {
-      div.innerHTML = `<label>${f.l}</label><div class="desc">${f.d || ""}</div><input type="number" min="${f.min}" max="${f.max}" step="${f.step}" value="${cur ?? f.min}"/>`;
+      div.innerHTML = `<label>${label}</label><div class="desc">${desc}</div><input type="number" min="${f.min}" max="${f.max}" step="${f.step}" value="${cur ?? f.min}"/>`;
       div.querySelector("input").addEventListener("change", (e) => {
         this._dirty[f.k] = parseFloat(e.target.value);
         this._updateSaveBar();
       });
     } else if (f.t === "entity") {
       const eid = `ep_${f.k}`;
-      div.innerHTML = `<label>${f.l}</label><div class="desc">${f.d || ""}</div><input type="text" list="${eid}_list" value="${cur || ""}" placeholder="sensor.xxx"/><datalist id="${eid}_list"></datalist>`;
+      div.innerHTML = `<label>${label}</label><div class="desc">${desc}</div><input type="text" list="${eid}_list" value="${cur || ""}" placeholder="sensor.xxx"/><datalist id="${eid}_list"></datalist>`;
       const inp = div.querySelector("input");
-      const dl = div.querySelector("datalist");
+      const dl  = div.querySelector("datalist");
       if (this._hass?.states) {
         const domain = f.domain || "";
         Object.keys(this._hass.states).filter(e => !domain || e.startsWith(domain + ".")).sort().forEach(e => {
@@ -762,64 +763,65 @@ class SolakonPanel extends HTMLElement {
   // ── Status tab ────────────────────────────────────────────────────────────
 
   _renderStatus(c) {
+    const s = this._t.status || {};
     c.innerHTML = `
-      <div class="zone-banner" id="zone-banner">Lade…</div>
+      <div class="zone-banner" id="zone-banner">${s.loading || "…"}</div>
       <div class="stat-col-grid">
 
         <div class="stat-col-card">
-          <div class="stat-col-header" style="background:#0891b2">⚡ Messwerte</div>
+          <div class="stat-col-header" style="background:#0891b2">${s.measurements_hdr || "⚡"}</div>
           <div class="stat-col-body">
             <div class="stat-row">
-              <div class="stat"><div class="val" id="st-grid">—</div><div class="lbl">Netzleistung</div></div>
-              <div class="stat"><div class="val" id="st-soc">—</div><div class="lbl">SOC</div></div>
+              <div class="stat"><div class="val" id="st-grid">—</div><div class="lbl">${s.grid_lbl   || "Grid"}</div></div>
+              <div class="stat"><div class="val" id="st-soc">—</div> <div class="lbl">${s.soc_lbl    || "SOC"}</div></div>
             </div>
             <div class="stat-row">
-              <div class="stat"><div class="val" id="st-actual">—</div><div class="lbl">Ausgangsleistung</div></div>
-              <div class="stat"><div class="val" id="st-solar">—</div><div class="lbl">Solarleistung</div></div>
+              <div class="stat"><div class="val" id="st-actual">—</div><div class="lbl">${s.output_lbl || "Output"}</div></div>
+              <div class="stat"><div class="val" id="st-solar">—</div> <div class="lbl">${s.solar_lbl  || "Solar"}</div></div>
             </div>
           </div>
         </div>
 
         <div class="stat-col-card">
-          <div class="stat-col-header" style="background:#7c3aed">📈 Regelzustand</div>
+          <div class="stat-col-header" style="background:#7c3aed">${s.ctrl_hdr || "📈"}</div>
           <div class="stat-col-body">
             <div class="stat-row">
-              <div class="stat"><div class="val" id="st-int">—</div><div class="lbl">PI Integral</div></div>
-              <div class="stat"><div class="val" id="st-stddev">—</div><div class="lbl">Netz-StdDev</div></div>
+              <div class="stat"><div class="val" id="st-int">—</div>   <div class="lbl">${s.integral_lbl || "Integral"}</div></div>
+              <div class="stat"><div class="val" id="st-stddev">—</div><div class="lbl">${s.stddev_lbl   || "StdDev"}</div></div>
             </div>
             <div class="stat-full">
               <div class="val" id="st-offset-val">—</div>
-              <div class="lbl" id="st-offset-lbl">Aktiver Offset</div>
+              <div class="lbl" id="st-offset-lbl">${s.offset_lbl || "Offset"}</div>
               <div class="lbl-src" id="st-offset-src">—</div>
             </div>
             <div class="stat-row">
-              <div class="stat"><div class="val" id="st-elapsed">—</div><div class="lbl">Seit letztem Output</div></div>
-              <div class="stat"><div class="val" id="st-mode-elapsed">—</div><div class="lbl">Seit Moduswechsel</div></div>
+              <div class="stat"><div class="val" id="st-elapsed">—</div>     <div class="lbl">${s.elapsed_lbl      || ""}</div></div>
+              <div class="stat"><div class="val" id="st-mode-elapsed">—</div><div class="lbl">${s.mode_elapsed_lbl || ""}</div></div>
             </div>
           </div>
         </div>
 
         <div class="stat-col-card">
-          <div class="stat-col-header" style="background:#b45309">🚦 Module & Status</div>
+          <div class="stat-col-header" style="background:#b45309">${s.modules_hdr || "🚦"}</div>
           <div class="stat-col-body">
             <div>
-              <div class="mode-lbl">Aktive Module</div>
+              <div class="mode-lbl">${s.active_modules_lbl || ""}</div>
               <div class="flag-row" id="st-flags"></div>
             </div>
             <div>
-              <div class="mode-lbl">Aktiver Fall</div>
+              <div class="mode-lbl">${s.active_fall_lbl || ""}</div>
               <div class="mode-val" id="st-active-fall">—</div>
             </div>
             <div>
-              <div class="mode-lbl">Betriebsmodus</div>
+              <div class="mode-lbl">${s.mode_lbl || ""}</div>
               <div class="mode-val" id="st-mode">—</div>
             </div>
             <div>
-              <div class="mode-lbl">Letzte Aktion</div>
+              <div class="mode-lbl">${s.last_action_lbl || ""}</div>
               <div class="mode-val" id="st-action">—</div>
             </div>
             <div>
-              <div class="mode-lbl">Fehler</div>
+              <div class="mode-lbl">${s.error_lbl || ""}</div>
               <div class="mode-err" id="st-error">—</div>
             </div>
           </div>
@@ -841,24 +843,26 @@ class SolakonPanel extends HTMLElement {
   _updateStatusView() {
     const st = this._status;
     if (!st) return;
+    const s  = this._t.status || {};
 
-    const z = ZONE_CFG[st.zone] || ZONE_CFG[2];
+    const zs    = ZONE_STYLE[st.zone] || ZONE_STYLE[2];
+    const zLabel = this._t.zone_cfg?.[st.zone] ?? `Zone ${st.zone}`;
     const b = this.shadowRoot.getElementById("zone-banner");
-    if (b) { b.textContent = `${z.icon} ${z.label}`; b.style.background = z.color; }
+    if (b) { b.textContent = `${zs.icon} ${zLabel}`; b.style.background = zs.color; }
 
     const set = (id, v) => { const e = this.shadowRoot.getElementById(id); if (e) e.textContent = v; };
     const fl = this.shadowRoot.getElementById("st-flags");
     if (fl) fl.innerHTML = [
-      ["Zyklus",      st.cycle_active],
-      ["Surplus",     st.surplus_active],
-      ["AC Laden",    st.ac_charge],
-      ["Tarif-Laden", st.tariff_charge],
-      ["Nacht",       st.is_night],
-      ["PV→Tarif",    st.forecast_tariff_suppressed],
-      ["PV→Surplus",  st.forecast_surplus_forced],
+      [s.flag_cycle       || "Cycle",         st.cycle_active],
+      [s.flag_surplus     || "Surplus",        st.surplus_active],
+      [s.flag_ac          || "AC",             st.ac_charge],
+      [s.flag_tariff      || "Tariff",         st.tariff_charge],
+      [s.flag_night       || "Night",          st.is_night],
+      [s.flag_pv_tariff   || "PV→Tariff",      st.forecast_tariff_suppressed],
+      [s.flag_pv_surplus  || "PV→Surplus",     st.forecast_surplus_forced],
     ].map(([n, v]) => `<span class="flag ${v ? "on" : "off"}">${v ? "●" : "○"} ${n}</span>`).join("");
 
-    set("st-active-fall", FALL_LABELS[st.active_fall] || st.active_fall || "—");
+    set("st-active-fall", this._t.fall_labels?.[st.active_fall] || st.active_fall || "—");
     set("st-grid",         `${(st.grid ?? 0).toFixed(0)} W`);
     set("st-actual",       `${st.actual_power ?? "—"} W`);
     set("st-solar",        `${st.solar ?? "—"} W`);
@@ -869,75 +873,75 @@ class SolakonPanel extends HTMLElement {
     set("st-mode-elapsed", this._fmt_elapsed(st.mode_label_ts));
     set("st-mode",         st.mode_label  || "—");
     set("st-action",       st.last_action || "—");
-    set("st-error",        st.last_error  || "Keine");
+    set("st-error",        st.last_error  || (s.no_error || "—"));
 
-    let offsetLabel, offsetActive, isDyn, offsetStatic;
+    let offsetZoneKey, isDyn, offsetStatic;
     if (st.ac_charge) {
-      offsetLabel  = "Zone AC Laden";
-      isDyn        = !!st.dyn_ac_enabled;
-      offsetStatic = this._settings.ac_offset ?? "—";
-      offsetActive = isDyn ? (st.dyn_ac ?? 0).toFixed(0) : offsetStatic;
+      offsetZoneKey = "offset_zone_ac";
+      isDyn         = !!st.dyn_ac_enabled;
+      offsetStatic  = this._settings.ac_offset ?? "—";
     } else if (st.cycle_active) {
-      offsetLabel  = "Zone 1";
-      isDyn        = !!st.dyn_z1_enabled;
-      offsetStatic = this._settings.offset_1 ?? "—";
-      offsetActive = isDyn ? (st.dyn_z1 ?? 0).toFixed(0) : offsetStatic;
+      offsetZoneKey = "offset_zone_1";
+      isDyn         = !!st.dyn_z1_enabled;
+      offsetStatic  = this._settings.offset_1 ?? "—";
     } else {
-      offsetLabel  = "Zone 2";
-      isDyn        = !!st.dyn_z2_enabled;
-      offsetStatic = this._settings.offset_2 ?? "—";
-      offsetActive = isDyn ? (st.dyn_z2 ?? 0).toFixed(0) : offsetStatic;
+      offsetZoneKey = "offset_zone_2";
+      isDyn         = !!st.dyn_z2_enabled;
+      offsetStatic  = this._settings.offset_2 ?? "—";
     }
-    set("st-offset-val", `${offsetActive} W`);
-    set("st-offset-lbl", `Aktiver Offset — ${offsetLabel}`);
+    const dynVal      = isDyn ? (st[`dyn_${offsetZoneKey === "offset_zone_ac" ? "ac" : offsetZoneKey === "offset_zone_1" ? "z1" : "z2"}`] ?? 0).toFixed(0) : offsetStatic;
+    const offsetLabel = s[offsetZoneKey] || offsetZoneKey;
+    set("st-offset-val", `${dynVal} W`);
+    set("st-offset-lbl", `${s.offset_lbl || "Offset"} — ${offsetLabel}`);
     const srcEl = this.shadowRoot.getElementById("st-offset-src");
+    const staticLbl = `${s.static_tag || "static"}: ${offsetStatic} W`;
     if (srcEl) srcEl.innerHTML = isDyn
-      ? `<span class="offset-src-tag active">⚡ dynamisch</span><span class="offset-src-tag inactive">statisch: ${offsetStatic} W</span>`
-      : `<span class="offset-src-tag inactive">dyn. inaktiv</span><span class="offset-src-tag active">statisch: ${offsetStatic} W</span>`;
+      ? `<span class="offset-src-tag active">${s.dyn_tag || "dynamic"}</span><span class="offset-src-tag inactive">${staticLbl}</span>`
+      : `<span class="offset-src-tag inactive">${s.dyn_inactive || "dyn. off"}</span><span class="offset-src-tag active">${staticLbl}</span>`;
   }
 
   // ── Debug tab ─────────────────────────────────────────────────────────────
 
   _renderDebug() {
-    const c = this.shadowRoot.getElementById("content");
+    const c  = this.shadowRoot.getElementById("content");
+    const d  = this._t.debug || {};
     const zoneState = this._status
-      ? (this._status.cycle_active ? "Zone 1 (Zyklus aktiv)" : "Zone 2")
+      ? (this._status.cycle_active ? (d.zone1_state || "Zone 1") : (d.zone2_state || "Zone 2"))
       : "—";
 
     c.innerHTML = `
       <div class="col-grid cols-2">
 
         <div class="col-card">
-          <div class="col-header" style="background:#7c3aed">🔄 PI-Integral</div>
+          <div class="col-header" style="background:#7c3aed">${d.pi_hdr || "PI Integral"}</div>
           <div class="col-body">
             <p style="font-size:.85em;color:var(--secondary-text-color,#888);margin:0 0 12px">
-              Setzt den I-Anteil des PI-Reglers manuell auf 0 zurück.
-              Nützlich nach einem manuellen Eingriff oder bei starkem Integral-Windup.
+              ${d.pi_desc || ""}
             </p>
             <button class="btn btn-secondary"
               onclick="this.getRootNode().host._resetIntegral()">
-              🔄 Integral zurücksetzen
+              ${d.reset_btn || "Reset"}
             </button>
           </div>
         </div>
 
         <div class="col-card">
-          <div class="col-header" style="background:#0891b2">🔁 Zone manuell setzen</div>
+          <div class="col-header" style="background:#0891b2">${d.zone_hdr || "Zone"}</div>
           <div class="col-body">
             <p style="font-size:.85em;color:var(--secondary-text-color,#888);margin:0 0 4px">
-              Schaltet den Entlade-Zyklus manuell um und setzt das Integral zurück.
+              ${d.zone_desc || ""}
             </p>
             <p style="font-size:.85em;margin:0 0 12px">
-              Aktuell: <strong id="dbg-zone-state">${zoneState}</strong>
+              ${d.zone_current || ""}<strong id="dbg-zone-state">${zoneState}</strong>
             </p>
             <div style="display:flex;gap:8px;flex-wrap:wrap">
               <button class="btn" style="background:#16a34a;color:#fff"
                 onclick="this.getRootNode().host._toggleCycle(true)">
-                ⚡ Zone 1 aktivieren
+                ${d.zone1_btn || "Zone 1"}
               </button>
               <button class="btn" style="background:#0891b2;color:#fff"
                 onclick="this.getRootNode().host._toggleCycle(false)">
-                🔋 Zone 2 aktivieren
+                ${d.zone2_btn || "Zone 2"}
               </button>
             </div>
           </div>
@@ -950,11 +954,12 @@ class SolakonPanel extends HTMLElement {
   // ── Shared helpers ────────────────────────────────────────────────────────
 
   _updateRegBanner() {
-    const on = this._settings.regulation_enabled;
+    const on  = this._settings.regulation_enabled;
+    const reg = this._t.regulation || {};
     const bar = this.shadowRoot.getElementById("reg-bar");
     const txt = this.shadowRoot.getElementById("reg-text");
     if (bar) bar.className = `reg-bar ${on ? "on" : "off"}`;
-    if (txt) txt.textContent = on ? "Regelung aktiv — klicken zum Deaktivieren" : "Regelung inaktiv — klicken zum Aktivieren";
+    if (txt) txt.textContent = on ? (reg.active || "") : (reg.inactive || "");
   }
 
   _effectiveValue(key) { return key in this._dirty ? this._dirty[key] : this._settings[key]; }
@@ -974,40 +979,46 @@ class SolakonPanel extends HTMLElement {
 
   async _saveSettings() {
     if (!Object.keys(this._dirty).length) return;
+    const toast = this._t.toast || {};
     try {
       await this._ws("save_config", { changes: this._dirty });
       this._settings = { ...this._settings, ...this._dirty };
       this._dirty = {};
-      this._showToast("✅ Einstellungen gespeichert");
+      this._showToast(toast.settings_saved || "✅");
       this._renderActiveTab();
     } catch (e) { this._showToast("❌ " + e.message, true); }
   }
 
   async _toggleRegulation() {
-    const on = !this._settings.regulation_enabled;
+    const on    = !this._settings.regulation_enabled;
+    const toast = this._t.toast || {};
     try {
       await this._ws("save_config", { changes: { regulation_enabled: on } });
       this._settings.regulation_enabled = on;
       this._updateRegBanner();
-      this._showToast(on ? "✅ Regelung aktiviert" : "⏸️ Regelung deaktiviert");
+      this._showToast(on ? (toast.regulation_on || "✅") : (toast.regulation_off || "⏸️"));
     } catch (e) { this._showToast("❌ " + e.message, true); }
   }
 
   async _resetIntegral() {
+    const toast = this._t.toast || {};
     try {
       await this._ws("reset_integral");
-      this._showToast("🔄 Integral zurückgesetzt");
+      this._showToast(toast.integral_reset || "🔄");
     } catch (e) { this._showToast("❌ " + e.message, true); }
   }
 
   async _toggleCycle(activate) {
+    const toast = this._t.toast || {};
+    const d     = this._t.debug || {};
     try {
       await this._ws("set_cycle", { active: activate });
-      this._showToast(activate ? "⚡ Zone 1 aktiviert" : "🔋 Zone 2 aktiviert");
+      this._showToast(activate ? (toast.zone1_activated || "⚡") : (toast.zone2_activated || "🔋"));
       this._status = await this._ws("get_status");
       const el = this.shadowRoot.getElementById("dbg-zone-state");
       if (el) el.textContent = this._status.cycle_active
-        ? "Zone 1 (Zyklus aktiv)" : "Zone 2";
+        ? (d.zone1_state || "Zone 1")
+        : (d.zone2_state || "Zone 2");
     } catch (e) { this._showToast("❌ " + e.message, true); }
   }
 
@@ -1023,11 +1034,12 @@ class SolakonPanel extends HTMLElement {
 
   async _saveDistConfig() {
     const merged = { ...this._distConfig, ...this._distDirty };
+    const toast  = this._t.toast || {};
     try {
       await this._hass.callWS({ type: `${DOMAIN}/save_distribution_config`, distribution: merged });
       this._distConfig = merged;
       this._distDirty  = {};
-      this._showToast("✅ Verteilung gespeichert");
+      this._showToast(toast.dist_saved || "✅");
       this._renderActiveTab();
     } catch (e) { this._showToast("❌ " + e.message, true); }
   }
@@ -1053,16 +1065,18 @@ class SolakonPanel extends HTMLElement {
   }
 
   _renderVerteilung(c) {
+    const dt = this._t.dist || {};
+
     if (this._instances.length <= 1) {
       c.innerHTML = `<p style="font-size:.88em;color:var(--secondary-text-color,#888);padding:12px 0">
-        Leistungsverteilung wird nur bei mehreren Instanzen benötigt.</p>`;
+        ${dt.single_instance_note || ""}</p>`;
       return;
     }
 
     const distLoaded = Object.keys(this._distConfig).length > 0 || Object.keys(this._distDirty).length > 0;
     if (!distLoaded) {
       this._loadDistConfig().then(() => this._renderActiveTab());
-      c.innerHTML = `<p style="font-size:.88em;color:var(--secondary-text-color,#888);padding:12px 0">Lade…</p>`;
+      c.innerHTML = `<p style="font-size:.88em;color:var(--secondary-text-color,#888);padding:12px 0">${dt.loading || "…"}</p>`;
       return;
     }
 
@@ -1074,7 +1088,7 @@ class SolakonPanel extends HTMLElement {
     const manualRows = this._instances.map(inst => {
       const val = this._distInstVal(inst.entry_id, "manual_power") ?? 800;
       return `<div class="field">
-        <label>${inst.instance_name} (W)</label>
+        <label>${inst.instance_name} ${dt.manual_inst_lbl || "(W)"}</label>
         <input type="number" min="0" max="9600" step="10" value="${val}"
           data-dist-inst="${inst.entry_id}" data-dist-key="manual_power"/>
       </div>`;
@@ -1083,57 +1097,54 @@ class SolakonPanel extends HTMLElement {
     const manualSum = this._instances.reduce((s, inst) => {
       return s + (parseFloat(this._distInstVal(inst.entry_id, "manual_power")) || 0);
     }, 0);
+    const warnTpl = dt.manual_warn || "⚠️ Sum ({sum} W) exceeds global max";
     const manualWarn = manualSum > globalMax
-      ? `<p style="font-size:.8em;color:#dc2626;margin-top:4px">⚠️ Summe (${manualSum} W) überschreitet Global-Max</p>`
+      ? `<p style="font-size:.8em;color:#dc2626;margin-top:4px">${warnTpl.replace("{sum}", manualSum)}</p>`
       : "";
+
+    const intervalOptions = ["10","30","60","120","300"].map(v =>
+      `<option value="${v}"${v === String(interval) ? " selected" : ""}>${v} s${v === "30" ? (dt.interval_recommended || "") : ""}</option>`
+    ).join("");
 
     c.innerHTML = `
       <div class="col-card top-item">
-        <div class="col-header" style="background:#0891b2">🌐 Globale Einstellungen</div>
+        <div class="col-header" style="background:#0891b2">${dt.global_hdr || "🌐"}</div>
         <div class="col-body">
           <div class="field">
-            <label>Gesamte Max. Ausgangsleistung (W)</label>
-            <div class="desc">Absolute Obergrenze aller Instanzen zusammen — wird nach Gewichtung aufgeteilt. Standard: 800 W (gesetzliches Einspeise-Maximum). Im manuellen Modus wird dieser Wert ignoriert.</div>
+            <label>${dt.global_max_lbl || ""}</label>
+            <div class="desc">${dt.global_max_desc || ""}</div>
             <input type="number" min="0" max="9600" step="10" value="${globalMax}" data-dist-key="global_max_power"/>
           </div>
           <div class="field">
-            <label>Aktualisierungsintervall</label>
-            <div class="desc">Wie oft die Verteilung neu berechnet und in die Coordinatoren geschrieben wird.</div>
-            <select data-dist-key="interval_seconds">
-              ${["10","30","60","120","300"].map(v =>
-                `<option value="${v}"${v === String(interval) ? " selected" : ""}>${v} s${v === "30" ? " (empfohlen)" : ""}</option>`
-              ).join("")}
-            </select>
+            <label>${dt.interval_lbl || ""}</label>
+            <div class="desc">${dt.interval_desc || ""}</div>
+            <select data-dist-key="interval_seconds">${intervalOptions}</select>
           </div>
         </div>
       </div>
 
       <div class="col-card top-item">
-        <div class="col-header" style="background:#7c3aed">⚖️ Verteilungs-Modus</div>
+        <div class="col-header" style="background:#7c3aed">${dt.mode_hdr || "⚖️"}</div>
         <div class="col-body">
           <div class="field">
-            <label>Modus</label>
-            <div class="desc">
-              Gleichverteilung → jede aktive Instanz erhält gleich viel<br>
-              Gewichtet → Aufteilung nach SOC-Anteil und/oder PV-Leistung der Instanz<br>
-              Manuell → feste Wattzahl pro Instanz, unabhängig von SOC oder PV
-            </div>
+            <label>${dt.mode_lbl || ""}</label>
+            <div class="desc">${(dt.mode_desc || "").replace(/\n/g, "<br>")}</div>
             <select data-dist-key="distribution_mode" id="dist-mode-select">
-              <option value="equal"${mode === "equal" ? " selected" : ""}>Gleichverteilung</option>
-              <option value="weighted"${mode === "weighted" ? " selected" : ""}>Gewichtet</option>
-              <option value="manual"${mode === "manual" ? " selected" : ""}>Manuell</option>
+              <option value="equal"${mode === "equal" ? " selected" : ""}>${dt.mode_equal || "Equal"}</option>
+              <option value="weighted"${mode === "weighted" ? " selected" : ""}>${dt.mode_weighted || "Weighted"}</option>
+              <option value="manual"${mode === "manual" ? " selected" : ""}>${dt.mode_manual || "Manual"}</option>
             </select>
           </div>
           <div class="field" style="${mode !== "weighted" ? "opacity:.4;pointer-events:none" : ""}">
-            <label>SOC ←→ PV Gewichtung (0–1)</label>
-            <div class="desc">0,0 → ausschließlich nach SOC · 1,0 → ausschließlich nach PV-Leistung der Instanz · 0,5 → 50/50 — Nur wirksam wenn Modus = Gewichtet</div>
+            <label>${dt.balance_lbl || ""}</label>
+            <div class="desc">${dt.balance_desc || ""}</div>
             <input type="number" min="0" max="1" step="0.05" value="${balance}" data-dist-key="soc_pv_balance"/>
           </div>
         </div>
       </div>
 
       <div class="col-card top-item" style="${mode !== "manual" ? "opacity:.4;pointer-events:none" : ""}">
-        <div class="col-header" style="background:#b45309">🔧 Manuelle Leistung pro Instanz</div>
+        <div class="col-header" style="background:#b45309">${dt.manual_hdr || "🔧"}</div>
         <div class="col-body">
           ${manualRows}
           ${manualWarn}
@@ -1141,8 +1152,8 @@ class SolakonPanel extends HTMLElement {
       </div>
 
       <div id="dist-save-bar" style="position:sticky;bottom:0;background:var(--primary-color,#03a9f4);color:#fff;padding:10px 16px;border-radius:8px;margin-top:4px;align-items:center;justify-content:space-between;display:${Object.keys(this._distDirty).length ? "flex" : "none"}">
-        <span>Ungespeicherte Änderungen</span>
-        <button onclick="this.getRootNode().host._saveDistConfig()" style="background:#fff;color:var(--primary-color,#03a9f4);border:none;padding:6px 16px;border-radius:6px;cursor:pointer;font-weight:600">💾 Speichern</button>
+        <span>${dt.unsaved || ""}</span>
+        <button onclick="this.getRootNode().host._saveDistConfig()" style="background:#fff;color:var(--primary-color,#03a9f4);border:none;padding:6px 16px;border-radius:6px;cursor:pointer;font-weight:600">${dt.save || "Save"}</button>
       </div>
     `;
 
