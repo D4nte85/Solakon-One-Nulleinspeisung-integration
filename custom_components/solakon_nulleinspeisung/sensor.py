@@ -149,11 +149,13 @@ class GridStdDevSensor(SolakonEntity, SensorEntity):
             attrs["dyn_offset_z2"] = self._coordinator.dyn_offset_z2
             attrs["dyn_offset_ac"] = self._coordinator.dyn_offset_ac
         return attrs
-        
+
+
 class IntegralSensor(SolakonEntity, SensorEntity):
     _attr_name = "PI Integral"
     _attr_icon = "mdi:chart-bell-curve"
-    _attr_native_unit_of_measurement = "W"
+    _attr_native_unit_of_measurement = UnitOfPower.WATT
+    _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_suggested_display_precision = 1
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 

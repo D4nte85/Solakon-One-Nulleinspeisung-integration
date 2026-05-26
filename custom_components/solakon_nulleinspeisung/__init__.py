@@ -102,9 +102,9 @@ async def _ws_get_status(
         "mode_label_ts":     coord.mode_label_ts,
         "last_error":        coord.last_error,
         "integral":          round(coord.integral, 2),
-        "grid":              coord._flt(cfg.get(CONF_GRID_SENSOR, ""), 0),
-        "actual_power":      coord._flt(cfg.get(CONF_ACTUAL_SENSOR, ""), 0),
-        "solar":             coord._flt(cfg.get(CONF_SOLAR_SENSOR, ""), 0),
+        "grid":              coord._flt_power(cfg.get(CONF_GRID_SENSOR, ""), 0),
+        "actual_power":      coord._flt_power(cfg.get(CONF_ACTUAL_SENSOR, ""), 0),
+        "solar":             coord._flt_power(cfg.get(CONF_SOLAR_SENSOR, ""), 0),
         "soc":               coord._flt(cfg.get(CONF_SOC_SENSOR, ""), 0),
         "cycle_active":      coord.cycle_active,
         "surplus_active":    coord.surplus_active,
@@ -137,8 +137,7 @@ async def _ws_reset_integral(
     coord = hass.data.get(DOMAIN, {}).get(msg["entry_id"])
     if coord:
         async with coord._lock:
-            coord.integral = 0.0
-        coord.notify_listeners()
+            coord.reset_integral()
         connection.send_result(msg["id"], {"success": True})
     else:
         connection.send_error(msg["id"], "not_found", "Coordinator not found")

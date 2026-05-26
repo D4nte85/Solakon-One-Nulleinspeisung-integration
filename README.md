@@ -219,6 +219,8 @@ Optionale Überschuss-Einspeisung (Zone 0). **Hat absoluten Vorrang vor allen an
 
 **Forecast-Eintritt:** PV-Vorhersage ≥ Schwelle UND PV > Hard Limit
 
+> Sensorwerte mit k-Präfix (kW, kWh, kWp …) werden automatisch ×1000 normalisiert — Schwelle immer in der Basiseinheit (W bzw. Wh) angeben. Standard: 5000 Wh.
+
 > Kein SOC-Gate — Surplus startet sobald PV die maximale Ausgangsleistung übersteigt. Gedacht für sonnige Tage: 800 W werden dauerhaft ausgegeben, der Rest lädt die Batterie.
 
 **Austritts-Bedingung (nur ohne aktive Vorhersage):** SOC < (Export-Schwelle − SOC-Hysterese) ODER (PV ≤ Output + Grid − PV-Hysterese UND PV ≠ 0 UND Output ≠ 0)
@@ -328,7 +330,7 @@ Die Regellogik arbeitet mit einer geordneten Liste von Falls. Die Reihenfolge is
 | **B** — Zone 3 Stop | SOC < Zone-3-Schwelle UND `cycle_active = True` UND kein AC/Tarif-Laden | `cycle_active → False`. Integral = 0. Output → 0 W. Modus → `'0'`. |
 | **C** — Zone 3 Absicherung | SOC < Zone-3-Schwelle UND `cycle_active = False` UND Modus ≠ `'0'` UND kein AC/Tarif-Laden | Output → 0 W. Modus → `'0'`. Kein Integral-Reset. |
 | **D** — Recovery | `(cycle_active = True ODER ac_charge_active = True)` UND Modus ∉ `{'1','3'}` UND SOC > Zone-3-Schwelle UND kein aktiver Tarif-Lock (außer `ac_charge_active = True`) | Timer-Toggle. Modus → `'3'` (wenn `ac_charge_active` oder `tariff_charge_active`) sonst `'1'`. Kein Integral-Reset. |
-| **GT** — Tarif-Laden Start | Tarif aktiv UND Preis gültig UND Preis < Günstig-Schwelle UND SOC < Tarif-SOC-Ziel UND kein Tarif-Laden aktiv UND kein Überschuss aktiv UND Modus ≠ `'3'` | `tariff_charge_active → True`. `cycle_active → True`. Timer-Toggle. Output → Tarif-Ladeleistung. Modus → `'3'`. |
+| **GT** — Tarif-Laden Start | Tarif aktiv UND Preis gültig UND Preis < Günstig-Schwelle UND SOC < Tarif-SOC-Ziel UND kein Tarif-Laden aktiv UND kein Überschuss aktiv UND Modus ≠ `'3'` | `tariff_charge_active → True`. Timer-Toggle. Output → Tarif-Ladeleistung. Modus → `'3'`. |
 | **HT** — Tarif-Laden Ende | `tariff_charge_active = True` UND (Preis gültig UND Preis ≥ Günstig-Schwelle ODER SOC ≥ Tarif-SOC-Ziel) | `tariff_charge_active → False`. Integral = 0. Zone 1 → `'1'` / Zone 2 → `'0'` + 0 W. |
 | **TM** — Discharge-Lock | Tarif aktiv UND Preis gültig UND Günstig ≤ Preis < Teuer-Schwelle UND kein AC/Tarif-Laden UND kein Überschuss UND Modus = `'1'` | Integral = 0. Output → 0 W. Modus → `'0'`. Sperrt Zone 1 und Zone 2. |
 | **G** — AC Laden Start | AC aktiv UND kein AC/Tarif-Laden aktiv UND kein Überschuss aktiv UND SOC < Ladeziel UND **Modus ≠ `'3'`** UND (Grid + Output) < −Hysterese | `ac_charge_active → True`. Timer-Toggle. Output → 0 W. Modus → `'3'`. |

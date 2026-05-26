@@ -145,6 +145,10 @@ class SolakonCoordinator:
     async def async_update_settings(self, changes: dict[str, Any]) -> None:
         old_tariff = self.settings.get(S_TARIFF_PRICE_SENSOR, "")
         old_tariff_enabled = self.settings.get(S_TARIFF_ENABLED, False)
+        old_pv = self.settings.get(S_PV_FORECAST_SENSOR, "")
+        old_pv_en = self.settings.get(S_PV_FORECAST_ENABLED, False)
+        old_sf = self.settings.get(S_SURPLUS_FORECAST_SENSOR, "")
+        old_sf_en = self.settings.get(S_SURPLUS_FORECAST_ENABLED, False)
 
         self.settings.update(changes)
         await self._store.async_save(self._store_data())
@@ -155,17 +159,13 @@ class SolakonCoordinator:
         if old_tariff != new_tariff or old_tariff_enabled != new_tariff_enabled:
             self._update_tariff_tracker()
 
-        old_pv = self.settings.get(S_PV_FORECAST_SENSOR, "")
-        old_pv_en = self.settings.get(S_PV_FORECAST_ENABLED, False)
-        new_pv = changes.get(S_PV_FORECAST_SENSOR, old_pv)
-        new_pv_en = changes.get(S_PV_FORECAST_ENABLED, old_pv_en)
+        new_pv = self.settings.get(S_PV_FORECAST_SENSOR, "")
+        new_pv_en = self.settings.get(S_PV_FORECAST_ENABLED, False)
         if old_pv != new_pv or old_pv_en != new_pv_en:
             self._update_forecast_tracker()
 
-        old_sf = self.settings.get(S_SURPLUS_FORECAST_SENSOR, "")
-        old_sf_en = self.settings.get(S_SURPLUS_FORECAST_ENABLED, False)
-        new_sf = changes.get(S_SURPLUS_FORECAST_SENSOR, old_sf)
-        new_sf_en = changes.get(S_SURPLUS_FORECAST_ENABLED, old_sf_en)
+        new_sf = self.settings.get(S_SURPLUS_FORECAST_SENSOR, "")
+        new_sf_en = self.settings.get(S_SURPLUS_FORECAST_ENABLED, False)
         if old_sf != new_sf or old_sf_en != new_sf_en:
             self._update_surplus_forecast_tracker()
     
@@ -371,6 +371,20 @@ class SolakonCoordinator:
             value *= 1000.0
         return value
 
+    def _flt_kilo_normalized(self, entity_id: str, default: float = 0.0) -> float:
+        """Float-Wert lesen; k-Präfix-Einheiten (kW, kWh, …) ×1000 normalisieren."""
+        state = self.hass.states.get(entity_id)
+        if state is None or state.state in ("unknown", "unavailable"):
+            return default
+        try:
+            value = state_as_number(state)
+        except (ValueError, TypeError):
+            return default
+        unit = state.attributes.get("unit_of_measurement", "")
+        if unit.startswith("k") or unit.startswith("K"):
+            value *= 1000.0
+        return value
+
     def _str(self, entity_id: str) -> str:
         """State als String lesen, 'unknown' bei Fehler."""
         state = self.hass.states.get(entity_id)
@@ -535,24 +549,20 @@ class SolakonCoordinator:
         surplus_forecast_threshold = float(s.get(S_SURPLUS_FORECAST_THRESHOLD, 0.0))
         
         if surplus_forecast_enabled and surplus_forecast_sensor:
-            raw = self.hass.states.get(surplus_forecast_sensor)
-            if raw and raw.state not in ("unknown", "unavailable"):
-                try:
-                    self.forecast_surplus_forced = float(raw.state) >= surplus_forecast_threshold
-                except (ValueError, TypeError):
-                    self.forecast_surplus_forced = False
+            if self._entity_ok(surplus_forecast_sensor):
+                self.forecast_surplus_forced = (
+                    self._flt_kilo_normalized(surplus_forecast_sensor) >= surplus_forecast_threshold
+                )
             else:
                 self.forecast_surplus_forced = False
         else:
             self.forecast_surplus_forced = False
 
         if pv_forecast_enabled and pv_forecast_sensor:
-            raw = self.hass.states.get(pv_forecast_sensor)
-            if raw and raw.state not in ("unknown", "unavailable"):
-                try:
-                    self.forecast_tariff_suppressed = float(raw.state) >= pv_forecast_threshold
-                except (ValueError, TypeError):
-                    self.forecast_tariff_suppressed = False
+            if self._entity_ok(pv_forecast_sensor):
+                self.forecast_tariff_suppressed = (
+                    self._flt_kilo_normalized(pv_forecast_sensor) >= pv_forecast_threshold
+                )
             else:
                 self.forecast_tariff_suppressed = False
         else:

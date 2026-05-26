@@ -5,6 +5,7 @@
         "title": "Solakon ONE — Entity Assignment",
         "description": "Assign your Solakon ONE entities.\n\nAll further parameters (PI, zones, AC charging, tariff, surplus …) are configured in the **sidebar panel**.\n\n[Documentation]({hint})",
         "data": {
+          "instance_name": "📛 Instance name (e.g. Battery 1)",
           "grid_power_sensor": "🔌 Grid power sensor (e.g. Shelly 3EM)",
           "actual_power_sensor": "⚡ Actual inverter output power",
           "solar_power_sensor": "☀️ Solar power (PV generation)",
@@ -37,6 +38,7 @@
       "init": {
         "title": "Solakon ONE — Update Entities",
         "data": {
+          "instance_name": "📛 Instance name",
           "grid_power_sensor": "🔌 Grid power sensor",
           "actual_power_sensor": "⚡ Output power",
           "solar_power_sensor": "☀️ Solar power",
