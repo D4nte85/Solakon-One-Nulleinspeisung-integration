@@ -20,7 +20,7 @@ from .const import (
     MODE_DISABLED, MODE_DISCHARGE, MODE_AC_CHARGE,
     S_REGULATION_ENABLED,
     S_P_FACTOR, S_I_FACTOR, S_TOLERANCE, S_WAIT_TIME, S_STDDEV_WINDOW,
-    S_ZONE1_LIMIT, S_ZONE3_LIMIT, S_DISCHARGE_MAX, S_HARD_LIMIT,
+    S_ZONE1_LIMIT, S_ZONE3_LIMIT, S_DISCHARGE_MAX, S_HARD_LIMIT_Z0, S_HARD_LIMIT_Z1,
     S_OFFSET_1, S_OFFSET_2, S_PV_RESERVE,
     S_SURPLUS_ENABLED, S_SURPLUS_SOC_THRESHOLD, S_SURPLUS_SOC_HYST, S_SURPLUS_PV_HYST,
     S_SURPLUS_FORECAST_ENABLED, S_SURPLUS_FORECAST_SENSOR, S_SURPLUS_FORECAST_THRESHOLD,
@@ -481,7 +481,8 @@ class SolakonCoordinator:
         # ── 2. Settings auslesen ─────────────────────────────────────────────
         zone1_limit = int(s[S_ZONE1_LIMIT])
         zone3_limit = int(s[S_ZONE3_LIMIT])
-        hard_limit = int(s[S_HARD_LIMIT])
+        hard_limit_z0 = int(s[S_HARD_LIMIT_Z0])
+        hard_limit_z1 = int(s[S_HARD_LIMIT_Z1])
         tolerance = int(s[S_TOLERANCE])
         wait_time = int(s[S_WAIT_TIME])
         p_factor = float(s[S_P_FACTOR])
@@ -538,7 +539,8 @@ class SolakonCoordinator:
 
         error_share, allocated_power = self._compute_distribution()
         self.allocated_power = allocated_power
-        effective_hard = int(allocated_power) if allocated_power is not None else hard_limit
+        effective_hard = int(allocated_power) if allocated_power is not None else hard_limit_z0
+        effective_hard_z1 = int(allocated_power) if allocated_power is not None else hard_limit_z1
 
         pv_forecast_enabled = bool(s.get(S_PV_FORECAST_ENABLED, False))
         pv_forecast_sensor = str(s.get(S_PV_FORECAST_SENSOR, ""))
@@ -607,7 +609,7 @@ class SolakonCoordinator:
             )
             forecast_entry = (
                 self.forecast_surplus_forced
-                and solar > hard_limit
+                and solar > hard_limit_z0
             )
             surplus_entry = normal_entry or forecast_entry
 
@@ -644,7 +646,7 @@ class SolakonCoordinator:
             soc=soc, grid=grid, solar=solar, actual=actual, mode=mode,
             current_power=current_power,
             zone1_limit=zone1_limit, zone3_limit=zone3_limit,
-            hard_limit=hard_limit, discharge_max=discharge_max,
+            hard_limit_z0=hard_limit_z0, hard_limit_z1=hard_limit_z1, discharge_max=discharge_max,
             surplus_enabled=surplus_enabled, new_surplus=new_surplus,
             surplus_pv_hyst=surplus_pv_hyst,
             ac_enabled=ac_enabled, ac_soc_target=ac_soc_target,
@@ -667,7 +669,7 @@ class SolakonCoordinator:
         if mode == MODE_AC_CHARGE:
             dynamic_max = ac_power_limit
         elif self.cycle_active:
-            dynamic_max = effective_hard
+            dynamic_max = effective_hard_z1
         else:
             dynamic_max = max(0, solar - pv_reserve)
 
@@ -701,7 +703,7 @@ class SolakonCoordinator:
             await self._set_output(effective_hard)
             self.mode_label = "Überschuss-Einspeisung"
             self._set_last_action(f"Zone 0: Output → {effective_hard} W")
-            await self._wait_for_target(hard_limit)
+            await self._wait_for_target(hard_limit_z0)
 
         elif self.ac_charge_active:
             ac_grid_err = grid - ac_offset
@@ -755,7 +757,8 @@ class SolakonCoordinator:
         actual = v["actual"]
         zone1 = v["zone1_limit"]
         zone3 = v["zone3_limit"]
-        hard = v["hard_limit"]
+        hard_z0 = v["hard_limit_z0"]
+        hard_z1 = v["hard_limit_z1"]
         discharge_max = v["discharge_max"]
 
         # ── Fall 0A: Surplus Entry ───────────────────────────────────────────

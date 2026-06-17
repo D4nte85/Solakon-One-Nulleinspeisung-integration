@@ -121,9 +121,13 @@
       "l": "PV Reserve (W)",
       "d": "Zone-2 output limit: max(0, PV − reserve). Also the threshold for night shutdown: Zone 2 disabled when PV < reserve."
     },
-    "hard_limit": {
-      "l": "Hard Limit (W)",
-      "d": "Absolute output power ceiling in Zone 0 and Zone 1. In Zone 2 the dynamic PV-based limit applies instead (max(0, PV − reserve))."
+    "hard_limit_z0": {
+      "l": "Hard Limit Zone 0 (W)",
+      "d": "Absolute output power ceiling in Zone 0 (Surplus). In Zone 2 the dynamic PV-based limit applies instead (max(0, PV − reserve))."
+    },
+    "hard_limit_z1": {
+      "l": "Hard Limit Zone 1 (W)",
+      "d": "Absolute output power ceiling in Zone 1 (Discharge). In Zone 2 the dynamic PV-based limit applies instead (max(0, PV − reserve))."
     },
     "discharge_max": {
       "l": "Max. Discharge Current Zone 1 (A)",
