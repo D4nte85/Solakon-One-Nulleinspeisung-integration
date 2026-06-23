@@ -568,7 +568,7 @@ class SolakonCoordinator:
         else:
             self.forecast_tariff_suppressed = False
 
-        effective_tariff_enabled = tariff_enabled and not self.forecast_tariff_suppressed
+        effective_tariff_enabled = tariff_enabled and bool(tariff_sensor) and not self.forecast_tariff_suppressed
         tariff_soc = int(s[S_TARIFF_SOC_TARGET])
         tariff_power = int(s[S_TARIFF_POWER])
 
@@ -591,7 +591,12 @@ class SolakonCoordinator:
             self.notify_listeners()
             return
 
-        self.last_error = ""
+        if tariff_enabled and not tariff_sensor:
+            self.last_error = "Tarif: Kein Preis-Sensor konfiguriert — Tarif-Funktion inaktiv"
+        elif tariff_enabled and tariff_sensor and not self._entity_ok(tariff_sensor):
+            self.last_error = f"Tarif: Preis-Sensor {tariff_sensor!r} nicht verfügbar"
+        else:
+            self.last_error = ""
 
         # ── 4. Abgeleitete Variablen ─────────────────────────────────────────
         target_offset = offset_1 if self.cycle_active else offset_2
