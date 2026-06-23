@@ -760,7 +760,6 @@ class SolakonCoordinator:
         actual = v["actual"]
         zone1 = v["zone1_limit"]
         zone3 = v["zone3_limit"]
-        hard = v["hard_limit"]
         discharge_max = v["discharge_max"]
 
         # ── Fall 0A: Surplus Entry ───────────────────────────────────────────
