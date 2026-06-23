@@ -17,6 +17,7 @@ from .const import (
     CONF_GRID_SENSOR, CONF_ACTUAL_SENSOR, CONF_SOLAR_SENSOR,
     CONF_SOC_SENSOR, CONF_TIMEOUT_COUNTDOWN, CONF_ACTIVE_POWER,
     CONF_DISCHARGE_CURRENT, CONF_TIMEOUT_SET, CONF_MODE_SELECT,
+    CONF_EXPORT_LIMIT,
     REQUIRED_ENTITY_DEFAULTS_DE, REQUIRED_ENTITY_DEFAULTS_EN,
 )
 
@@ -77,6 +78,11 @@ def _schema(current: dict, defaults: dict) -> vol.Schema:
             CONF_MODE_SELECT,
             default=current.get(CONF_MODE_SELECT, defaults[CONF_MODE_SELECT]),
         ): EntitySelector(EntitySelectorConfig(domain="select")),
+
+        vol.Optional(
+            CONF_EXPORT_LIMIT,
+            default=current.get(CONF_EXPORT_LIMIT, ""),
+        ): EntitySelector(EntitySelectorConfig(domain="number")),
     })
 
 

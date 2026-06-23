@@ -15,6 +15,7 @@ CONF_ACTIVE_POWER     = "active_power_number"
 CONF_DISCHARGE_CURRENT = "max_discharge_current_number"
 CONF_TIMEOUT_SET      = "remote_timeout_set_number"
 CONF_MODE_SELECT      = "mode_select"
+CONF_EXPORT_LIMIT     = "export_power_limit_number"
 
 # -- Config-Entry Entity Defaults (sprachabhängig) ----------------------------
 REQUIRED_ENTITY_DEFAULTS_DE = {

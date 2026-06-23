@@ -16,7 +16,7 @@ from .const import (
     DOMAIN, STORAGE_VERSION, SETTINGS_DEFAULTS,
     CONF_GRID_SENSOR, CONF_ACTUAL_SENSOR, CONF_SOLAR_SENSOR,
     CONF_SOC_SENSOR, CONF_TIMEOUT_COUNTDOWN, CONF_ACTIVE_POWER,
-    CONF_DISCHARGE_CURRENT, CONF_TIMEOUT_SET, CONF_MODE_SELECT,
+    CONF_DISCHARGE_CURRENT, CONF_TIMEOUT_SET, CONF_MODE_SELECT, CONF_EXPORT_LIMIT,
     MODE_DISABLED, MODE_DISCHARGE, MODE_AC_CHARGE,
     S_REGULATION_ENABLED,
     S_P_FACTOR, S_I_FACTOR, S_TOLERANCE, S_WAIT_TIME, S_STDDEV_WINDOW,
@@ -426,6 +426,16 @@ class SolakonCoordinator:
         if abs(current - amps) > 0.5:
             await self._set_number(self.entry.data[CONF_DISCHARGE_CURRENT], amps)
 
+    async def _sync_export_limit(self, target: int) -> None:
+        """grid_export_power_limit korrigieren wenn von Soll abgewichen — nur wenn Entity konfiguriert."""
+        export_entity = self.entry.data.get(CONF_EXPORT_LIMIT, "")
+        if not export_entity:
+            return
+        current = self._flt(export_entity, -1)
+        if abs(current - target) > 0.5:
+            _LOGGER.info("Solakon: Export-Limit korrigiert %d → %d W", int(current), target)
+            await self._set_number(export_entity, target)
+
     async def _timer_toggle(self) -> None:
         """Timer-Wechsel 3598↔3599 — erzwingt sichere Modus-Übernahme."""
         timer_eid = self.entry.data[CONF_TIMEOUT_SET]
@@ -482,6 +492,7 @@ class SolakonCoordinator:
         zone1_limit = int(s[S_ZONE1_LIMIT])
         zone3_limit = int(s[S_ZONE3_LIMIT])
         hard_limit = int(s[S_HARD_LIMIT])
+        await self._sync_export_limit(hard_limit)
         tolerance = int(s[S_TOLERANCE])
         wait_time = int(s[S_WAIT_TIME])
         p_factor = float(s[S_P_FACTOR])
