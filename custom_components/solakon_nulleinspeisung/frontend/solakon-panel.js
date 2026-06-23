@@ -57,6 +57,13 @@ const TAB_LAYOUT = {
           { k: "self_adjust_tolerance", t: "num", min: 1, max: 50, step: 1 },
         ],
       },
+      {
+        tk: "periodic", icon: "⏱️", color: "#475569",
+        fields: [
+          { k: "periodic_enabled",  t: "bool" },
+          { k: "periodic_interval", t: "num", min: 5, max: 300, step: 5 },
+        ],
+      },
     ],
   },
 

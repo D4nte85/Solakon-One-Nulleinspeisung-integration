@@ -96,6 +96,9 @@ S_PV_FORECAST_THRESHOLD  = "pv_forecast_threshold"
 
 S_NIGHT_ENABLED = "night_enabled"
 
+S_PERIODIC_ENABLED  = "periodic_enabled"
+S_PERIODIC_INTERVAL = "periodic_interval"
+
 S_SELF_ADJUST     = "self_adjust_enabled"
 S_SELF_ADJUST_TOL = "self_adjust_tolerance"
 
@@ -174,6 +177,9 @@ SETTINGS_DEFAULTS: dict = {
     S_PV_FORECAST_THRESHOLD: 5000.0,
 
     S_NIGHT_ENABLED: False,
+
+    S_PERIODIC_ENABLED:  False,
+    S_PERIODIC_INTERVAL: 10,
 
     S_SELF_ADJUST:     False,
     S_SELF_ADJUST_TOL: 2,

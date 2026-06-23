@@ -82,7 +82,8 @@
     "tariff_forecast":  "PV-Vorhersage",
     "dynoff_z1":        "Zone 1",
     "dynoff_z2":        "Zone 2",
-    "dynoff_ac":        "Zone AC Laden"
+    "dynoff_ac":        "Zone AC Laden",
+    "periodic":         "Periodischer Trigger"
   },
   "fields": {
     "p_factor":  {
@@ -266,6 +267,14 @@
     "night_enabled": {
       "l": "Nachtabschaltung aktivieren",
       "d": "Zone 2 bei PV < PV-Ladereserve deaktivieren. Zone 1 und AC Laden laufen weiter. Zone 2 wird nicht reaktiviert solange ein Tarif-Lock (mittlerer/günstiger Preis) aktiv ist."
+    },
+    "periodic_enabled": {
+      "l": "Periodischen Trigger aktivieren",
+      "d": "Startet die Regelschleife im konfigurierten Intervall neu — auch ohne Sensor-Änderung. Sinnvoll bei stabilen Haushalten, in denen der Netzbezug selten springt."
+    },
+    "periodic_interval": {
+      "l": "Trigger-Intervall (s)",
+      "d": "Abstand zwischen zwei periodischen Regelläufen in Sekunden. Minimum: 5 s."
     }
   },
   "general_section": "⚙️ Allgemein",

@@ -82,7 +82,8 @@
     "tariff_forecast":  "PV Forecast",
     "dynoff_z1":        "Zone 1",
     "dynoff_z2":        "Zone 2",
-    "dynoff_ac":        "Zone AC Charge"
+    "dynoff_ac":        "Zone AC Charge",
+    "periodic":         "Periodic Trigger"
   },
   "fields": {
     "p_factor":  {
@@ -266,6 +267,14 @@
     "night_enabled": {
       "l": "Enable Night Shutdown",
       "d": "Disable Zone 2 when PV < PV reserve. Zone 1 and AC charging continue running. Zone 2 is not reactivated while a tariff lock (medium/cheap price) is active."
+    },
+    "periodic_enabled": {
+      "l": "Enable Periodic Trigger",
+      "d": "Runs the regulation loop at a fixed interval — even without sensor changes. Useful for stable households where grid power rarely fluctuates."
+    },
+    "periodic_interval": {
+      "l": "Trigger Interval (s)",
+      "d": "Seconds between periodic regulation runs. Minimum: 5 s."
     }
   },
   "general_section": "⚙️ General",

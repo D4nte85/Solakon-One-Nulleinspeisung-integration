@@ -7,8 +7,10 @@ import time
 from collections import deque
 from typing import Any, Callable
 
+from datetime import timedelta
+
 from homeassistant.core import HomeAssistant, Event, callback
-from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.helpers.event import async_track_state_change_event, async_track_time_interval
 from homeassistant.helpers.state import state_as_number
 from homeassistant.helpers.storage import Store
 
@@ -26,6 +28,7 @@ from .const import (
     S_SURPLUS_FORECAST_ENABLED, S_SURPLUS_FORECAST_SENSOR, S_SURPLUS_FORECAST_THRESHOLD,
     S_AC_ENABLED, S_AC_SOC_TARGET, S_AC_POWER_LIMIT, S_AC_HYSTERESIS,
     S_AC_OFFSET, S_AC_P_FACTOR, S_AC_I_FACTOR,
+    S_PERIODIC_ENABLED, S_PERIODIC_INTERVAL,
     S_TARIFF_ENABLED, S_TARIFF_PRICE_SENSOR, S_TARIFF_CHEAP_THRESHOLD,
     S_TARIFF_EXP_THRESHOLD, S_TARIFF_SOC_TARGET, S_TARIFF_POWER,
     S_TARIFF_CHEAP_ENTITY, S_TARIFF_EXP_ENTITY,
@@ -88,6 +91,7 @@ class SolakonCoordinator:
         self._listeners: list[Callable[[], None]] = []
         self._unsub_trackers: list[Callable] = []
         self._tariff_unsub = None
+        self._periodic_unsub = None
         self._forecast_unsub = None
         self.forecast_tariff_suppressed: bool = False
         self._surplus_forecast_unsub = None
@@ -125,6 +129,7 @@ class SolakonCoordinator:
             self._unsub_trackers.append(unsub)
 
         self._update_tariff_tracker()
+        self._update_periodic_tracker()
 
     async def async_shutdown(self) -> None:
         """Listener abräumen, Integral speichern."""
@@ -134,6 +139,9 @@ class SolakonCoordinator:
         if self._tariff_unsub:
             self._tariff_unsub()
             self._tariff_unsub = None
+        if self._periodic_unsub:
+            self._periodic_unsub()
+            self._periodic_unsub = None
         if self._forecast_unsub:
             self._forecast_unsub()
             self._forecast_unsub = None
@@ -145,6 +153,8 @@ class SolakonCoordinator:
     async def async_update_settings(self, changes: dict[str, Any]) -> None:
         old_tariff = self.settings.get(S_TARIFF_PRICE_SENSOR, "")
         old_tariff_enabled = self.settings.get(S_TARIFF_ENABLED, False)
+        old_periodic_en = self.settings.get(S_PERIODIC_ENABLED, False)
+        old_periodic_iv = self.settings.get(S_PERIODIC_INTERVAL, 10)
         old_pv = self.settings.get(S_PV_FORECAST_SENSOR, "")
         old_pv_en = self.settings.get(S_PV_FORECAST_ENABLED, False)
         old_sf = self.settings.get(S_SURPLUS_FORECAST_SENSOR, "")
@@ -158,6 +168,11 @@ class SolakonCoordinator:
         new_tariff_enabled = self.settings.get(S_TARIFF_ENABLED, False)
         if old_tariff != new_tariff or old_tariff_enabled != new_tariff_enabled:
             self._update_tariff_tracker()
+
+        new_periodic_en = self.settings.get(S_PERIODIC_ENABLED, False)
+        new_periodic_iv = self.settings.get(S_PERIODIC_INTERVAL, 10)
+        if old_periodic_en != new_periodic_en or old_periodic_iv != new_periodic_iv:
+            self._update_periodic_tracker()
 
         new_pv = self.settings.get(S_PV_FORECAST_SENSOR, "")
         new_pv_en = self.settings.get(S_PV_FORECAST_ENABLED, False)
@@ -448,6 +463,26 @@ class SolakonCoordinator:
 
     @callback
     def _on_state_change(self, event: Event) -> None:
+        self.hass.async_create_task(self._async_regulate())
+
+    def _update_periodic_tracker(self) -> None:
+        """Periodischen Fallback-Trigger (de-)registrieren."""
+        if self._periodic_unsub:
+            self._periodic_unsub()
+            self._periodic_unsub = None
+
+        if not self.settings.get(S_PERIODIC_ENABLED, False):
+            return
+
+        interval = max(5, int(self.settings.get(S_PERIODIC_INTERVAL, 10)))
+        self._periodic_unsub = async_track_time_interval(
+            self.hass, self._on_periodic, timedelta(seconds=interval)
+        )
+
+    def _on_periodic(self, _now: object) -> None:
+        # Fallback für stabile Haushalte: ohne Sensoränderung würde die Regelschleife
+        # nie laufen (z.B. stabiler Netzbezug + kein Preissprung). Der Lock verhindert
+        # parallele Läufe — dieser Trigger ist rein additiv.
         self.hass.async_create_task(self._async_regulate())
 
     async def _async_regulate(self) -> None:
