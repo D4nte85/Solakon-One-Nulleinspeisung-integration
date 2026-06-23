@@ -132,6 +132,7 @@ Die folgenden Solakon-Entitäten müssen in HA vorhanden sein und werden beim Ei
 | `number` | Maximaler Entladestrom |
 | `number` | Modus-Reset-Timer |
 | `select` | Betriebsmodus |
+| `number` *(optional)* | Netz-Ausgangsleistungsgrenze — für Export-Limit-Feature |
 
 ---
 
@@ -186,6 +187,8 @@ Kern des Regelkreises. Vollständige Einstellhilfe → [PI-Regler Einstellung](#
 | Stabw.-Fenster (s) | Zeitfenster für den internen Standardabweichungs-Sensor | 30–300 |
 | Self-Adjusting Wait | Wartet auf die tatsächliche WR-Ausgangsleistung statt fester Wartezeit | Empfohlen |
 | Zielwert-Toleranz (W) | Abweichung, ab der der Zielwert als erreicht gilt (nur bei Self-Adjust) | 2–5 |
+| Periodischer Trigger | Startet die Regelschleife im konfigurierten Intervall neu — auch ohne Sensor-Änderung. Sinnvoll bei stabilen Haushalten, in denen der Netzbezug selten springt. | Aus |
+| Trigger-Intervall (s) | Abstand zwischen zwei periodischen Regelläufen. Bereich: 5–300 s. | 10–60 |
 
 ---
 
