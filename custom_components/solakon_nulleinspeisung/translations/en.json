@@ -27,7 +27,7 @@
           "max_discharge_current_number": "Maximum discharge current in amperes — set zone-dependently.",
           "remote_timeout_set_number": "Timer value for mode reset (3598/3599 toggle mechanism).",
           "mode_select": "Inverter operating mode: Disabled / Discharge / AC Charge.",
-          "export_power_limit_number": "Hardware limit for grid feed-in in watts — written by the export limit feature."
+          "export_power_limit_number": "Solakon entity for the hardware grid export limit. Automatically set to the Hard Limit value on each regulation cycle — ensures the cap stays correct even after external changes."
         }
       }
     },
@@ -62,7 +62,7 @@
           "max_discharge_current_number": "Maximum discharge current in amperes — set zone-dependently.",
           "remote_timeout_set_number": "Timer value for mode reset (3598/3599 toggle mechanism).",
           "mode_select": "Inverter operating mode: Disabled / Discharge / AC Charge.",
-          "export_power_limit_number": "Hardware limit for grid feed-in in watts — written by the export limit feature."
+          "export_power_limit_number": "Solakon entity for the hardware grid export limit. Automatically set to the Hard Limit value on each regulation cycle — ensures the cap stays correct even after external changes."
         }
       }
     }

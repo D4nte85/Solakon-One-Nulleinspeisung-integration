@@ -27,7 +27,7 @@
           "max_discharge_current_number": "Maximaler Entladestrom in Ampere — zonenabhängig gesetzt.",
           "remote_timeout_set_number": "Timer-Wert für den Modus-Reset (3598/3599 Toggle-Mechanismus).",
           "mode_select": "Betriebsmodus des Wechselrichters: Disabled / Discharge / AC Charge.",
-          "export_power_limit_number": "Hardware-Limit für die Netzeinspeisung in Watt — wird bei Export-Limit-Feature geschrieben."
+          "export_power_limit_number": "Solakon-Entität für das Hardware-Limit der Netzeinspeisung. Wird bei jedem Regelzyklus automatisch auf den Hard-Limit-Wert gesetzt — stellt sicher dass die Grenze auch nach externen Änderungen korrekt bleibt."
         }
       }
     },
@@ -62,7 +62,7 @@
           "max_discharge_current_number": "Maximaler Entladestrom in Ampere — zonenabhängig gesetzt.",
           "remote_timeout_set_number": "Timer-Wert für den Modus-Reset (3598/3599 Toggle-Mechanismus).",
           "mode_select": "Betriebsmodus des Wechselrichters: Disabled / Discharge / AC Charge.",
-          "export_power_limit_number": "Hardware-Limit für die Netzeinspeisung in Watt — wird bei Export-Limit-Feature geschrieben."
+          "export_power_limit_number": "Solakon-Entität für das Hardware-Limit der Netzeinspeisung. Wird bei jedem Regelzyklus automatisch auf den Hard-Limit-Wert gesetzt — stellt sicher dass die Grenze auch nach externen Änderungen korrekt bleibt."
         }
       }
     }

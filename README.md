@@ -201,7 +201,7 @@ SOC-Zonenlogik mit allen Leistungs- und Offset-Parametern.
 | Zone 1 SOC-Schwelle (%) | SOC über diesem Wert → Zone 1 (aggressiv) | 40–60 |
 | Zone 3 SOC-Schwelle (%) | SOC unter diesem Wert → Zone 3 (Stopp) | 15–25 |
 | Max. Entladestrom (A) | Entladestrom in Zone 1 (Zone 2 = 0 A, Surplus = 2 A) | 25–40 |
-| Hard Limit (W) | Absolute Obergrenze der Ausgangsleistung in Zone 0 und Zone 1 | 800 |
+| Hard Limit (W) | Absolute Obergrenze der Ausgangsleistung in Zone 0 und Zone 1. Wird bei jedem Regelzyklus automatisch in die optionale Netz-Ausgangsleistungsgrenze-Entität geschrieben — Hardware-Enforcement. | 800 |
 | Zone 1 Offset (W) | Statischer Zielwert in Zone 1. Bei aktivem Dyn. Offset überschrieben | 20–50 |
 | Zone 2 Offset (W) | Statischer Zielwert in Zone 2 | 10–30 |
 | PV-Ladereserve (W) | Zone-2-Output-Limit: `max(0, PV − Reserve)`. Dient auch als Schwelle für Nachtabschaltung | 30–100 |
@@ -381,6 +381,7 @@ Typischer Arbeitsbereich: **0.03–0.08**. Für AC Laden separat tunen — P bes
 8. **Tarif-Discharge-Lock.** Der Lock gilt für mittlere UND günstige Preiszonen (alles unterhalb der Teuer-Schwelle) und sperrt sowohl Zone 1 als auch Zone 2 (Output 0 W, Modus Disabled). Solange Überschuss-Einspeisung aktiv ist, wird kein Lock ausgelöst. Die Sperre hebt sich automatisch wenn der Preis die Teuer-Schwelle überschreitet — Recovery (Fall D) stellt dann den vorherigen Modus wieder her.
 9. **Dynamischer Offset.** Jede Zone wird einzeln aktiviert. Die Netz-Standardabweichung wird intern berechnet — kein externer Statistik-Sensor erforderlich. Nach dem ersten Start einige Minuten warten bis genug Samples gesammelt sind.
 10. **Self-Adjusting Wait.** Polls die tatsächliche Ausgangsleistung nach einem Setpoint-Befehl statt einer festen Wartezeit zu schlafen. Die konfigurierte Wartezeit wird zum maximalen Timeout als Sicherheitsnetz.
+11. **Export-Limit-Sync.** Ist die optionale Netz-Ausgangsleistungsgrenze-Entität konfiguriert, schreibt jeder Regelzyklus den Hard-Limit-Wert in diese Entität — sofern er abweicht. Das verhindert, dass externe Eingriffe (App, andere Automation) das Hardware-Limit dauerhaft ändern.
 
 ---
 
