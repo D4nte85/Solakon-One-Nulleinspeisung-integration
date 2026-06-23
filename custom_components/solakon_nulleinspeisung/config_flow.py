@@ -81,7 +81,7 @@ def _schema(current: dict, defaults: dict) -> vol.Schema:
 
         vol.Optional(
             CONF_EXPORT_LIMIT,
-            default=current.get(CONF_EXPORT_LIMIT, ""),
+            default=current.get(CONF_EXPORT_LIMIT, defaults[CONF_EXPORT_LIMIT]),
         ): EntitySelector(EntitySelectorConfig(domain="number")),
     })
 

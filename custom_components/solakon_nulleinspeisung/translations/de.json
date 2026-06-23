@@ -14,7 +14,8 @@
           "active_power_number": "⚙️ Ausgangsleistungsregler",
           "max_discharge_current_number": "🔋 Max. Entladestrom",
           "remote_timeout_set_number": "⏲️ Modus-Reset-Timer",
-          "mode_select": "🔄 Betriebsmodus-Auswahl"
+          "mode_select": "🔄 Betriebsmodus-Auswahl",
+          "export_power_limit_number": "📤 Netz-Ausgangsleistungsgrenze (optional)"
         },
         "data_description": {
           "grid_power_sensor": "Sensor der die aktuelle Netzleistung misst. Positiv = Bezug, negativ = Einspeisung.",
@@ -25,7 +26,8 @@
           "active_power_number": "Zielleistung für den Wechselrichter — wird vom PI-Regler geschrieben.",
           "max_discharge_current_number": "Maximaler Entladestrom in Ampere — zonenabhängig gesetzt.",
           "remote_timeout_set_number": "Timer-Wert für den Modus-Reset (3598/3599 Toggle-Mechanismus).",
-          "mode_select": "Betriebsmodus des Wechselrichters: Disabled / Discharge / AC Charge."
+          "mode_select": "Betriebsmodus des Wechselrichters: Disabled / Discharge / AC Charge.",
+          "export_power_limit_number": "Hardware-Limit für die Netzeinspeisung in Watt — wird bei Export-Limit-Feature geschrieben."
         }
       }
     },
@@ -47,7 +49,8 @@
           "active_power_number": "⚙️ Ausgangsleistungsregler",
           "max_discharge_current_number": "🔋 Max. Entladestrom",
           "remote_timeout_set_number": "⏲️ Modus-Reset-Timer",
-          "mode_select": "🔄 Betriebsmodus-Auswahl"
+          "mode_select": "🔄 Betriebsmodus-Auswahl",
+          "export_power_limit_number": "📤 Netz-Ausgangsleistungsgrenze (optional)"
         },
         "data_description": {
           "grid_power_sensor": "Sensor der die aktuelle Netzleistung misst. Positiv = Bezug, negativ = Einspeisung.",
@@ -58,7 +61,8 @@
           "active_power_number": "Zielleistung für den Wechselrichter — wird vom PI-Regler geschrieben.",
           "max_discharge_current_number": "Maximaler Entladestrom in Ampere — zonenabhängig gesetzt.",
           "remote_timeout_set_number": "Timer-Wert für den Modus-Reset (3598/3599 Toggle-Mechanismus).",
-          "mode_select": "Betriebsmodus des Wechselrichters: Disabled / Discharge / AC Charge."
+          "mode_select": "Betriebsmodus des Wechselrichters: Disabled / Discharge / AC Charge.",
+          "export_power_limit_number": "Hardware-Limit für die Netzeinspeisung in Watt — wird bei Export-Limit-Feature geschrieben."
         }
       }
     }

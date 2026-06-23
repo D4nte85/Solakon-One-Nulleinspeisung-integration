@@ -27,6 +27,7 @@ REQUIRED_ENTITY_DEFAULTS_DE = {
     CONF_DISCHARGE_CURRENT:  "number.solakon_one_maximaler_entladestrom",
     CONF_TIMEOUT_SET:        "number.solakon_one_fernsteuerung_zeituberschreitung",
     CONF_MODE_SELECT:        "select.solakon_one_modus_fernsteuern",
+    CONF_EXPORT_LIMIT:       "number.solakon_one_netz_ausgangsleistungsgrenze",
 }
 
 REQUIRED_ENTITY_DEFAULTS_EN = {
@@ -38,6 +39,7 @@ REQUIRED_ENTITY_DEFAULTS_EN = {
     CONF_DISCHARGE_CURRENT:  "number.solakon_one_maximum_discharge_current",
     CONF_TIMEOUT_SET:        "number.solakon_one_remote_control_timeout",
     CONF_MODE_SELECT:        "select.solakon_one_remote_control_mode",
+    CONF_EXPORT_LIMIT:       "number.solakon_one_grid_export_power_limit",
 }
 
 PLATFORMS = ["sensor", "switch", "binary_sensor"]

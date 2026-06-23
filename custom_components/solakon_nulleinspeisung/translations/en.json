@@ -14,7 +14,8 @@
           "active_power_number": "⚙️ Active power control",
           "max_discharge_current_number": "🔋 Max. discharge current",
           "remote_timeout_set_number": "⏲️ Mode reset timer",
-          "mode_select": "🔄 Operating mode selector"
+          "mode_select": "🔄 Operating mode selector",
+          "export_power_limit_number": "📤 Grid export power limit (optional)"
         },
         "data_description": {
           "grid_power_sensor": "Sensor measuring current grid power. Positive = consumption, negative = feed-in.",
@@ -25,7 +26,8 @@
           "active_power_number": "Target output power for the inverter — written by the PI controller.",
           "max_discharge_current_number": "Maximum discharge current in amperes — set zone-dependently.",
           "remote_timeout_set_number": "Timer value for mode reset (3598/3599 toggle mechanism).",
-          "mode_select": "Inverter operating mode: Disabled / Discharge / AC Charge."
+          "mode_select": "Inverter operating mode: Disabled / Discharge / AC Charge.",
+          "export_power_limit_number": "Hardware limit for grid feed-in in watts — written by the export limit feature."
         }
       }
     },
@@ -47,7 +49,8 @@
           "active_power_number": "⚙️ Active power control",
           "max_discharge_current_number": "🔋 Max. discharge current",
           "remote_timeout_set_number": "⏲️ Mode reset timer",
-          "mode_select": "🔄 Operating mode"
+          "mode_select": "🔄 Operating mode",
+          "export_power_limit_number": "📤 Grid export power limit (optional)"
         },
         "data_description": {
           "grid_power_sensor": "Sensor measuring current grid power. Positive = consumption, negative = feed-in.",
@@ -58,7 +61,8 @@
           "active_power_number": "Target output power for the inverter — written by the PI controller.",
           "max_discharge_current_number": "Maximum discharge current in amperes — set zone-dependently.",
           "remote_timeout_set_number": "Timer value for mode reset (3598/3599 toggle mechanism).",
-          "mode_select": "Inverter operating mode: Disabled / Discharge / AC Charge."
+          "mode_select": "Inverter operating mode: Disabled / Discharge / AC Charge.",
+          "export_power_limit_number": "Hardware limit for grid feed-in in watts — written by the export limit feature."
         }
       }
     }
