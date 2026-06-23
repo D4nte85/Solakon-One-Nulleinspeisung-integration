@@ -895,12 +895,13 @@ class SolakonCoordinator:
             self._set_last_action("Fall HT: Tarif-Laden beendet")
             return "HT"
 
-        # ── Mittlere Tarifstufe — Discharge-Lock ─────────────────────────────
-        # Sperrt Zone 1 und Zone 2 (cycle_active egal). Überschuss hat Vorrang.
+        # ── Discharge-Lock (Preis < Teuer-Schwelle) ──────────────────────────
+        # Sperrt Zone 1 und Zone 2 solange Preis < teuer (günstig UND mittel).
+        # Entspricht price_discharge_locked im Blueprint. Überschuss hat Vorrang.
+        # GT (Tarif-Laden) hat Vorrang — greift bei günstigem Preis + SOC < Ziel zuerst.
         if (
             v["tariff_enabled"]
             and v.get("tariff_price_valid", False)
-            and v["tariff_price"] >= v["tariff_cheap"]
             and v["tariff_price"] < v["tariff_exp"]
             and not self.tariff_charge_active
             and not self.ac_charge_active
