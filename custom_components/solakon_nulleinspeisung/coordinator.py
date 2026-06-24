@@ -653,7 +653,6 @@ class SolakonCoordinator:
                 and (
                     solar > (actual + grid + surplus_pv_hyst)
                     or solar == 0
-                    or actual == 0
                 )
             )
             forecast_entry = (
@@ -817,8 +816,10 @@ class SolakonCoordinator:
             and not self.tariff_charge_active
         ):
             self.surplus_active = True
-            if self.cycle_active:
-                await self._set_discharge(2)
+            if mode != MODE_DISCHARGE:
+                await self._timer_toggle()
+                await self._set_mode(MODE_DISCHARGE)
+            await self._set_discharge(2)
             self._set_last_action("Zone 0: Surplus aktiviert")
             return "0A"
 
