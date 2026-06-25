@@ -667,11 +667,21 @@ class SolakonCoordinator:
             )
             surplus_entry = normal_entry or forecast_entry
 
+            # Austritts-Verbrauchsbezug: Anteil dieser Instanz am WAHREN Hausverbrauch.
+            # Wahrer Hausverbrauch = Σactual (alle Wechselrichter) + grid. Das rohe
+            # actual_i + grid unterschlägt im Multi-Betrieb die Leistung der anderen
+            # Instanz — die regelt grid auf ~0 und maskiert so den Verbrauch, wodurch
+            # eine gedrosselte Surplus-Instanz nie aussteigt. Σactual macht sichtbar,
+            # dass die Last bereits getragen wird. × error_share = der Anteil, den diese
+            # Instanz decken soll. Einzelbetrieb: error_share=1, Σactual=actual_i →
+            # reduziert sich exakt auf actual + grid (Verhalten unverändert).
+            consumption_share = (self._total_actual_power() + grid) * error_share
+
             surplus_exit = (
                 not self.forecast_surplus_forced
                 and (
                     soc < (surplus_threshold - surplus_soc_hyst)
-                    or solar <= (actual + grid - surplus_pv_hyst)
+                    or solar <= (consumption_share - surplus_pv_hyst)
                 )
             )
             if self.surplus_active:
@@ -1141,6 +1151,26 @@ class SolakonCoordinator:
             w_self    = soc_share * soc_w + pv_share * pv_w
 
         return w_self, round(total_power * w_self)
+
+    def _total_actual_power(self) -> float:
+        """Summe der Wechselrichter-Ist-Leistung über alle aktiven Instanzen.
+
+        Zusammen mit dem geteilten Netzwert ergibt sich der wahre Hausverbrauch
+        (C = Σactual + grid) — nötig für den Surplus-Austritt, weil actual_i + grid
+        im Multi-Betrieb den Verbrauch unterschätzt (die andere Instanz trägt Last,
+        die im rohen actual_i nicht auftaucht). Einzelbetrieb: eigener actual-Wert.
+        """
+        all_coords = self.hass.data.get(DOMAIN, {})
+        active = [
+            c for c in all_coords.values()
+            if c.settings.get(S_REGULATION_ENABLED, False)
+        ]
+        if len(active) <= 1:
+            return self._flt_power(self.entry.data.get(CONF_ACTUAL_SENSOR, ""))
+        return sum(
+            c._flt_power(c.entry.data.get(CONF_ACTUAL_SENSOR, ""))
+            for c in active
+        )
 
     # ── PI-Berechnung ────────────────────────────────────────────────────────
 
