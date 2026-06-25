@@ -124,7 +124,15 @@ class SolakonOptionsFlow(config_entries.OptionsFlow):
         self, user_input: dict | None = None
     ) -> FlowResult:
         if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
+            # Die Entitäten-Zuweisung liegt in entry.data (der Coordinator liest
+            # ausschließlich von dort) — nicht in entry.options. Daher data direkt
+            # aktualisieren statt in options zu schreiben. Der Update-Listener in
+            # __init__ lädt den Eintrag danach neu und re-registriert die Tracker.
+            self.hass.config_entries.async_update_entry(
+                self.config_entry,
+                data={**self.config_entry.data, **user_input},
+            )
+            return self.async_create_entry(title="", data={})
 
         defaults = _get_defaults(self.hass)
         return self.async_show_form(

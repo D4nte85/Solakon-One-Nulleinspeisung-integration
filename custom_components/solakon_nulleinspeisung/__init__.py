@@ -185,6 +185,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
 
+    # Eintrag neu laden wenn die Entitäten-Zuweisung im OptionsFlow geändert wurde —
+    # sonst behält der Coordinator die alten State-Tracker (entry.data wird nur beim
+    # Setup gelesen).
+    entry.async_on_unload(entry.add_update_listener(_async_update_listener))
+
     # Distribution-Store einmalig anlegen + Config in synchron lesbaren Cache laden
     if not hass.data.get(f"{DOMAIN}_dist_store"):
         from homeassistant.helpers.storage import Store
@@ -226,6 +231,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         raise ConfigEntryNotReady(f"Solakon: Platform-Setup fehlgeschlagen: {ex}") from ex
 
     return True
+
+
+async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Eintrag neu laden wenn die Entitäten-Zuweisung (entry.data) geändert wurde."""
+    await hass.config_entries.async_reload(entry.entry_id)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
