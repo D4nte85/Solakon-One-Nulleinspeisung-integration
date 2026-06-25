@@ -654,10 +654,21 @@ class SolakonCoordinator:
         self._prev_actual = actual
 
         if surplus_enabled:
+            # Verbrauchsbezug für Ein- UND Austritt: Anteil dieser Instanz am WAHREN
+            # Hausverbrauch. Wahrer Hausverbrauch = Σactual (alle Wechselrichter) + grid.
+            # Das rohe actual_i + grid unterschlägt im Multi-Betrieb die Leistung der
+            # anderen Instanz — die regelt grid auf ~0 und maskiert so den Verbrauch.
+            # Σactual macht sichtbar, dass die Last bereits getragen wird. × error_share
+            # = der Anteil, den diese Instanz decken soll. Einzelbetrieb: error_share=1,
+            # Σactual=actual_i → reduziert sich exakt auf actual + grid (unverändert).
+            # Ein- und Austritt MÜSSEN dieselbe Referenz nutzen, sonst bricht das
+            # Hysterese-Totband zusammen → Flackern.
+            consumption_share = (self._total_actual_power() + grid) * error_share
+
             normal_entry = (
                 soc >= surplus_threshold
                 and (
-                    solar > (actual + grid + surplus_pv_hyst)
+                    solar > (consumption_share + surplus_pv_hyst)
                     or (solar == 0 and actual == 0 and prev_actual == 0)
                 )
             )
@@ -666,16 +677,6 @@ class SolakonCoordinator:
                 and solar > hard_limit
             )
             surplus_entry = normal_entry or forecast_entry
-
-            # Austritts-Verbrauchsbezug: Anteil dieser Instanz am WAHREN Hausverbrauch.
-            # Wahrer Hausverbrauch = Σactual (alle Wechselrichter) + grid. Das rohe
-            # actual_i + grid unterschlägt im Multi-Betrieb die Leistung der anderen
-            # Instanz — die regelt grid auf ~0 und maskiert so den Verbrauch, wodurch
-            # eine gedrosselte Surplus-Instanz nie aussteigt. Σactual macht sichtbar,
-            # dass die Last bereits getragen wird. × error_share = der Anteil, den diese
-            # Instanz decken soll. Einzelbetrieb: error_share=1, Σactual=actual_i →
-            # reduziert sich exakt auf actual + grid (Verhalten unverändert).
-            consumption_share = (self._total_actual_power() + grid) * error_share
 
             surplus_exit = (
                 not self.forecast_surplus_forced
