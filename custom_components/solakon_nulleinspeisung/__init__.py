@@ -154,9 +154,15 @@ async def _ws_set_cycle(
 ) -> None:
     coord = hass.data.get(DOMAIN, {}).get(msg["entry_id"])
     if coord:
-        coord.cycle_active = msg["active"]
-        coord.integral = 0.0
-        coord.notify_listeners()
+        async with coord._lock:
+            coord.cycle_active = msg["active"]
+            coord.integral = 0.0
+            # Flag persistieren (Teil von _store_data), sonst geht der manuelle
+            # Override bei Neustart verloren.
+            coord._store.async_delay_save(coord._store_data, 5)
+            coord.notify_listeners()
+        # Neuen Zustand sofort anwenden statt erst beim nächsten Sensor-Event.
+        hass.async_create_task(coord._async_regulate())
         connection.send_result(msg["id"], {"success": True})
     else:
         connection.send_error(msg["id"], "not_found", "Coordinator not found")
@@ -307,4 +313,11 @@ async def _ws_save_distribution_config(
         return
     await store.async_save(msg["distribution"])
     hass.data[f"{DOMAIN}_dist_config"] = {**DIST_DEFAULTS, **msg["distribution"]}
+
+    # Neue Verteilung sofort auf alle Instanzen anwenden — sonst greift die
+    # geänderte allocated_power erst beim nächsten Sensor-Event. Lock-geschützt
+    # (parallele Läufe werden verworfen), daher rein additiv.
+    for coord in hass.data.get(DOMAIN, {}).values():
+        hass.async_create_task(coord._async_regulate())
+
     connection.send_result(msg["id"], {"success": True})

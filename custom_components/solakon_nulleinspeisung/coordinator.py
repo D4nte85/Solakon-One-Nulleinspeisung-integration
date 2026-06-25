@@ -757,7 +757,7 @@ class SolakonCoordinator:
             await self._set_output(effective_hard)
             self.mode_label = "Überschuss-Einspeisung"
             self._set_last_action(f"Zone 0: Output → {effective_hard} W")
-            await self._wait_for_target(hard_limit)
+            await self._wait_for_target(effective_hard)
 
         elif self.ac_charge_active:
             ac_grid_err = grid - ac_offset
