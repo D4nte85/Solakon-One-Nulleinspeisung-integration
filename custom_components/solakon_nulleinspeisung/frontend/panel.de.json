@@ -43,7 +43,7 @@
     },
     "surplus": {
       "summary": "Überschuss-Einspeisung — Zone 0 aktivieren",
-      "text": "Höchste Priorität — blockiert Tarif-Laden, Discharge-Lock und AC Laden solange Zone 0 aktiv.\n\nNormaler Eintritt: SOC ≥ SOC-Schwelle UND (PV > Output + Grid + PV-Hysterese ODER PV = 0 ODER Output = 0).\nForecast-Eintritt: Vorhersage ≥ Schwelle UND PV > Hard Limit (kein SOC-Gate).\n\nAustritt (nur ohne Forecast): SOC < (Schwelle − SOC-Hysterese) ODER PV ≤ Output + Grid − PV-Hysterese (wenn PV ≠ 0 und Output ≠ 0).\nBei aktivem Forecast: Exit komplett blockiert — nur Zone 3 (Safety) beendet Surplus. Sobald Forecast-Sensor unter Schwelle fällt, greift die normale Exit-Logik.\n\nOutput wird auf Hard Limit gesetzt. Integral eingefroren (kein PI-Aufruf)."
+      "text": "Höchste Priorität — blockiert Tarif-Laden, Discharge-Lock und AC Laden solange Zone 0 aktiv.\n\nNormaler Eintritt: SOC ≥ SOC-Schwelle UND (PV > Output + Grid + PV-Hysterese ODER (PV = 0 UND Output = 0 über zwei aufeinanderfolgende Zyklen — Entprellung gegen nächtliches Wieder-Eintreten)).\nForecast-Eintritt: Vorhersage ≥ Schwelle UND PV > Hard Limit (kein SOC-Gate).\n\nAustritt (nur ohne Forecast): SOC < (Schwelle − SOC-Hysterese) ODER PV ≤ Output + Grid − PV-Hysterese.\nBei aktivem Forecast: Exit komplett blockiert — nur Zone 3 (Safety) beendet Surplus. Sobald Forecast-Sensor unter Schwelle fällt, greift die normale Exit-Logik.\n\nOutput wird auf Hard Limit gesetzt. Integral eingefroren (kein PI-Aufruf)."
     },
     "ac": {
       "summary": "AC Laden — Netz lädt die Batterie",
@@ -124,7 +124,7 @@
     },
     "hard_limit": {
       "l": "Hard Limit (W)",
-      "d": "Absolute Ausgangsleistungs-Obergrenze in Zone 0 und Zone 1. In Zone 2 gilt stattdessen das dynamische PV-basierte Limit (max(0, PV − Reserve))."
+      "d": "Absolute Ausgangsleistungs-Obergrenze in Zone 0 und Zone 1. In Zone 2 gilt stattdessen das dynamische PV-basierte Limit (max(0, PV − Reserve)). Ist die optionale Netz-Ausgangsleistungsgrenze-Entität (im Setup) konfiguriert, wird dieser Wert bei jedem Regelzyklus dorthin geschrieben sofern er abweicht — korrigiert externe Änderungen am Hardware-Limit automatisch zurück."
     },
     "discharge_max": {
       "l": "Max. Entladestrom Zone 1 (A)",
