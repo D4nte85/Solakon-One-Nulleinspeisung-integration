@@ -163,7 +163,7 @@ SETTINGS_DEFAULTS: dict = {
     S_AC_HYSTERESIS:  50,
     S_AC_OFFSET:      -50,
     S_AC_P_FACTOR:    0.3,
-    S_AC_I_FACTOR:    0.07,
+    S_AC_I_FACTOR:    0.0,
 
     S_TARIFF_ENABLED:         False,
     S_TARIFF_PRICE_SENSOR:    "",
