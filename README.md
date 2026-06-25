@@ -216,9 +216,9 @@ Ein positiver Offset von z. B. 30 W lässt den Regler auf 30 W Netzbezug regeln 
 
 Optionale Überschuss-Einspeisung (Zone 0). **Hat absoluten Vorrang vor allen anderen optionalen Modulen** — Tarif-Laden, Discharge-Lock und AC Laden werden blockiert solange Zone 0 aktiv ist.
 
-**Normaler Eintritt:** SOC ≥ Export-Schwelle UND (PV > Output + Grid + PV-Hysterese ODER PV = 0)
+**Normaler Eintritt:** SOC ≥ Export-Schwelle UND (PV > Output + Grid + PV-Hysterese ODER (PV = 0 UND Output = 0 im aktuellen *und* vorherigen Zyklus))
 
-> Der `PV = 0`-Zweig deckt den Fall ab, dass das MPPT die PV bei vollem Akku auf 0 W drosselt.
+> Der `PV = 0`-Zweig deckt den Fall ab, dass das MPPT die PV bei vollem Akku auf 0 W drosselt. Die zusätzliche Bedingung `Output = 0` über zwei aufeinanderfolgende Zyklen (Entprellung) verhindert ein Wieder-Eintreten nachts: Sobald Zone 0 den Entladestrom auf 2 A setzt (Output ≈ 96 W), blockiert dieser Wert für einen Zyklus den Neueintritt — lang genug, dass bei vollem Akku Zone 1 (Fall A) übernimmt und die Ausgangsleistung dauerhaft > 0 hält. (Der Blueprint erreicht dasselbe über getaktete Trigger statt Entprellung.)
 
 **Forecast-Eintritt:** PV-Vorhersage ≥ Schwelle UND PV > Hard Limit
 
@@ -226,7 +226,7 @@ Optionale Überschuss-Einspeisung (Zone 0). **Hat absoluten Vorrang vor allen an
 
 > Kein SOC-Gate — Surplus startet sobald PV die maximale Ausgangsleistung übersteigt. Gedacht für sonnige Tage: 800 W werden dauerhaft ausgegeben, der Rest lädt die Batterie.
 
-**Austritts-Bedingung (nur ohne aktive Vorhersage):** SOC < (Export-Schwelle − SOC-Hysterese) ODER (PV ≤ Output + Grid − PV-Hysterese UND PV ≠ 0 UND Output ≠ 0)
+**Austritts-Bedingung (nur ohne aktive Vorhersage):** SOC < (Export-Schwelle − SOC-Hysterese) ODER PV ≤ (Output + Grid − PV-Hysterese)
 
 > Bei aktiver Vorhersage ist der gesamte Exit blockiert — nur Zone 3 (Safety-Stopp) beendet Surplus. Sobald der Forecast-Sensor unter die Schwelle fällt (z.B. abends bei Tagesvorhersage-Aktualisierung), greift die normale Exit-Logik sofort.
 
