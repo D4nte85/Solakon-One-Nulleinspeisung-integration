@@ -86,6 +86,9 @@ class SolakonCoordinator:
         # Multi-Instanz: zugeteiltes Leistungslimit (None = Einzelbetrieb)
         self.allocated_power: float | None = None
 
+        # Vorheriger actual-Wert (für Surplus-Einstiegs-Entprellung)
+        self._prev_actual: float = 0.0
+
         # Interne Mechanik
         self._lock = asyncio.Lock()
         self._listeners: list[Callable[[], None]] = []
@@ -647,12 +650,15 @@ class SolakonCoordinator:
         # ── 4. Abgeleitete Variablen ─────────────────────────────────────────
         target_offset = offset_1 if self.cycle_active else offset_2
 
+        prev_actual = self._prev_actual
+        self._prev_actual = actual
+
         if surplus_enabled:
             normal_entry = (
                 soc >= surplus_threshold
                 and (
                     solar > (actual + grid + surplus_pv_hyst)
-                    or solar == 0
+                    or (solar == 0 and actual == 0 and prev_actual == 0)
                 )
             )
             forecast_entry = (
