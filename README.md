@@ -134,6 +134,8 @@ Die folgenden Solakon-Entitäten müssen in HA vorhanden sein und werden beim Ei
 | `select` | Betriebsmodus |
 | `number` *(optional)* | Netz-Ausgangsleistungsgrenze — für Export-Limit-Feature |
 
+> **Hinweis zum „Maximalen Entladestrom":** In der offiziellen Solakon Home-Assistant-Integration ist die Entität `number.solakon_one_maximaler_entladestrom` **standardmäßig deaktiviert**. Wird sie im Einrichtungsformular als „unbekannte Entität" angezeigt, muss sie zunächst in HA unter dem Solakon-Gerät bei den **Konfigurations-Entitäten** aktiviert werden (Gerät → Entität → Zahnrad → „Aktivieren"). Ohne diese Entität kann die Integration den Entladestrom nicht steuern.
+
 ---
 
 ## Installation
