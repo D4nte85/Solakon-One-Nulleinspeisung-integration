@@ -331,7 +331,7 @@ Die Regellogik arbeitet mit einer geordneten Liste von Falls. Die Reihenfolge is
 
 | Fall | Bedingung | Aktion |
 |:-----|:----------|:-------|
-| **0A** — Surplus Start | `surplus_enabled` UND `new_surplus = True` UND `surplus_active = False` UND kein AC/Tarif-Laden | `surplus_active → True`. Integral eingefroren. Falls Modus ≠ `'1'`: Timer-Toggle + Modus → `'1'`. Entladestrom → 2 A. |
+| **0A** — Surplus Start | `surplus_enabled` UND `new_surplus = True` UND `surplus_active = False` UND kein AC/Tarif-Laden | `surplus_active → True`. Integral eingefroren. Falls Modus ≠ `'1'`: Timer-Toggle + Modus → `'1'`. (Entladestrom 2 A setzt der zentrale Abgleich, siehe Hinweis 12.) |
 | **0B** — Surplus Ende | `surplus_enabled` UND `surplus_active = True` UND Austritts-Bedingung erfüllt | `surplus_active → False`. Integral = 0. |
 | **A** — Zone 1 Start | SOC > Zone-1-Schwelle UND `cycle_active = False` UND kein AC/Tarif-Laden UND (Tarif deaktiviert ODER Preis gültig) UND kein aktiver Tarif-Block (Preis < Teuer) | `cycle_active → True`. Integral = 0. Timer-Toggle. Modus → `'1'`. |
 | **B** — Zone 3 Stop | SOC < Zone-3-Schwelle UND `cycle_active = True` UND kein AC/Tarif-Laden | `cycle_active → False`. Integral = 0. Output → 0 W. Modus → `'0'`. |
@@ -386,6 +386,7 @@ Typischer Arbeitsbereich: **0.03–0.08**. Für AC Laden separat tunen — P bes
 9. **Dynamischer Offset.** Jede Zone wird einzeln aktiviert. Die Netz-Standardabweichung wird intern berechnet — kein externer Statistik-Sensor erforderlich. Nach dem ersten Start einige Minuten warten bis genug Samples gesammelt sind.
 10. **Self-Adjusting Wait.** Polls die tatsächliche Ausgangsleistung nach einem Setpoint-Befehl statt einer festen Wartezeit zu schlafen. Die konfigurierte Wartezeit wird zum maximalen Timeout als Sicherheitsnetz.
 11. **Export-Limit-Sync.** Ist die optionale Netz-Ausgangsleistungsgrenze-Entität konfiguriert, schreibt jeder Regelzyklus den Hard-Limit-Wert in diese Entität — sofern er abweicht. Das verhindert, dass externe Eingriffe (App, andere Automation) das Hardware-Limit dauerhaft ändern.
+12. **Entladestrom-Abgleich.** Der maximale Entladestrom wird in jedem Zyklus zentral aus dem Regelzustand abgeleitet (Surplus → 2 A, AC-/Tarif-Laden → 0 A, Zone 1 → Max-Entladestrom, sonst 0 A) und mit dem Ist-Wert abgeglichen — vor dem PI-Gate, also auch im Disabled-Leerlauf. Das garantiert, dass ein Klemmwert (insb. die 2 A aus dem Surplus-Trick) nie über einen Zustandswechsel hinaus stehen bleibt und die Batterie drosselt; die einzelnen Falls setzen den Strom nicht mehr selbst.
 
 ---
 

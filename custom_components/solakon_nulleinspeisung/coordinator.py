@@ -444,6 +444,29 @@ class SolakonCoordinator:
         if abs(current - amps) > 0.5:
             await self._set_number(self.entry.data[CONF_DISCHARGE_CURRENT], amps)
 
+    def _required_discharge(self, discharge_max: int) -> float:
+        """Entladestrom, der zum aktuellen Regelzustand gehört — einzige Wahrheit.
+
+        Abgeleitet aus den Zustands-Flags (nicht aus dem latenzbehafteten WR-Modus):
+        - Surplus aktiv          → 2 A (erzwungene Mini-Entladung für Einspeise-Trick)
+        - AC-/Tarif-Laden aktiv  → 0 A (Batterie wird geladen, nicht entladen)
+        - Entladezyklus (Zone 1) → max. Entladestrom
+        - sonst (Leerlauf)       → 0 A
+
+        Der Entladestrom ist ein klebriger Aktuator (`_set_discharge` schreibt nur
+        bei Abweichung). Ohne zentralen Abgleich bleibt z. B. die 2 A aus Surplus
+        nach dem Austritt stehen und drosselt die Batterie dauerhaft — die Ursache
+        von Issue #7 (Batterie übernimmt abends nicht). Deshalb wird dieser Wert in
+        jedem Zyklus nach den Falls gegen den Ist-Wert abgeglichen.
+        """
+        if self.surplus_active:
+            return 2.0
+        if self.ac_charge_active or self.tariff_charge_active:
+            return 0.0
+        if self.cycle_active:
+            return float(discharge_max)
+        return 0.0
+
     async def _sync_export_limit(self, target: int) -> None:
         """grid_export_power_limit korrigieren wenn von Soll abgewichen — nur wenn Entity konfiguriert."""
         export_entity = self.entry.data.get(CONF_EXPORT_LIMIT, "")
@@ -725,7 +748,15 @@ class SolakonCoordinator:
         if fall_executed:
             self.active_fall = fall_executed
 
-        # ── 6. Frische Werte nach Falls ──────────────────────────────────────
+        # ── 6. Entladestrom mit Regelzustand abgleichen ──────────────────────
+        # Einzige Stelle, an der der Entladestrom gesetzt wird: nach jedem Fall-/
+        # Zustandswechsel (und auch ohne Fall jeden Zyklus) gegen den Ist-Wert
+        # abgleichen. MUSS vor dem PI-Gate stehen, damit ein Klemmwert (z. B. die
+        # 2 A aus Surplus) auch im DISABLED-Leerlauf nie über einen Zustandswechsel
+        # hinaus stehen bleibt — sonst drosselt er die Batterie dauerhaft (Issue #7).
+        await self._set_discharge(self._required_discharge(discharge_max))
+
+        # ── 6b. Frische Werte nach Falls ─────────────────────────────────────
         grid = self._flt_power(cfg[CONF_GRID_SENSOR])
         solar = self._flt_power(cfg[CONF_SOLAR_SENSOR])
         current_power = self._flt(cfg[CONF_ACTIVE_POWER])
@@ -748,16 +779,6 @@ class SolakonCoordinator:
             self._update_zone_display(soc, zone1_limit, zone3_limit, mode)
             self.notify_listeners()
             return
-
-        # ── 8. Entladestrom zonenabhängig ────────────────────────────────────
-        if self.surplus_active:
-            await self._set_discharge(2)
-        elif self.ac_charge_active or self.tariff_charge_active:
-            await self._set_discharge(0)
-        elif self.cycle_active:
-            await self._set_discharge(discharge_max)
-        else:
-            await self._set_discharge(0)
 
         # ── 9. Timeout-Reset ─────────────────────────────────────────────────
         if timer_val < 120 and self._entity_ok(cfg[CONF_TIMEOUT_COUNTDOWN]):
@@ -822,7 +843,6 @@ class SolakonCoordinator:
         actual = v["actual"]
         zone1 = v["zone1_limit"]
         zone3 = v["zone3_limit"]
-        discharge_max = v["discharge_max"]
 
         # ── Fall 0A: Surplus Entry ───────────────────────────────────────────
         if (
@@ -836,7 +856,7 @@ class SolakonCoordinator:
             if mode != MODE_DISCHARGE:
                 await self._timer_toggle()
                 await self._set_mode(MODE_DISCHARGE)
-            await self._set_discharge(2)
+            # Entladestrom (2 A) setzt der zentrale Abgleich in _run_regulation_cycle
             self._set_last_action("Zone 0: Surplus aktiviert")
             return "0A"
 
@@ -844,8 +864,7 @@ class SolakonCoordinator:
         if v["surplus_enabled"] and self.surplus_active and not v["new_surplus"]:
             self.surplus_active = False
             self.integral = 0.0
-            if self.cycle_active:
-                await self._set_discharge(discharge_max)
+            # Entladestrom-Reset übernimmt der zentrale Abgleich in _run_regulation_cycle
             self._set_last_action("Zone 0: Surplus beendet")
             return "0B"
 
