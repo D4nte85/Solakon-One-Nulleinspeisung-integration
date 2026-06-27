@@ -43,7 +43,7 @@
     },
     "surplus": {
       "summary": "Surplus Feed-In — activating Zone 0",
-      "text": "Highest priority — blocks tariff charging, discharge-lock and AC charging while Zone 0 is active.\n\nNormal entry: SOC ≥ SOC threshold AND (PV > output + grid + PV hysteresis OR (PV = 0 AND output = 0 across two consecutive cycles — debounce against nightly re-entry)).\nForecast entry: forecast ≥ threshold AND PV > hard limit (no SOC gate).\n\nExit (without forecast only): SOC < (threshold − SOC hysteresis) OR PV ≤ output + grid − PV hysteresis.\nWith active forecast: exit completely blocked — only Zone 3 (safety) ends surplus. Once the forecast sensor drops below the threshold, normal exit logic applies immediately.\n\nOutput is set to hard limit. Integral frozen (no PI call)."
+      "text": "Highest priority — blocks tariff charging, discharge-lock and AC charging while Zone 0 is active.\n\nNormal entry: SOC ≥ SOC threshold AND (PV > output + grid + PV hysteresis OR (PV = 0 AND output = 0 across two consecutive cycles — debounce against nightly re-entry)).\nForecast entry: forecast ≥ threshold AND PV > hard limit (no SOC gate).\n\nExit: PV ≤ output + grid − PV hysteresis (always) OR SOC < (threshold − SOC hysteresis) (without forecast only).\nForecast overrides only the SOC term — if the PV surplus is gone, surplus always ends (no nightly stick). Zone 3 (safety) ends surplus at any time as well.\n\nOutput is set to hard limit. Integral frozen (no PI call)."
     },
     "ac": {
       "summary": "AC Charging — grid charges the battery",
@@ -144,7 +144,7 @@
     },
     "surplus_enabled": {
       "l": "Enable Surplus Feed-In",
-      "d": "Highest priority — blocks tariff charging, discharge-lock and AC charging while Zone 0 is active. Normal: SOC ≥ threshold + PV surplus. With forecast: PV > hard limit is sufficient (no SOC gate), exit blocked until forecast drops."
+      "d": "Highest priority — blocks tariff charging, discharge-lock and AC charging while Zone 0 is active. Normal: SOC ≥ threshold + PV surplus. With forecast: PV > hard limit is sufficient (no SOC gate); forecast blocks only the SOC exit, the PV term still ends surplus."
     },
     "surplus_soc_threshold": {
       "l": "SOC Threshold (%)",
@@ -160,7 +160,7 @@
     },
     "surplus_forecast_enabled": {
       "l": "Enable Forecast Override",
-      "d": "When forecast ≥ threshold: surplus starts as soon as PV > hard limit (no SOC gate). Exit completely blocked — only Zone 3 (safety) ends surplus. In the evening the forecast sensor drops below the threshold → normal exit logic applies immediately."
+      "d": "When forecast ≥ threshold: surplus starts as soon as PV > hard limit (no SOC gate). Forecast blocks only the SOC exit; the PV term (PV ≤ consumption) still ends surplus — no nightly stick, even with a daily/next-day forecast. Zone 3 (safety) ends it at any time as well."
     },
     "surplus_forecast_sensor": {
       "l": "Forecast Sensor",

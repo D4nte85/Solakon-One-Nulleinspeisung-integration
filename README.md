@@ -230,11 +230,11 @@ Optionale Überschuss-Einspeisung (Zone 0). **Hat absoluten Vorrang vor allen an
 
 > Kein SOC-Gate — Surplus startet sobald PV die maximale Ausgangsleistung übersteigt. Gedacht für sonnige Tage: 800 W werden dauerhaft ausgegeben, der Rest lädt die Batterie.
 
-**Austritts-Bedingung (nur ohne aktive Vorhersage):** SOC < (Export-Schwelle − SOC-Hysterese) ODER PV ≤ ((Σ Output aller Instanzen + Grid) × Fehler-Anteil − PV-Hysterese)
+**Austritts-Bedingung:** PV ≤ ((Σ Output aller Instanzen + Grid) × Fehler-Anteil − PV-Hysterese) ODER (ohne aktive Vorhersage: SOC < (Export-Schwelle − SOC-Hysterese))
 
 > Der PV-Term prüft, ob die eigene PV noch den **Anteil dieser Instanz am Hausverbrauch** übersteigt. Der wahre Hausverbrauch ist `Σ Output (alle Wechselrichter) + Grid` — im Einzelbetrieb identisch zu `Output + Grid`. Im Multi-Instanz-Betrieb ist die Summe nötig: regelt eine zweite Instanz den Netzwert auf ~0, würde `Output + Grid` der eigenen Instanz den Verbrauch unterschätzen und eine auf 2 A gedrosselte Surplus-Instanz käme nie aus Zone 0 heraus. `× Fehler-Anteil` skaliert auf den Lastanteil, den diese Instanz decken soll (Einzelbetrieb: 1,0).
 
-> Bei aktiver Vorhersage ist der gesamte Exit blockiert — nur Zone 3 (Safety-Stopp) beendet Surplus. Sobald der Forecast-Sensor unter die Schwelle fällt (z.B. abends bei Tagesvorhersage-Aktualisierung), greift die normale Exit-Logik sofort.
+> Der PV-Term greift **immer** — auch bei aktiver Vorhersage. Sobald die eigene PV den Hausverbrauch nicht mehr deckt, gibt es keinen Überschuss zum Einspeisen und Surplus endet. Die Vorhersage blockiert nur den **SOC-Term**: ein voller Akku-Forecast hält Surplus trotz sinkendem SOC, deckt aber keinen fehlenden PV-Überschuss. Damit kann Surplus bei Tages-/Morgen-Vorhersage nachts nicht hängen bleiben (PV = 0 < Verbrauch → Austritt). Zone 3 (Safety-Stopp) beendet Surplus zusätzlich jederzeit.
 
 | Parameter | Beschreibung | Empfehlung |
 |-----------|-------------|------------|

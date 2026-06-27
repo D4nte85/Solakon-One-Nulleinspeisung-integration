@@ -684,12 +684,12 @@ class SolakonCoordinator:
             )
             surplus_entry = normal_entry or forecast_entry
 
-            surplus_exit = (
-                not self.forecast_surplus_forced
-                and (
-                    soc < (surplus_threshold - surplus_soc_hyst)
-                    or solar <= (consumption_share - surplus_pv_hyst)
-                )
+            # Austritt: fehlender Solar-Überschuss beendet Surplus immer;
+            # die Forecast-Forcierung überstimmt nur den SOC-Term.
+            soc_exit = soc < (surplus_threshold - surplus_soc_hyst)
+            power_exit = solar <= (consumption_share - surplus_pv_hyst)
+            surplus_exit = power_exit or (
+                not self.forecast_surplus_forced and soc_exit
             )
             if self.surplus_active:
                 new_surplus = not surplus_exit
