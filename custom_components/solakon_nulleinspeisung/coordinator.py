@@ -445,19 +445,12 @@ class SolakonCoordinator:
             await self._set_number(self.entry.data[CONF_DISCHARGE_CURRENT], amps)
 
     def _required_discharge(self, discharge_max: int) -> float:
-        """Entladestrom, der zum aktuellen Regelzustand gehört — einzige Wahrheit.
+        """Entladestrom für den aktuellen Regelzustand.
 
-        Abgeleitet aus den Zustands-Flags (nicht aus dem latenzbehafteten WR-Modus):
-        - Surplus aktiv          → 2 A (erzwungene Mini-Entladung für Einspeise-Trick)
-        - AC-/Tarif-Laden aktiv  → 0 A (Batterie wird geladen, nicht entladen)
+        - Surplus aktiv          → 2 A
+        - AC-/Tarif-Laden aktiv  → 0 A
         - Entladezyklus (Zone 1) → max. Entladestrom
-        - sonst (Leerlauf)       → 0 A
-
-        Der Entladestrom ist ein klebriger Aktuator (`_set_discharge` schreibt nur
-        bei Abweichung). Ohne zentralen Abgleich bleibt z. B. die 2 A aus Surplus
-        nach dem Austritt stehen und drosselt die Batterie dauerhaft — die Ursache
-        von Issue #7 (Batterie übernimmt abends nicht). Deshalb wird dieser Wert in
-        jedem Zyklus nach den Falls gegen den Ist-Wert abgeglichen.
+        - sonst                  → 0 A
         """
         if self.surplus_active:
             return 2.0
@@ -506,9 +499,7 @@ class SolakonCoordinator:
         )
 
     def _on_periodic(self, _now: object) -> None:
-        # Fallback für stabile Haushalte: ohne Sensoränderung würde die Regelschleife
-        # nie laufen (z.B. stabiler Netzbezug + kein Preissprung). Der Lock verhindert
-        # parallele Läufe — dieser Trigger ist rein additiv.
+        # Periodischer Fallback-Trigger der Regelschleife.
         self.hass.async_create_task(self._async_regulate())
 
     async def _async_regulate(self) -> None:
@@ -677,15 +668,7 @@ class SolakonCoordinator:
         self._prev_actual = actual
 
         if surplus_enabled:
-            # Verbrauchsbezug für Ein- UND Austritt: Anteil dieser Instanz am WAHREN
-            # Hausverbrauch. Wahrer Hausverbrauch = Σactual (alle Wechselrichter) + grid.
-            # Das rohe actual_i + grid unterschlägt im Multi-Betrieb die Leistung der
-            # anderen Instanz — die regelt grid auf ~0 und maskiert so den Verbrauch.
-            # Σactual macht sichtbar, dass die Last bereits getragen wird. × error_share
-            # = der Anteil, den diese Instanz decken soll. Einzelbetrieb: error_share=1,
-            # Σactual=actual_i → reduziert sich exakt auf actual + grid (unverändert).
-            # Ein- und Austritt MÜSSEN dieselbe Referenz nutzen, sonst bricht das
-            # Hysterese-Totband zusammen → Flackern.
+            # Lastanteil dieser Instanz für Ein- und Austritt: (Σactual + grid) × error_share.
             consumption_share = (self._total_actual_power() + grid) * error_share
 
             normal_entry = (
@@ -748,12 +731,7 @@ class SolakonCoordinator:
         if fall_executed:
             self.active_fall = fall_executed
 
-        # ── 6. Entladestrom mit Regelzustand abgleichen ──────────────────────
-        # Einzige Stelle, an der der Entladestrom gesetzt wird: nach jedem Fall-/
-        # Zustandswechsel (und auch ohne Fall jeden Zyklus) gegen den Ist-Wert
-        # abgleichen. MUSS vor dem PI-Gate stehen, damit ein Klemmwert (z. B. die
-        # 2 A aus Surplus) auch im DISABLED-Leerlauf nie über einen Zustandswechsel
-        # hinaus stehen bleibt — sonst drosselt er die Batterie dauerhaft (Issue #7).
+        # ── 6. Entladestrom mit Regelzustand abgleichen (vor dem PI-Gate) ────
         await self._set_discharge(self._required_discharge(discharge_max))
 
         # ── 6b. Frische Werte nach Falls ─────────────────────────────────────
@@ -856,15 +834,14 @@ class SolakonCoordinator:
             if mode != MODE_DISCHARGE:
                 await self._timer_toggle()
                 await self._set_mode(MODE_DISCHARGE)
-            # Entladestrom (2 A) setzt der zentrale Abgleich in _run_regulation_cycle
             self._set_last_action("Zone 0: Surplus aktiviert")
             return "0A"
 
         # ── Fall 0B: Surplus Exit ────────────────────────────────────────────
-        if v["surplus_enabled"] and self.surplus_active and not v["new_surplus"]:
+        # Austritt bei erfüllter Austritts-Bedingung oder deaktivierter Überschuss-Option.
+        if self.surplus_active and (not v["surplus_enabled"] or not v["new_surplus"]):
             self.surplus_active = False
             self.integral = 0.0
-            # Entladestrom-Reset übernimmt der zentrale Abgleich in _run_regulation_cycle
             self._set_last_action("Zone 0: Surplus beendet")
             return "0B"
 
@@ -984,8 +961,6 @@ class SolakonCoordinator:
 
         # ── Discharge-Lock (Preis < Teuer-Schwelle) ──────────────────────────
         # Sperrt Zone 1 und Zone 2 solange Preis < teuer (günstig UND mittel).
-        # Entspricht price_discharge_locked im Blueprint. Überschuss hat Vorrang.
-        # GT (Tarif-Laden) hat Vorrang — greift bei günstigem Preis + SOC < Ziel zuerst.
         if (
             v["tariff_enabled"]
             and v.get("tariff_price_valid", False)
@@ -1061,7 +1036,6 @@ class SolakonCoordinator:
             return "I"
 
         # ── Fall E: Zone 2 Start ─────────────────────────────────────────────
-        # Tarif-Lock verhindert Re-Aktivierung bei mittlerem/günstigem Preis
         if (
             not self.ac_charge_active
             and not self.tariff_charge_active
@@ -1175,10 +1149,7 @@ class SolakonCoordinator:
     def _total_actual_power(self) -> float:
         """Summe der Wechselrichter-Ist-Leistung über alle aktiven Instanzen.
 
-        Zusammen mit dem geteilten Netzwert ergibt sich der wahre Hausverbrauch
-        (C = Σactual + grid) — nötig für den Surplus-Austritt, weil actual_i + grid
-        im Multi-Betrieb den Verbrauch unterschätzt (die andere Instanz trägt Last,
-        die im rohen actual_i nicht auftaucht). Einzelbetrieb: eigener actual-Wert.
+        Einzelbetrieb: eigener actual-Wert.
         """
         all_coords = self.hass.data.get(DOMAIN, {})
         active = [

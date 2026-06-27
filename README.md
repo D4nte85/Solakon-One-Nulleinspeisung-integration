@@ -334,7 +334,7 @@ Die Regellogik arbeitet mit einer geordneten Liste von Falls. Die Reihenfolge is
 | Fall | Bedingung | Aktion |
 |:-----|:----------|:-------|
 | **0A** — Surplus Start | `surplus_enabled` UND `new_surplus = True` UND `surplus_active = False` UND kein AC/Tarif-Laden | `surplus_active → True`. Integral eingefroren. Falls Modus ≠ `'1'`: Timer-Toggle + Modus → `'1'`. (Entladestrom 2 A setzt der zentrale Abgleich, siehe Hinweis 12.) |
-| **0B** — Surplus Ende | `surplus_enabled` UND `surplus_active = True` UND Austritts-Bedingung erfüllt | `surplus_active → False`. Integral = 0. |
+| **0B** — Surplus Ende | `surplus_active = True` UND (Überschuss-Option AUS **ODER** Austritts-Bedingung erfüllt) | `surplus_active → False`. Integral = 0. Das Ausschalten der Option erzwingt den Austritt, sonst bliebe `surplus_active` hängen und die Batterie auf 2 A gedrosselt. |
 | **A** — Zone 1 Start | SOC > Zone-1-Schwelle UND `cycle_active = False` UND kein AC/Tarif-Laden UND (Tarif deaktiviert ODER Preis gültig) UND kein aktiver Tarif-Block (Preis < Teuer) | `cycle_active → True`. Integral = 0. Timer-Toggle. Modus → `'1'`. |
 | **B** — Zone 3 Stop | SOC < Zone-3-Schwelle UND `cycle_active = True` UND kein AC/Tarif-Laden | `cycle_active → False`. Integral = 0. Output → 0 W. Modus → `'0'`. |
 | **C** — Zone 3 Absicherung | SOC < Zone-3-Schwelle UND `cycle_active = False` UND Modus ≠ `'0'` UND kein AC/Tarif-Laden | Output → 0 W. Modus → `'0'`. Kein Integral-Reset. |
