@@ -156,7 +156,7 @@
     },
     "surplus_pv_hyst": {
       "l": "PV-Hysterese (W)",
-      "d": "Eintritt: PV > Output + Grid + Hysterese. Austritt: PV ≤ Output + Grid − Hysterese."
+      "d": "Eintritt: PV > Output + Grid + Hysterese. Austritt: PV ≤ Output + Grid − Hysterese. Im Multi-Instanz-Betrieb wird die Hysterese mit dem Fehler-Anteil skaliert — das Totband bleibt relativ zur Verbrauchsreferenz konstant."
     },
     "surplus_forecast_enabled": {
       "l": "Forecast-Erzwingung aktivieren",

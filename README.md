@@ -218,7 +218,7 @@ Ein positiver Offset von z. B. 30 W lässt den Regler auf 30 W Netzbezug regeln 
 
 Optionale Überschuss-Einspeisung (Zone 0). **Hat absoluten Vorrang vor allen anderen optionalen Modulen** — Tarif-Laden, Discharge-Lock und AC Laden werden blockiert solange Zone 0 aktiv ist.
 
-**Normaler Eintritt:** SOC ≥ Export-Schwelle UND (PV > ((Σ Output aller Instanzen + Grid) × Fehler-Anteil + PV-Hysterese) ODER (PV = 0 UND Output = 0 im aktuellen *und* vorherigen Zyklus))
+**Normaler Eintritt:** SOC ≥ Export-Schwelle UND (PV > ((Σ Output aller Instanzen + Grid) × Fehler-Anteil + PV-Hysterese × Fehler-Anteil) ODER (PV = 0 UND Output = 0 im aktuellen *und* vorherigen Zyklus))
 
 > Ein- und Austritt nutzen denselben Verbrauchsbezug `(Σ Output + Grid) × Fehler-Anteil` (im Einzelbetrieb = `Output + Grid`). Gleiche Referenz für beide ist zwingend, sonst bricht das Hysterese-Totband zusammen und Zone 0 flackert.
 
@@ -230,9 +230,9 @@ Optionale Überschuss-Einspeisung (Zone 0). **Hat absoluten Vorrang vor allen an
 
 > Kein SOC-Gate — Surplus startet sobald PV die maximale Ausgangsleistung übersteigt. Gedacht für sonnige Tage: 800 W werden dauerhaft ausgegeben, der Rest lädt die Batterie. Die Forcierung ist an PV > Hard Limit gekoppelt und endet von selbst, sobald die PV unter das Limit fällt (kein Abregel-Risiko mehr).
 
-**Austritts-Bedingung:** PV ≤ ((Σ Output aller Instanzen + Grid) × Fehler-Anteil − PV-Hysterese) ODER SOC < (Export-Schwelle − SOC-Hysterese)
+**Austritts-Bedingung:** PV ≤ ((Σ Output aller Instanzen + Grid) × Fehler-Anteil − PV-Hysterese × Fehler-Anteil) ODER SOC < (Export-Schwelle − SOC-Hysterese)
 
-> Der PV-Term prüft, ob die eigene PV noch den **Anteil dieser Instanz am Hausverbrauch** übersteigt. Der wahre Hausverbrauch ist `Σ Output (alle Wechselrichter) + Grid` — im Einzelbetrieb identisch zu `Output + Grid`. Im Multi-Instanz-Betrieb ist die Summe nötig: regelt eine zweite Instanz den Netzwert auf ~0, würde `Output + Grid` der eigenen Instanz den Verbrauch unterschätzen und eine auf 2 A gedrosselte Surplus-Instanz käme nie aus Zone 0 heraus. `× Fehler-Anteil` skaliert auf den Lastanteil, den diese Instanz decken soll (Einzelbetrieb: 1,0).
+> Der PV-Term prüft, ob die eigene PV noch den **Anteil dieser Instanz am Hausverbrauch** übersteigt. Der wahre Hausverbrauch ist `Σ Output (alle Wechselrichter) + Grid` — im Einzelbetrieb identisch zu `Output + Grid`. Im Multi-Instanz-Betrieb ist die Summe nötig: regelt eine zweite Instanz den Netzwert auf ~0, würde `Output + Grid` der eigenen Instanz den Verbrauch unterschätzen und eine auf 2 A gedrosselte Surplus-Instanz käme nie aus Zone 0 heraus. `× Fehler-Anteil` skaliert sowohl den Verbrauchsbezug als auch die PV-Hysterese auf den Lastanteil dieser Instanz (Einzelbetrieb: 1,0) — so bleibt das Totband relativ zur Referenz konstant.
 
 > Solange die Forcierung aktiv ist (Vorhersage ≥ Schwelle **und** PV > Hard Limit), ist der Austritt komplett gesperrt — SOC- und Verbrauchsterm sind ausgeklammert, damit bei großem PV-Tag früh eingespeist statt abgeregelt wird, ohne auf vollen Akku zu warten. Sobald die PV unter das Hard Limit fällt, endet die Forcierung und der normale Austritt greift: bei vollem Akku über den PV-Term (Überschuss weg), bei noch nicht vollem Akku sofort über den SOC-Term. Nachts ist PV = 0 < Hard Limit → Forcierung aus → Austritt, auch bei Tages-/Morgen-Vorhersage. Zone 3 (Safety-Stopp) beendet Surplus zusätzlich jederzeit.
 

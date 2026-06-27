@@ -156,7 +156,7 @@
     },
     "surplus_pv_hyst": {
       "l": "PV Hysteresis (W)",
-      "d": "Entry: PV > output + grid + hysteresis. Exit: PV ≤ output + grid − hysteresis."
+      "d": "Entry: PV > output + grid + hysteresis. Exit: PV ≤ output + grid − hysteresis. In multi-instance setups the hysteresis is scaled by the error share — the dead band stays proportional to the consumption reference."
     },
     "surplus_forecast_enabled": {
       "l": "Enable Forecast Override",
