@@ -613,8 +613,11 @@ class SolakonCoordinator:
         
         if surplus_forecast_enabled and surplus_forecast_sensor:
             if self._entity_ok(surplus_forecast_sensor):
+                # Forcierung nur solange die PV das Ausgangslimit übersteigt (Abregel-Risiko);
+                # fällt sie darunter, greift wieder die normale SOC-/Verbrauchslogik.
                 self.forecast_surplus_forced = (
                     self._flt_kilo_normalized(surplus_forecast_sensor) >= surplus_forecast_threshold
+                    and solar > hard_limit
                 )
             else:
                 self.forecast_surplus_forced = False
@@ -678,19 +681,14 @@ class SolakonCoordinator:
                     or (solar == 0 and actual == 0 and prev_actual == 0)
                 )
             )
-            forecast_entry = (
-                self.forecast_surplus_forced
-                and solar > hard_limit
-            )
-            surplus_entry = normal_entry or forecast_entry
+            # Forcierung ist bereits an solar > hard_limit gekoppelt → SOC-unabhängiger Eintritt.
+            surplus_entry = normal_entry or self.forecast_surplus_forced
 
-            # Austritt: fehlender Solar-Überschuss beendet Surplus immer;
-            # die Forecast-Forcierung überstimmt nur den SOC-Term.
+            # Austritt: bei aktiver Forcierung gesperrt (SOC- und Verbrauchsterm ausgeklammert),
+            # sonst normal über SOC- oder Verbrauchsschwelle.
             soc_exit = soc < (surplus_threshold - surplus_soc_hyst)
             power_exit = solar <= (consumption_share - surplus_pv_hyst)
-            surplus_exit = power_exit or (
-                not self.forecast_surplus_forced and soc_exit
-            )
+            surplus_exit = not self.forecast_surplus_forced and (soc_exit or power_exit)
             if self.surplus_active:
                 new_surplus = not surplus_exit
             else:

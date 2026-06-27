@@ -228,13 +228,13 @@ Optionale Überschuss-Einspeisung (Zone 0). **Hat absoluten Vorrang vor allen an
 
 > Sensorwerte mit k-Präfix (kW, kWh, kWp …) werden automatisch ×1000 normalisiert — Schwelle immer in der Basiseinheit (W bzw. Wh) angeben. Standard: 5000 Wh.
 
-> Kein SOC-Gate — Surplus startet sobald PV die maximale Ausgangsleistung übersteigt. Gedacht für sonnige Tage: 800 W werden dauerhaft ausgegeben, der Rest lädt die Batterie.
+> Kein SOC-Gate — Surplus startet sobald PV die maximale Ausgangsleistung übersteigt. Gedacht für sonnige Tage: 800 W werden dauerhaft ausgegeben, der Rest lädt die Batterie. Die Forcierung ist an PV > Hard Limit gekoppelt und endet von selbst, sobald die PV unter das Limit fällt (kein Abregel-Risiko mehr).
 
-**Austritts-Bedingung:** PV ≤ ((Σ Output aller Instanzen + Grid) × Fehler-Anteil − PV-Hysterese) ODER (ohne aktive Vorhersage: SOC < (Export-Schwelle − SOC-Hysterese))
+**Austritts-Bedingung:** PV ≤ ((Σ Output aller Instanzen + Grid) × Fehler-Anteil − PV-Hysterese) ODER SOC < (Export-Schwelle − SOC-Hysterese)
 
 > Der PV-Term prüft, ob die eigene PV noch den **Anteil dieser Instanz am Hausverbrauch** übersteigt. Der wahre Hausverbrauch ist `Σ Output (alle Wechselrichter) + Grid` — im Einzelbetrieb identisch zu `Output + Grid`. Im Multi-Instanz-Betrieb ist die Summe nötig: regelt eine zweite Instanz den Netzwert auf ~0, würde `Output + Grid` der eigenen Instanz den Verbrauch unterschätzen und eine auf 2 A gedrosselte Surplus-Instanz käme nie aus Zone 0 heraus. `× Fehler-Anteil` skaliert auf den Lastanteil, den diese Instanz decken soll (Einzelbetrieb: 1,0).
 
-> Der PV-Term greift **immer** — auch bei aktiver Vorhersage. Sobald die eigene PV den Hausverbrauch nicht mehr deckt, gibt es keinen Überschuss zum Einspeisen und Surplus endet. Die Vorhersage blockiert nur den **SOC-Term**: ein voller Akku-Forecast hält Surplus trotz sinkendem SOC, deckt aber keinen fehlenden PV-Überschuss. Damit kann Surplus bei Tages-/Morgen-Vorhersage nachts nicht hängen bleiben (PV = 0 < Verbrauch → Austritt). Zone 3 (Safety-Stopp) beendet Surplus zusätzlich jederzeit.
+> Solange die Forcierung aktiv ist (Vorhersage ≥ Schwelle **und** PV > Hard Limit), ist der Austritt komplett gesperrt — SOC- und Verbrauchsterm sind ausgeklammert, damit bei großem PV-Tag früh eingespeist statt abgeregelt wird, ohne auf vollen Akku zu warten. Sobald die PV unter das Hard Limit fällt, endet die Forcierung und der normale Austritt greift: bei vollem Akku über den PV-Term (Überschuss weg), bei noch nicht vollem Akku sofort über den SOC-Term. Nachts ist PV = 0 < Hard Limit → Forcierung aus → Austritt, auch bei Tages-/Morgen-Vorhersage. Zone 3 (Safety-Stopp) beendet Surplus zusätzlich jederzeit.
 
 | Parameter | Beschreibung | Empfehlung |
 |-----------|-------------|------------|
