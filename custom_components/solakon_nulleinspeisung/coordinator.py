@@ -673,11 +673,12 @@ class SolakonCoordinator:
         if surplus_enabled:
             # Lastanteil dieser Instanz für Ein- und Austritt: (Σactual + grid) × error_share.
             consumption_share = (self._total_actual_power() + grid) * error_share
+            pv_hyst_share = surplus_pv_hyst * error_share
 
             normal_entry = (
                 soc >= surplus_threshold
                 and (
-                    solar > (consumption_share + surplus_pv_hyst)
+                    solar > (consumption_share + pv_hyst_share)
                     or (solar == 0 and actual == 0 and prev_actual == 0)
                 )
             )
@@ -687,7 +688,7 @@ class SolakonCoordinator:
             # Austritt: bei aktiver Forcierung gesperrt (SOC- und Verbrauchsterm ausgeklammert),
             # sonst normal über SOC- oder Verbrauchsschwelle.
             soc_exit = soc < (surplus_threshold - surplus_soc_hyst)
-            power_exit = solar <= (consumption_share - surplus_pv_hyst)
+            power_exit = solar <= (consumption_share - pv_hyst_share)
             surplus_exit = not self.forecast_surplus_forced and (soc_exit or power_exit)
             if self.surplus_active:
                 new_surplus = not surplus_exit
