@@ -21,6 +21,9 @@ body{font-family:Roboto,sans-serif;font-size:13px;color:var(--color-text-primary
 .main{flex:1;display:flex;flex-direction:column;min-width:0}
 .appbar{background:#03a9f4;color:#fff;display:flex;align-items:center;height:46px;padding:0 8px;gap:4px;flex-shrink:0}
 .appbar-title{font-size:14px;font-weight:500;flex:1}
+.lang-toggle{display:flex;gap:3px;margin-left:auto}
+.lang-btn{background:rgba(255,255,255,.2);color:#fff;border:none;padding:3px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:500}
+.lang-btn.active{background:#fff;color:#03a9f4}
 .itabs{display:flex;gap:3px;padding:6px 12px 0;background:var(--color-background-secondary);border-bottom:0.5px solid var(--color-border-tertiary);flex-shrink:0}
 .itab{padding:5px 11px;border-radius:7px 7px 0 0;cursor:pointer;background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-bottom:2px solid var(--color-background-primary);font-size:11px;white-space:nowrap;position:relative;bottom:-1px}
 .itab.active{background:#03a9f4;color:#fff;border-color:#03a9f4;border-bottom-color:#03a9f4;font-weight:500}
@@ -111,6 +114,10 @@ body{font-family:Roboto,sans-serif;font-size:13px;color:var(--color-text-primary
     <div class="appbar">
       <span style="font-size:18px;padding:6px;border-radius:50%">☰</span>
       <span class="appbar-title">Solakon ONE</span>
+      <div class="lang-toggle">
+        <button class="lang-btn active" data-lang="de" onclick="setLang('de')">DE</button>
+        <button class="lang-btn" data-lang="en" onclick="setLang('en')">EN</button>
+      </div>
     </div>
     <div class="itabs">
       <div class="itab" id="it-ov" onclick="si('ov')">📊 Übersicht</div>
@@ -125,13 +132,13 @@ body{font-family:Roboto,sans-serif;font-size:13px;color:var(--color-text-primary
 const DA={name:'Solakon A',zone:2,zl:'🔋 Zone 2 — Schonend',zc:'#0891b2',soc:74,out:312,grid:4,solar:580,int:12.40,std:18.3,fl:'Zone 2: Regelung aktiv',cy:false,reg:true,dyn_z2:true,offset:28,mode:'1',alloc:null};
 const DB={name:'Solakon B',zone:1,zl:'⚡ Zone 1 — Aggressiv',zc:'#16a34a',soc:41,out:180,grid:8,solar:320,int:3.10,std:9.7,fl:'Zone 1: Entladezyklus Start',cy:true,reg:true,dyn_z1:true,offset:38,mode:'1',alloc:400};
 const INST={a:DA,b:DB};
-const TABS=[{id:'status',l:'📊 Status'},{id:'pi',l:'🎛️ PI-Regler'},{id:'zones',l:'🔋 Zonen'},{id:'surplus',l:'☀️ Überschuss'},{id:'ac',l:'⚡ AC Laden'},{id:'tariff',l:'💹 Tarif'},{id:'dynoff',l:'📈 Dyn. Offset'},{id:'night',l:'🌙 Nacht'},{id:'debug',l:'🔧 Debug'}];
 let inst='a', tab='status';
+let T=null, lang='de';
+const LANGS={};
 
 function si(id){inst=id;tab='status';['ov','a','b'].forEach(k=>document.getElementById('it-'+k).className='itab'+(k===id?' active':''));render();}
 function st(id){tab=id;render();}
 
-// Separate Save-Bar Funktionen je Kontext
 function dirty(){
   const s=document.getElementById('save-inst');
   if(s) s.className='save-bar show';
@@ -156,11 +163,24 @@ function wireToggle(cbId,targetId){
   cb.addEventListener('change',apply);
 }
 
+function setLang(l){
+  if(!LANGS[l])return;
+  lang=l;T=LANGS[l];
+  document.querySelectorAll('.lang-btn').forEach(b=>b.classList.toggle('active',b.dataset.lang===l));
+  render();
+}
+
+function getTabs(){
+  const ic={status:'📊',pi:'🎛️',zones:'🔋',surplus:'☀️',ac:'⚡',tariff:'💹',dynoff:'📈',night:'🌙',debug:'🔧'};
+  return Object.keys(T.tabs).map(id=>({id,l:(ic[id]||'')+' '+T.tabs[id]}));
+}
+
 function render(){
+  if(!T)return;
   const c=document.getElementById('content');
   if(inst==='ov'){c.innerHTML='';renderOv(c);return;}
   const d=INST[inst];
-  const tb=TABS.map(t=>`<div class="tab${t.id===tab?' active':''}" onclick="st('${t.id}')">${t.l}</div>`).join('');
+  const tb=getTabs().map(t=>`<div class="tab${t.id===tab?' active':''}" onclick="st('${t.id}')">${t.l}</div>`).join('');
   c.innerHTML=`
     <div class="top-card">
       <div class="top-hdr">⚡ Solakon ONE Nulleinspeisung — ${d.name}</div>
@@ -211,10 +231,7 @@ function renderOv(c){
       <button id="save-dist-btn">💾 Speichern</button>
     </div>`;
 
-  // Speichern-Button
   vd.querySelector('#save-dist-btn').addEventListener('click',()=>hideSave('save-dist'));
-
-  // Modus-Dropdown schaltet Blöcke
   vd.querySelector('#sel-mode').addEventListener('change',function(){
     const m=this.value;
     vd.querySelector('#blk-w').className=m==='Gewichtet'?'':'dimmed';
@@ -263,114 +280,142 @@ function rStatus(d){
 }
 
 function rPI(){
-  return acc('PI-Regler — Kern des Regelkreises','Regelgröße: Netzleistung. Stellgröße: AC-Ausgangsleistung.\nP-Anteil: reagiert sofort auf Abweichung (Grid − Offset). I-Anteil: summiert Abweichungen auf.\nAnti-Windup: ±1000. Integral-Reset bei Zonenwechsel. Toleranz-Decay: −5 %/Zyklus.\nEinstieg: P = 0.5, I = 0. P erhöhen bis Output pendelt, dann einen Schritt zurück.')+
+  const D=T.tab_docs.pi,F=T.fields,C=T.col_titles;
+  return acc(D.summary,D.text)+
   `<div class="cg2">
-    ${card('🎛️ Regelparameter','#0891b2',
-      fi('P-Faktor (Proportional)','Reagiert sofort auf die aktuelle Abweichung (Grid − Offset). Höher = aggressiver. Zu groß: Output pendelt dauerhaft. Typisch: 0.8–1.5','number',1.3,'min=0.1 max=5 step=0.1')+
-      fi('I-Faktor (Integral)','Summiert Abweichungen über die Zeit auf, eliminiert bleibende Regelabweichungen. Startwert: 0. Erst erhöhen wenn P-Regelung stabil. Typisch: 0.03–0.08','number',0.05,'min=0 max=0.5 step=0.01')+
-      fi('Toleranzbereich / Totband (W)','Abweichungen innerhalb dieses Bereichs lösen keinen PI-Eingriff aus — stattdessen greift der Integral-Decay.','number',15,'min=0 max=200 step=1')+
-      fi('Wartezeit / Max-Timeout (s)','Pause nach einem Stelleingriff. Mit Self-Adjust: maximales Timeout.','number',3,'min=0 max=30 step=1'))}
-    ${card('🎯 Self-Adjusting Wait','#7c3aed',
-      fb('Self-Adjusting Wait aktivieren','Wartet auf tatsächliche WR-Ausgangsleistung statt fixer Pause. Sobald actual_power Sollwert ±Toleranz erreicht, geht der Regler weiter.',false)+
-      fi('Zielwert-Toleranz (W)','Abweichung in W ab der der Zielwert als erreicht gilt. Typisch: 2–5 W.','number',2,'min=1 max=50 step=1'))}
+    ${card('🎛️ '+C.pi_ctrl,'#0891b2',
+      fi(F.p_factor.l,F.p_factor.d,'number',1.3,'min=0.1 max=5 step=0.1')+
+      fi(F.i_factor.l,F.i_factor.d,'number',0.05,'min=0 max=0.5 step=0.01')+
+      fi(F.tolerance.l,F.tolerance.d,'number',15,'min=0 max=200 step=1')+
+      fi(F.wait_time.l,F.wait_time.d,'number',3,'min=0 max=30 step=1'))}
+    ${card('🎯 '+C.pi_saw,'#7c3aed',
+      fb(F.self_adjust_enabled.l,F.self_adjust_enabled.d,false)+
+      fi(F.self_adjust_tolerance.l,F.self_adjust_tolerance.d,'number',2,'min=1 max=50 step=1'))}
   </div>`;
 }
 
 function rZones(){
-  return acc('SOC-Zonenlogik','Zone 1: SOC > Schwelle → hoher Entladestrom. Läuft bis SOC ≤ Zone-3-Schwelle.\nZone 2: Zone-3 < SOC ≤ Zone-1 → 0 A Entladestrom, Limit max(0, PV − Reserve).\nZone 3: SOC ≤ Zone-3-Schwelle → Output 0 W, Modus Disabled.\nZone 0: optional — Überschuss-Tab.')+
+  const D=T.tab_docs.zones,F=T.fields,C=T.col_titles;
+  return acc(D.summary,D.text)+
   `<div class="cg3">
-    ${card('🔋 SOC-Grenzen','#0891b2',
-      fi('Zone 1 SOC-Schwelle (%)','SOC überschreitet → Zone 1 startet. Läuft bis SOC ≤ Zone-3-Schwelle — kein Yo-Yo-Effekt.','number',50,'min=1 max=99 step=1')+
-      fi('Zone 3 SOC-Schwelle (%)','SOC unterschreitet → Sicherheitsstopp. Muss kleiner als Zone-1-Schwelle sein.','number',20,'min=1 max=49 step=1')+
-      fi('PV-Ladereserve (W)','Zone-2-Output-Limit: max(0, PV − Reserve). Auch Schwelle für die Nachtabschaltung.','number',50,'min=0 max=500 step=10'))}
-    ${card('⚙️ Leistungsgrenzen','#b45309',
-      fi('Hard Limit (W)','Absolute Ausgangsleistungs-Obergrenze in Zone 0 und Zone 1.','number',800,'min=100 max=2000 step=50')+
-      fi('Max. Entladestrom Zone 1 (A)','Entladestrom in Zone 1. Zone 2 und AC Laden setzen automatisch 0 A.','number',40,'min=1 max=100 step=1'))}
-    ${card('🎯 Offsets','#7c3aed',
-      fi('Offset Zone 1 (W)','Regelziel in Zone 1. Positiv = leichter Netzbezug als Sicherheitspuffer. Wird überschrieben wenn Dyn. Offset Zone 1 aktiv.','number',30,'min=-200 max=300 step=1')+
-      fi('Offset Zone 2 (W)','Regelziel in Zone 2. Empfohlen: etwas größer als Zone-1-Offset. Wird überschrieben wenn Dyn. Offset Zone 2 aktiv.','number',10,'min=-200 max=300 step=1'))}
+    ${card('🔋 '+C.zones_soc,'#0891b2',
+      fi(F.zone1_limit.l,F.zone1_limit.d,'number',50,'min=1 max=99 step=1')+
+      fi(F.zone3_limit.l,F.zone3_limit.d,'number',20,'min=1 max=49 step=1')+
+      fi(F.pv_reserve.l,F.pv_reserve.d,'number',50,'min=0 max=500 step=10'))}
+    ${card('⚙️ '+C.zones_power,'#b45309',
+      fi(F.hard_limit_z0.l,F.hard_limit_z0.d,'number',800,'min=100 max=2000 step=50')+
+      fi(F.hard_limit_z1.l,F.hard_limit_z1.d,'number',800,'min=100 max=2000 step=50')+
+      fi(F.discharge_max.l,F.discharge_max.d,'number',40,'min=1 max=100 step=1'))}
+    ${card('🎯 '+C.zones_offsets,'#7c3aed',
+      fi(F.offset_1.l,F.offset_1.d,'number',30,'min=-200 max=300 step=1')+
+      fi(F.offset_2.l,F.offset_2.d,'number',10,'min=-200 max=300 step=1'))}
   </div>`;
 }
 
 function rSurplus(){
-  return acc('Überschuss-Einspeisung — Zone 0','Höchste Priorität.\nNormaler Eintritt: SOC ≥ Schwelle UND (PV > Output + Grid + Hysterese ODER PV = 0 ODER Output = 0).\nForecast-Eintritt: Vorhersage ≥ Schwelle UND PV > Hard Limit (kein SOC-Gate).\nAustritt (nur ohne Forecast): SOC < (Schwelle − Hysterese) ODER PV-Exit.\nBei Forecast: Exit blockiert — nur Zone 3 beendet Surplus.\nOutput auf Hard Limit. Integral eingefroren.')+
-  card('⚙️ Allgemein','#475569',fb('Überschuss-Einspeisung aktivieren','Höchste Priorität — blockiert Tarif-Laden, Discharge-Lock und AC Laden solange Zone 0 aktiv.',false,'cb-surplus'))+
+  const D=T.tab_docs.surplus,F=T.fields,C=T.col_titles;
+  return acc(D.summary,D.text)+
+  card(T.general_section,'#475569',fb(F.surplus_enabled.l,F.surplus_enabled.d,false,'cb-surplus'))+
   `<div id="blk-surplus-cols" class="dimmed" style="margin-top:10px"><div class="cg3">
-    ${card('🔋 SOC-Bedingung','#0891b2',
-      fi('SOC-Schwelle (%)','Zone 0 startet ab diesem SOC. Empfohlen: > Zone-1-Schwelle. Typisch: 90–98 %.','number',95,'min=50 max=100 step=1')+
-      fi('SOC-Hysterese (%)','Austritt erst wenn SOC < (Schwelle − Hysterese). Verhindert Flackern. Typisch: 3–5 %.','number',5,'min=1 max=20 step=1'))}
-    ${card('☀️ PV-Bedingung','#f59e0b',
-      fi('PV-Hysterese (W)','Eintritt: PV > Output + Grid + Hysterese. Austritt: PV ≤ Output + Grid − Hysterese.','number',50,'min=10 max=200 step=10'))}
-    ${card('🌤️ PV-Vorhersage','#65a30d',
-      fb('Forecast-Erzwingung aktivieren','Wenn Vorhersage ≥ Schwelle: Surplus startet bei PV > Hard Limit ohne SOC-Gate. Exit komplett blockiert bis Forecast wegfällt.',false)+
-      fi('Vorhersage-Sensor','Sensor mit prognostiziertem PV-Ertrag (z.B. Solcast). Einheit muss zur Schwelle passen.','text','','placeholder="sensor.solcast_prognose"')+
-      fi('Mindest-Ertrag für Surplus','PV > Hard Limit + Forecast ≥ Schwelle → Surplus startet und bleibt aktiv bis Forecast unter Schwelle fällt.','number',5,'min=0 max=100 step=0.5'))}
+    ${card('🔋 '+C.surplus_soc,'#0891b2',
+      fi(F.surplus_soc_threshold.l,F.surplus_soc_threshold.d,'number',95,'min=50 max=100 step=1')+
+      fi(F.surplus_soc_hyst.l,F.surplus_soc_hyst.d,'number',5,'min=1 max=20 step=1'))}
+    ${card('☀️ '+C.surplus_pv,'#f59e0b',
+      fi(F.surplus_pv_hyst.l,F.surplus_pv_hyst.d,'number',50,'min=10 max=200 step=10'))}
+    ${card('🌤️ '+C.surplus_forecast,'#65a30d',
+      fb(F.surplus_forecast_enabled.l,F.surplus_forecast_enabled.d,false)+
+      fi(F.surplus_forecast_sensor.l,F.surplus_forecast_sensor.d,'text','','placeholder="sensor.solcast_prognose"')+
+      fi(F.surplus_forecast_threshold.l,F.surplus_forecast_threshold.d,'number',5,'min=0 max=100 step=0.5'))}
   </div></div>`;
 }
 
 function rAC(){
-  return acc('AC Laden — Netz lädt die Batterie','Eintritt: SOC < Ladeziel UND kein Überschuss UND kein AC/Tarif-Laden UND Modus ≠ 3 UND (Grid + Output) < −Hysterese.\nAbbruch: Modus = 3 UND ac_charge_active UND kein Tarif-Laden UND (SOC ≥ Ladeziel ODER (Grid ≥ Offset + Hysterese UND Output = 0 W)).\nPI läuft invertiert. P-Faktor klein halten (~0.3) wegen Hardware-Flanke (~25 s).')+
-  card('⚙️ Allgemein','#475569',fb('AC Laden aktivieren','Eintritt: SOC < Ladeziel UND kein Überschuss UND kein AC/Tarif-Laden UND Modus ≠ 3. SOC-Schutz (Zone 3) bleibt aktiv.',false,'cb-ac'))+
+  const D=T.tab_docs.ac,F=T.fields,C=T.col_titles;
+  return acc(D.summary,D.text)+
+  card(T.general_section,'#475569',fb(F.ac_enabled.l,F.ac_enabled.d,false,'cb-ac'))+
   `<div id="blk-ac-cols" class="dimmed" style="margin-top:10px"><div class="cg2">
-    ${card('⚡ Eintritt & Grenzen','#7c3aed',
-      fi('Ladeziel SOC (%)','Laden stoppt wenn SOC diesen Wert erreicht. Empfohlen: > Zone-1-Schwelle.','number',90,'min=50 max=100 step=1')+
-      fi('Max. Ladeleistung (W)','Absolute Obergrenze der AC-Ladeleistung.','number',800,'min=100 max=2000 step=50')+
-      fi('Eintritts-Hysterese (W)','Eintritt: (Grid + Output) < −Hysterese. Austritt: Grid ≥ (Offset + Hysterese) UND Output = 0 W.','number',50,'min=10 max=500 step=10')+
-      fi('Regel-Offset (W)','Regelziel im AC-Lade-Modus. Negativ = Einspeisung angestrebt → PI erhöht Ladeleistung.','number',-50,'min=-500 max=200 step=5'))}
-    ${card('🎛️ PI-Parameter','#0891b2',
-      fi('AC P-Faktor','Klein halten (~0.3–0.5) wegen der Hardware-Flanke (~25 s). Startwert: 0.3.','number',0.3,'min=0.1 max=3 step=0.1')+
-      fi('AC I-Faktor','Startwert: 0 — erst erhöhen wenn P stabil. Typisch: 0.05–0.1. I-Anteil macht die eigentliche Regelarbeit.','number',0.07,'min=0 max=0.5 step=0.01'))}
+    ${card('⚡ '+C.ac_entry,'#7c3aed',
+      fi(F.ac_soc_target.l,F.ac_soc_target.d,'number',90,'min=50 max=100 step=1')+
+      fi(F.ac_power_limit.l,F.ac_power_limit.d,'number',800,'min=100 max=2000 step=50')+
+      fi(F.ac_hysteresis.l,F.ac_hysteresis.d,'number',50,'min=10 max=500 step=10')+
+      fi(F.ac_offset.l,F.ac_offset.d,'number',-50,'min=-500 max=200 step=5'))}
+    ${card('🎛️ '+C.ac_pi,'#0891b2',
+      fi(F.ac_p_factor.l,F.ac_p_factor.d,'number',0.3,'min=0.1 max=3 step=0.1')+
+      fi(F.ac_i_factor.l,F.ac_i_factor.d,'number',0.07,'min=0 max=0.5 step=0.01'))}
   </div></div>`;
 }
 
 function rTariff(){
-  return acc('Tarif-Arbitrage — drei Preisstufen','Günstig (< Günstig-Schwelle): Tarif-Laden — feste Ladeleistung bis SOC-Ziel.\nMittel: Discharge-Lock — Zone 1 und Zone 2 gesperrt.\nTeuer (≥ Teuer-Schwelle): normale SOC-Logik.')+
-  card('⚙️ Allgemein','#475569',
-    fb('Tarif-Steuerung aktivieren','Günstig: Laden · Mittel: Discharge-Lock · Teuer: normale Logik. Blockiert solange Überschuss aktiv.',false,'cb-tariff')+
-    fi('Preis-Sensor','Sensor mit aktuellem Strompreis in ct/kWh.','text','sensor.tibber_price_current',''))+
+  const D=T.tab_docs.tariff,F=T.fields,C=T.col_titles;
+  return acc(D.summary,D.text)+
+  card(T.general_section,'#475569',
+    fb(F.tariff_enabled.l,F.tariff_enabled.d,false,'cb-tariff')+
+    fi(F.tariff_price_sensor.l,F.tariff_price_sensor.d,'text','sensor.tibber_price_current',''))+
   `<div id="blk-tariff-cols" class="dimmed" style="margin-top:10px"><div class="cg2">
-    ${card('💹 Preisschwellen','#0891b2',
-      fi('Günstig-Schwelle (ct/kWh)','Tarif-Laden startet wenn Preis < Schwelle UND SOC < Ladeziel.','number',10,'min=0 max=100 step=0.5')+
-      fi('Günstig-Schwelle dynamisch (optional)','Optionale input_number überschreibt den statischen Wert.','text','','placeholder="input_number.xxx"')+
-      fi('Teuer-Schwelle (ct/kWh)','Über dieser Schwelle: normale SOC-Logik. Muss > Günstig-Schwelle sein.','number',25,'min=0 max=100 step=0.5')+
-      fi('Teuer-Schwelle dynamisch (optional)','Optionale input_number überschreibt den statischen Wert.','text','','placeholder="input_number.xxx"'))}
+    ${card('💹 '+C.tariff_thresholds,'#0891b2',
+      fi(F.tariff_cheap_threshold.l,F.tariff_cheap_threshold.d,'number',10,'min=0 max=100 step=0.5')+
+      fi(F.tariff_cheap_entity.l,F.tariff_cheap_entity.d,'text','','placeholder="input_number.xxx"')+
+      fi(F.tariff_exp_threshold.l,F.tariff_exp_threshold.d,'number',25,'min=0 max=100 step=0.5')+
+      fi(F.tariff_exp_entity.l,F.tariff_exp_entity.d,'text','','placeholder="input_number.xxx"'))}
     <div>
-      ${card('🔋 Laden','#16a34a',
-        fi('Ladeziel SOC (%)','Tarif-Laden stoppt wenn dieser SOC erreicht wird.','number',90,'min=50 max=100 step=1')+
-        fi('Ladeleistung (W)','Feste Ladeleistung — kein PI-Regler.','number',800,'min=100 max=2000 step=50'))}
-      ${card('☀️ PV-Vorhersage','#f59e0b',
-        fb('PV-Vorhersage aktivieren','Wenn Vorhersage ≥ Schwelle: Tarif-Laden und Discharge-Lock unterdrückt.',false)+
-        fi('Vorhersage-Sensor','sensor- oder input_number-Entität mit kWh-Wert.','text','','placeholder="sensor.solcast_prognose"')+
-        fi('Schwellwert (kWh)','Wenn Vorhersage ≥ diesem Wert: Tarif-Laden und Discharge-Lock gesperrt.','number',5,'min=0 max=50 step=0.5'))}
+      ${card('🔋 '+C.tariff_charge,'#16a34a',
+        fi(F.tariff_soc_target.l,F.tariff_soc_target.d,'number',90,'min=50 max=100 step=1')+
+        fi(F.tariff_power.l,F.tariff_power.d,'number',800,'min=100 max=2000 step=50'))}
+      ${card('☀️ '+C.tariff_forecast,'#f59e0b',
+        fb(F.pv_forecast_enabled.l,F.pv_forecast_enabled.d,false)+
+        fi(F.pv_forecast_sensor.l,F.pv_forecast_sensor.d,'text','','placeholder="sensor.solcast_prognose"')+
+        fi(F.pv_forecast_threshold.l,F.pv_forecast_threshold.d,'number',5,'min=0 max=50 step=0.5'))}
     </div>
   </div></div>`;
 }
 
 function rDynoff(){
-  const zn=(t,c)=>card(t,c,
-    fb('Aktivieren','Berechnet den Offset dynamisch aus der Netz-StdDev statt des statischen Werts.',false)+
-    fi('Min. Offset (W)','Grundpuffer bei ruhigem Netz (StdDev ≤ Rausch-Schwelle). Offset sinkt nie unter diesen Wert.','number',30,'min=0 max=500 step=1')+
-    fi('Max. Offset (W)','Obergrenze — steigt nie über diesen Wert.','number',250,'min=50 max=1000 step=10')+
-    fi('Rausch-Schwelle (W)','StdDev unterhalb gilt als Messrauschen — löst keinen Offset-Anstieg aus.','number',15,'min=0 max=100 step=1')+
-    fi('Volatilitäts-Faktor','Verstärkung: buffer = (StdDev − Rausch) × Faktor.','number',1.5,'min=0.5 max=5 step=0.1')+
-    fb('Negativer Offset','Negiert den Offset (× −1). Regelziel liegt unterhalb von 0 W.',false));
-  return acc('Dynamischer Offset — aus Netz-Volatilität','Formel: offset = clamp(min + max(0, (StdDev − Rausch) × Faktor), min, max)\n\n• StdDev 5 W → 30 W · StdDev 30 W → 53 W · StdDev 80 W → 128 W · StdDev 250 W+ → 250 W')+
-  card('⚙️ Allgemein','#475569',fi('Stabw.-Fenster (s)','Zeitfenster für die Standardabweichungs-Berechnung. Gilt für alle Zonen.','number',60,'min=30 max=300 step=10'))+
-  `<div class="cg3" style="margin-top:10px">${zn('⚡ Zone 1','#16a34a')}${zn('🔋 Zone 2','#0891b2')}${zn('⚡ Zone AC','#7c3aed')}</div>`;
+  const D=T.tab_docs.dynoff,F=T.fields,C=T.col_titles;
+  const ic={z1:'⚡',z2:'🔋',ac:'⚡'};
+  const zn=(pre,col)=>{
+    const p='dyn_'+pre+'_';
+    return card(ic[pre]+' '+C['dynoff_'+pre],col,
+      fb(F[p+'enabled'].l,F[p+'enabled'].d,false)+
+      fi(F[p+'min'].l,F[p+'min'].d,'number',30,'min=0 max=500 step=1')+
+      fi(F[p+'max'].l,F[p+'max'].d,'number',250,'min=50 max=1000 step=10')+
+      fi(F[p+'noise'].l,F[p+'noise'].d,'number',15,'min=0 max=100 step=1')+
+      fi(F[p+'factor'].l,F[p+'factor'].d,'number',1.5,'min=0.5 max=5 step=0.1')+
+      fb(F[p+'negative'].l,F[p+'negative'].d,false));
+  };
+  return acc(D.summary,D.text)+
+  card(T.general_section,'#475569',fi(F.stddev_window.l,F.stddev_window.d,'number',60,'min=30 max=300 step=10'))+
+  `<div class="cg3" style="margin-top:10px">${zn('z1','#16a34a')}${zn('z2','#0891b2')}${zn('ac','#7c3aed')}</div>`;
 }
 
 function rNight(){
-  return acc('Nachtabschaltung — Zone 2 bei PV < PV-Ladereserve','Betrifft ausschließlich Zone 2 (Fall F): Modus → Disabled, Output 0 W, Integral-Reset.\nZone 1 und AC Laden laufen auch nachts weiter.\nReaktivierung: PV > PV-Ladereserve, sofern kein Tarif-Lock aktiv.')+
-  card('⚙️ Allgemein','#475569',fb('Nachtabschaltung aktivieren','Zone 2 bei PV < PV-Ladereserve deaktivieren. Zone 1 und AC Laden laufen weiter.',false));
+  const D=T.tab_docs.night,F=T.fields;
+  return acc(D.summary,D.text)+
+  card(T.general_section,'#475569',fb(F.night_enabled.l,F.night_enabled.d,false));
 }
 
 function rDebug(d){
-  return acc('Debug — manuelle Eingriffe','Integral zurücksetzen: I-Anteil auf 0.\nZone manuell setzen: cycle_active-Flag schalten + Integral-Reset.\n• Zone 1: cycle_active = true → aggressiver Entladebetrieb.\n• Zone 2: cycle_active = false → batterieschonender Betrieb.')+
+  const D=T.tab_docs.debug,Dbg=T.debug;
+  return acc(D.summary,D.text)+
   `<div class="cg2">
-    ${card('🔄 PI-Integral','#7c3aed',`<p style="font-size:11px;color:var(--color-text-secondary);margin:0 0 8px">Setzt den I-Anteil des PI-Reglers manuell auf 0 zurück.</p><button style="padding:7px 14px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-tertiary);border-radius:6px;cursor:pointer;font-size:11px;color:var(--color-text-primary)">🔄 Integral zurücksetzen</button>`)}
-    ${card('🔁 Zone manuell setzen','#0891b2',`<p style="font-size:11px;color:var(--color-text-secondary);margin:0 0 4px">Schaltet den Entlade-Zyklus manuell um und setzt das Integral zurück.</p><p style="font-size:11px;margin:0 0 12px">Aktuell: <strong>${d.cy?'Zone 1 (Zyklus aktiv)':'Zone 2'}</strong></p><div style="display:flex;gap:8px"><button style="padding:6px 12px;background:#16a34a;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:11px">⚡ Zone 1 aktivieren</button><button style="padding:6px 12px;background:#0891b2;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:11px">🔋 Zone 2 aktivieren</button></div>`)}
+    ${card(Dbg.pi_hdr,'#7c3aed',`<p style="font-size:11px;color:var(--color-text-secondary);margin:0 0 8px">${Dbg.pi_desc}</p><button style="padding:7px 14px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-tertiary);border-radius:6px;cursor:pointer;font-size:11px;color:var(--color-text-primary)">${Dbg.reset_btn}</button>`)}
+    ${card(Dbg.zone_hdr,'#0891b2',`<p style="font-size:11px;color:var(--color-text-secondary);margin:0 0 4px">${Dbg.zone_desc}</p><p style="font-size:11px;margin:0 0 12px">${Dbg.zone_current}<strong>${d.cy?Dbg.zone1_state:Dbg.zone2_state}</strong></p><div style="display:flex;gap:8px"><button style="padding:6px 12px;background:#16a34a;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:11px">${Dbg.zone1_btn}</button><button style="padding:6px 12px;background:#0891b2;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:11px">${Dbg.zone2_btn}</button></div>`)}
   </div>`;
 }
 
-si('ov');
+async function init(){
+  document.getElementById('content').innerHTML='<div style="padding:24px;color:var(--color-text-secondary);font-size:12px">Lade…</div>';
+  const base='custom_components/solakon_nulleinspeisung/frontend/panel';
+  const results=await Promise.allSettled(['de','en'].map(l=>
+    fetch(`${base}.${l}.json`).then(r=>{if(!r.ok)throw new Error(r.status);return r.json();}).then(j=>({l,j}))
+  ));
+  results.forEach(r=>{if(r.status==='fulfilled')LANGS[r.value.l]=r.value.j;});
+  if(!LANGS.de){
+    document.getElementById('content').innerHTML='<div style="padding:24px;color:#f59e0b;font-size:12px">⚠️ panel.de.json konnte nicht geladen werden.<br>Seite über HTTP öffnen: <code>python -m http.server</code></div>';
+    return;
+  }
+  T=LANGS[lang];
+  si('ov');
+}
+
+init();
 </script>

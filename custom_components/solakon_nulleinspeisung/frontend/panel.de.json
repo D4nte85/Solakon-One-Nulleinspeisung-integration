@@ -92,7 +92,7 @@
     },
     "i_factor":  {
       "l": "I-Faktor (Integral)",
-      "d": "Summiert Abweichungen über die Zeit auf, eliminiert bleibende Regelabweichungen. Anti-Windup auf ±1000 begrenzt. Startwert: 0 — erst erhöhen wenn P-Regelung stabil ist. Typisch: 0.03–0.08"
+      "d": "Summiert Abweichungen über die Zeit auf, eliminiert bleibende Regelabweichungen. Startwert: 0 — erst erhöhen wenn P-Regelung stabil ist. Typisch: 0.03–0.08"
     },
     "tolerance": {
       "l": "Toleranzbereich / Totband (W)",

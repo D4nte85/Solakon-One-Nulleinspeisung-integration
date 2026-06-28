@@ -92,7 +92,7 @@
     },
     "i_factor":  {
       "l": "I-Factor (Integral)",
-      "d": "Accumulates deviations over time, eliminates steady-state error. Anti-windup clamped to ±1000. Starting value: 0 — only increase once P-control is stable. Typical: 0.03–0.08"
+      "d": "Accumulates deviations over time, eliminates steady-state error. Starting value: 0 — only increase once P-control is stable. Typical: 0.03–0.08"
     },
     "tolerance": {
       "l": "Tolerance / Dead Band (W)",
