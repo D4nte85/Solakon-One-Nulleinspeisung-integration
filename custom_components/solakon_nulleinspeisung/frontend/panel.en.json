@@ -39,7 +39,7 @@
     },
     "zones": {
       "summary": "SOC Zone Logic — behaviour based on battery state of charge",
-      "text": "Zone 0 (surplus, optional): SOC ≥ export threshold AND PV surplus → output at hard limit. Discharge current 2 A. PI integral frozen.\n\nZone 1 (aggressive): SOC > zone-1 threshold → high discharge current, offset 1. Runs through until SOC ≤ zone-3 threshold — no yo-yo effect.\n\nZone 2 (conservative): zone-3 < SOC ≤ zone-1 → 0 A discharge current, dynamic output limit (max PV − reserve), offset 2.\n\nZone 3 (safety stop): SOC ≤ zone-3 threshold → output 0 W, mode disabled. AC charging remains possible."
+      "text": "Zone 0 (surplus, optional): SOC ≥ export threshold AND PV surplus → output at hard limit. Discharge current 2 A. PI integral frozen.\n\nZone 1 (aggressive): SOC > zone-1 threshold → high discharge current, offset 1. Runs through until SOC ≤ zone-3 threshold — no yo-yo effect.\n\nZone 2 (conservative): zone-3 < SOC ≤ zone-1 → 0 A discharge current, dynamic output limit (min(hard limit, max(0, PV − reserve))), offset 2.\n\nZone 3 (safety stop): SOC ≤ zone-3 threshold → output 0 W, mode disabled. AC charging remains possible."
     },
     "surplus": {
       "summary": "Surplus Feed-In — activating Zone 0",
@@ -120,11 +120,11 @@
     },
     "pv_reserve": {
       "l": "PV Reserve (W)",
-      "d": "Zone-2 output limit: max(0, PV − reserve). Also the threshold for night shutdown: Zone 2 disabled when PV < reserve."
+      "d": "Zone-2 output limit: min(hard limit, max(0, PV − reserve)) — PV-based limit capped by hard limit. Also the threshold for night shutdown: Zone 2 disabled when PV < reserve."
     },
     "hard_limit": {
       "l": "Hard Limit (W)",
-      "d": "Absolute output power ceiling in Zone 0 and Zone 1. In Zone 2 the dynamic PV-based limit applies instead (max(0, PV − reserve)). If the optional grid export power limit entity (set during setup) is configured, this value is written to it on every regulation cycle when it deviates — automatically reverting external changes to the hardware limit."
+      "d": "Absolute output power ceiling in all zones. In Zone 2 the dynamic PV-based limit also applies (max(0, PV − reserve)) — whichever is smaller determines the ceiling. If the optional grid export power limit entity (set during setup) is configured, this value is written to it on every regulation cycle when it deviates — automatically reverting external changes to the hardware limit."
     },
     "discharge_max": {
       "l": "Max. Discharge Current Zone 1 (A)",

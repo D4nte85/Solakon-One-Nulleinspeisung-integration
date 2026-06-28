@@ -744,12 +744,13 @@ class SolakonCoordinator:
         elif self.cycle_active:
             dynamic_max = effective_hard
         else:
-            dynamic_max = max(0, solar - pv_reserve)
+            dynamic_max = min(effective_hard, max(0, solar - pv_reserve))
 
         target_offset = offset_1 if self.cycle_active else offset_2
 
         at_max_limit = current_power >= dynamic_max
         at_min_limit = current_power <= 0
+        above_dynamic_max = current_power > dynamic_max
 
         # ── 7. PI-Gate ───────────────────────────────────────────────────────
         if mode not in (MODE_DISCHARGE, MODE_AC_CHARGE):
@@ -789,7 +790,7 @@ class SolakonCoordinator:
             grid_error = grid - target_offset
             grid_error_abs = abs(grid_error)
 
-            if grid_error_abs > tolerance and not (at_max_limit and grid_error > 0) and not (at_min_limit and grid_error < 0):
+            if grid_error_abs > tolerance and not (at_max_limit and not above_dynamic_max and grid_error > 0) and not (at_min_limit and grid_error < 0):
                 new_pw = self._pi_calculate(
                     grid, current_power, target_offset, dynamic_max,
                     tolerance, p_factor, i_factor, ac_charge_mode=False,
