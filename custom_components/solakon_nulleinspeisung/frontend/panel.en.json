@@ -35,7 +35,7 @@
   "tab_docs": {
     "pi": {
       "summary": "PI Controller — Core of the control loop",
-      "text": "Controlled variable: grid power (positive = import, negative = export). Manipulated variable: AC output power of the inverter.\n\nP-part: responds immediately to the current deviation (grid − offset).\nI-part: accumulates deviations over time, eliminates steady-state error.\nAnti-windup: integral clamped to ±1000.\nIntegral reset: on every zone transition.\nTolerance decay: −5 %/cycle when error ≤ dead band and |integral| > 10.\nZone 0: integral frozen, no PI call.\n\nError calculation depends on mode:\n• Normal: raw_error = (grid − offset) × error_share\n• AC Charge: raw_error = (offset − grid) × error_share (inverted)\nError share: with multiple instances, proportional to usable capacity (SOC − zone-3 threshold). Always 1.0 with a single instance.\n\nSelf-Adjusting Wait: After each output change the controller waits for the actual inverter output power instead of a fixed pause. Once actual_power reaches the target ±tolerance, the controller continues. The configured wait time acts as a maximum timeout.\n\nStarting values: P = 0.5, I = 0. Increase P gradually until output starts oscillating, then step back. Only introduce I once P-control is stable."
+      "text": "Controlled variable: grid power (positive = import, negative = export). Manipulated variable: AC output power of the inverter.\n\nP-part: responds immediately to the current deviation (grid − offset).\nI-part: accumulates deviations over time, eliminates steady-state error.\nAnti-windup: integral clamped to ±max output power (dynamic_max).\nIntegral reset: on most zone transitions — except case D (recovery), C (zone-3 safety) and G (AC charge start).\nTolerance decay: −5 %/cycle when error ≤ dead band and |integral| > 10.\nZone 0: integral frozen, no PI call.\n\nError calculation depends on mode:\n• Normal: raw_error = (grid − offset) × error_share\n• AC Charge: raw_error = (offset − grid) × error_share (inverted)\nError share: with multiple instances, proportional to usable capacity (SOC − zone-3 threshold). Always 1.0 with a single instance.\n\nSelf-Adjusting Wait: After each output change the controller waits for the actual inverter output power instead of a fixed pause. Once actual_power reaches the target ±tolerance, the controller continues. The configured wait time acts as a maximum timeout.\n\nStarting values: P = 0.5, I = 0. Increase P gradually until output starts oscillating, then step back. Only introduce I once P-control is stable."
     },
     "zones": {
       "summary": "SOC Zone Logic — behaviour based on battery state of charge",
@@ -43,7 +43,7 @@
     },
     "surplus": {
       "summary": "Surplus Feed-In — activating Zone 0",
-      "text": "Highest priority — blocks tariff charging, discharge-lock and AC charging while Zone 0 is active.\n\nNormal entry: SOC ≥ SOC threshold AND (PV > consumption reference + PV hysteresis OR (PV = 0 AND output = 0 across two consecutive cycles — debounce against nightly re-entry)).\nForecast entry: forecast ≥ threshold AND PV > Hard Limit Z0 (no SOC gate).\n\nExit: PV ≤ consumption reference − PV hysteresis OR SOC < (threshold − SOC hysteresis).\nConsumption reference: single instance = output + grid. Multi-instance = (ΣOutput_all + grid) × error share — keeps the dead band consistent relative to true household consumption.\nForecast forcing is tied to PV > Hard Limit Z0: while active, exit is blocked (both SOC and consumption terms excluded — curtailment avoidance). Once PV drops below Hard Limit Z0 (incl. at night: PV = 0), forcing ends and the normal exit applies. Zone 3 (safety) ends surplus at any time as well.\n\nOutput is set to Hard Limit Z0. Integral frozen (no PI call)."
+      "text": "Highest priority — blocks tariff charging, discharge-lock and AC charging while Zone 0 is active.\n\nNormal entry: SOC ≥ SOC threshold AND (PV > consumption reference + PV hysteresis OR (PV = 0 AND output = 0 across two consecutive cycles — debounce against nightly re-entry)).\nForecast entry: forecast ≥ threshold AND PV > Hard Limit Z0 (no SOC gate).\n\nExit: PV ≤ consumption reference − PV hysteresis OR SOC < (threshold − SOC hysteresis).\nConsumption reference: single instance = output + grid. Multi-instance = (ΣOutput_all + grid) × error share — keeps the dead band consistent relative to true household consumption.\nForecast forcing is active while forecast ≥ threshold AND PV > Hard Limit Z0: as long as both hold, exit is blocked (both SOC and consumption terms excluded — curtailment avoidance). Once PV drops below Hard Limit Z0 (incl. at night: PV = 0) or the forecast drops below the threshold, forcing ends and the normal exit applies. Zone 3 (safety) ends surplus at any time as well.\n\nOutput is set to Hard Limit Z0. Integral frozen (no PI call)."
     },
     "ac": {
       "summary": "AC Charging — grid charges the battery",
@@ -148,7 +148,7 @@
     },
     "surplus_enabled": {
       "l": "Enable Surplus Feed-In",
-      "d": "Highest priority — blocks tariff charging, discharge-lock and AC charging while Zone 0 is active. Normal: SOC ≥ threshold + PV surplus. With forecast: PV > Hard Limit Z0 is sufficient (no SOC gate); while PV stays above Hard Limit Z0, exit is blocked — once it drops below, the normal SOC/consumption logic applies."
+      "d": "Highest priority — blocks tariff charging, discharge-lock and AC charging while Zone 0 is active. Normal: SOC ≥ threshold + PV surplus. With forecast: PV > Hard Limit Z0 is sufficient (no SOC gate); exit is blocked while forecast ≥ threshold AND PV > Hard Limit Z0 — once either condition drops away, the normal SOC/consumption logic applies."
     },
     "surplus_soc_threshold": {
       "l": "SOC Threshold (%)",
@@ -164,7 +164,7 @@
     },
     "surplus_forecast_enabled": {
       "l": "Enable Forecast Override",
-      "d": "When forecast ≥ threshold: surplus starts as soon as PV > Hard Limit Z0 (no SOC gate) and stays active while PV stays above Hard Limit Z0 — feeds in early on a big PV day instead of curtailing, without waiting for a full battery. Once PV drops below Hard Limit Z0 (incl. at night: PV = 0), forcing ends and the normal exit (SOC OR consumption) applies — no nightly stick, even with a daily/next-day forecast. Zone 3 (safety) ends it at any time as well."
+      "d": "When forecast ≥ threshold: surplus starts as soon as PV > Hard Limit Z0 (no SOC gate). Forcing stays active while forecast ≥ threshold AND PV > Hard Limit Z0 — feeds in early on a big PV day instead of curtailing, without waiting for a full battery. Once PV drops below Hard Limit Z0 (incl. at night: PV = 0) or the forecast drops below the threshold, forcing ends and the normal exit (SOC OR consumption) applies — no nightly stick. Zone 3 (safety) ends it at any time as well."
     },
     "surplus_forecast_sensor": {
       "l": "Forecast Sensor",
@@ -172,7 +172,7 @@
     },
     "surplus_forecast_threshold": {
       "l": "Minimum Yield for Surplus",
-      "d": "PV > Hard Limit Z0 + forecast ≥ threshold → surplus starts without SOC condition and stays active while PV stays above Hard Limit Z0."
+      "d": "PV > Hard Limit Z0 + forecast ≥ threshold → surplus starts without SOC condition and stays active while forecast ≥ threshold AND PV > Hard Limit Z0."
     },
     "ac_enabled": {
       "l": "Enable AC Charging",
