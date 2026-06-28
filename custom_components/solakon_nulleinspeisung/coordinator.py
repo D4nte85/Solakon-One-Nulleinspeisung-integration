@@ -22,7 +22,7 @@ from .const import (
     MODE_DISABLED, MODE_DISCHARGE, MODE_AC_CHARGE,
     S_REGULATION_ENABLED,
     S_P_FACTOR, S_I_FACTOR, S_TOLERANCE, S_WAIT_TIME, S_STDDEV_WINDOW,
-    S_ZONE1_LIMIT, S_ZONE3_LIMIT, S_DISCHARGE_MAX, S_HARD_LIMIT,
+    S_ZONE1_LIMIT, S_ZONE3_LIMIT, S_DISCHARGE_MAX, S_HARD_LIMIT, S_HARD_LIMIT_Z0, S_HARD_LIMIT_Z1,
     S_OFFSET_1, S_OFFSET_2, S_PV_RESERVE,
     S_SURPLUS_ENABLED, S_SURPLUS_SOC_THRESHOLD, S_SURPLUS_SOC_HYST, S_SURPLUS_PV_HYST,
     S_SURPLUS_FORECAST_ENABLED, S_SURPLUS_FORECAST_SENSOR, S_SURPLUS_FORECAST_THRESHOLD,
@@ -106,6 +106,11 @@ class SolakonCoordinator:
         """Einstellungen laden, State-Listener starten."""
         stored = await self._store.async_load()
         if stored:
+            if S_HARD_LIMIT_Z0 not in stored and S_HARD_LIMIT_Z1 not in stored:
+                old = stored.get(S_HARD_LIMIT, SETTINGS_DEFAULTS[S_HARD_LIMIT])
+                stored[S_HARD_LIMIT_Z0] = old
+                stored[S_HARD_LIMIT_Z1] = old
+                await self._store.async_save({**SETTINGS_DEFAULTS, **stored})
             self.settings = {**SETTINGS_DEFAULTS, **stored}
             self.cycle_active = bool(stored.get("cycle_active", False))
             self.surplus_active = bool(stored.get("surplus_active", False))
@@ -543,8 +548,9 @@ class SolakonCoordinator:
         # ── 2. Settings auslesen ─────────────────────────────────────────────
         zone1_limit = int(s[S_ZONE1_LIMIT])
         zone3_limit = int(s[S_ZONE3_LIMIT])
-        hard_limit = int(s[S_HARD_LIMIT])
-        await self._sync_export_limit(hard_limit)
+        hard_limit_z0 = int(s.get(S_HARD_LIMIT_Z0, s.get(S_HARD_LIMIT, 800)))
+        hard_limit_z1 = int(s.get(S_HARD_LIMIT_Z1, s.get(S_HARD_LIMIT, 800)))
+        await self._sync_export_limit(max(hard_limit_z0, hard_limit_z1))
         tolerance = int(s[S_TOLERANCE])
         wait_time = int(s[S_WAIT_TIME])
         p_factor = float(s[S_P_FACTOR])
@@ -601,7 +607,8 @@ class SolakonCoordinator:
 
         error_share, allocated_power = self._compute_distribution()
         self.allocated_power = allocated_power
-        effective_hard = int(allocated_power) if allocated_power is not None else hard_limit
+        effective_hard    = min(int(allocated_power), hard_limit_z0) if allocated_power is not None else hard_limit_z0
+        effective_hard_z1 = min(int(allocated_power), hard_limit_z1) if allocated_power is not None else hard_limit_z1
 
         pv_forecast_enabled = bool(s.get(S_PV_FORECAST_ENABLED, False))
         pv_forecast_sensor = str(s.get(S_PV_FORECAST_SENSOR, ""))
@@ -617,7 +624,7 @@ class SolakonCoordinator:
                 # fällt sie darunter, greift wieder die normale SOC-/Verbrauchslogik.
                 self.forecast_surplus_forced = (
                     self._flt_kilo_normalized(surplus_forecast_sensor) >= surplus_forecast_threshold
-                    and solar > hard_limit
+                    and solar > hard_limit_z0
                 )
             else:
                 self.forecast_surplus_forced = False
@@ -682,7 +689,7 @@ class SolakonCoordinator:
                     or (solar == 0 and actual == 0 and prev_actual == 0)
                 )
             )
-            # Forcierung ist bereits an solar > hard_limit gekoppelt → SOC-unabhängiger Eintritt.
+            # Forcierung ist bereits an solar > hard_limit_z0 gekoppelt → SOC-unabhängiger Eintritt.
             surplus_entry = normal_entry or self.forecast_surplus_forced
 
             # Austritt: bei aktiver Forcierung gesperrt (SOC- und Verbrauchsterm ausgeklammert),
@@ -716,7 +723,7 @@ class SolakonCoordinator:
             soc=soc, grid=grid, solar=solar, actual=actual, mode=mode,
             current_power=current_power,
             zone1_limit=zone1_limit, zone3_limit=zone3_limit,
-            hard_limit=hard_limit, discharge_max=discharge_max,
+            discharge_max=discharge_max,
             surplus_enabled=surplus_enabled, new_surplus=new_surplus,
             surplus_pv_hyst=surplus_pv_hyst,
             ac_enabled=ac_enabled, ac_soc_target=ac_soc_target,
@@ -742,9 +749,9 @@ class SolakonCoordinator:
         if mode == MODE_AC_CHARGE:
             dynamic_max = ac_power_limit
         elif self.cycle_active:
-            dynamic_max = effective_hard
+            dynamic_max = effective_hard_z1
         else:
-            dynamic_max = min(effective_hard, max(0, solar - pv_reserve))
+            dynamic_max = min(effective_hard_z1, max(0, solar - pv_reserve))
 
         target_offset = offset_1 if self.cycle_active else offset_2
 

@@ -122,9 +122,13 @@
       "l": "PV-Ladereserve (W)",
       "d": "Zone-2-Output-Limit: min(Hard-Limit, max(0, PV − Reserve)) — PV-basiertes Limit, durch Hard-Limit gedeckelt. Gleichzeitig Schwelle für Nachtabschaltung: Zone 2 deaktiviert wenn PV < Reserve."
     },
-    "hard_limit": {
-      "l": "Hard Limit (W)",
-      "d": "Absolute Ausgangsleistungs-Obergrenze in allen Zonen. In Zone 2 gilt das kombinierte Limit min(Hard-Limit, max(0, PV − Reserve)) — Hard-Limit deckt nach oben, PV-basierter Wert kann darunter liegen. Sinkt die PV plötzlich, läuft der PI weiter und korrigiert den Output nach unten (kein Einfrieren bei Überschreitung des Limits). Ist die optionale Netz-Ausgangsleistungsgrenze-Entität (im Setup) konfiguriert, wird dieser Wert bei jedem Regelzyklus dorthin geschrieben sofern er abweicht — korrigiert externe Änderungen am Hardware-Limit automatisch zurück."
+    "hard_limit_z0": {
+      "l": "Hard Limit Zone 0 — Surplus (W)",
+      "d": "Ausgangsleistungs-Obergrenze in Zone 0 (Überschuss-Einspeisung). Der WR wird auf diesen Wert gesetzt solange Surplus aktiv ist. Typisch: gesetzliches Maximum (z. B. 800 W). Ist die optionale Export-Limit-Entität konfiguriert, wird max(Z0, Z1) bei jedem Zyklus dorthin geschrieben."
+    },
+    "hard_limit_z1": {
+      "l": "Hard Limit Zone 1 / 2 — Entladung (W)",
+      "d": "Ausgangsleistungs-Obergrenze in Zone 1 (Entladung) und Zone 2 (PV-Tracking). In Zone 2 gilt zusätzlich das PV-basierte Limit min(Hard-Limit-Z1, max(0, PV − Reserve)). Sinkt die PV plötzlich, läuft der PI weiter und korrigiert den Output nach unten."
     },
     "discharge_max": {
       "l": "Max. Entladestrom Zone 1 (A)",

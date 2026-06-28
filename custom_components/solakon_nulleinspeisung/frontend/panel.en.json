@@ -122,9 +122,13 @@
       "l": "PV Reserve (W)",
       "d": "Zone-2 output limit: min(hard limit, max(0, PV − reserve)) — PV-based limit capped by hard limit. Also the threshold for night shutdown: Zone 2 disabled when PV < reserve."
     },
-    "hard_limit": {
-      "l": "Hard Limit (W)",
-      "d": "Absolute output power ceiling in all zones. In Zone 2 the combined limit min(hard limit, max(0, PV − reserve)) applies — hard limit caps from above, the PV-based value may be lower. If PV drops suddenly, the PI controller keeps running and corrects output downward (no freezing when output exceeds the limit). If the optional grid export power limit entity (set during setup) is configured, this value is written to it on every regulation cycle when it deviates — automatically reverting external changes to the hardware limit."
+    "hard_limit_z0": {
+      "l": "Hard Limit Zone 0 — Surplus (W)",
+      "d": "Output power ceiling in Zone 0 (surplus feed-in). The inverter is set to this value while surplus is active. Typically the legal maximum (e.g. 800 W). If the optional export-limit entity is configured, max(Z0, Z1) is written to it on every cycle."
+    },
+    "hard_limit_z1": {
+      "l": "Hard Limit Zone 1 / 2 — Discharge (W)",
+      "d": "Output power ceiling in Zone 1 (discharge) and Zone 2 (PV tracking). In Zone 2 the combined limit min(hard limit Z1, max(0, PV − reserve)) applies. If PV drops suddenly, the PI controller keeps running and corrects output downward."
     },
     "discharge_max": {
       "l": "Max. Discharge Current Zone 1 (A)",
