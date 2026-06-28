@@ -39,11 +39,11 @@
     },
     "zones": {
       "summary": "SOC-Zonenlogik — Verhalten abhängig vom Batterieladestand",
-      "text": "Zone 0 (Überschuss, optional): SOC ≥ Export-Schwelle UND PV-Überschuss → Output auf Hard Limit. Entladestrom 2 A. PI-Integral eingefroren.\n\nZone 1 (aggressiv): SOC > Zone-1-Schwelle → hoher Entladestrom, Offset 1. Läuft durch bis SOC ≤ Zone-3-Schwelle — kein Yo-Yo-Effekt.\n\nZone 2 (schonend): Zone-3 < SOC ≤ Zone-1 → 0 A Entladestrom, dynamisches Output-Limit (min(Hard-Limit, max(0, PV − Reserve))), Offset 2.\n\nZone 3 (Sicherheitsstopp): SOC ≤ Zone-3-Schwelle → Output 0 W, Modus Disabled. AC Laden bleibt trotzdem möglich."
+      "text": "Zone 0 (Überschuss, optional): SOC ≥ Export-Schwelle UND PV-Überschuss → Output auf Hard-Limit-Z0. Entladestrom 2 A. PI-Integral eingefroren.\n\nZone 1 (aggressiv): SOC > Zone-1-Schwelle → hoher Entladestrom, Offset 1. Läuft durch bis SOC ≤ Zone-3-Schwelle — kein Yo-Yo-Effekt.\n\nZone 2 (schonend): Zone-3 < SOC ≤ Zone-1 → 0 A Entladestrom, dynamisches Output-Limit (min(Hard-Limit-Z1, max(0, PV − Reserve))), Offset 2.\n\nZone 3 (Sicherheitsstopp): SOC ≤ Zone-3-Schwelle → Output 0 W, Modus Disabled. AC Laden bleibt trotzdem möglich."
     },
     "surplus": {
       "summary": "Überschuss-Einspeisung — Zone 0 aktivieren",
-      "text": "Höchste Priorität — blockiert Tarif-Laden, Discharge-Lock und AC Laden solange Zone 0 aktiv.\n\nNormaler Eintritt: SOC ≥ SOC-Schwelle UND (PV > Verbrauchsreferenz + PV-Hysterese ODER (PV = 0 UND Output = 0 über zwei aufeinanderfolgende Zyklen — Entprellung gegen nächtliches Wieder-Eintreten)).\nForecast-Eintritt: Vorhersage ≥ Schwelle UND PV > Hard Limit (kein SOC-Gate).\n\nAustritt: PV ≤ Verbrauchsreferenz − PV-Hysterese ODER SOC < (Schwelle − SOC-Hysterese).\nVerbrauchsreferenz: Einzelbetrieb = Output + Grid. Multi-Instanz = (ΣOutput_alle + Grid) × Fehler-Anteil — so bleibt das Totband relativ zum wahren Hausverbrauch konsistent.\nDie Forecast-Forcierung ist an PV > Hard Limit gekoppelt: solange sie aktiv ist, bleibt der Austritt gesperrt (SOC- und Verbrauchsterm ausgeklammert — Abregel-Vermeidung). Fällt die PV unter das Hard Limit (auch nachts: PV = 0), endet die Forcierung und der normale Austritt greift. Zone 3 (Safety) beendet Surplus zusätzlich jederzeit.\n\nOutput wird auf Hard Limit gesetzt. Integral eingefroren (kein PI-Aufruf)."
+      "text": "Höchste Priorität — blockiert Tarif-Laden, Discharge-Lock und AC Laden solange Zone 0 aktiv.\n\nNormaler Eintritt: SOC ≥ SOC-Schwelle UND (PV > Verbrauchsreferenz + PV-Hysterese ODER (PV = 0 UND Output = 0 über zwei aufeinanderfolgende Zyklen — Entprellung gegen nächtliches Wieder-Eintreten)).\nForecast-Eintritt: Vorhersage ≥ Schwelle UND PV > Hard-Limit-Z0 (kein SOC-Gate).\n\nAustritt: PV ≤ Verbrauchsreferenz − PV-Hysterese ODER SOC < (Schwelle − SOC-Hysterese).\nVerbrauchsreferenz: Einzelbetrieb = Output + Grid. Multi-Instanz = (ΣOutput_alle + Grid) × Fehler-Anteil — so bleibt das Totband relativ zum wahren Hausverbrauch konsistent.\nDie Forecast-Forcierung ist an PV > Hard-Limit-Z0 gekoppelt: solange sie aktiv ist, bleibt der Austritt gesperrt (SOC- und Verbrauchsterm ausgeklammert — Abregel-Vermeidung). Fällt die PV unter Hard-Limit-Z0 (auch nachts: PV = 0), endet die Forcierung und der normale Austritt greift. Zone 3 (Safety) beendet Surplus zusätzlich jederzeit.\n\nOutput wird auf Hard-Limit-Z0 gesetzt. Integral eingefroren (kein PI-Aufruf)."
     },
     "ac": {
       "summary": "AC Laden — Netz lädt die Batterie",
@@ -120,7 +120,7 @@
     },
     "pv_reserve": {
       "l": "PV-Ladereserve (W)",
-      "d": "Zone-2-Output-Limit: min(Hard-Limit, max(0, PV − Reserve)) — PV-basiertes Limit, durch Hard-Limit gedeckelt. Gleichzeitig Schwelle für Nachtabschaltung: Zone 2 deaktiviert wenn PV < Reserve."
+      "d": "Zone-2-Output-Limit: min(Hard-Limit-Z1, max(0, PV − Reserve)) — PV-basiertes Limit, durch Hard-Limit-Z1 gedeckelt. Gleichzeitig Schwelle für Nachtabschaltung: Zone 2 deaktiviert wenn PV < Reserve."
     },
     "hard_limit_z0": {
       "l": "Hard Limit Zone 0 — Surplus (W)",
@@ -148,7 +148,7 @@
     },
     "surplus_enabled": {
       "l": "Überschuss-Einspeisung aktivieren",
-      "d": "Höchste Priorität — blockiert Tarif-Laden, Discharge-Lock und AC Laden solange Zone 0 aktiv. Normal: SOC ≥ Schwelle + PV-Überschuss. Mit Forecast: PV > Hard Limit genügt (kein SOC-Gate); solange die PV über dem Hard Limit liegt, ist der Austritt gesperrt — fällt sie darunter, greift die normale SOC-/Verbrauchslogik."
+      "d": "Höchste Priorität — blockiert Tarif-Laden, Discharge-Lock und AC Laden solange Zone 0 aktiv. Normal: SOC ≥ Schwelle + PV-Überschuss. Mit Forecast: PV > Hard-Limit-Z0 genügt (kein SOC-Gate); solange die PV über Hard-Limit-Z0 liegt, ist der Austritt gesperrt — fällt sie darunter, greift die normale SOC-/Verbrauchslogik."
     },
     "surplus_soc_threshold": {
       "l": "SOC-Schwelle (%)",
@@ -164,7 +164,7 @@
     },
     "surplus_forecast_enabled": {
       "l": "Forecast-Erzwingung aktivieren",
-      "d": "Wenn Vorhersage ≥ Schwelle: Surplus startet sobald PV > Hard Limit (kein SOC-Gate) und bleibt aktiv solange die PV über dem Hard Limit liegt — so wird bei großem PV-Tag früh eingespeist statt abgeregelt, ohne auf vollen Akku zu warten. Fällt die PV unter das Hard Limit (auch nachts: PV = 0), endet die Forcierung und der normale Austritt (SOC ODER Verbrauch) greift — kein Hängenbleiben, auch bei Tages-/Morgen-Vorhersage. Zone 3 (Safety) beendet zusätzlich jederzeit."
+      "d": "Wenn Vorhersage ≥ Schwelle: Surplus startet sobald PV > Hard-Limit-Z0 (kein SOC-Gate) und bleibt aktiv solange die PV über Hard-Limit-Z0 liegt — so wird bei großem PV-Tag früh eingespeist statt abgeregelt, ohne auf vollen Akku zu warten. Fällt die PV unter Hard-Limit-Z0 (auch nachts: PV = 0), endet die Forcierung und der normale Austritt (SOC ODER Verbrauch) greift — kein Hängenbleiben, auch bei Tages-/Morgen-Vorhersage. Zone 3 (Safety) beendet zusätzlich jederzeit."
     },
     "surplus_forecast_sensor": {
       "l": "Vorhersage-Sensor",
@@ -172,7 +172,7 @@
     },
     "surplus_forecast_threshold": {
       "l": "Mindest-Ertrag für Surplus",
-      "d": "PV > Hard Limit + Forecast ≥ Schwelle → Surplus startet ohne SOC-Bedingung und bleibt aktiv solange die PV über dem Hard Limit liegt (bzw. der Forecast über der Schwelle)."
+      "d": "PV > Hard-Limit-Z0 + Forecast ≥ Schwelle → Surplus startet ohne SOC-Bedingung und bleibt aktiv solange die PV über Hard-Limit-Z0 liegt."
     },
     "ac_enabled": {
       "l": "AC Laden aktivieren",
