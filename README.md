@@ -207,7 +207,7 @@ SOC-Zonenlogik mit allen Leistungs- und Offset-Parametern.
 | Hard Limit Z1 — Entladung (W) | Ausgangsleistungs-Obergrenze in Zone 1 und Zone 2. In Zone 2 gilt `min(Z1, max(0, PV − Reserve))`. Wird als `max(Z0, Z1)` in die optionale Export-Limit-Entität geschrieben. | 800 |
 | Zone 1 Offset (W) | Statischer Zielwert in Zone 1. Bei aktivem Dyn. Offset überschrieben | 20–50 |
 | Zone 2 Offset (W) | Statischer Zielwert in Zone 2 | 10–30 |
-| PV-Ladereserve (W) | Zone-2-Output-Limit: `max(0, PV − Reserve)`. Dient auch als Schwelle für Nachtabschaltung | 30–100 |
+| PV-Ladereserve (W) | Zone-2-Output-Limit: `min(Hard-Limit Z1, max(0, PV − Reserve))`. Dient auch als Schwelle für Nachtabschaltung | 30–100 |
 
 Ein positiver Offset von z. B. 30 W lässt den Regler auf 30 W Netzbezug regeln (Sicherheitspuffer gegen versehentliche Einspeisung). Ein negativer Wert lässt den Regler gezielt leicht einspeisen.
 
