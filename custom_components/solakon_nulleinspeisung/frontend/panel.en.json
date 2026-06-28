@@ -124,7 +124,7 @@
     },
     "hard_limit": {
       "l": "Hard Limit (W)",
-      "d": "Absolute output power ceiling in all zones. In Zone 2 the dynamic PV-based limit also applies (max(0, PV − reserve)) — whichever is smaller determines the ceiling. If the optional grid export power limit entity (set during setup) is configured, this value is written to it on every regulation cycle when it deviates — automatically reverting external changes to the hardware limit."
+      "d": "Absolute output power ceiling in all zones. In Zone 2 the combined limit min(hard limit, max(0, PV − reserve)) applies — hard limit caps from above, the PV-based value may be lower. If PV drops suddenly, the PI controller keeps running and corrects output downward (no freezing when output exceeds the limit). If the optional grid export power limit entity (set during setup) is configured, this value is written to it on every regulation cycle when it deviates — automatically reverting external changes to the hardware limit."
     },
     "discharge_max": {
       "l": "Max. Discharge Current Zone 1 (A)",

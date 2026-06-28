@@ -124,7 +124,7 @@
     },
     "hard_limit": {
       "l": "Hard Limit (W)",
-      "d": "Absolute Ausgangsleistungs-Obergrenze in allen Zonen. In Zone 2 gilt zusätzlich das dynamische PV-basierte Limit (max(0, PV − Reserve)) — der jeweils kleinere Wert bestimmt die Decke. Ist die optionale Netz-Ausgangsleistungsgrenze-Entität (im Setup) konfiguriert, wird dieser Wert bei jedem Regelzyklus dorthin geschrieben sofern er abweicht — korrigiert externe Änderungen am Hardware-Limit automatisch zurück."
+      "d": "Absolute Ausgangsleistungs-Obergrenze in allen Zonen. In Zone 2 gilt das kombinierte Limit min(Hard-Limit, max(0, PV − Reserve)) — Hard-Limit deckt nach oben, PV-basierter Wert kann darunter liegen. Sinkt die PV plötzlich, läuft der PI weiter und korrigiert den Output nach unten (kein Einfrieren bei Überschreitung des Limits). Ist die optionale Netz-Ausgangsleistungsgrenze-Entität (im Setup) konfiguriert, wird dieser Wert bei jedem Regelzyklus dorthin geschrieben sofern er abweicht — korrigiert externe Änderungen am Hardware-Limit automatisch zurück."
     },
     "discharge_max": {
       "l": "Max. Entladestrom Zone 1 (A)",
