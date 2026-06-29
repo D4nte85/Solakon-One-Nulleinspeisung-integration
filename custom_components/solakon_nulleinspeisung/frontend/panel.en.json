@@ -35,7 +35,7 @@
   "tab_docs": {
     "pi": {
       "summary": "PI Controller — Core of the control loop",
-      "text": "Controlled variable: grid power (positive = import, negative = export). Manipulated variable: AC output power of the inverter.\n\nP-part: responds immediately to the current deviation (grid − offset).\nI-part: accumulates deviations over time, eliminates steady-state error.\nAnti-windup: integral clamped to ±max output power (dynamic_max).\nIntegral reset: on most zone transitions — except case D (recovery), C (zone-3 safety) and G (AC charge start).\nTolerance decay: −5 %/cycle when error ≤ dead band and |integral| > 10.\nZone 0: integral frozen, no PI call.\n\nError calculation depends on mode:\n• Normal: raw_error = (grid − offset) × error_share\n• AC Charge: raw_error = (offset − grid) × error_share (inverted)\nError share: with multiple instances, proportional to usable capacity (SOC − zone-3 threshold). Always 1.0 with a single instance.\n\nSelf-Adjusting Wait: After each output change the controller waits for the actual inverter output power instead of a fixed pause. Once actual_power reaches the target ±tolerance, the controller continues. The configured wait time acts as a maximum timeout.\n\nStarting values: P = 0.5, I = 0. Increase P gradually until output starts oscillating, then step back. Only introduce I once P-control is stable."
+      "text": "Controlled variable: grid power (positive = import, negative = export). Manipulated variable: AC output power of the inverter.\n\nP-part: responds immediately to the current deviation (grid − offset).\nI-part: accumulates deviations over time, eliminates steady-state error.\nAnti-windup: back-calculation — after each control action the integral is corrected to the value that produces the actual (possibly clamped) output. When output is not clamped, this is identical to normal accumulation.\nIntegral reset: on most zone transitions — except case D (recovery), C (zone-3 safety) and G (AC charge start).\nTolerance decay: −5 %/cycle when error ≤ dead band and |integral| > 10.\nZone 0: integral frozen, no PI call.\n\nError calculation depends on mode:\n• Normal: raw_error = (grid − offset) × error_share\n• AC Charge: raw_error = (offset − grid) × error_share (inverted)\nError share: with multiple instances, proportional to usable capacity (SOC − zone-3 threshold). Always 1.0 with a single instance.\n\nSelf-Adjusting Wait: After each output change the controller waits for the actual inverter output power instead of a fixed pause. Once actual_power reaches the target ±tolerance, the controller continues. The configured wait time acts as a maximum timeout.\n\nStarting values: P = 0.5, I = 0. Increase P gradually until output starts oscillating, then step back. Only introduce I once P-control is stable."
     },
     "zones": {
       "summary": "SOC Zone Logic — behaviour based on battery state of charge",
@@ -355,7 +355,7 @@
   },
   "debug": {
     "pi_hdr":     "🔄 PI Integral",
-    "pi_desc":    "Manually resets the I-part of the PI controller to 0. Useful after a manual intervention or strong integral windup.",
+    "pi_desc":    "Manually resets the I-part of the PI controller to 0. Useful after a manual intervention.",
     "reset_btn":  "🔄 Reset Integral",
     "zone_hdr":   "🔁 Set Zone Manually",
     "zone_desc":  "Manually switches the discharge cycle and resets the integral.",

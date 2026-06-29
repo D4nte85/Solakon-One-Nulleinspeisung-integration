@@ -1184,7 +1184,7 @@ class SolakonCoordinator:
         ac_charge_mode: bool = False,
         error_share: float = 1.0,
     ) -> float:
-        """PI-Regler-Berechnung mit modusabhängiger Fehlerrichtung."""
+        """PI-Regler-Berechnung mit modusabhängiger Fehlerrichtung und Anti-Windup via Back-Calculation."""
         if ac_charge_mode:
             raw_error = (target_offset - grid_power) * error_share
         else:
@@ -1195,13 +1195,17 @@ class SolakonCoordinator:
         else:
             error = max(raw_error, 0 - current_power)
 
-        integral_new = max(-max_power, min(max_power, self.integral + error))
-        self.integral = integral_new
-
-        correction = error * p_factor + integral_new * i_factor
+        integral_candidate = self.integral + error
+        correction = error * p_factor + integral_candidate * i_factor
         new_power = current_power + correction
-
         final = max(0, min(max_power, new_power))
+
+        if i_factor != 0:
+            back_calc = (final - current_power - error * p_factor) / i_factor
+            self.integral = max(-max_power, min(max_power, back_calc))
+        else:
+            self.integral = max(-max_power, min(max_power, integral_candidate))
+
         return round(final, 1)
 
     # ── Zonen-Display ────────────────────────────────────────────────────────
