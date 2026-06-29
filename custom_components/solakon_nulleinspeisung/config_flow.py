@@ -116,13 +116,10 @@ class SolakonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def async_get_options_flow(
         entry: config_entries.ConfigEntry,
     ) -> "SolakonOptionsFlow":
-        return SolakonOptionsFlow(entry)
+        return SolakonOptionsFlow()
 
 
 class SolakonOptionsFlow(config_entries.OptionsFlow):
-    def __init__(self, entry: config_entries.ConfigEntry) -> None:
-        self._entry = entry
-
     async def async_step_init(
         self, user_input: dict | None = None
     ) -> FlowResult:
@@ -132,13 +129,13 @@ class SolakonOptionsFlow(config_entries.OptionsFlow):
             # aktualisieren statt in options zu schreiben. Der Update-Listener in
             # __init__ lädt den Eintrag danach neu und re-registriert die Tracker.
             self.hass.config_entries.async_update_entry(
-                self._entry,
-                data={**self._entry.data, **user_input},
+                self.config_entry,
+                data={**self.config_entry.data, **user_input},
             )
             return self.async_create_entry(title="", data={})
 
         defaults = _get_defaults(self.hass)
         return self.async_show_form(
             step_id="init",
-            data_schema=_schema(self._entry.data, defaults),
+            data_schema=_schema(self.config_entry.data, defaults),
         )
