@@ -233,7 +233,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     try:
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     except Exception as ex:
-        hass.data[DOMAIN].pop(entry.entry_id, None)
+        coord = hass.data[DOMAIN].pop(entry.entry_id, None)
+        if coord:
+            await coord.async_shutdown()
         raise ConfigEntryNotReady(f"Solakon: Platform-Setup fehlgeschlagen: {ex}") from ex
 
     return True

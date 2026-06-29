@@ -138,6 +138,8 @@ class SolakonCoordinator:
 
         self._update_tariff_tracker()
         self._update_periodic_tracker()
+        self._update_forecast_tracker()
+        self._update_surplus_forecast_tracker()
 
     async def async_shutdown(self) -> None:
         """Listener abräumen, Integral speichern."""
@@ -720,19 +722,16 @@ class SolakonCoordinator:
 
         # ── 5. Falls / Zonenwechsel ──────────────────────────────────────────
         fall_executed = await self._execute_falls(
-            soc=soc, grid=grid, solar=solar, actual=actual, mode=mode,
-            current_power=current_power,
+            soc=soc, grid=grid, actual=actual, mode=mode,
             zone1_limit=zone1_limit, zone3_limit=zone3_limit,
-            discharge_max=discharge_max,
             surplus_enabled=surplus_enabled, new_surplus=new_surplus,
-            surplus_pv_hyst=surplus_pv_hyst,
             ac_enabled=ac_enabled, ac_soc_target=ac_soc_target,
             ac_hysteresis=ac_hysteresis, ac_offset=ac_offset,
             tariff_enabled=effective_tariff_enabled, tariff_price=tariff_price,
             tariff_price_valid=tariff_price_valid,
             tariff_cheap=tariff_cheap, tariff_exp=tariff_exp,
             tariff_soc=tariff_soc, tariff_power=tariff_power,
-            is_night=is_night, pv_reserve=pv_reserve,
+            is_night=is_night,
         )
         if fall_executed:
             self.active_fall = fall_executed
@@ -762,6 +761,8 @@ class SolakonCoordinator:
         # ── 7. PI-Gate ───────────────────────────────────────────────────────
         if mode not in (MODE_DISCHARGE, MODE_AC_CHARGE):
             self._update_zone_display(soc, zone1_limit, zone3_limit, mode)
+            if (self.cycle_active, self.surplus_active, self.ac_charge_active, self.tariff_charge_active) != _prev_flags:
+                self._store.async_delay_save(self._store_data, 5)
             self.notify_listeners()
             return
 
@@ -772,7 +773,6 @@ class SolakonCoordinator:
         # ── PI-Pfade ─────────────────────────────────────────────────────────
         if self.surplus_active:
             await self._set_output(effective_hard)
-            self.mode_label = "Überschuss-Einspeisung"
             self._set_last_action(f"Zone 0: Output → {effective_hard} W")
             await self._wait_for_target(effective_hard)
 
@@ -809,7 +809,6 @@ class SolakonCoordinator:
             else:
                 if abs(self.integral) > 10:
                     self.integral *= 0.95
-                    self._set_last_action("Integral-Decay (5%)")
 
         # ── 10. Display + Flag-Persistenz ────────────────────────────────────
         self._update_zone_display(soc, zone1_limit, zone3_limit, mode)
