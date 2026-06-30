@@ -131,7 +131,6 @@ S_DYN_AC_NEGATIVE = "dyn_ac_negative"
 S_DIST_GLOBAL_MAX   = "global_max_power"
 S_DIST_MODE         = "distribution_mode"   # "equal" | "weighted"
 S_DIST_SOC_PV_BAL   = "soc_pv_balance"     # 0.0–1.0
-S_DIST_PV_INFLUENCE = "pv_influence"        # 0.0–1.0
 
 SETTINGS_DEFAULTS: dict = {
     S_REGULATION_ENABLED: False,

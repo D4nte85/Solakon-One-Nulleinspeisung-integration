@@ -85,9 +85,6 @@ soc_anteil_i = nutzbar_i / Σ nutzbar_j
 pv_anteil_i  = PV_i / Σ PV_j
 w_i          = (1 − soc_pv_balance) × soc_anteil_i + soc_pv_balance × pv_anteil_i
 
-# Gesamtleistung (PV-Einfluss):
-total_power = global_max × (1 − pv_influence) + min(ΣPV, global_max) × pv_influence
-
 # Ergebnis pro Instanz:
 allocated_power_i = total_power × w_i   → effektives Hard-Limit in Zone 1 / 2
 error_share_i     = w_i                 → Anteil am Netzfehler im PI-Regler
@@ -104,7 +101,6 @@ Im Panel wird bei mehreren Instanzen ein zusätzlicher **Verteilungs-Tab** einge
 | Parameter | Beschreibung |
 |-----------|-------------|
 | Gesamte Max. Ausgangsleistung (W) | Absolute Obergrenze aller Instanzen zusammen |
-| PV-Einfluss (0–1) | 0,0 = immer Global-Max · 1,0 = durch PV begrenzt · 0,5 = Mittelweg |
 | Verteilungs-Modus | Gleichverteilung oder Gewichtet (SOC/PV) |
 | SOC ↔ PV Gewichtung | 0,0 = nur SOC · 1,0 = nur PV (nur Modus Gewichtet) |
 

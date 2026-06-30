@@ -380,8 +380,6 @@
     "global_hdr":         "🌐 Global Settings",
     "global_max_lbl":     "Total Max. Output Power (W)",
     "global_max_desc":    "Absolute ceiling for all instances combined — split according to weights. Default: 800 W (legal feed-in maximum).",
-    "pv_influence_lbl":   "PV Influence on Total Power (0–1)",
-    "pv_influence_desc":  "0.0 → always distribute global max · 1.0 → total power = min(PV, global max) · 0.5 → midpoint. Formula: global max × (1−influence) + min(PV, global max) × influence",
     "mode_hdr":           "⚖️ Distribution Mode",
     "mode_lbl":           "Mode",
     "mode_desc":          "Equal → each active instance receives the same share\nWeighted → split by SOC ratio and/or PV power of the instance",

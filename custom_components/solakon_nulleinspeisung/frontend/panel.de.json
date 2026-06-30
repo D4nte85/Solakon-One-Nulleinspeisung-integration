@@ -380,8 +380,6 @@
     "global_hdr":         "🌐 Globale Einstellungen",
     "global_max_lbl":     "Gesamte Max. Ausgangsleistung (W)",
     "global_max_desc":    "Absolute Obergrenze aller Instanzen zusammen — wird nach Gewichtung aufgeteilt. Standard: 800 W (gesetzliches Einspeise-Maximum).",
-    "pv_influence_lbl":   "PV-Einfluss auf Gesamtleistung (0–1)",
-    "pv_influence_desc":  "0,0 → immer Global-Max verteilt · 1,0 → Gesamtleistung = min(PV, Global-Max) · 0,5 → Mittelweg. Formel: Global-Max × (1−Einfluss) + min(PV, Global-Max) × Einfluss",
     "mode_hdr":           "⚖️ Verteilungs-Modus",
     "mode_lbl":           "Modus",
     "mode_desc":          "Gleichverteilung → jede aktive Instanz erhält gleich viel\nGewichtet → Aufteilung nach SOC-Anteil und/oder PV-Leistung der Instanz",

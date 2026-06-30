@@ -1096,7 +1096,6 @@ class SolakonPanel extends HTMLElement {
     const mode       = this._distVal("distribution_mode") ?? "equal";
     const globalMax  = this._distVal("global_max_power")  ?? 800;
     const balance    = this._distVal("soc_pv_balance")    ?? 0.5;
-    const pvInfluence = this._distVal("pv_influence")     ?? 0.5;
 
     c.innerHTML = `
       <div class="col-card top-item">
@@ -1106,11 +1105,6 @@ class SolakonPanel extends HTMLElement {
             <label>${dt.global_max_lbl || ""}</label>
             <div class="desc">${dt.global_max_desc || ""}</div>
             <input type="number" min="0" max="9600" step="10" value="${globalMax}" data-dist-key="global_max_power"/>
-          </div>
-          <div class="field">
-            <label>${dt.pv_influence_lbl || ""}</label>
-            <div class="desc">${dt.pv_influence_desc || ""}</div>
-            <input type="number" min="0" max="1" step="0.05" value="${pvInfluence}" data-dist-key="pv_influence"/>
           </div>
         </div>
       </div>

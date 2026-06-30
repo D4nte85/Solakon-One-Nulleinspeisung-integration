@@ -281,7 +281,6 @@ DIST_DEFAULTS = {
     "global_max_power":  800,
     "distribution_mode": "equal",
     "soc_pv_balance":    0.5,
-    "pv_influence":      0.5,
 }
 
 

@@ -1094,16 +1094,8 @@ class SolakonCoordinator:
         dist = self.hass.data.get(f"{DOMAIN}_dist_config") or {}
         global_max  = float(dist.get("global_max_power", 800))
         mode        = dist.get("distribution_mode", "equal")
-        pv_infl     = float(dist.get("pv_influence", 0.5))
         soc_pv_bal  = float(dist.get("soc_pv_balance", 0.5))
-
-        # Gesamt-PV = Summe aller Instanz-Solarsensoren
-        total_pv = sum(
-            c._flt_power(c.entry.data.get(CONF_SOLAR_SENSOR, ""))
-            for c in active.values()
-        )
-        pv_capped   = min(total_pv, global_max)
-        total_power = global_max * (1.0 - pv_infl) + pv_capped * pv_infl
+        total_power = global_max
 
         if mode == "equal":
             w_self = 1.0 / n
