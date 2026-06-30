@@ -79,11 +79,9 @@ Laufen mehrere Instanzen gleichzeitig, berechnet jeder Coordinator seinen **Gewi
 # Gleichverteilung (Standard):
 w_i = 1 / Anzahl_aktiver_Instanzen
 
-# Gewichtet:
-nutzbar_i   = (SOC_i − Zone-3-Schwelle_i) / 100 × Kapazität_kWh_i
-soc_anteil_i = nutzbar_i / Σ nutzbar_j
-pv_anteil_i  = PV_i / Σ PV_j
-w_i          = (1 − soc_pv_balance) × soc_anteil_i + soc_pv_balance × pv_anteil_i
+# SOC-gewichtet:
+nutzbar_i = (SOC_i − Zone-3-Schwelle_i) / 100 × Kapazität_kWh_i
+w_i       = nutzbar_i / Σ nutzbar_j
 
 # Ergebnis pro Instanz:
 allocated_power_i = total_power × w_i   → effektives Hard-Limit in Zone 1 / 2
@@ -101,8 +99,9 @@ Im Panel wird bei mehreren Instanzen ein zusätzlicher **Verteilungs-Tab** einge
 | Parameter | Beschreibung |
 |-----------|-------------|
 | Gesamte Max. Ausgangsleistung (W) | Absolute Obergrenze aller Instanzen zusammen |
-| Verteilungs-Modus | Gleichverteilung oder Gewichtet (SOC/PV) |
-| SOC ↔ PV Gewichtung | 0,0 = nur SOC · 1,0 = nur PV (nur Modus Gewichtet) |
+| Kapazitätsausgleich | Verteilt proportional zur Batteriekapazität — alle SOC sinken gleich schnell |
+| Kapazitätssensor (pro Instanz) | `sensor.solakon_one_batteriekapazitat` — optional, Standard = reine SOC-%-Gewichtung |
+| Verteilungs-Modus | Gleichverteilung oder SOC-gewichtet |
 
 ---
 

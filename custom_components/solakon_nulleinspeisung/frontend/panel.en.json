@@ -136,7 +136,7 @@
     },
     "battery_capacity_sensor": {
       "l": "Battery Capacity Sensor (kWh, Optional)",
-      "d": "Relevant for multi-instancing only: sensor.solakon_one_bms1_design_energy from the Solakon ONE device integration. Weights the error share proportional to usable energy — (SOC − min-SOC) / 100 × capacity_kWh. Leave empty = pure SOC-%-weighting. ⚠️ Set for all instances or none."
+      "d": "Relevant for multi-instancing only: sensor.solakon_one_battery_capacity from the Solakon ONE device integration. Weights the error share proportional to usable energy — (SOC − min-SOC) / 100 × capacity_kWh. Leave empty = pure SOC-%-weighting. ⚠️ Set for all instances or none."
     },
     "offset_1": {
       "l": "Offset Zone 1 (W)",

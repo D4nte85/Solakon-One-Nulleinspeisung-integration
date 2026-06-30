@@ -222,19 +222,27 @@ function renderOv(c){
   vd.innerHTML=`
     ${card('🌐 Globale Einstellungen','#0891b2',
       `<div class="field"><label>Gesamte Max. Ausgangsleistung (W)</label><div class="desc">Absolute Obergrenze aller Instanzen zusammen. Standard: 800 W.</div><input type="number" value="800" min="0" max="9600" step="10" oninput="dirtyDist()"></div>`)}
-    ${card('⚖️ Verteilungs-Modus','#7c3aed',
-      `<div class="field"><label>Modus</label><div class="desc">Gleichverteilung: gleich viel · Gewichtet: nach SOC/PV</div><select id="sel-mode" onchange="dirtyDist()"><option selected>Gleichverteilung</option><option>Gewichtet</option></select></div>
-       <div id="blk-w" class="dimmed"><div class="field"><label>SOC ←→ PV Gewichtung (0–1)</label><div class="desc">0,0 → nur SOC · 1,0 → nur PV · Nur bei Modus = Gewichtet</div><input type="number" value="0.5" min="0" max="1" step="0.05" oninput="dirtyDist()"></div></div>`)}
+    ${card('🔋 Kapazitätsausgleich','#059669',
+      `<div class="field"><label><input type="checkbox" id="cb-cap" onchange="dirtyDist()"> Kapazitätsausgleich aktivieren</label><div class="desc">Verteilt Leistung proportional zur Batteriekapazität, sodass der SOC aller Instanzen gleich schnell sinkt. Erfordert einen Kapazitätssensor (kWh) pro Instanz.</div></div>
+       <div class="desc" style="margin:6px 0 4px">Kapazitätssensor (kWh) pro Instanz:</div>
+       <div class="field"><label>Solakon A</label><input type="text" placeholder="sensor.solakon_one_batteriekapazitat" style="width:100%;box-sizing:border-box" oninput="dirtyDist()"></div>
+       <div class="field"><label>Solakon B</label><input type="text" placeholder="sensor.solakon_one_batteriekapazitat" style="width:100%;box-sizing:border-box" oninput="dirtyDist()"></div>`)}
+    <div id="blk-mode">
+      ${card('⚖️ Verteilungs-Modus','#7c3aed',
+        `<div class="field"><label>Modus</label><div class="desc">Gleichverteilung: gleich viel · SOC-gewichtet: nach nutzbarer Kapazität (SOC − Zone-3-Schwelle)</div><select onchange="dirtyDist()"><option selected>Gleichverteilung</option><option>SOC-gewichtet</option></select></div>`)}
+    </div>
     <div class="save-bar" id="save-dist">
       <span>Ungespeicherte Änderungen</span>
       <button id="save-dist-btn">💾 Speichern</button>
     </div>`;
 
   vd.querySelector('#save-dist-btn').addEventListener('click',()=>hideSave('save-dist'));
-  vd.querySelector('#sel-mode').addEventListener('change',function(){
-    const m=this.value;
-    vd.querySelector('#blk-w').className=m==='Gewichtet'?'':'dimmed';
-  });
+  const cbCap=vd.querySelector('#cb-cap'),blkMode=vd.querySelector('#blk-mode');
+  if(cbCap&&blkMode){
+    const applyCap=()=>{blkMode.className=cbCap.checked?'dimmed':'';};
+    applyCap();
+    cbCap.addEventListener('change',applyCap);
+  }
 }
 
 function rTab(d){

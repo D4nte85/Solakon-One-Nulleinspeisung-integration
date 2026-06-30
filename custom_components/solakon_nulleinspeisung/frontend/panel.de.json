@@ -136,7 +136,7 @@
     },
     "battery_capacity_sensor": {
       "l": "Batteriekapazitäts-Sensor (kWh, Optional)",
-      "d": "Nur für Multi-Instancing relevant: sensor.solakon_one_bms1_design_energy der Solakon-ONE-Geräte-Integration. Gewichtet den Netzfehler-Anteil proportional zur nutzbaren Energie — (SOC − Min-SOC) / 100 × Kapazität_kWh. Leer lassen = reine SOC-%-Gewichtung. ⚠️ Entweder für alle Instanzen setzen oder für keine."
+      "d": "Nur für Multi-Instancing relevant: sensor.solakon_one_batteriekapazitat der Solakon-ONE-Geräte-Integration. Gewichtet den Netzfehler-Anteil proportional zur nutzbaren Energie — (SOC − Min-SOC) / 100 × Kapazität_kWh. Leer lassen = reine SOC-%-Gewichtung. ⚠️ Entweder für alle Instanzen setzen oder für keine."
     },
     "offset_1": {
       "l": "Offset Zone 1 (W)",
