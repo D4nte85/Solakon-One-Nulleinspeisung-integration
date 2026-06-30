@@ -384,7 +384,7 @@
     "cap_toggle_lbl":          "Equal SOC drain across all instances",
     "cap_toggle_desc":         "Distributes power proportional to battery capacity so that the SOC of all instances drops at the same rate. Requires a capacity sensor (kWh) per instance below.",
     "cap_sensor_desc":         "Battery capacity sensor (in kWh) per instance — used to weight the power split:",
-    "cap_sensor_placeholder":  "sensor.solakon_one_batteriekapazitat",
+    "cap_sensor_placeholder":  "sensor.solakon_one_battery_capacity",
     "cap_overrides_mode":      "Distribution mode is overridden by capacity equalisation.",
     "mode_hdr":           "⚖️ Distribution Mode",
     "mode_lbl":           "Mode",
