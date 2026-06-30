@@ -1093,9 +1093,21 @@ class SolakonPanel extends HTMLElement {
       return;
     }
 
-    const mode       = this._distVal("distribution_mode") ?? "equal";
-    const globalMax  = this._distVal("global_max_power")  ?? 800;
-    const balance    = this._distVal("soc_pv_balance")    ?? 0.5;
+    const mode         = this._distVal("distribution_mode")  ?? "equal";
+    const globalMax    = this._distVal("global_max_power")   ?? 800;
+    const capWeighting = this._distVal("capacity_weighting") ?? false;
+
+    const instCards = this._instances.map(inst => {
+      const capSensor = this._distInstVal(inst.entry_id, "capacity_sensor");
+      return `
+        <div class="field">
+          <label>${inst.instance_name}</label>
+          <input type="text" placeholder="${dt.cap_sensor_placeholder || "sensor.battery_capacity_kwh"}"
+            value="${capSensor}"
+            data-dist-inst="${inst.entry_id}" data-dist-key="capacity_sensor"
+            style="width:100%;box-sizing:border-box"/>
+        </div>`;
+    }).join("");
 
     c.innerHTML = `
       <div class="col-card top-item">
@@ -1110,21 +1122,35 @@ class SolakonPanel extends HTMLElement {
       </div>
 
       <div class="col-card top-item">
+        <div class="col-header" style="background:#059669">${dt.cap_hdr || "🔋"}</div>
+        <div class="col-body">
+          <div class="field">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+              <input type="checkbox" data-dist-key="capacity_weighting" ${capWeighting ? "checked" : ""}
+                style="width:16px;height:16px;cursor:pointer"/>
+              ${dt.cap_toggle_lbl || ""}
+            </label>
+            <div class="desc">${dt.cap_toggle_desc || ""}</div>
+          </div>
+          <div style="${!capWeighting ? "opacity:.4;pointer-events:none" : ""}">
+            <div class="desc" style="margin-bottom:8px">${dt.cap_sensor_desc || ""}</div>
+            ${instCards}
+          </div>
+        </div>
+      </div>
+
+      <div class="col-card top-item" style="${capWeighting ? "opacity:.4;pointer-events:none" : ""}">
         <div class="col-header" style="background:#7c3aed">${dt.mode_hdr || "⚖️"}</div>
         <div class="col-body">
+          ${capWeighting ? `<div class="desc">${dt.cap_overrides_mode || ""}</div>` : `
           <div class="field">
             <label>${dt.mode_lbl || ""}</label>
             <div class="desc">${(dt.mode_desc || "").replace(/\n/g, "<br>")}</div>
             <select data-dist-key="distribution_mode">
               <option value="equal"${mode === "equal" ? " selected" : ""}>${dt.mode_equal || "Equal"}</option>
-              <option value="weighted"${mode === "weighted" ? " selected" : ""}>${dt.mode_weighted || "Weighted"}</option>
+              <option value="weighted"${mode !== "equal" ? " selected" : ""}>${dt.mode_soc || "SOC-weighted"}</option>
             </select>
-          </div>
-          <div class="field" style="${mode !== "weighted" ? "opacity:.4;pointer-events:none" : ""}">
-            <label>${dt.balance_lbl || ""}</label>
-            <div class="desc">${dt.balance_desc || ""}</div>
-            <input type="number" min="0" max="1" step="0.05" value="${balance}" data-dist-key="soc_pv_balance"/>
-          </div>
+          </div>`}
         </div>
       </div>
 
@@ -1138,7 +1164,9 @@ class SolakonPanel extends HTMLElement {
       const key  = el.dataset.distKey;
       const inst = el.dataset.distInst;
       el.addEventListener("change", () => {
-        const val = el.type === "number" ? parseFloat(el.value) : el.value;
+        const val = el.type === "checkbox" ? el.checked
+                  : el.type === "number"   ? parseFloat(el.value)
+                  : el.value;
         if (inst) this._setDistInstVal(inst, key, val);
         else      this._setDistVal(key, val);
       });

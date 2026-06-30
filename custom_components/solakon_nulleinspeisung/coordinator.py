@@ -1092,12 +1092,27 @@ class SolakonCoordinator:
 
         n = len(active)
         dist = self.hass.data.get(f"{DOMAIN}_dist_config") or {}
-        global_max  = float(dist.get("global_max_power", 800))
-        mode        = dist.get("distribution_mode", "equal")
-        soc_pv_bal  = float(dist.get("soc_pv_balance", 0.5))
-        total_power = global_max
+        global_max    = float(dist.get("global_max_power", 800))
+        mode          = dist.get("distribution_mode", "equal")
+        cap_weighting = bool(dist.get("capacity_weighting", False))
+        total_power   = global_max
 
-        if mode == "equal":
+        def _cap_kwh(eid: str, c) -> float:
+            # Prefer capacity sensor from dist panel; fall back to instance settings.
+            cap_s = str(dist.get(f"inst_{eid}_capacity_sensor", "") or c.settings.get(S_BATTERY_CAPACITY_SENSOR, ""))
+            if not cap_s:
+                return 100.0
+            cap_st = c.hass.states.get(cap_s)
+            if not cap_st or cap_st.state in ("unknown", "unavailable"):
+                return 100.0
+            try:
+                cv   = state_as_number(cap_st)
+                unit = cap_st.attributes.get("unit_of_measurement", "")
+                return cv if unit == "kWh" else cv / 1000.0
+            except (ValueError, TypeError):
+                return 100.0
+
+        if mode == "equal" and not cap_weighting:
             w_self = 1.0 / n
         else:
             # SOC-Gewichte: nutzbare kWh pro Instanz
@@ -1105,42 +1120,13 @@ class SolakonCoordinator:
             for eid, c in active.items():
                 soc   = c._flt(c.entry.data.get(CONF_SOC_SENSOR, ""), 0)
                 zone3 = float(c.settings.get(S_ZONE3_LIMIT, 20))
-                cap_s = str(c.settings.get(S_BATTERY_CAPACITY_SENSOR, ""))
-                if cap_s:
-                    cap_st = c.hass.states.get(cap_s)
-                    if cap_st and cap_st.state not in ("unknown", "unavailable"):
-                        try:
-                            cv   = state_as_number(cap_st)
-                            unit = cap_st.attributes.get("unit_of_measurement", "")
-                            cap_kwh = cv if unit == "kWh" else cv / 1000.0
-                        except (ValueError, TypeError):
-                            cap_kwh = 100.0
-                    else:
-                        cap_kwh = 100.0
-                else:
-                    cap_kwh = 100.0
-                soc_weights[eid] = max(0.0, (soc - zone3) / 100.0 * cap_kwh)
+                soc_weights[eid] = max(0.0, (soc - zone3) / 100.0 * _cap_kwh(eid, c))
 
             total_soc = sum(soc_weights.values())
-
-            # PV-Gewichte: Instanz-Solar
-            pv_weights: dict[str, float] = {
-                eid: c._flt_power(c.entry.data.get(CONF_SOLAR_SENSOR, ""))
-                for eid, c in active.items()
-            }
-            total_pv_w = sum(pv_weights.values())
-
             eq    = 1.0 / n
             soc_w = soc_weights.get(self.entry.entry_id, 0.0) / total_soc if total_soc > 0 else eq
-            pv_w  = (
-                pv_weights.get(self.entry.entry_id, 0.0) / total_pv_w
-                if total_pv_w > 0
-                else soc_w  # kein PV-Signal → PV-Anteil auf SOC umleiten
-            )
 
-            pv_share  = soc_pv_bal
-            soc_share = 1.0 - pv_share
-            w_self    = soc_share * soc_w + pv_share * pv_w
+            w_self = soc_w
 
         return w_self, round(total_power * w_self)
 

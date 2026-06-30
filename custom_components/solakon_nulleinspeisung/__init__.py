@@ -278,9 +278,9 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
 
 
 DIST_DEFAULTS = {
-    "global_max_power":  800,
-    "distribution_mode": "equal",
-    "soc_pv_balance":    0.5,
+    "global_max_power":   800,
+    "distribution_mode":  "equal",
+    "capacity_weighting": False,
 }
 
 
