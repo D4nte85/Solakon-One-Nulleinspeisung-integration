@@ -883,6 +883,7 @@ class SolakonCoordinator:
             self.ac_charge_active = False
             self.tariff_charge_active = False
             await self._set_output(0)
+            await self._timer_toggle()
             await self._set_mode(MODE_DISABLED)
             self._set_last_action(f"Fall B: Zone 3 Stop (SOC {soc:.0f}%)")
             return "B"
@@ -899,6 +900,7 @@ class SolakonCoordinator:
             self.ac_charge_active = False
             self.tariff_charge_active = False
             await self._set_output(0)
+            await self._timer_toggle()
             await self._set_mode(MODE_DISABLED)
             self._set_last_action("Fall C: Zone 3 Absicherung")
             return "C"
@@ -981,6 +983,7 @@ class SolakonCoordinator:
             if self.cycle_active:
                 self.cycle_active = False
             await self._set_output(0)
+            await self._timer_toggle()
             await self._set_mode(MODE_DISABLED)
             self._set_last_action(f"Tarif: Discharge-Lock (Preis {v['tariff_price']:.1f})")
             return "TM"
@@ -1071,6 +1074,7 @@ class SolakonCoordinator:
         ):
             self.integral = 0.0
             await self._set_output(0)
+            await self._timer_toggle()
             await self._set_mode(MODE_DISABLED)
             self._set_last_action("Fall F: Nachtabschaltung")
             return "F"

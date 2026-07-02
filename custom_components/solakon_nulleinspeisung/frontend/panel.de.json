@@ -59,7 +59,7 @@
     },
     "night": {
       "summary": "Nachtabschaltung — Zone 2 bei PV < PV-Ladereserve deaktivieren",
-      "text": "Betrifft ausschließlich Zone 2 (Fall F): Modus → Disabled, Output 0 W, Integral-Reset.\nZone 1 und AC Laden laufen auch nachts weiter.\n\nSchwelle: PV-Ladereserve aus den Zonen-Einstellungen — kein separater Parameter.\n\nReaktivierung: Sobald PV wieder über die PV-Ladereserve steigt, greift Fall E (Integral-Reset, Timer-Toggle, Modus → '1') — sofern kein Tarif-Lock aktiv ist."
+      "text": "Betrifft ausschließlich Zone 2 (Fall F): Output 0 W, Timer-Toggle, Modus → Disabled, Integral-Reset.\nZone 1 und AC Laden laufen auch nachts weiter.\n\nSchwelle: PV-Ladereserve aus den Zonen-Einstellungen — kein separater Parameter.\n\nReaktivierung: Sobald PV wieder über die PV-Ladereserve steigt, greift Fall E (Integral-Reset, Timer-Toggle, Modus → '1') — sofern kein Tarif-Lock aktiv ist."
     },
     "debug": {
       "summary": "Debug — manuelle Eingriffe in den Regelzustand",

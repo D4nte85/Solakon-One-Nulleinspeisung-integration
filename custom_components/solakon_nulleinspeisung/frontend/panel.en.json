@@ -59,7 +59,7 @@
     },
     "night": {
       "summary": "Night Shutdown — disable Zone 2 when PV < PV reserve",
-      "text": "Affects Zone 2 only (case F): mode → disabled, output 0 W, integral reset.\nZone 1 and AC charging continue running at night.\n\nThreshold: PV reserve from zone settings — no separate parameter.\n\nReactivation: once PV rises above the PV reserve again, case E applies (integral reset, timer toggle, mode → '1') — provided no tariff lock is active."
+      "text": "Affects Zone 2 only (case F): output 0 W, timer toggle, mode → disabled, integral reset.\nZone 1 and AC charging continue running at night.\n\nThreshold: PV reserve from zone settings — no separate parameter.\n\nReactivation: once PV rises above the PV reserve again, case E applies (integral reset, timer toggle, mode → '1') — provided no tariff lock is active."
     },
     "debug": {
       "summary": "Debug — manual intervention in the control state",
