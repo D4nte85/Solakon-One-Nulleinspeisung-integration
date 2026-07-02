@@ -339,8 +339,8 @@ Die Regellogik arbeitet mit einer geordneten Liste von Falls. Die Reihenfolge is
 | **HT** — Tarif-Laden Ende | `tariff_charge_active = True` UND (Preis gültig UND Preis ≥ Günstig-Schwelle ODER SOC ≥ Tarif-SOC-Ziel) | `tariff_charge_active → False`. Integral = 0. Zone 1 → `'1'` / Zone 2 → `'0'` + 0 W. |
 | **TM** — Discharge-Lock | Tarif aktiv UND Preis gültig UND Preis < Teuer-Schwelle UND kein AC/Tarif-Laden UND kein Überschuss UND Modus = `'1'` | Integral = 0. Output → 0 W. Modus → `'0'`. Sperrt Zone 1 und Zone 2 (greift für günstig + mittel, d.h. alles unter Teuer-Schwelle). |
 | **G** — AC Laden Start | AC aktiv UND kein AC/Tarif-Laden aktiv UND kein Überschuss aktiv UND SOC < Ladeziel UND **Modus ≠ `'3'`** UND (Grid + Output) < −Hysterese | `ac_charge_active → True`. Timer-Toggle. Output → 0 W. Modus → `'3'`. |
-| **H** — AC Laden Ende | Modus = `'3'` UND `ac_charge_active = True` UND kein Tarif-Laden UND (SOC ≥ Ladeziel ODER (Grid ≥ ac_offset + Hysterese UND Output = 0)) | `ac_charge_active → False`. Integral = 0. Zone 1 → `'1'` / Zone 2 → `'0'` + 0 W. |
-| **I** — Safety | Modus = `'3'` UND kein aktives AC Laden UND kein Tarif-Laden | Integral = 0. Zone 1 → Timer-Toggle + `'1'` / Zone 2 → `'0'` + 0 W. |
+| **H** — AC Laden Ende | Modus = `'3'` UND `ac_charge_active = True` UND kein Tarif-Laden UND (SOC ≥ Ladeziel ODER (Grid ≥ ac_offset + Hysterese UND Output = 0)) | `ac_charge_active → False`. Integral = 0. Zone 1 → Timer-Toggle + `'1'` / Zone 2 → Timer-Toggle + `'0'` + 0 W. |
+| **I** — Safety | Modus = `'3'` UND kein aktives AC Laden UND kein Tarif-Laden | Integral = 0. Zone 1 → Timer-Toggle + `'1'` / Zone 2 → Timer-Toggle + `'0'` + 0 W. |
 | **E** — Zone 2 Start | Zone-3 < SOC ≤ Zone-1 UND `cycle_active = False` UND Modus = `'0'` UND kein AC/Tarif-Laden UND kein Nacht UND kein Tarif-Lock | Integral = 0. Timer-Toggle. Modus → `'1'`. |
 | **F** — Nachtabschaltung | Nacht aktiv UND `cycle_active = False` UND Modus ≠ `'0'` UND kein AC/Tarif-Laden | Integral = 0. Output → 0 W. Modus → `'0'`. |
 
@@ -385,6 +385,7 @@ Typischer Arbeitsbereich: **0.03–0.08**. Für AC Laden separat tunen — P bes
 10. **Self-Adjusting Wait.** Polls die tatsächliche Ausgangsleistung nach einem Setpoint-Befehl statt einer festen Wartezeit zu schlafen. Die konfigurierte Wartezeit wird zum maximalen Timeout als Sicherheitsnetz.
 11. **Export-Limit-Sync.** Ist die optionale Netz-Ausgangsleistungsgrenze-Entität konfiguriert, schreibt jeder Regelzyklus `max(Hard-Limit-Z0, Hard-Limit-Z1)` in diese Entität — sofern er abweicht. Das verhindert, dass externe Eingriffe (App, andere Automation) das Hardware-Limit dauerhaft ändern.
 12. **Entladestrom-Abgleich.** Der maximale Entladestrom wird in jedem Zyklus zentral aus dem Regelzustand abgeleitet (Surplus → 2 A, AC-/Tarif-Laden → 0 A, Zone 1 → Max-Entladestrom, sonst 0 A) und mit dem Ist-Wert abgeglichen — vor dem PI-Gate, also auch im Disabled-Leerlauf. Das garantiert, dass ein Klemmwert (insb. die 2 A aus dem Surplus-Trick) nie über einen Zustandswechsel hinaus stehen bleibt und die Batterie drosselt; die einzelnen Falls setzen den Strom nicht mehr selbst.
+13. **`Regelung aktiv = Aus`.** Bevor der Schreibteil deaktiviert wird, erzwingt der Schalter Timer-Toggle + Modus → `'0'`. Ohne diesen Übergang bliebe der Solakon im zuletzt geschriebenen Modus (z.B. `'3'` während AC Laden) eingefroren, da bei deaktivierter Regelung keine weiteren Schreibbefehle mehr gesendet werden.
 
 ---
 
