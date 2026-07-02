@@ -38,7 +38,7 @@ Das Verhalten wird abhängig vom Batterie-Ladestand in vier Zonen eingeteilt:
 | **Zone 0** | SOC ≥ Export-Schwelle UND PV-Überschuss | `'1'` | 2 A (Stabilitätspuffer) | Hard Limit Z0 | Optional. PI-Integral eingefroren. SOC- und PV-Hysterese verhindern Flackern. |
 | **Zone 1** | SOC > Zone-1-Schwelle | `'1'` | Konfigurierter Maximalwert | 0 W + Offset 1 | Läuft bis Zone-3-Schwelle — kein Yo-Yo-Effekt. Auch nachts aktiv. |
 | **Zone 2** | Zone-3 < SOC ≤ Zone-1 | `'1'` | 0 A | 0 W + Offset 2 | Output-Limit: `min(Hard-Limit Z1, max(0, PV − Reserve))`. Optional: Nachtabschaltung. |
-| **Zone 3** | SOC ≤ Zone-3-Schwelle | `'0'` (Disabled) | 0 A | — | Output = 0 W. Vollständiger Batterieschutz. AC Laden bleibt möglich. |
+| **Zone 3** | SOC ≤ Zone-3-Schwelle | `'0'` (Disabled), außer AC Laden aktiv → `'3'` | 0 A | — | Output = 0 W. Vollständiger Batterieschutz. AC Laden bleibt möglich. |
 
 ### Optionale Module
 
@@ -99,7 +99,7 @@ Im Panel wird bei mehreren Instanzen ein zusätzlicher **Verteilungs-Tab** einge
 | Parameter | Beschreibung |
 |-----------|-------------|
 | Gesamte Max. Ausgangsleistung (W) | Absolute Obergrenze aller Instanzen zusammen |
-| Kapazitätsausgleich | Verteilt proportional zur Batteriekapazität — alle SOC sinken gleich schnell |
+| Kapazitätsausgleich | Verteilt proportional zur Batteriekapazität — alle SOC sinken gleich schnell. Überschreibt „Gleichverteilung": ist Kapazitätsausgleich aktiv, wird immer SOC-/Kapazitäts-gewichtet verteilt, unabhängig vom Verteilungs-Modus. |
 | Kapazitätssensor (pro Instanz) | `sensor.solakon_one_batteriekapazitat` — optional, Standard = reine SOC-%-Gewichtung |
 | Verteilungs-Modus | Gleichverteilung oder SOC-gewichtet |
 
@@ -129,6 +129,8 @@ Die folgenden Solakon-Entitäten müssen in HA vorhanden sein und werden beim Ei
 | `select` | Betriebsmodus |
 | `number` *(optional)* | Netz-Ausgangsleistungsgrenze — für Export-Limit-Feature |
 
+> **Hinweis zu Timeout-Countdown & Modus-Reset-Timer:** Die Solakon-Fernsteuerung läuft ab, wenn der Countdown-Sensor abläuft. Die Integration hält sie aktiv, indem sie den Modus-Reset-Timer rechtzeitig togglet (Countdown < 120 s). Derselbe Toggle-Mechanismus erzwingt zusätzlich bei jedem Moduswechsel die sichere Übernahme durch den Solakon (siehe Stichwort „Timer-Toggle" in der Falls-Tabelle weiter unten).
+
 > **Hinweis zum „Maximalen Entladestrom":** In der offiziellen Solakon Home-Assistant-Integration ist die Entität `number.solakon_one_maximaler_entladestrom` **standardmäßig deaktiviert**. Wird sie im Einrichtungsformular als „unbekannte Entität" angezeigt, muss sie zunächst in HA unter dem Solakon-Gerät bei den **Konfigurations-Entitäten** aktiviert werden (Gerät → Entität → Zahnrad → „Aktivieren"). Ohne diese Entität kann die Integration den Entladestrom nicht steuern.
 
 ---
@@ -153,7 +155,7 @@ Repository klonen oder als ZIP herunterladen und den Ordner `custom_components/s
 
 Nach dem Neustart unter **Einstellungen → Geräte & Dienste → Integration hinzufügen** nach *Solakon* suchen.
 
-Im Einrichtungsformular werden die neun Pflichtentitäten zugewiesen. Alle weiteren Parameter (PI-Regler, SOC-Zonen, optionale Module) werden **nicht** im Config-Flow konfiguriert, sondern ausschließlich über das **Sidebar-Panel**.
+Im Einrichtungsformular werden zunächst ein **Instanzname** (z. B. „Speicher 1" — wird zum Gerätenamen in HA, relevant bei mehreren Instanzen, siehe [Multi-Instancing](#multi-instancing)) sowie die neun Pflichtentitäten zugewiesen. Alle weiteren Parameter (PI-Regler, SOC-Zonen, optionale Module) werden **nicht** im Config-Flow konfiguriert, sondern ausschließlich über das **Sidebar-Panel**.
 
 > Die Regelung startet nach der Einrichtung mit deaktiviertem Schreibteil (`Regelung aktiv = Aus`). Erst nach Prüfung der Konfiguration im Panel sollte die Regelung aktiviert werden.
 
@@ -263,7 +265,7 @@ Der Lademodus verwendet einen **eigenen invertierten PI-Regler**: `raw_error = (
 | Eintritts-Hysterese (W) | (Grid + Output) muss unter −Hysterese liegen | 30–80 |
 | Regel-Offset (W) | Zielwert während AC Laden (typisch negativ) | −80 bis −30 |
 | AC P-Faktor | Klein halten wegen langer Hardware-Flanke (~25 s) | 0,3–0,5 |
-| AC I-Faktor | Macht bei AC Laden die eigentliche Regelarbeit | 0,05–0,1 |
+| AC I-Faktor | Ohne Wirkung — die Regelung ist wegen der Hardware-Flanke (~25 s) so träge, dass der I-Anteil bedeutungslos wird | 0,0 |
 
 ---
 
@@ -363,11 +365,11 @@ Die **Wartezeit** deckt Wechselrichter-Reaktion und Messlatenz ab. Sinnvolle War
 
 ### Schritt 2: P-Faktor finden (I = 0)
 
-Schrittweise erhöhen bis das System leicht anfängt zu pendeln — dann einen Schritt zurück. Typischer Arbeitsbereich: **0.8–1.5**.
+Bei P = 0,5 beginnen, schrittweise erhöhen bis das System leicht anfängt zu pendeln — dann einen Schritt zurück. Typischer Arbeitsbereich: **0.8–1.5**.
 
 ### Schritt 3: I-Faktor hinzufügen
 
-Typischer Arbeitsbereich: **0.03–0.08**. Für AC Laden separat tunen — P besonders klein halten (~0.3–0.5). Tarif-Laden verwendet keinen PI-Regler.
+Typischer Arbeitsbereich: **0.03–0.08**. Für AC Laden separat tunen — P besonders klein halten (~0.3–0.5), I-Faktor auf 0 belassen: die Regelung ist wegen der Hardware-Flanke des Solakon ONE (~25 s) so träge, dass der I-Anteil keine Wirkung mehr hat. Tarif-Laden verwendet keinen PI-Regler.
 
 ---
 
@@ -377,7 +379,7 @@ Typischer Arbeitsbereich: **0.03–0.08**. Für AC Laden separat tunen — P bes
 2. **Zone-1-Schwelle > Zone-3-Schwelle.** Die Integration prüft dies und gibt im Status-Tab einen Fehler aus falls die Limits ungültig sind.
 3. **Netzleistungssensor-Polarität.** Positiv = Bezug, negativ = Einspeisung — abweichende Polarität führt zu umgekehrtem Regelverhalten.
 4. **AC Laden Eintritts-Guard.** Eintritt in AC Laden ist nur möglich wenn Modus ≠ `'3'`. Das verhindert einen Re-Eintritt wenn AC Laden bereits aktiv ist.
-5. **AC Laden P/I-Tuning.** Separates Tuning erforderlich — P klein halten (~0,3–0,5) wegen der langen Hardware-Flanke des Solakon ONE im AC-Lade-Modus (~25 s). I-Faktor macht die eigentliche Regelarbeit. Standard I-Faktor: 0,0 als sicherer Startpunkt.
+5. **AC Laden P/I-Tuning.** Separates Tuning erforderlich — P klein halten (~0,3–0,5) wegen der langen Hardware-Flanke des Solakon ONE im AC-Lade-Modus (~25 s). I-Faktor bleibt auf 0,0 — bei dieser Trägheit hat der I-Anteil keine Wirkung mehr, reine P-Regelung reicht.
 6. **at_max_limit-Guard.** Greift am zonenabhängigen `dynamic_max` (Zone 0: AC-Limit, Zone 1: Hard Limit Z1, Zone 2: `min(Hard-Limit-Z1, PV−Reserve)`). Liegt `current_power` über `dynamic_max` (z.B. weil PV abgefallen ist), läuft der PI trotz positivem Netzfehler und reduziert den Befehl auf die neue Decke — kein Deadlock wenn das dynamic ceiling sinkt.
 7. **at_max/at_min-Guards im AC-Lade-Modus.** Beide Guards sind während AC Laden deaktiviert — Fall I übernimmt die Safety-Funktion für unlegitimierte `'3'`-Zustände.
 8. **Tarif-Discharge-Lock.** Der Lock gilt für mittlere UND günstige Preiszonen (alles unterhalb der Teuer-Schwelle) und sperrt sowohl Zone 1 als auch Zone 2 (Output 0 W, Modus Disabled). Solange Überschuss-Einspeisung aktiv ist, wird kein Lock ausgelöst. Die Sperre hebt sich automatisch wenn der Preis die Teuer-Schwelle überschreitet — Recovery (Fall D) stellt dann den vorherigen Modus wieder her.

@@ -47,7 +47,7 @@
     },
     "ac": {
       "summary": "AC Charging — grid charges the battery",
-      "text": "Entry (case G): SOC < target AND no surplus active AND no AC/tariff charge active AND mode ≠ '3' AND (grid + output) < −hysteresis.\nAbort (case H): mode = '3' AND ac_charge_active AND no tariff charge AND (SOC ≥ target OR (grid ≥ offset + hysteresis AND output = 0 W)).\n\nPI controller runs inverted — positive error → increase charge power.\nat_max/at_min guards removed — case I handles the safety function.\n\nReturn: Zone 1 → timer toggle + mode '1'. Zone 2 → timer toggle + output 0 W + mode '0'. Integral = 0.\n\nSOC protection (Zone 3) remains fully active.\n\nDue to the Solakon ONE hardware ramp (~25 s from min to max), keep the P-factor low. The I-part does the actual control work.\n\nPriority: AC charging does not start if surplus feed-in (Zone 0) is active. AC charging and tariff charging mutually block each other via the mode guard (mode ≠ '3')."
+      "text": "Entry (case G): SOC < target AND no surplus active AND no AC/tariff charge active AND mode ≠ '3' AND (grid + output) < −hysteresis.\nAbort (case H): mode = '3' AND ac_charge_active AND no tariff charge AND (SOC ≥ target OR (grid ≥ offset + hysteresis AND output = 0 W)).\n\nPI controller runs inverted — positive error → increase charge power.\nat_max/at_min guards removed — case I handles the safety function.\n\nReturn: Zone 1 → timer toggle + mode '1'. Zone 2 → timer toggle + output 0 W + mode '0'. Integral = 0.\n\nSOC protection (Zone 3) remains fully active.\n\nDue to the Solakon ONE hardware ramp (~25 s from min to max), keep the P-factor low. The I-part stays at 0 — at this sluggishness it has no effect.\n\nPriority: AC charging does not start if surplus feed-in (Zone 0) is active. AC charging and tariff charging mutually block each other via the mode guard (mode ≠ '3')."
     },
     "tariff": {
       "summary": "Tariff Arbitrage (Tibber, aWATTar …) — three price tiers",
@@ -200,7 +200,7 @@
     },
     "ac_i_factor": {
       "l": "AC I-Factor",
-      "d": "Integral gain in AC charge mode. Starting value: 0 — only increase once P alone leaves a steady-state error. Typical: 0.05–0.1. The I-part does the actual control work."
+      "d": "Integral gain in AC charge mode. Leave at 0 — due to the Solakon ONE hardware ramp (~25 s), the control loop is too sluggish for the I-part to have any effect. P alone is sufficient."
     },
     "tariff_enabled": {
       "l": "Enable Tariff Control",
