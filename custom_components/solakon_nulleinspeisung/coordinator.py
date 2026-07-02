@@ -961,6 +961,7 @@ class SolakonCoordinator:
                 await self._set_mode(MODE_DISCHARGE)
             else:
                 await self._set_output(0)
+                await self._timer_toggle()
                 await self._set_mode(MODE_DISABLED)
             self._set_last_action("Fall HT: Tarif-Laden beendet")
             return "HT"
