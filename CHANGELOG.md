@@ -28,14 +28,28 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 - Export-Limit-Sync mit Hard Limit
 
 ## [2.1.0] – 2026-05-16
+- Leistungsverteilungs-Logik aus dem Multi-Instanz-Blueprint nativ implementiert
 - `allocated_power` als Sensor-Attribut, Status-Endpoint und Panel-Anzeige
 - Panel und README an die neue Verteilungslogik angepasst
 
 ## [2.0.2] – 2026-05-15
 - kWh-Kapazitätsgewichtung für Multi-Instancing
+- Proportionale Fehleraufteilung bei Multi-Instanz-Betrieb
+- Panel-Internationalisierung (DE/EN) + Static-Path-Fix
 
 ## [2.0.1] – 2026-04-20
-- 25 Bugfixes aus vollständigem Review, Deprecation-Fixes, README-Korrekturen
+- 25 Bugfixes aus vollständigem Code-Review, Deprecation-Fixes, README-Korrekturen
+- Live-Demo (`index.html`) ergänzt
 
-## [2.0.0] – 2026-04-10 und früher
-Ältere Versionen (1.0.0 – 2.0.0) sind nicht rückwirkend dokumentiert.
+## [2.0.0] – 2026-04-10
+- Vollständige Steuer-Falls-Architektur mit Prioritätensystem: Überschuss-Einspeisung, Tarif-Laden (GT/TM/Discharge-Lock), AC Laden, Nachtabschaltung
+- SOC-Zonen mit Modus-Steuerung und zonenspezifischem Entladestrom (Zone 0 Surplus 2 A, Zone 1 Maximalwert, Zone 2 0 A, Zone 3 Stopp)
+- Self-Adjusting Wait: wartet auf die tatsächliche WR-Ausgangsleistung statt fester Wartezeit
+- Binary-Sensor-Plattform ergänzt, Number-Plattform entfernt
+- Übersetzungen (DE/EN), HACS-Validate-Workflow, Icon/Branding
+
+## [1.1.0] – 2026-04-02
+- Dynamischer Offset: Netz-Standardabweichung intern berechnet (`GridStdDevSensor`), zonenspezifische dynamische Offsets
+
+## [1.0.0] – 2026-04-02
+- Erstveröffentlichung: PI-Regler mit SOC-Zonen, Sidebar-Panel (Lit-Element), WebSocket-API, Config Flow
