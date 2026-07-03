@@ -18,7 +18,7 @@ class SolakonEntity(Entity):
             "identifiers": {(DOMAIN, coordinator.entry.entry_id)},
             "name": coordinator.entry.data.get(CONF_INSTANCE_NAME, "Solakon ONE"),
             "manufacturer": "D4nte",
-            "model": "Nulleinspeisung v2.1.0",
+            "model": "Nulleinspeisung v2.1.1",
         }
 
     async def async_added_to_hass(self) -> None:
