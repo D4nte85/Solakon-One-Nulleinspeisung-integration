@@ -6,7 +6,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN, MODE_DISABLED, S_REGULATION_ENABLED
+from .const import DOMAIN, S_REGULATION_ENABLED
 from .coordinator import SolakonCoordinator
 from .entity_base import SolakonEntity
 
@@ -34,7 +34,4 @@ class RegulationSwitch(SolakonEntity, SwitchEntity):
         await self._coordinator.async_update_settings({S_REGULATION_ENABLED: True})
 
     async def async_turn_off(self, **kwargs: object) -> None:
-        async with self._coordinator._lock:
-            await self._coordinator._timer_toggle()
-            await self._coordinator._set_mode(MODE_DISABLED)
-            await self._coordinator.async_update_settings({S_REGULATION_ENABLED: False})
+        await self._coordinator.async_update_settings({S_REGULATION_ENABLED: False})

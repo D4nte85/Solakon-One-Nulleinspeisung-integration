@@ -161,6 +161,20 @@ class SolakonCoordinator:
     # ── Settings-Management ──────────────────────────────────────────────────
 
     async def async_update_settings(self, changes: dict[str, Any]) -> None:
+        turning_off = (
+            self.settings.get(S_REGULATION_ENABLED, False)
+            and S_REGULATION_ENABLED in changes
+            and not changes[S_REGULATION_ENABLED]
+        )
+        if turning_off:
+            # Aufräum-Sequenz solange regulation_enabled noch True ist,
+            # danach blockt der Guard alle Modbus-Schreibbefehle
+            async with self._lock:
+                _LOGGER.info("Solakon: Regelung wird deaktiviert — setze Output 0, Modus Disabled")
+                await self._set_output(0)
+                await self._timer_toggle()
+                await self._set_mode(MODE_DISABLED)
+
         old_tariff = self.settings.get(S_TARIFF_PRICE_SENSOR, "")
         old_tariff_enabled = self.settings.get(S_TARIFF_ENABLED, False)
         old_periodic_en = self.settings.get(S_PERIODIC_ENABLED, False)
