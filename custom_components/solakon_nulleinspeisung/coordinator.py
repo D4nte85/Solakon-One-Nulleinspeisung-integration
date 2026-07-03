@@ -524,6 +524,11 @@ class SolakonCoordinator:
     async def _run_regulation_cycle(self) -> None:
         cfg = self.entry.data
         s = self.settings
+
+        # ── 0. Regelung aktiv? ───────────────────────────────────────────────
+        if not s.get(S_REGULATION_ENABLED, False):
+            return
+
         _prev_flags = (self.cycle_active, self.surplus_active, self.ac_charge_active, self.tariff_charge_active)
 
         # ── 1. Sensor-Werte lesen ────────────────────────────────────────────

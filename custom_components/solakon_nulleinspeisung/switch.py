@@ -37,4 +37,4 @@ class RegulationSwitch(SolakonEntity, SwitchEntity):
         async with self._coordinator._lock:
             await self._coordinator._timer_toggle()
             await self._coordinator._set_mode(MODE_DISABLED)
-        await self._coordinator.async_update_settings({S_REGULATION_ENABLED: False})
+            await self._coordinator.async_update_settings({S_REGULATION_ENABLED: False})
