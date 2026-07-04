@@ -171,9 +171,19 @@ class SolakonCoordinator:
             # danach blockt der Guard alle Modbus-Schreibbefehle
             async with self._lock:
                 _LOGGER.info("Solakon: Regelung wird deaktiviert — setze Output 0, Modus Disabled")
+                if self.ac_charge_active or self.tariff_charge_active:
+                    await self._set_output(0)
+                    await self._timer_toggle()
+                    await self._set_mode(MODE_DISCHARGE)
+                    self.ac_charge_active = False
+                    self.tariff_charge_active = False
+                    self.integral = 0.0
                 await self._set_output(0)
                 await self._timer_toggle()
                 await self._set_mode(MODE_DISABLED)
+                if self.mode_label != "Disabled (Regelung inaktiv)":
+                    self.mode_label_ts = time.time()
+                self.mode_label = "Disabled (Regelung inaktiv)"
 
         old_tariff = self.settings.get(S_TARIFF_PRICE_SENSOR, "")
         old_tariff_enabled = self.settings.get(S_TARIFF_ENABLED, False)
