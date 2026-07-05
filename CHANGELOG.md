@@ -3,6 +3,11 @@
 Alle nennenswerten Änderungen an der Solakon-ONE-Nulleinspeisung-Integration.
 Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [Unreleased]
+
+### Behoben
+- Entladestrom wird in der Deaktivierungs-Sequenz (`Regelung aktiv = Aus`) explizit auf Max-Entladestrom zurückgesetzt — verhindert, dass ein während AC-/Tarif-Laden auf 0 A geklemmter Wert nach dem Deaktivieren dauerhaft stehen bleibt (Issue #10)
+
 ## [2.1.1] – 2026-07-03
 
 ### Behoben

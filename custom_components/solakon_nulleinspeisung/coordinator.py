@@ -172,6 +172,7 @@ class SolakonCoordinator:
             async with self._lock:
                 _LOGGER.info("Solakon: Regelung wird deaktiviert — setze Output 0, Modus Disabled")
                 await self._set_output(0)
+                await self._set_discharge(float(self.settings.get(S_DISCHARGE_MAX, 40)))
                 await self._timer_toggle()
                 await self._set_mode(MODE_DISABLED)
                 if self.mode_label != "Disabled (Regelung inaktiv)":
