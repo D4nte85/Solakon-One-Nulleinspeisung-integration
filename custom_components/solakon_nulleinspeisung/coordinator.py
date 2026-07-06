@@ -314,7 +314,7 @@ class SolakonCoordinator:
         remaining = wait_max - 1.0
 
         while remaining > 0:
-            actual = self._flt(actual_eid)
+            actual = self._flt_power(actual_eid)
             if abs(actual - compare_target) <= tolerance:
                 _LOGGER.debug(
                     "Solakon: Zielwert erreicht (actual=%.0f, target=%.0f) nach %.1fs",
@@ -326,7 +326,7 @@ class SolakonCoordinator:
 
         _LOGGER.debug(
             "Solakon: Max-Wartezeit (%.0fs), actual=%.0f, target=%.0f",
-            wait_max, self._flt(actual_eid), compare_target,
+            wait_max, self._flt_power(actual_eid), compare_target,
         )
 
     # ── StdDev-Berechnung (Ringpuffer) ───────────────────────────────────────
