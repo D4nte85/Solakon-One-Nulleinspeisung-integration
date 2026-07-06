@@ -208,13 +208,15 @@ SOC-Zonenlogik mit allen Leistungs- und Offset-Parametern.
 
 Ein positiver Offset von z. B. 30 W lässt den Regler auf 30 W Netzbezug regeln (Sicherheitspuffer gegen versehentliche Einspeisung). Ein negativer Wert lässt den Regler gezielt leicht einspeisen.
 
-**Wichtig:** Zone-1-Schwelle muss größer als Zone-3-Schwelle sein. Die Integration prüft dies beim Start.
+**Wichtig:** Zone-1-Schwelle muss größer als Zone-3-Schwelle sein, und bei aktivierter Überschuss-Einspeisung muss die Export-Schwelle über der Zone-1-Schwelle liegen. Die Integration prüft beides in jedem Regelzyklus und pausiert mit Fehlermeldung, solange die Grenzen ungültig sind.
 
 ---
 
 ### ☀️ Überschuss
 
-Optionale Überschuss-Einspeisung (Zone 0). **Hat absoluten Vorrang vor allen anderen optionalen Modulen** — Tarif-Laden, Discharge-Lock und AC Laden werden blockiert solange Zone 0 aktiv ist.
+Optionale Überschuss-Einspeisung (Zone 0). **Hat absoluten Vorrang vor allen anderen optionalen Modulen** — Tarif-Laden, Discharge-Lock (inkl. dessen Recovery-Sperre) und AC Laden werden blockiert solange Zone 0 aktiv ist.
+
+**Zone 0 ist ein Overlay über Zone 1:** Der Eintritt aktiviert immer auch den Zone-1-Zyklus (`cycle_active`), beim Austritt wird die Zone aus dem SOC neu abgeleitet (SOC > Zone-1-Schwelle → Zone 1 läuft weiter, sonst Zone 2). Deshalb muss die Export-Schwelle über der Zone-1-Schwelle liegen — die Integration prüft das in jedem Zyklus.
 
 **Normaler Eintritt:** SOC ≥ Export-Schwelle UND (PV > ((Σ Output aller Instanzen + Grid) × Fehler-Anteil + PV-Hysterese × Fehler-Anteil) ODER (PV = 0 UND Output = 0 im aktuellen *und* vorherigen Zyklus))
 
@@ -222,17 +224,17 @@ Optionale Überschuss-Einspeisung (Zone 0). **Hat absoluten Vorrang vor allen an
 
 > Der `PV = 0`-Zweig deckt den Fall ab, dass das MPPT die PV bei vollem Akku auf 0 W drosselt. Die zusätzliche Bedingung `Output = 0` über zwei aufeinanderfolgende Zyklen (Entprellung) verhindert ein Wieder-Eintreten nachts: Sobald Zone 0 den Entladestrom auf 2 A setzt (Output ≈ 96 W), blockiert dieser Wert für einen Zyklus den Neueintritt — lang genug, dass bei vollem Akku Zone 1 (Fall A) übernimmt und die Ausgangsleistung dauerhaft > 0 hält. (Der Blueprint erreicht dasselbe über getaktete Trigger statt Entprellung.)
 
-**Forecast-Eintritt:** PV-Vorhersage ≥ Schwelle UND PV > Hard Limit Z0
+**Forecast-Eintritt:** PV-Vorhersage ≥ Schwelle UND PV > Hard Limit Z0 UND SOC > Zone-3-Schwelle
 
 > Sensorwerte mit k-Präfix (kW, kWh, kWp …) werden automatisch ×1000 normalisiert — Schwelle immer in der Basiseinheit (W bzw. Wh) angeben. Standard: 5000 Wh.
 
-> Kein SOC-Gate — Surplus startet sobald PV die maximale Ausgangsleistung übersteigt. Gedacht für sonnige Tage: 800 W werden dauerhaft ausgegeben, der Rest lädt die Batterie. Die Forcierung ist an PV > Hard Limit Z0 gekoppelt und endet von selbst, sobald die PV unter das Limit fällt (kein Abregel-Risiko mehr).
+> Keine Export-Schwelle — Surplus startet sobald PV die maximale Ausgangsleistung übersteigt, der SOC muss nur über der Zone-3-Schutzgrenze liegen. Gedacht für sonnige Tage: 800 W werden dauerhaft ausgegeben, der Rest lädt die Batterie. Die Forcierung ist an PV > Hard Limit Z0 gekoppelt und endet von selbst, sobald die PV unter das Limit fällt (kein Abregel-Risiko mehr). Die SOC-Untergrenze verhindert, dass die Forcierung gegen den Zone-3-Sicherheitsstopp ankämpft (Modus-Flattern 0A ↔ C).
 
 **Austritts-Bedingung:** PV ≤ ((Σ Output aller Instanzen + Grid) × Fehler-Anteil − PV-Hysterese × Fehler-Anteil) ODER SOC < (Export-Schwelle − SOC-Hysterese)
 
 > Der PV-Term prüft, ob die eigene PV noch den **Anteil dieser Instanz am Hausverbrauch** übersteigt. Der wahre Hausverbrauch ist `Σ Output (alle Wechselrichter) + Grid` — im Einzelbetrieb identisch zu `Output + Grid`. Im Multi-Instanz-Betrieb ist die Summe nötig: regelt eine zweite Instanz den Netzwert auf ~0, würde `Output + Grid` der eigenen Instanz den Verbrauch unterschätzen und eine auf 2 A gedrosselte Surplus-Instanz käme nie aus Zone 0 heraus. `× Fehler-Anteil` skaliert sowohl den Verbrauchsbezug als auch die PV-Hysterese auf den Lastanteil dieser Instanz (Einzelbetrieb: 1,0) — so bleibt das Totband relativ zur Referenz konstant.
 
-> Solange die Forcierung aktiv ist (Vorhersage ≥ Schwelle **und** PV > Hard Limit Z0), ist der Austritt komplett gesperrt — SOC- und Verbrauchsterm sind ausgeklammert, damit bei großem PV-Tag früh eingespeist statt abgeregelt wird, ohne auf vollen Akku zu warten. Sobald die PV unter das Hard Limit fällt, endet die Forcierung und der normale Austritt greift: bei vollem Akku über den PV-Term (Überschuss weg), bei noch nicht vollem Akku sofort über den SOC-Term. Nachts ist PV = 0 < Hard Limit → Forcierung aus → Austritt, auch bei Tages-/Morgen-Vorhersage. Zone 3 (Safety-Stopp) beendet Surplus zusätzlich jederzeit.
+> Solange die Forcierung aktiv ist (Vorhersage ≥ Schwelle **und** PV > Hard Limit Z0 **und** SOC > Zone-3-Schwelle), ist der Austritt komplett gesperrt — SOC- und Verbrauchsterm sind ausgeklammert, damit bei großem PV-Tag früh eingespeist statt abgeregelt wird, ohne auf vollen Akku zu warten. Sobald die PV unter das Hard Limit fällt, die Vorhersage unter die Schwelle sinkt oder der SOC die Zone-3-Schwelle unterschreitet, endet die Forcierung und der normale Austritt greift: bei vollem Akku über den PV-Term (Überschuss weg), bei noch nicht vollem Akku sofort über den SOC-Term. Nachts ist PV = 0 < Hard Limit → Forcierung aus → Austritt, auch bei Tages-/Morgen-Vorhersage. Zone 3 (Safety-Stopp) beendet Surplus zusätzlich jederzeit.
 
 | Parameter | Beschreibung | Empfehlung |
 |-----------|-------------|------------|
@@ -331,12 +333,12 @@ Die Regellogik arbeitet mit einer geordneten Liste von Falls. Die Reihenfolge is
 
 | Fall | Bedingung | Aktion |
 |:-----|:----------|:-------|
-| **0A** — Surplus Start | `surplus_enabled` UND `new_surplus = True` UND `surplus_active = False` UND kein AC/Tarif-Laden | `surplus_active → True`. Integral eingefroren. Falls Modus ≠ `'1'`: Timer-Toggle + Modus → `'1'`. (Entladestrom 2 A setzt der zentrale Abgleich, siehe Hinweis 12.) |
-| **0B** — Surplus Ende | `surplus_active = True` UND (Überschuss-Option AUS **ODER** Austritts-Bedingung erfüllt) | `surplus_active → False`. Integral = 0. Das Ausschalten der Option erzwingt den Austritt, sonst bliebe `surplus_active` hängen und die Batterie auf 2 A gedrosselt. |
+| **0A** — Surplus Start | `surplus_enabled` UND `new_surplus = True` UND `surplus_active = False` UND kein AC/Tarif-Laden | `surplus_active → True`, `cycle_active → True` (Zone 0 setzt auf Zone 1 auf). Integral eingefroren. Falls Modus ≠ `'1'`: Timer-Toggle + Modus → `'1'`. (Entladestrom 2 A setzt der zentrale Abgleich, siehe Hinweis 12.) |
+| **0B** — Surplus Ende | `surplus_active = True` UND (Überschuss-Option AUS **ODER** Austritts-Bedingung erfüllt) | `surplus_active → False`, `cycle_active → (SOC > Zone-1-Schwelle)` (Zone aus SOC neu abgeleitet). Integral = 0. Das Ausschalten der Option erzwingt den Austritt, sonst bliebe `surplus_active` hängen und die Batterie auf 2 A gedrosselt. |
 | **A** — Zone 1 Start | SOC > Zone-1-Schwelle UND `cycle_active = False` UND kein AC/Tarif-Laden UND (Tarif deaktiviert ODER Preis gültig) UND kein aktiver Tarif-Block (Preis < Teuer) | `cycle_active → True`. Integral = 0. Timer-Toggle. Modus → `'1'`. |
 | **B** — Zone 3 Stop | SOC < Zone-3-Schwelle UND `cycle_active = True` UND kein AC/Tarif-Laden | `cycle_active → False`. Integral = 0. Output → 0 W. Timer-Toggle. Modus → `'0'`. |
 | **C** — Zone 3 Absicherung | SOC < Zone-3-Schwelle UND `cycle_active = False` UND Modus ≠ `'0'` UND kein AC/Tarif-Laden | Output → 0 W. Timer-Toggle. Modus → `'0'`. Kein Integral-Reset. |
-| **D** — Recovery | `(cycle_active = True ODER ac_charge_active = True)` UND Modus ∉ `{'1','3'}` UND SOC > Zone-3-Schwelle UND kein aktiver Tarif-Lock (außer `ac_charge_active = True`) | Timer-Toggle. Modus → `'3'` (wenn `ac_charge_active` oder `tariff_charge_active`) sonst `'1'`. Kein Integral-Reset. |
+| **D** — Recovery | `(cycle_active = True ODER ac_charge_active = True)` UND Modus ∉ `{'1','3'}` UND SOC > Zone-3-Schwelle UND kein aktiver Tarif-Lock (Tarif-Lock greift nicht bei `ac_charge_active`, `tariff_charge_active` oder `surplus_active`) | Timer-Toggle. Modus → `'3'` (wenn `ac_charge_active` oder `tariff_charge_active`) sonst `'1'`. Kein Integral-Reset. |
 | **GT** — Tarif-Laden Start | Tarif aktiv UND Preis gültig UND Preis < Günstig-Schwelle UND SOC < Tarif-SOC-Ziel UND kein Tarif-Laden aktiv UND kein Überschuss aktiv UND Modus ≠ `'3'` | `tariff_charge_active → True`. Timer-Toggle. Output → Tarif-Ladeleistung. Modus → `'3'`. |
 | **HT** — Tarif-Laden Ende | `tariff_charge_active = True` UND (Preis gültig UND Preis ≥ Günstig-Schwelle ODER SOC ≥ Tarif-SOC-Ziel) | `tariff_charge_active → False`. Integral = 0. Zone 1 → Timer-Toggle + `'1'` / Zone 2 → Timer-Toggle + `'0'` + 0 W. |
 | **TM** — Discharge-Lock | Tarif aktiv UND Preis gültig UND Preis < Teuer-Schwelle UND kein AC/Tarif-Laden UND kein Überschuss UND Modus = `'1'` | Integral = 0. Output → 0 W. Timer-Toggle. Modus → `'0'`. Sperrt Zone 1 und Zone 2 (greift für günstig + mittel, d.h. alles unter Teuer-Schwelle). |
@@ -349,7 +351,7 @@ Die Regellogik arbeitet mit einer geordneten Liste von Falls. Die Reihenfolge is
 **Reihenfolge-Begründungen:**
 - Fall D liegt vor Falls G/H, damit Recovery nur Modus ∉ `{'1','3'}` prüft — der AC-Lade-Modus `'3'` wird durch Recovery nie überschrieben.
 - Fall I fängt jeden `'3'`-Zustand ohne legitime Lade-Session auf — egal ob durch externe Modussetzung oder Fehlzustand entstanden.
-- Fall D ist gegen Tarif-Lock geblockt (außer wenn `ac_charge_active = True`) — verhindert, dass Recovery den Discharge-Lock durch Modus-Wiederherstellung umgeht.
+- Fall D ist gegen Tarif-Lock geblockt (außer bei aktiver AC-/Tarif-Lade-Session oder aktivem Überschuss) — verhindert, dass Recovery den Discharge-Lock durch Modus-Wiederherstellung umgeht; Zone 0 ist ausgenommen, weil Einspeisung bei vollem Speicher unabhängig vom Preis richtig ist (konsistent zu Fall TM).
 - Fall E ist gegen Tarif-Lock geblockt — verhindert, dass Zone 2 bei aktivem Lock neu startet.
 - Falls GT und G sind gegen aktiven Überschuss geblockt — Zone-0-Einspeisung hat absoluten Vorrang vor Tarif-Laden und AC Laden.
 

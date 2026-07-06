@@ -645,11 +645,13 @@ class SolakonCoordinator:
         
         if surplus_forecast_enabled and surplus_forecast_sensor:
             if self._entity_ok(surplus_forecast_sensor):
-                # Forcierung nur solange die PV das Ausgangslimit übersteigt (Abregel-Risiko);
-                # fällt sie darunter, greift wieder die normale SOC-/Verbrauchslogik.
+                # Forcierung nur solange die PV das Ausgangslimit übersteigt (Abregel-Risiko)
+                # und der SOC über der Zone-3-Schutzgrenze liegt; sonst greift wieder die
+                # normale SOC-/Verbrauchslogik.
                 self.forecast_surplus_forced = (
                     self._flt_kilo_normalized(surplus_forecast_sensor) >= surplus_forecast_threshold
                     and solar > hard_limit_z0
+                    and soc > zone3_limit
                 )
             else:
                 self.forecast_surplus_forced = False
@@ -676,6 +678,11 @@ class SolakonCoordinator:
         # ── 3. Validierung ───────────────────────────────────────────────────
         if zone1_limit <= zone3_limit:
             self.last_error = "SOC-Limits ungültig (Zone1 muss > Zone3)"
+            self.notify_listeners()
+            return
+
+        if surplus_enabled and surplus_threshold <= zone1_limit:
+            self.last_error = "SOC-Limits ungültig (Überschuss-Schwelle muss > Zone1)"
             self.notify_listeners()
             return
 
@@ -859,7 +866,9 @@ class SolakonCoordinator:
             and not self.ac_charge_active
             and not self.tariff_charge_active
         ):
+            # Zone 0 setzt immer auf einem aktiven Zone-1-Zyklus auf
             self.surplus_active = True
+            self.cycle_active = True
             if mode != MODE_DISCHARGE:
                 await self._timer_toggle()
                 await self._set_mode(MODE_DISCHARGE)
@@ -870,6 +879,8 @@ class SolakonCoordinator:
         # Austritt bei erfüllter Austritts-Bedingung oder deaktivierter Überschuss-Option.
         if self.surplus_active and (not v["surplus_enabled"] or not v["new_surplus"]):
             self.surplus_active = False
+            # Zone nach Overlay-Ende aus dem SOC ableiten
+            self.cycle_active = soc > zone1
             self.integral = 0.0
             self._set_last_action("Zone 0: Surplus beendet")
             return "0B"
@@ -937,6 +948,7 @@ class SolakonCoordinator:
             and v["tariff_price"] < v["tariff_exp"]
             and not self.ac_charge_active
             and not self.tariff_charge_active
+            and not self.surplus_active
         )
         if (
             (self.cycle_active or self.ac_charge_active or self.tariff_charge_active)

@@ -39,11 +39,11 @@
     },
     "zones": {
       "summary": "SOC Zone Logic — behaviour based on battery state of charge",
-      "text": "Zone 0 (surplus, optional): SOC ≥ export threshold AND PV surplus → output at Hard Limit Z0. Discharge current 2 A. PI integral frozen.\n\nZone 1 (aggressive): SOC > zone-1 threshold → high discharge current, offset 1. Runs through until SOC ≤ zone-3 threshold — no yo-yo effect.\n\nZone 2 (conservative): zone-3 < SOC ≤ zone-1 → 0 A discharge current, dynamic output limit (min(Hard Limit Z1, max(0, PV − reserve))), offset 2.\n\nZone 3 (safety stop): SOC ≤ zone-3 threshold → output 0 W, mode disabled. AC charging remains possible."
+      "text": "Zone 0 (surplus, optional): SOC ≥ export threshold AND PV surplus → output at Hard Limit Z0. Discharge current 2 A. PI integral frozen. Always sits on top of an active Zone-1 cycle; on exit the zone is re-derived from the SOC.\n\nZone 1 (aggressive): SOC > zone-1 threshold → high discharge current, offset 1. Runs through until SOC ≤ zone-3 threshold — no yo-yo effect.\n\nZone 2 (conservative): zone-3 < SOC ≤ zone-1 → 0 A discharge current, dynamic output limit (min(Hard Limit Z1, max(0, PV − reserve))), offset 2.\n\nZone 3 (safety stop): SOC ≤ zone-3 threshold → output 0 W, mode disabled. AC charging remains possible."
     },
     "surplus": {
       "summary": "Surplus Feed-In — activating Zone 0",
-      "text": "Highest priority — blocks tariff charging, discharge-lock and AC charging while Zone 0 is active.\n\nNormal entry: SOC ≥ SOC threshold AND (PV > consumption reference + PV hysteresis OR (PV = 0 AND output = 0 across two consecutive cycles — debounce against nightly re-entry)).\nForecast entry: forecast ≥ threshold AND PV > Hard Limit Z0 (no SOC gate).\n\nExit: PV ≤ consumption reference − PV hysteresis OR SOC < (threshold − SOC hysteresis).\nConsumption reference: single instance = output + grid. Multi-instance = (ΣOutput_all + grid) × error share — keeps the dead band consistent relative to true household consumption.\nForecast forcing is active while forecast ≥ threshold AND PV > Hard Limit Z0: as long as both hold, exit is blocked (both SOC and consumption terms excluded — curtailment avoidance). Once PV drops below Hard Limit Z0 (incl. at night: PV = 0) or the forecast drops below the threshold, forcing ends and the normal exit applies. Zone 3 (safety) ends surplus at any time as well.\n\nOutput is set to Hard Limit Z0. Integral frozen (no PI call)."
+      "text": "Highest priority — blocks tariff charging, discharge-lock and AC charging while Zone 0 is active.\n\nNormal entry: SOC ≥ SOC threshold AND (PV > consumption reference + PV hysteresis OR (PV = 0 AND output = 0 across two consecutive cycles — debounce against nightly re-entry)).\nForecast entry: forecast ≥ threshold AND PV > Hard Limit Z0 AND SOC > zone-3 threshold (no export threshold required).\n\nZone 0 always sits on top of an active Zone-1 cycle: entry activates Zone 1, on exit the zone is re-derived from the SOC (SOC > zone-1 threshold → Zone 1, otherwise Zone 2). The SOC threshold must be above the zone-1 threshold — otherwise regulation pauses with an error message.\n\nExit: PV ≤ consumption reference − PV hysteresis OR SOC < (threshold − SOC hysteresis).\nConsumption reference: single instance = output + grid. Multi-instance = (ΣOutput_all + grid) × error share — keeps the dead band consistent relative to true household consumption.\nForecast forcing is active while forecast ≥ threshold AND PV > Hard Limit Z0 AND SOC > zone-3 threshold: as long as all hold, exit is blocked (both SOC and consumption terms excluded — curtailment avoidance). Once PV drops below Hard Limit Z0 (incl. at night: PV = 0), the forecast drops below the threshold or the SOC drops below the zone-3 threshold, forcing ends and the normal exit applies. Zone 3 (safety) ends surplus at any time as well.\n\nOutput is set to Hard Limit Z0. Integral frozen (no PI call)."
     },
     "ac": {
       "summary": "AC Charging — grid charges the battery",
@@ -51,7 +51,7 @@
     },
     "tariff": {
       "summary": "Tariff Arbitrage (Tibber, aWATTar …) — three price tiers",
-      "text": "Cheap (price < cheap threshold): tariff charging starts — fixed charge power until SOC target. No PI controller.\nMedium (cheap ≤ price < expensive threshold): discharge-lock — Zone 1 and Zone 2 blocked (output 0 W, mode disabled). Once the price exceeds the expensive threshold, operation is automatically restored.\nExpensive (price ≥ expensive threshold): normal SOC logic, no restriction.\n\nTariff charging and AC charging are independent modules that mutually block each other via the mode guard.\n\nPriority: tariff charging and discharge-lock are blocked while surplus feed-in (Zone 0) is active.\n\nRequires a price sensor with a numeric value in ct/kWh."
+      "text": "Cheap (price < cheap threshold): tariff charging starts — fixed charge power until SOC target. No PI controller.\nMedium (cheap ≤ price < expensive threshold): discharge-lock — Zone 1 and Zone 2 blocked (output 0 W, mode disabled). Once the price exceeds the expensive threshold, operation is automatically restored.\nExpensive (price ≥ expensive threshold): normal SOC logic, no restriction.\n\nTariff charging and AC charging are independent modules that mutually block each other via the mode guard.\n\nPriority: tariff charging, discharge-lock and its recovery block are suspended while surplus feed-in (Zone 0) is active.\n\nRequires a price sensor with a numeric value in ct/kWh."
     },
     "dynoff": {
       "summary": "Dynamic Offset — automatically calculated from grid volatility",
@@ -148,11 +148,11 @@
     },
     "surplus_enabled": {
       "l": "Enable Surplus Feed-In",
-      "d": "Highest priority — blocks tariff charging, discharge-lock and AC charging while Zone 0 is active. Normal: SOC ≥ threshold + PV surplus. With forecast: PV > Hard Limit Z0 is sufficient (no SOC gate); exit is blocked while forecast ≥ threshold AND PV > Hard Limit Z0 — once either condition drops away, the normal SOC/consumption logic applies."
+      "d": "Highest priority — blocks tariff charging, discharge-lock and AC charging while Zone 0 is active. Normal: SOC ≥ threshold + PV surplus. With forecast: PV > Hard Limit Z0 is sufficient (no export threshold, SOC only needs to be above zone 3); exit is blocked while forecast ≥ threshold AND PV > Hard Limit Z0 AND SOC > zone 3 — once one condition drops away, the normal SOC/consumption logic applies."
     },
     "surplus_soc_threshold": {
       "l": "SOC Threshold (%)",
-      "d": "Zone 0 only starts at this SOC. Recommended: > Zone-1 threshold. Typical: 90–98 %."
+      "d": "Zone 0 only starts at this SOC. Must be above the zone-1 threshold — otherwise regulation pauses with an error message. Typical: 90–98 %."
     },
     "surplus_soc_hyst": {
       "l": "SOC Hysteresis (%)",
@@ -164,7 +164,7 @@
     },
     "surplus_forecast_enabled": {
       "l": "Enable Forecast Override",
-      "d": "When forecast ≥ threshold: surplus starts as soon as PV > Hard Limit Z0 (no SOC gate). Forcing stays active while forecast ≥ threshold AND PV > Hard Limit Z0 — feeds in early on a big PV day instead of curtailing, without waiting for a full battery. Once PV drops below Hard Limit Z0 (incl. at night: PV = 0) or the forecast drops below the threshold, forcing ends and the normal exit (SOC OR consumption) applies — no nightly stick. Zone 3 (safety) ends it at any time as well."
+      "d": "When forecast ≥ threshold: surplus starts as soon as PV > Hard Limit Z0 AND SOC > zone-3 threshold (no export threshold required). Forcing stays active while forecast ≥ threshold AND PV > Hard Limit Z0 AND SOC > zone 3 — feeds in early on a big PV day instead of curtailing, without waiting for a full battery. Once PV drops below Hard Limit Z0 (incl. at night: PV = 0), the forecast drops below the threshold or the SOC drops below zone 3, forcing ends and the normal exit (SOC OR consumption) applies — no nightly stick."
     },
     "surplus_forecast_sensor": {
       "l": "Forecast Sensor",
@@ -172,7 +172,7 @@
     },
     "surplus_forecast_threshold": {
       "l": "Minimum Yield for Surplus",
-      "d": "PV > Hard Limit Z0 + forecast ≥ threshold → surplus starts without SOC condition and stays active while forecast ≥ threshold AND PV > Hard Limit Z0."
+      "d": "PV > Hard Limit Z0 + forecast ≥ threshold + SOC > zone-3 threshold → surplus starts without export threshold and stays active while all three conditions hold."
     },
     "ac_enabled": {
       "l": "Enable AC Charging",
