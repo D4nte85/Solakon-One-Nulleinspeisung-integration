@@ -1,8 +1,12 @@
 """Constants for Solakon ONE Nulleinspeisung."""
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 DOMAIN = "solakon_nulleinspeisung"
 STORAGE_VERSION = 1
+VERSION = json.loads((Path(__file__).parent / "manifest.json").read_text())["version"]
 
 # -- Config-Entry Keys --------------------------------------------------------
 CONF_INSTANCE_NAME    = "instance_name"
@@ -126,11 +130,6 @@ S_DYN_AC_MAX      = "dyn_ac_max"
 S_DYN_AC_NOISE    = "dyn_ac_noise"
 S_DYN_AC_FACTOR   = "dyn_ac_factor"
 S_DYN_AC_NEGATIVE = "dyn_ac_negative"
-
-# -- Distribution Config Keys -------------------------------------------------
-S_DIST_GLOBAL_MAX   = "global_max_power"
-S_DIST_MODE         = "distribution_mode"   # "equal" | "weighted"
-S_DIST_SOC_PV_BAL   = "soc_pv_balance"     # 0.0–1.0
 
 SETTINGS_DEFAULTS: dict = {
     S_REGULATION_ENABLED: False,

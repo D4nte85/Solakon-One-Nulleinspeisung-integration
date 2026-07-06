@@ -90,7 +90,7 @@ error_share_i     = w_i                 → Anteil am Netzfehler im PI-Regler
 
 Bei einer einzelnen aktiven Instanz bleibt `w_i = 1,0` und das statische Hard-Limit gilt unverändert.
 
-> **Batteriekapazität (kWh):** Optional, Standard 100 — dann erfolgt die Gewichtung rein nach SOC-Prozentpunkten. Sinnvoll wenn die Instanzen Batterien unterschiedlicher Kapazität steuern.
+> **Batteriekapazität (kWh):** Optional. Fehlt der Sensor bei irgendeiner aktiven Instanz, wird die Kapazität für alle neutral (1.0) gewertet — die Gewichtung erfolgt dann rein nach SOC-Prozentpunkten. Kapazitätsgewichtung greift nur, wenn alle Instanzen einen gültigen Wert liefern. Sinnvoll wenn die Instanzen Batterien unterschiedlicher Kapazität steuern.
 
 ### Leistungsverteilung konfigurieren
 

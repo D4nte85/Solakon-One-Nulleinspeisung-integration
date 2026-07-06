@@ -20,6 +20,10 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 - HACS-Validierungs-Workflow nach `.github/workflows/` verschoben (lag im Repo-Root und wurde von GitHub Actions nie ausgeführt); Brands-Prüfung ausgenommen
 - `manifest.json` (documentation, issue_tracker) und Config-Flow-Hinweis verlinken jetzt auf das Integrations-Repo statt auf das Blueprint-Repo
 - `.gitignore` ergänzt (`__pycache__/`, `*.pyc`)
+- Kapazitätsgewichtung (Multi-Instanz): fehlt der Kapazitätssensor bei irgendeiner aktiven Instanz, zählen alle neutral 1.0 — vorher dominierte eine sensorlose Instanz mit 100-kWh-Fallback die Leistungsverteilung
+- OptionsFlow verweigert doppelte `mode_select`-Zuweisung (gleiche Prüfung wie beim Anlegen) — verhindert zwei Instanzen auf demselben Inverter
+- Geräteversion aus `manifest.json` gelesen (`sw_version`) statt hartkodiert im Modellnamen
+- Tote Symbole entfernt (`S_DIST_*`-Konstanten, `_static_registered`-Aufräumzeile)
 
 ## [2.1.1] – 2026-07-03
 

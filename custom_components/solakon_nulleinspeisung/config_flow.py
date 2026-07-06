@@ -124,6 +124,13 @@ class SolakonOptionsFlow(config_entries.OptionsFlow):
         self, user_input: dict | None = None
     ) -> FlowResult:
         if user_input is not None:
+            mode_select = user_input.get(CONF_MODE_SELECT, "")
+            for entry in self.hass.config_entries.async_entries(DOMAIN):
+                if (
+                    entry.entry_id != self.config_entry.entry_id
+                    and entry.data.get(CONF_MODE_SELECT) == mode_select
+                ):
+                    return self.async_abort(reason="already_configured")
             # Die Entitäten-Zuweisung liegt in entry.data (der Coordinator liest
             # ausschließlich von dort) — nicht in entry.options. Daher data direkt
             # aktualisieren statt in options zu schreiben. Der Update-Listener in

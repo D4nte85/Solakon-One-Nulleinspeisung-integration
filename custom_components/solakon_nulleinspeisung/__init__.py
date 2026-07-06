@@ -266,7 +266,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             hass.data.pop(f"{DOMAIN}_dist_config", None)
             hass.data.pop(f"{DOMAIN}_panel_registered", None)
             hass.data.pop(f"{DOMAIN}_ws_registered", None)
-            hass.data.pop(f"{DOMAIN}_static_registered", None)
 
     return unload_ok
 

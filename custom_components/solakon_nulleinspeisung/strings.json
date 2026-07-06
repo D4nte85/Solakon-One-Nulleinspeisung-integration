@@ -65,6 +65,9 @@
           "export_power_limit_number": "Solakon-Entität für das Hardware-Limit der Netzeinspeisung. Wird bei jedem Regelzyklus automatisch auf den Hard-Limit-Wert gesetzt — stellt sicher dass die Grenze auch nach externen Änderungen korrekt bleibt."
         }
       }
+    },
+    "abort": {
+      "already_configured": "Diese Entitätenkombination wird bereits von einer anderen Instanz verwendet."
     }
   }
 }

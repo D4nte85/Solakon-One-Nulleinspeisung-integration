@@ -65,6 +65,9 @@
           "export_power_limit_number": "Solakon entity for the hardware grid export limit. Automatically set to the Hard Limit value on each regulation cycle — ensures the cap stays correct even after external changes."
         }
       }
+    },
+    "abort": {
+      "already_configured": "This entity combination is already used by another instance."
     }
   }
 }

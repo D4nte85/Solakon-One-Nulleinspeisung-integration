@@ -1152,30 +1152,35 @@ class SolakonCoordinator:
         cap_weighting = bool(dist.get("capacity_weighting", False))
         total_power   = global_max
 
-        def _cap_kwh(eid: str, c) -> float:
+        def _cap_kwh(eid: str, c) -> float | None:
             # Prefer capacity sensor from dist panel; fall back to instance settings.
             cap_s = str(dist.get(f"inst_{eid}_capacity_sensor", "") or c.settings.get(S_BATTERY_CAPACITY_SENSOR, ""))
             if not cap_s:
-                return 100.0
+                return None
             cap_st = c.hass.states.get(cap_s)
             if not cap_st or cap_st.state in ("unknown", "unavailable"):
-                return 100.0
+                return None
             try:
                 cv   = state_as_number(cap_st)
                 unit = cap_st.attributes.get("unit_of_measurement", "")
                 return cv if unit == "kWh" else cv / 1000.0
             except (ValueError, TypeError):
-                return 100.0
+                return None
 
         if mode == "equal" and not cap_weighting:
             w_self = 1.0 / n
         else:
+            # Kapazitäten pro Instanz; sobald eine keinen gültigen Wert liefert,
+            # zählen alle neutral 1.0 (reine SOC-Gewichtung, keine Dominanz)
+            caps = {eid: _cap_kwh(eid, c) for eid, c in active.items()}
+            if any(cap is None for cap in caps.values()):
+                caps = {eid: 1.0 for eid in caps}
             # SOC-Gewichte: nutzbare kWh pro Instanz
             soc_weights: dict[str, float] = {}
             for eid, c in active.items():
                 soc   = c._flt(c.entry.data.get(CONF_SOC_SENSOR, ""), 0)
                 zone3 = float(c.settings.get(S_ZONE3_LIMIT, 20))
-                soc_weights[eid] = max(0.0, (soc - zone3) / 100.0 * _cap_kwh(eid, c))
+                soc_weights[eid] = max(0.0, (soc - zone3) / 100.0 * caps[eid])
 
             total_soc = sum(soc_weights.values())
             eq    = 1.0 / n
