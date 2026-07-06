@@ -90,6 +90,7 @@ class SolakonCoordinator:
         self._prev_actual: float = 0.0
 
         # Interne Mechanik
+        self._timer_toggled_in_cycle: bool = False
         self._lock = asyncio.Lock()
         self._listeners: list[Callable[[], None]] = []
         self._unsub_trackers: list[Callable] = []
@@ -501,6 +502,7 @@ class SolakonCoordinator:
         current = self._flt(timer_eid, 3599)
         new_val = 3598.0 if current >= 3599 else 3599.0
         await self._set_number(timer_eid, new_val)
+        self._timer_toggled_in_cycle = True
         await asyncio.sleep(1)
 
     # ── Haupt-Trigger ────────────────────────────────────────────────────────
@@ -546,6 +548,8 @@ class SolakonCoordinator:
         # ── 0. Regelung aktiv? ───────────────────────────────────────────────
         if not s.get(S_REGULATION_ENABLED, False):
             return
+
+        self._timer_toggled_in_cycle = False
 
         _prev_flags = (self.cycle_active, self.surplus_active, self.ac_charge_active, self.tariff_charge_active)
 
@@ -797,18 +801,20 @@ class SolakonCoordinator:
             return
 
         # ── 9. Timeout-Reset ─────────────────────────────────────────────────
-        if timer_val < 120 and self._entity_ok(cfg[CONF_TIMEOUT_COUNTDOWN]):
+        # Entfällt wenn ein Fall in diesem Zyklus bereits getoggelt hat (timer_val wäre stale)
+        if timer_val < 120 and not self._timer_toggled_in_cycle and self._entity_ok(cfg[CONF_TIMEOUT_COUNTDOWN]):
             await self._timer_toggle()
 
         # ── PI-Pfade ─────────────────────────────────────────────────────────
         if self.surplus_active:
-            await self._set_output(effective_hard)
-            self._set_last_action(f"Zone 0: Output → {effective_hard} W")
-            await self._wait_for_target(effective_hard)
+            # Nur schreiben wenn der Ist-Sollwert abweicht — kein Modbus-Traffic im eingeschwungenen Zustand
+            if abs(current_power - effective_hard) > 0.5:
+                await self._set_output(effective_hard)
+                self._set_last_action(f"Zone 0: Output → {effective_hard} W")
+                await self._wait_for_target(effective_hard)
 
         elif self.ac_charge_active:
             ac_grid_err = grid - ac_offset
-            new_pw = current_power
             if abs(ac_grid_err) > tolerance:
                 new_pw = self._pi_calculate(
                     grid, current_power, ac_offset, ac_power_limit,
@@ -817,7 +823,10 @@ class SolakonCoordinator:
                 )
                 await self._set_output(new_pw)
                 self._set_last_action(f"AC-PI: {current_power:.0f} → {new_pw:.0f} W")
-            await self._wait_for_target(new_pw, ac_charge_mode=True)
+                await self._wait_for_target(new_pw, ac_charge_mode=True)
+            else:
+                if abs(self.integral) > 10:
+                    self.integral *= 0.95
 
         elif self.tariff_charge_active:
             await self._set_output(tariff_power)

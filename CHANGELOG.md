@@ -12,6 +12,11 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 - Neue Validierung: Export-Schwelle (Surplus) muss über der Zone-1-Schwelle liegen, analog zur bestehenden Zone1-/Zone3-Prüfung
 - Tarif-Lock der Fall-D-Recovery verschont aktiven Surplus (konsistent zu Fall TM) — Modus-Wiederherstellung in Zone 0 wird nicht mehr durch mittlere Strompreise blockiert
 
+### Geändert
+- Zone 0 schreibt den Output nur noch bei Abweichung vom Sollwert — vorher identischer Modbus-Schreibbefehl plus Wartezeit bei jedem Regelzyklus, solange Surplus aktiv war
+- AC-Lade-Pfad wartet nur noch nach einem tatsächlichen Stelleingriff (wie der normale PI-Pfad) und baut das Integral in Toleranzphasen per Decay ab
+- Timeout-Reset (Schritt 9) entfällt, wenn ein Fall im selben Zyklus bereits einen Timer-Toggle ausgeführt hat — kein Doppel-Toggle mit stalem Countdown-Wert mehr
+
 ## [2.1.1] – 2026-07-03
 
 ### Behoben
