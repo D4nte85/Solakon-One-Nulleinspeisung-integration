@@ -212,8 +212,12 @@ class SolakonCoordinator:
         new_sf_en = self.settings.get(S_SURPLUS_FORECAST_ENABLED, False)
         if old_sf != new_sf or old_sf_en != new_sf_en:
             self._update_surplus_forecast_tracker()
-    
+
         self.notify_listeners()
+
+        # Neuen Zustand sofort anwenden statt erst beim nächsten Sensor-Event.
+        if self.settings.get(S_REGULATION_ENABLED, False):
+            self.hass.async_create_task(self._async_regulate())
 
     def _update_tariff_tracker(self) -> None:
         """Tarif-Sensor-Listener dynamisch (de-)registrieren."""
