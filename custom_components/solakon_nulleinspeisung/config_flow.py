@@ -107,7 +107,7 @@ class SolakonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="user",
             data_schema=_schema({}, defaults),
             description_placeholders={
-                "hint": "https://github.com/D4nte85/Solakon-One-Nulleinspeisung-Blueprint-homeassistant",
+                "hint": "https://github.com/D4nte85/Solakon-One-Nulleinspeisung-integration",
             },
         )
 
