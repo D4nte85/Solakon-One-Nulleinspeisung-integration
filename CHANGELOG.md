@@ -6,6 +6,7 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 ## [Unreleased]
 
 ### Behoben
+- Fall-D-Recovery erfordert bei aktiver AC-/Tarif-Lade-Session keine Zone-3-Schwelle mehr — vorher blieb der Modus bei niedrigem SOC dauerhaft auf `'0'` hängen, obwohl `ac_charge_active`/`tariff_charge_active` noch `True` waren (z. B. nach Deaktivieren/Reaktivieren der Regelung während laufendem Laden), und keine der übrigen Falls konnte den Zustand auflösen
 - Entladestrom wird in der Deaktivierungs-Sequenz (`Regelung aktiv = Aus`) explizit auf Max-Entladestrom zurückgesetzt — verhindert, dass ein während AC-/Tarif-Laden auf 0 A geklemmter Wert nach dem Deaktivieren dauerhaft stehen bleibt (Issue #10)
 - Zone 0 als Overlay über Zone 1 erzwungen: Fall 0A aktiviert `cycle_active`, Fall 0B leitet die Zone beim Austritt aus dem SOC neu ab — schließt hängende Zustände, in denen Surplus aktiv war, aber weder Nachtabschaltung (Fall F) noch Recovery (Fall D) den Zustand kannten
 - Forecast-Forcierung an SOC > Zone-3-Schwelle gekoppelt — beendet das Modus-Flattern 0A ↔ C, wenn die Forcierung bei tiefentladener Batterie gegen den Zone-3-Sicherheitsstopp ankämpfte

@@ -954,6 +954,7 @@ class SolakonCoordinator:
 
         # ── Fall D: Recovery ─────────────────────────────────────────────────
         # Tarif-Lock blockiert Recovery für normalen Discharge (ac/tariff_charge_active-Recovery bleibt erlaubt)
+        # Recovery einer aktiven Lade-Session ignoriert die Zone-3-Schwelle — Laden bleibt bei jedem SOC möglich
         tariff_lock_active = (
             v["tariff_enabled"]
             and v.get("tariff_price_valid", False)
@@ -963,14 +964,15 @@ class SolakonCoordinator:
             and not self.tariff_charge_active
             and not self.surplus_active
         )
+        charging_session_active = self.ac_charge_active or self.tariff_charge_active
         if (
-            (self.cycle_active or self.ac_charge_active or self.tariff_charge_active)
+            (self.cycle_active or charging_session_active)
             and mode not in (MODE_DISCHARGE, MODE_AC_CHARGE)
-            and soc > zone3
+            and (charging_session_active or soc > zone3)
             and not tariff_lock_active
         ):
             await self._timer_toggle()
-            if self.ac_charge_active or self.tariff_charge_active:
+            if charging_session_active:
                 await self._set_mode(MODE_AC_CHARGE)
             else:
                 await self._set_mode(MODE_DISCHARGE)
