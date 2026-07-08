@@ -809,6 +809,10 @@ class SolakonCoordinator:
         if timer_val < 120 and not self._timer_toggled_in_cycle and self._entity_ok(cfg[CONF_TIMEOUT_COUNTDOWN]):
             await self._timer_toggle()
 
+        # Eigener Pool für AC-Laden — erst nach den Falls berechnet, damit ein in
+        # diesem Zyklus per Fall G neu gesetztes ac_charge_active bereits zählt.
+        ac_error_share = self._compute_ac_distribution()
+
         # ── PI-Pfade ─────────────────────────────────────────────────────────
         if self.surplus_active:
             # Nur schreiben wenn der Ist-Sollwert abweicht — kein Modbus-Traffic im eingeschwungenen Zustand
@@ -823,7 +827,7 @@ class SolakonCoordinator:
                 new_pw = self._pi_calculate(
                     grid, current_power, ac_offset, ac_power_limit,
                     tolerance, ac_p, ac_i, ac_charge_mode=True,
-                    error_share=error_share,
+                    error_share=ac_error_share,
                 )
                 await self._set_output(new_pw)
                 self._set_last_action(f"AC-PI: {current_power:.0f} → {new_pw:.0f} W")
@@ -1133,26 +1137,26 @@ class SolakonCoordinator:
 
     # ── Multi-Instanz Verteilung ─────────────────────────────────────────────
 
-    def _compute_distribution(self) -> tuple[float, float | None]:
-        """Fehler-Anteil + zugeteilte Leistung für Multi-Instanz-Betrieb berechnen.
+    def _weighted_share(self, active: dict[str, "SolakonCoordinator"]) -> float:
+        """SOC-/kapazitätsgewichteter oder gleichverteilter Fehler-Anteil dieser Instanz.
 
-        Gibt (error_share, allocated_power) zurück.
-        Im Einzelbetrieb: (1.0, None) — kein Einfluss auf hard_limit.
+        `active` ist die Menge der aktuell gleichrangig teilnehmenden Instanzen
+        (Pool-spezifisch — z. B. alle in Modus '1', oder alle mit aktivem AC-Laden).
+        Ist diese Instanz nicht Teil von `active`, bekommt sie keinen Anteil (0.0).
         """
-        all_coords = self.hass.data.get(DOMAIN, {})
-        active = {
-            eid: c for eid, c in all_coords.items()
-            if c.settings.get(S_REGULATION_ENABLED, False)
-        }
-        if len(active) <= 1:
-            return 1.0, None
+        if self.entry.entry_id not in active:
+            return 0.0
 
         n = len(active)
+        if n <= 1:
+            return 1.0
+
         dist = self.hass.data.get(f"{DOMAIN}_dist_config") or {}
-        global_max    = float(dist.get("global_max_power", 800))
         mode          = dist.get("distribution_mode", "equal")
         cap_weighting = bool(dist.get("capacity_weighting", False))
-        total_power   = global_max
+
+        if mode == "equal" and not cap_weighting:
+            return 1.0 / n
 
         def _cap_kwh(eid: str, c) -> float | None:
             # Prefer capacity sensor from dist panel; fall back to instance settings.
@@ -1169,38 +1173,67 @@ class SolakonCoordinator:
             except (ValueError, TypeError):
                 return None
 
-        if mode == "equal" and not cap_weighting:
-            w_self = 1.0 / n
-        else:
-            # Kapazitäten pro Instanz; sobald eine keinen gültigen Wert liefert,
-            # zählen alle neutral 1.0 (reine SOC-Gewichtung, keine Dominanz)
-            caps = {eid: _cap_kwh(eid, c) for eid, c in active.items()}
-            if any(cap is None for cap in caps.values()):
-                caps = {eid: 1.0 for eid in caps}
-            # SOC-Gewichte: nutzbare kWh pro Instanz
-            soc_weights: dict[str, float] = {}
-            for eid, c in active.items():
-                soc   = c._flt(c.entry.data.get(CONF_SOC_SENSOR, ""), 0)
-                zone3 = float(c.settings.get(S_ZONE3_LIMIT, 20))
-                soc_weights[eid] = max(0.0, (soc - zone3) / 100.0 * caps[eid])
+        # Kapazitäten pro Instanz; sobald eine keinen gültigen Wert liefert,
+        # zählen alle neutral 1.0 (reine SOC-Gewichtung, keine Dominanz)
+        caps = {eid: _cap_kwh(eid, c) for eid, c in active.items()}
+        if any(cap is None for cap in caps.values()):
+            caps = {eid: 1.0 for eid in caps}
+        # SOC-Gewichte: nutzbare kWh pro Instanz
+        soc_weights: dict[str, float] = {}
+        for eid, c in active.items():
+            soc   = c._flt(c.entry.data.get(CONF_SOC_SENSOR, ""), 0)
+            zone3 = float(c.settings.get(S_ZONE3_LIMIT, 20))
+            soc_weights[eid] = max(0.0, (soc - zone3) / 100.0 * caps[eid])
 
-            total_soc = sum(soc_weights.values())
-            eq    = 1.0 / n
-            soc_w = soc_weights.get(self.entry.entry_id, 0.0) / total_soc if total_soc > 0 else eq
+        total_soc = sum(soc_weights.values())
+        eq = 1.0 / n
+        return soc_weights.get(self.entry.entry_id, 0.0) / total_soc if total_soc > 0 else eq
 
-            w_self = soc_w
+    def _compute_distribution(self) -> tuple[float, float | None]:
+        """Fehler-Anteil + zugeteilte Leistung für Nulleinspeisung-Instanzen (Modus '1').
 
-        return w_self, round(total_power * w_self)
+        Gibt (error_share, allocated_power) zurück.
+        Im Einzelbetrieb oder wenn diese Instanz gerade nicht in Modus '1' steht:
+        (1.0 bzw. 0.0, None) — kein Einfluss auf hard_limit.
+        """
+        all_coords = self.hass.data.get(DOMAIN, {})
+        active = {
+            eid: c for eid, c in all_coords.items()
+            if c.settings.get(S_REGULATION_ENABLED, False)
+            and c._str(c.entry.data.get(CONF_MODE_SELECT, "")) == MODE_DISCHARGE
+        }
+        if self.entry.entry_id not in active or len(active) <= 1:
+            return (1.0, None) if self.entry.entry_id in active else (0.0, None)
+
+        w_self = self._weighted_share(active)
+        dist = self.hass.data.get(f"{DOMAIN}_dist_config") or {}
+        global_max = float(dist.get("global_max_power", 800))
+        return w_self, round(global_max * w_self)
+
+    def _compute_ac_distribution(self) -> float:
+        """Fehler-Anteil unter gleichzeitig AC-ladenden Instanzen (Modus '3', `ac_charge_active`).
+
+        Eigener Pool, unabhängig von der Nulleinspeisungs-Verteilung (Modus '1') —
+        verhindert, dass mehrere AC-Lader denselben Netzüberschuss doppelt beanspruchen.
+        Kein `allocated_power`: das AC-Leistungslimit bleibt unabhängig vom hard_limit.
+        """
+        all_coords = self.hass.data.get(DOMAIN, {})
+        active = {
+            eid: c for eid, c in all_coords.items()
+            if c.settings.get(S_REGULATION_ENABLED, False) and c.ac_charge_active
+        }
+        return self._weighted_share(active)
 
     def _total_actual_power(self) -> float:
-        """Summe der Wechselrichter-Ist-Leistung über alle aktiven Instanzen.
+        """Summe der Wechselrichter-Ist-Leistung über alle Nulleinspeisung-Instanzen (Modus '1').
 
-        Einzelbetrieb: eigener actual-Wert.
+        Einzelbetrieb bzw. kein Modus-'1'-Teilnehmer: eigener actual-Wert.
         """
         all_coords = self.hass.data.get(DOMAIN, {})
         active = [
             c for c in all_coords.values()
             if c.settings.get(S_REGULATION_ENABLED, False)
+            and c._str(c.entry.data.get(CONF_MODE_SELECT, "")) == MODE_DISCHARGE
         ]
         if len(active) <= 1:
             return self._flt_power(self.entry.data.get(CONF_ACTUAL_SENSOR, ""))

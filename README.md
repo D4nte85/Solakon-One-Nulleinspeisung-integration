@@ -73,11 +73,12 @@ Bei mehr als einer installierten Instanz zeigt das Sidebar-Panel oben eine **Ins
 
 ### Automatische Fehleraufteilung und Leistungsverteilung
 
-Laufen mehrere Instanzen gleichzeitig, berechnet jeder Coordinator seinen **Gewichts-Anteil** `w_i` und verwendet ihn sowohl für den PI-Regelungsfehler als auch für das zugeteilte Leistungslimit in Zone 1:
+Laufen mehrere Instanzen gleichzeitig, berechnet jeder Coordinator seinen **Gewichts-Anteil** `w_i` und verwendet ihn sowohl für den PI-Regelungsfehler als auch für das zugeteilte Leistungslimit in Zone 1. Das läuft in **zwei vollständig getrennten Pools**, je nachdem welche Rolle eine Instanz gerade einnimmt:
 
 ```
+# Pool 1 — Nulleinspeisung (nur Instanzen aktuell in Modus '1'):
 # Gleichverteilung (Standard):
-w_i = 1 / Anzahl_aktiver_Instanzen
+w_i = 1 / Anzahl_Instanzen_in_Modus_1
 
 # SOC-gewichtet:
 nutzbar_i = (SOC_i − Zone-3-Schwelle_i) / 100 × Kapazität_kWh_i
@@ -85,10 +86,16 @@ w_i       = nutzbar_i / Σ nutzbar_j
 
 # Ergebnis pro Instanz:
 allocated_power_i = total_power × w_i   → effektives Hard-Limit in Zone 1 / 2
-error_share_i     = w_i                 → Anteil am Netzfehler im PI-Regler
+error_share_i     = w_i                 → Anteil am Netzfehler im normalen PI-Regler
+
+# Pool 2 — AC Laden (nur Instanzen aktuell mit ac_charge_active):
+# gleiche Gleichverteilung/SOC-Gewichtungs-Logik, aber ausschließlich unter
+# gleichzeitig ladenden Instanzen — kein allocated_power (AC-Ladeleistung
+# bleibt unabhängig vom Hard-Limit), nur ein eigener error_share für den
+# AC-Lade-PI (siehe „AC Laden" unten).
 ```
 
-Bei einer einzelnen aktiven Instanz bleibt `w_i = 1,0` und das statische Hard-Limit gilt unverändert.
+Eine Instanz, die gerade in Modus `'0'` (idle) steht, trägt zu keinem der beiden Pools bei und bekommt `error_share = 0` sowie `allocated_power = None` (statisches Hard-Limit gilt unverändert). Eine Instanz, die aktuell AC lädt, verwässert **nicht** den Nulleinspeisungs-Pool der anderen — und umgekehrt beeinflusst eine nulleinspeisende Instanz nicht den AC-Lade-Pool. Bei nur einer aktiven Instanz je Pool bleibt `w_i = 1,0`.
 
 > **Batteriekapazität (kWh):** Optional. Fehlt der Sensor bei irgendeiner aktiven Instanz, wird die Kapazität für alle neutral (1.0) gewertet — die Gewichtung erfolgt dann rein nach SOC-Prozentpunkten. Kapazitätsgewichtung greift nur, wenn alle Instanzen einen gültigen Wert liefern. Sinnvoll wenn die Instanzen Batterien unterschiedlicher Kapazität steuern.
 
@@ -258,6 +265,8 @@ Optionales Laden bei erkanntem externem Überschuss. Aktiv in Zone 1 und Zone 2.
 > Der `Output = 0 W`-Guard verhindert Fehlauslösung während der PI noch aktiv regelt.
 
 Der Lademodus verwendet einen **eigenen invertierten PI-Regler**: `raw_error = (ac_offset − grid) × Fehler-Anteil`. Ein positiver Fehler (Grid zu negativ → zu viel Einspeisung) erhöht die Ladeleistung.
+
+> Der `Fehler-Anteil` hier ist [Pool 2](#multi-instancing) — unabhängig von der Nulleinspeisungs-Verteilung. Laden mehrere Instanzen gleichzeitig, teilen sie sich denselben Netzüberschuss über diesen eigenen Pool, statt sich gegenseitig zu überschätzen.
 
 | Parameter | Beschreibung | Empfehlung |
 |-----------|-------------|------------|

@@ -80,8 +80,8 @@ const TAB_LAYOUT = {
       {
         tk: "zones_power", icon: "⚙️", color: "#b45309",
         fields: [
-          { k: "hard_limit_z0",            t: "num",    min: 100, max: 2000, step: 50 },
-          { k: "hard_limit_z1",            t: "num",    min: 100, max: 2000, step: 50 },
+          { k: "hard_limit_z0",            t: "num",    min: 100, max: 1200, step: 50 },
+          { k: "hard_limit_z1",            t: "num",    min: 100, max: 1200, step: 50 },
           { k: "discharge_max",            t: "num",    min: 1,   max: 100,  step: 1  },
           { k: "battery_capacity_sensor",  t: "entity", domain: "sensor" },
         ],
@@ -136,7 +136,7 @@ const TAB_LAYOUT = {
         tk: "ac_entry", icon: "⚡", color: "#7c3aed",
         fields: [
           { k: "ac_soc_target",  t: "num", min: 50,  max: 100,  step: 1   },
-          { k: "ac_power_limit", t: "num", min: 100, max: 2000, step: 50  },
+          { k: "ac_power_limit", t: "num", min: 100, max: 1200, step: 50  },
           { k: "ac_hysteresis",  t: "num", min: 10,  max: 500,  step: 10  },
           { k: "ac_offset",      t: "num", min: -500,max: 200,  step: 5   },
         ],
@@ -171,7 +171,7 @@ const TAB_LAYOUT = {
         tk: "tariff_charge", icon: "🔋", color: "#16a34a",
         fields: [
           { k: "tariff_soc_target", t: "num", min: 50,  max: 100,  step: 1  },
-          { k: "tariff_power",      t: "num", min: 100, max: 2000, step: 50 },
+          { k: "tariff_power",      t: "num", min: 100, max: 1200, step: 50 },
         ],
       },
       {

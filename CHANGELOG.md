@@ -5,7 +5,12 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+## [2.1.2] – 2026-07-08
+
 ### Behoben
+- AC-Lade-Fehler-Anteil von der Nulleinspeisungs-Verteilung entkoppelt: bisher galt eine Instanz im Modus `'3'` für die Multi-Instanz-Verteilung als „inaktiv" und bekam `error_share = 0` — der AC-Lade-PI-Regler fror dadurch bei 0 W ein, sobald die Leistungsverteilung aktiv war. Jetzt eigener Pool, der nur unter gleichzeitig AC-ladenden Instanzen aufgeteilt wird (`_compute_ac_distribution`)
+- Aktiv-Kriterium der Nulleinspeisungs-Verteilung korrigiert: `_compute_distribution`/`_total_actual_power` prüften bisher nur `regulation_enabled`, nicht den tatsächlichen Modus — eine Sekundärinstanz in Modus `'0'` oder `'3'` verwässerte dadurch fälschlich den `error_share` der echten Modus-`'1'`-Teilnehmer. Jetzt zusätzlich `mode == '1'` erforderlich, analog zum Blueprint
+- Panel-Eingabefelder (`hard_limit_z0`, `hard_limit_z1`, `ac_power_limit`, `tariff_power`) erlaubten bis zu 2000 W — reale AC-Hardwaregrenze des Solakon ONE ist 1200 W in beide Richtungen. Slider-Obergrenzen entsprechend korrigiert
 - Fall-D-Recovery erfordert bei aktiver AC-/Tarif-Lade-Session keine Zone-3-Schwelle mehr — vorher blieb der Modus bei niedrigem SOC dauerhaft auf `'0'` hängen, obwohl `ac_charge_active`/`tariff_charge_active` noch `True` waren (z. B. nach Deaktivieren/Reaktivieren der Regelung während laufendem Laden), und keine der übrigen Falls konnte den Zustand auflösen
 - Entladestrom wird in der Deaktivierungs-Sequenz (`Regelung aktiv = Aus`) explizit auf Max-Entladestrom zurückgesetzt — verhindert, dass ein während AC-/Tarif-Laden auf 0 A geklemmter Wert nach dem Deaktivieren dauerhaft stehen bleibt (Issue #10)
 - Zone 0 als Overlay über Zone 1 erzwungen: Fall 0A aktiviert `cycle_active`, Fall 0B leitet die Zone beim Austritt aus dem SOC neu ab — schließt hängende Zustände, in denen Surplus aktiv war, aber weder Nachtabschaltung (Fall F) noch Recovery (Fall D) den Zustand kannten
