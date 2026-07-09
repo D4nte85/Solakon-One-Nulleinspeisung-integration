@@ -83,7 +83,6 @@ const TAB_LAYOUT = {
           { k: "hard_limit_z0",            t: "num",    min: 100, max: 1200, step: 50 },
           { k: "hard_limit_z1",            t: "num",    min: 100, max: 1200, step: 50 },
           { k: "discharge_max",            t: "num",    min: 1,   max: 100,  step: 1  },
-          { k: "battery_capacity_sensor",  t: "entity", domain: "sensor" },
         ],
       },
       {

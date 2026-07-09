@@ -38,7 +38,6 @@ from .const import (
     S_DYN_Z1_ENABLED, S_DYN_Z1_MIN, S_DYN_Z1_MAX, S_DYN_Z1_NOISE, S_DYN_Z1_FACTOR, S_DYN_Z1_NEGATIVE,
     S_DYN_Z2_ENABLED, S_DYN_Z2_MIN, S_DYN_Z2_MAX, S_DYN_Z2_NOISE, S_DYN_Z2_FACTOR, S_DYN_Z2_NEGATIVE,
     S_DYN_AC_ENABLED, S_DYN_AC_MIN, S_DYN_AC_MAX, S_DYN_AC_NOISE, S_DYN_AC_FACTOR, S_DYN_AC_NEGATIVE,
-    S_BATTERY_CAPACITY_SENSOR,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -1159,8 +1158,7 @@ class SolakonCoordinator:
             return 1.0 / n
 
         def _cap_kwh(eid: str, c) -> float | None:
-            # Prefer capacity sensor from dist panel; fall back to instance settings.
-            cap_s = str(dist.get(f"inst_{eid}_capacity_sensor", "") or c.settings.get(S_BATTERY_CAPACITY_SENSOR, ""))
+            cap_s = str(dist.get(f"inst_{eid}_capacity_sensor", ""))
             if not cap_s:
                 return None
             cap_st = c.hass.states.get(cap_s)

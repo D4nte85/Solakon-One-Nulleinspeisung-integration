@@ -134,10 +134,6 @@
       "l": "Max. Entladestrom Zone 1 (A)",
       "d": "Entladestrom in Zone 1. Zone 2 und AC Laden setzen automatisch 0 A. Surplus setzt 2 A."
     },
-    "battery_capacity_sensor": {
-      "l": "Batteriekapazitäts-Sensor (kWh, Optional)",
-      "d": "Nur für Multi-Instancing relevant: sensor.solakon_one_batteriekapazitat der Solakon-ONE-Geräte-Integration. Gewichtet den Netzfehler-Anteil proportional zur nutzbaren Energie — (SOC − Min-SOC) / 100 × Kapazität_kWh. Leer lassen = reine SOC-%-Gewichtung. Fehlt der Sensor bei irgendeiner aktiven Instanz, wird die Kapazität für alle neutral (1.0) gewertet — Kapazitätsgewichtung greift nur, wenn alle Instanzen einen gültigen Wert liefern."
-    },
     "offset_1": {
       "l": "Offset Zone 1 (W)",
       "d": "Regelziel in Zone 1. Positiv = Regler hält leichten Netzbezug als Sicherheitspuffer. Negativ = Regler speist leicht ein. Wird überschrieben wenn Dyn. Offset für Zone 1 aktiv ist."

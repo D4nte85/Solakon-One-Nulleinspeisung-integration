@@ -11,6 +11,9 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 ### Hinzugefügt
 - Live-Validierungspunkte an allen Entity-Eingabefeldern (Config-Tabs und Kapazitätssensoren im Verteilungs-Tab): grün = Entity liefert einen Wert, gelb = existiert, aber `unknown`/`unavailable`, rot = existiert nicht. Aktualisieren beim Tippen und im Polling — macht Tippfehler in Entity-IDs sofort sichtbar (Issue #13). In der Live-Vorschau (`index.html`) mit allen drei Zuständen abgebildet
 
+### Geändert
+- Batteriekapazitätssensor war doppelt konfigurierbar: einmal pro Instanz im Zonen-Tab (`battery_capacity_sensor`), einmal pro Instanz im Verteilungs-Tab — mit Fallback auf den Instanz-Wert, aber ohne Vorbefüllung. Ein Tippfehler in nur einem der beiden Felder brach die Kapazitätsgewichtung unbemerkt. Feld aus dem Zonen-Tab entfernt; einziger Konfigurationsort ist jetzt das Verteilungs-Tab. Bereits gesetzte Zonen-Tab-Werte werden beim ersten Start nach dem Update automatisch ins Verteilungs-Tab übernommen, sofern dort noch kein Wert hinterlegt ist
+
 ## [2.1.2] – 2026-07-08
 
 ### Behoben

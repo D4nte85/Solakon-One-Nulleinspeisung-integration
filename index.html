@@ -1,435 +1,163 @@
+<title>Solakon ONE — Live-Vorschau</title>
 <style>
 :root {
-  --color-background-primary: #1e1e1e;
-  --color-background-secondary: #252525;
-  --color-background-tertiary: #333333;
-  --color-text-primary: #e0e0e0;
-  --color-text-secondary: #a0a0a0;
-  --color-text-tertiary: #777777;
-  --color-border-secondary: #555555;
-  --color-border-tertiary: #333333;
+  color-scheme: dark;
+  --primary-color: #03a9f4;
+  --primary-background-color: #121212;
+  --secondary-background-color: #1c1c1c;
+  --card-background-color: #1e1e1e;
+  --primary-text-color: #e0e0e0;
+  --secondary-text-color: #a0a0a0;
+  --divider-color: #333333;
+  --app-header-background-color: #03a9f4;
+  --app-header-text-color: #ffffff;
 }
-*{box-sizing:border-box;margin:0;padding:0}
-.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}
-body{font-family:Roboto,sans-serif;font-size:13px;color:var(--color-text-primary);background:#121212;padding:20px}
-.shell{display:flex;border:0.5px solid var(--color-border-tertiary);border-radius:12px;overflow:hidden;min-height:720px}
-.sb{width:148px;background:var(--color-background-secondary);border-right:0.5px solid var(--color-border-tertiary);display:flex;flex-direction:column;flex-shrink:0}
-.sb-logo{padding:14px 12px 8px;font-size:10px;font-weight:500;color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:.08em}
-.sb-item{padding:8px 12px;font-size:12px;color:var(--color-text-secondary);cursor:pointer;border-left:3px solid transparent;line-height:1.35}
-.sb-item.active{color:var(--color-text-primary);background:var(--color-background-primary);border-left-color:#03a9f4;font-weight:500}
-.sb-item:hover:not(.active){background:var(--color-background-tertiary)}
-.main{flex:1;display:flex;flex-direction:column;min-width:0}
-.appbar{background:#03a9f4;color:#fff;display:flex;align-items:center;height:46px;padding:0 8px;gap:4px;flex-shrink:0}
-.appbar-title{font-size:14px;font-weight:500;flex:1}
-.lang-toggle{display:flex;gap:3px;margin-left:auto}
-.lang-btn{background:rgba(255,255,255,.2);color:#fff;border:none;padding:3px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:500}
-.lang-btn.active{background:#fff;color:#03a9f4}
-.itabs{display:flex;gap:3px;padding:6px 12px 0;background:var(--color-background-secondary);border-bottom:0.5px solid var(--color-border-tertiary);flex-shrink:0}
-.itab{padding:5px 11px;border-radius:7px 7px 0 0;cursor:pointer;background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-bottom:2px solid var(--color-background-primary);font-size:11px;white-space:nowrap;position:relative;bottom:-1px}
-.itab.active{background:#03a9f4;color:#fff;border-color:#03a9f4;border-bottom-color:#03a9f4;font-weight:500}
-.scroll{overflow-y:auto;flex:1;padding:12px}
-.wrap{max-width:880px;margin:0 auto}
-.top-card{border:0.5px solid var(--color-border-tertiary);border-radius:10px;overflow:hidden;margin-bottom:10px}
-.top-hdr{background:#03a9f4;color:#fff;padding:9px 14px;font-size:13px;font-weight:500}
-.top-body{padding:10px 14px;background:var(--color-background-primary);display:flex;flex-direction:column;gap:8px}
-.reg-bar{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:7px;cursor:pointer;font-size:12px}
-.reg-bar.on{background:#16a34a22;border:0.5px solid #16a34a}
-.reg-bar.off{background:#dc262622;border:0.5px solid #dc2626}
-.reg-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
-.reg-bar.on .reg-dot{background:#16a34a}
-.reg-bar.off .reg-dot{background:#dc2626}
-.info-acc{border:0.5px solid var(--color-border-tertiary);border-radius:8px;overflow:hidden;margin-bottom:12px}
-.info-acc summary{padding:8px 12px;cursor:pointer;font-weight:500;font-size:12px;background:var(--color-background-secondary);color:#03a9f4;list-style:none;display:flex;align-items:center;gap:8px;user-select:none}
-.info-acc summary::-webkit-details-marker{display:none}
-.info-acc summary::before{content:"▶";font-size:.7em;transition:transform .2s}
-.info-acc[open] summary::before{transform:rotate(90deg)}
-.info-acc .info-body{padding:10px 12px;font-size:11px;line-height:1.65;color:var(--color-text-secondary);white-space:pre-wrap;border-top:0.5px solid var(--color-border-tertiary)}
-.tpanel{border:0.5px solid var(--color-border-tertiary);border-radius:10px;overflow:hidden;margin-bottom:10px}
-.tbar{background:var(--color-background-secondary);border-bottom:0.5px solid var(--color-border-tertiary);display:flex;flex-wrap:wrap;padding:5px 5px 0;gap:2px}
-.tab{padding:5px 9px;border-radius:6px 6px 0 0;cursor:pointer;background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-bottom:1px solid var(--color-background-primary);font-size:11px;white-space:nowrap;position:relative;bottom:-1px}
-.tab.active{background:#03a9f4;color:#fff;border-color:#03a9f4;border-bottom-color:#03a9f4;font-weight:500}
-.tcontent{background:var(--color-background-primary);padding:12px}
-.col-card{border:0.5px solid var(--color-border-tertiary);border-radius:9px;overflow:hidden;margin-bottom:10px}
-.col-hdr{padding:7px 12px;color:#fff;font-weight:500;font-size:11px}
-.col-body{padding:10px 12px;background:var(--color-background-primary);display:flex;flex-direction:column;gap:10px}
-.cg2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.cg3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
-.field{display:flex;flex-direction:column;gap:3px}
-.field label{font-size:11px;font-weight:500;color:var(--color-text-primary);display:flex;align-items:center;gap:6px;cursor:pointer}
-.field input[type=number],.field input[type=text]{padding:5px 8px;border:0.5px solid var(--color-border-tertiary);border-radius:5px;background:var(--color-background-secondary);color:var(--color-text-primary);font-size:11px;width:100%}
-.field input[type=checkbox]{width:14px;height:14px;cursor:pointer;accent-color:#03a9f4}
-.entity-row{display:flex;align-items:center;gap:5px}
-.entity-row input{flex:1;min-width:0}
-.entity-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;background:#6b7280}
-.entity-dot.ok{background:#16a34a}
-.entity-dot.warn{background:#f59e0b}
-.entity-dot.err{background:#dc2626}
-.field select{padding:5px 8px;border:0.5px solid var(--color-border-tertiary);border-radius:5px;background:var(--color-background-secondary);color:var(--color-text-primary);font-size:11px;width:100%}
-.desc{font-size:10px;color:var(--color-text-secondary);line-height:1.45}
-.zone-banner{padding:9px;border-radius:7px;color:#fff;font-weight:500;font-size:13px;margin-bottom:10px;text-align:center}
-.sgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
-.sc{border:0.5px solid var(--color-border-tertiary);border-radius:8px;overflow:hidden}
-.sc-hdr{padding:6px 10px;color:#fff;font-weight:500;font-size:11px}
-.sc-body{padding:8px 10px;background:var(--color-background-primary);display:flex;flex-direction:column;gap:6px}
-.sr2{display:grid;grid-template-columns:1fr 1fr;gap:6px}
-.sv{padding:5px 8px;border-radius:5px;background:var(--color-background-secondary)}
-.sv .val{font-size:14px;font-weight:500;color:var(--color-text-primary)}
-.sv .lbl{font-size:10px;color:var(--color-text-secondary);margin-top:1px}
-.sv-full{padding:5px 8px;border-radius:5px;background:var(--color-background-secondary)}
-.sv-full .val{font-size:14px;font-weight:500;color:var(--color-text-primary)}
-.sv-full .lbl{font-size:10px;color:var(--color-text-secondary);margin-top:1px}
-.flags{display:flex;flex-wrap:wrap;gap:3px}
-.flag{padding:2px 7px;border-radius:9px;font-size:10px;font-weight:500}
-.flag.on{background:#16a34a22;color:#16a34a}
-.flag.off{background:var(--color-background-secondary);color:var(--color-text-tertiary)}
-.mlbl{font-size:10px;color:var(--color-text-secondary);margin-bottom:1px}
-.mval{font-size:11px;color:var(--color-text-primary)}
-.osrc{display:inline-block;padding:2px 7px;border-radius:9px;font-size:10px;font-weight:500}
-.osrc.dyn{background:#16a34a22;color:#16a34a}
-.osrc.stat{background:var(--color-background-secondary);color:var(--color-text-tertiary)}
-.ov-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
-.ov-card{border:0.5px solid var(--color-border-tertiary);border-radius:9px;overflow:hidden;cursor:pointer}
-.ov-card:hover{border-color:var(--color-border-secondary)}
-.ov-hdr{padding:9px 12px;color:#fff;font-weight:500;font-size:12px}
-.ov-body{padding:9px 12px;background:var(--color-background-primary);display:flex;flex-direction:column;gap:4px}
-.ov-row{display:flex;justify-content:space-between;font-size:11px;color:var(--color-text-secondary)}
-.ov-row strong{color:var(--color-text-primary);font-weight:500}
-.sec-hdr{font-size:11px;font-weight:500;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px;padding-bottom:6px;border-bottom:0.5px solid var(--color-border-tertiary)}
-.dimmed{opacity:.35;pointer-events:none}
-.save-bar{background:#03a9f4;color:#fff;padding:8px 14px;border-radius:8px;margin-top:8px;display:none;align-items:center;justify-content:space-between}
-.save-bar.show{display:flex}
-.save-bar button{background:#fff;color:#03a9f4;border:none;padding:5px 14px;border-radius:5px;cursor:pointer;font-weight:500;font-size:11px}
-.prio-tbl{width:100%;border-collapse:collapse;font-size:10px;margin-top:4px}
-.prio-tbl th{background:var(--color-background-secondary);padding:4px 8px;text-align:left;font-weight:500;border-bottom:0.5px solid var(--color-border-tertiary)}
-.prio-tbl td{padding:3px 8px;border-bottom:0.5px solid var(--color-border-tertiary)}
-.prio-tbl tr:last-child td{border-bottom:none}
+@media (prefers-color-scheme: light) {
+  :root {
+    color-scheme: light;
+    --primary-background-color: #fafafa;
+    --secondary-background-color: #f0f0f0;
+    --card-background-color: #ffffff;
+    --primary-text-color: #212121;
+    --secondary-text-color: #666666;
+    --divider-color: #dddddd;
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:var(--primary-background-color);min-height:100vh}
 </style>
 
-<h2 class="sr-only">Vollständiges Solakon ONE Panel mit zwei Instanzen</h2>
+<!--
+  Live-Vorschau: lädt das echte solakon-panel.js unverändert und speist es mit
+  Demo-Daten über ein Mock-hass-Objekt. Keine hartkodierte Nachbildung mehr —
+  jede Änderung am echten Panel erscheint hier automatisch. Optional ?lang=en
+  für die englische Übersetzung (real genutzte panel.en.json).
+-->
+<solakon-panel id="panel"></solakon-panel>
 
-<div class="shell">
-  <div class="sb">
-    <div class="sb-logo">Home Assistant</div>
-    <div class="sb-item">Übersicht</div>
-    <div class="sb-item">Energie</div>
-    <div class="sb-item active">☀️ Solakon ONE</div>
-    <div class="sb-item">Automationen</div>
-    <div class="sb-item">Einstellungen</div>
-  </div>
-  <div class="main">
-    <div class="appbar">
-      <span style="font-size:18px;padding:6px;border-radius:50%">☰</span>
-      <span class="appbar-title">Solakon ONE</span>
-      <div class="lang-toggle">
-        <button class="lang-btn active" data-lang="de" onclick="setLang('de')">DE</button>
-        <button class="lang-btn" data-lang="en" onclick="setLang('en')">EN</button>
-      </div>
-    </div>
-    <div class="itabs">
-      <div class="itab" id="it-ov" onclick="si('ov')">📊 Übersicht</div>
-      <div class="itab active" id="it-a" onclick="si('a')">Solakon A</div>
-      <div class="itab" id="it-b" onclick="si('b')">Solakon B</div>
-    </div>
-    <div class="scroll"><div class="wrap" id="content"></div></div>
-  </div>
-</div>
-
+<script src="custom_components/solakon_nulleinspeisung/frontend/solakon-panel.js"></script>
 <script>
-const DA={name:'Solakon A',zone:2,zl:'🔋 Zone 2 — Schonend',zc:'#0891b2',soc:74,out:312,grid:4,solar:580,int:12.40,std:18.3,fl:'Zone 2: Regelung aktiv',cy:false,reg:true,dyn_z2:true,offset:28,mode:'1',alloc:null};
-const DB={name:'Solakon B',zone:1,zl:'⚡ Zone 1 — Aggressiv',zc:'#16a34a',soc:41,out:180,grid:8,solar:320,int:3.10,std:9.7,fl:'Zone 1: Entladezyklus Start',cy:true,reg:true,dyn_z1:true,offset:38,mode:'1',alloc:400};
-const INST={a:DA,b:DB};
-let inst='a', tab='status';
-let T=null, lang='de';
-const LANGS={};
+(function () {
+  const DOMAIN = "solakon_nulleinspeisung";
 
-function si(id){inst=id;tab='status';['ov','a','b'].forEach(k=>document.getElementById('it-'+k).className='itab'+(k===id?' active':''));render();}
-function st(id){tab=id;render();}
-
-function dirty(){
-  const s=document.getElementById('save-inst');
-  if(s) s.className='save-bar show';
-}
-function dirtyDist(){
-  const s=document.getElementById('save-dist');
-  if(s) s.className='save-bar show';
-}
-function hideSave(id){ document.getElementById(id).className='save-bar'; }
-
-function fi(l,d,t,v,x=''){return `<div class="field"><label>${l}</label>${d?`<div class="desc">${d}</div>`:''}<input type="${t}" value="${v}" ${x} oninput="dirty()"></div>`;}
-function fent(l,d,v,ph,dot){return `<div class="field"><label>${l}</label>${d?`<div class="desc">${d}</div>`:''}<div class="entity-row"><input type="text" value="${v}" ${ph?`placeholder="${ph}"`:''} oninput="dirty()"><span class="entity-dot ${dot||''}"></span></div></div>`;}
-function fb(l,d,chk,id=''){return `<div class="field"><label><input type="checkbox" ${chk?'checked':''} ${id?`id="${id}"`:''}  onchange="dirty()"> ${l}</label>${d?`<div class="desc">${d}</div>`:''}</div>`;}
-function fsel(l,d,opts,sel,id=''){const os=opts.map(o=>`<option${o===sel?' selected':''}>${o}</option>`).join('');return `<div class="field"><label>${l}</label>${d?`<div class="desc">${d}</div>`:''}<select ${id?`id="${id}"`:''}  onchange="dirty()">${os}</select></div>`;}
-function card(t,col,body){return `<div class="col-card"><div class="col-hdr" style="background:${col}">${t}</div><div class="col-body">${body}</div></div>`;}
-function acc(sum,txt){return `<details class="info-acc"><summary>ℹ️ ${sum}</summary><div class="info-body">${txt}</div></details>`;}
-
-function wireToggle(cbId,targetId){
-  const cb=document.getElementById(cbId),tgt=document.getElementById(targetId);
-  if(!cb||!tgt) return;
-  const apply=()=>{tgt.className=cb.checked?'':'dimmed';};
-  apply();
-  cb.addEventListener('change',apply);
-}
-
-function setLang(l){
-  if(!LANGS[l])return;
-  lang=l;T=LANGS[l];
-  document.querySelectorAll('.lang-btn').forEach(b=>b.classList.toggle('active',b.dataset.lang===l));
-  render();
-}
-
-function getTabs(){
-  const ic={status:'📊',pi:'🎛️',zones:'🔋',surplus:'☀️',ac:'⚡',tariff:'💹',dynoff:'📈',night:'🌙',debug:'🔧'};
-  return Object.keys(T.tabs).map(id=>({id,l:(ic[id]||'')+' '+T.tabs[id]}));
-}
-
-function render(){
-  if(!T)return;
-  const c=document.getElementById('content');
-  if(inst==='ov'){c.innerHTML='';renderOv(c);return;}
-  const d=INST[inst];
-  const tb=getTabs().map(t=>`<div class="tab${t.id===tab?' active':''}" onclick="st('${t.id}')">${t.l}</div>`).join('');
-  c.innerHTML=`
-    <div class="top-card">
-      <div class="top-hdr">⚡ Solakon ONE Nulleinspeisung — ${d.name}</div>
-      <div class="top-body">
-        <div class="reg-bar ${d.reg?'on':'off'}"><div class="reg-dot"></div><span>${d.reg?'Regelung aktiv — klicken zum Deaktivieren':'Regelung inaktiv'}</span></div>
-        <details class="info-acc"><summary>ℹ️ Über diese Integration</summary><div class="info-body">PI-Regler mit Netzleistung als Regelgröße. Vier SOC-Zonen steuern das Verhalten.
-<table class="prio-tbl" style="margin-top:6px"><tr><th>Prio</th><th>Modul</th><th>Blockiert</th></tr><tr><td>1</td><td>☀️ Überschuss</td><td>Tarif-Laden, Discharge-Lock, AC Laden</td></tr><tr><td>2</td><td>💹 Tarif-Laden</td><td>AC Laden, Discharge-Lock</td></tr><tr><td>3</td><td>💹 Discharge-Lock</td><td>Zone-1/2-Recovery</td></tr><tr><td>4</td><td>⚡ AC Laden</td><td>Tarif-Laden</td></tr><tr><td>5</td><td>🌙 Nacht</td><td>Zone-2-Start</td></tr></table></div></details>
-      </div>
-    </div>
-    <div class="tpanel">
-      <div class="tbar">${tb}</div>
-      <div class="tcontent">${rTab(d)}</div>
-    </div>
-    <div class="save-bar" id="save-inst">
-      <span>Ungespeicherte Änderungen</span>
-      <button onclick="hideSave('save-inst')">💾 Speichern</button>
-    </div>`;
-  if(tab==='surplus') wireToggle('cb-surplus','blk-surplus-cols');
-  if(tab==='ac')      wireToggle('cb-ac','blk-ac-cols');
-  if(tab==='tariff')  wireToggle('cb-tariff','blk-tariff-cols');
-}
-
-function renderOv(c){
-  const cards=Object.entries(INST).map(([k,d])=>`
-    <div class="ov-card" onclick="si('${k}')">
-      <div class="ov-hdr" style="background:${d.zc}">${d.zl} — ${d.name}</div>
-      <div class="ov-body">
-        <div class="ov-row"><span>SOC</span><strong>${d.soc} %</strong></div>
-        <div class="ov-row"><span>Ausgang</span><strong>${d.out} W</strong></div>
-        <div class="ov-row"><span>Netz</span><strong>${d.grid >= 0 ? '+' : ''}${d.grid} W</strong></div>
-        <div class="ov-row"><span>Fall</span><strong>${d.fl}</strong></div>
-      </div>
-    </div>`).join('');
-  c.innerHTML=`<div class="ov-grid">${cards}</div><div class="sec-hdr">⚖️ Leistungsverteilung</div>`;
-  c.querySelectorAll('.ov-card').forEach((el,i)=>el.addEventListener('click',()=>si(i===0?'a':'b')));
-
-  const vd=document.createElement('div');
-  c.appendChild(vd);
-  vd.innerHTML=`
-    ${card('🌐 Globale Einstellungen','#0891b2',
-      `<div class="field"><label>Gesamte Max. Ausgangsleistung (W)</label><div class="desc">Absolute Obergrenze aller Instanzen zusammen. Standard: 800 W.</div><input type="number" value="800" min="0" max="9600" step="10" oninput="dirtyDist()"></div>`)}
-    ${card('🔋 Kapazitätsausgleich','#059669',
-      `<div class="field"><label><input type="checkbox" id="cb-cap" onchange="dirtyDist()"> Kapazitätsausgleich aktivieren</label><div class="desc">Verteilt Leistung proportional zur Batteriekapazität, sodass der SOC aller Instanzen gleich schnell sinkt. Erfordert einen Kapazitätssensor (kWh) pro Instanz.</div></div>
-       <div class="desc" style="margin:6px 0 4px">Kapazitätssensor (kWh) pro Instanz — der Punkt zeigt die Gültigkeit der Entity live: grün = liefert einen Wert, gelb = unknown/unavailable, rot = existiert nicht (Tippfehler prüfen):</div>
-       <div class="field"><label>Solakon A</label><div class="entity-row"><input type="text" value="sensor.solakon_one_batteriekapazitat" placeholder="sensor.solakon_one_batteriekapazitat" style="width:100%;box-sizing:border-box" oninput="dirtyDist()"><span class="entity-dot ok"></span></div></div>
-       <div class="field"><label>Solakon B</label><div class="entity-row"><input type="text" value="sensor.solakon_one_batteriekapzitat" placeholder="sensor.solakon_one_batteriekapazitat" style="width:100%;box-sizing:border-box" oninput="dirtyDist()"><span class="entity-dot err"></span></div></div>`)}
-    <div id="blk-mode">
-      ${card('⚖️ Verteilungs-Modus','#7c3aed',
-        `<div class="field"><label>Modus</label><div class="desc">Gleichverteilung: gleich viel · SOC-gewichtet: nach nutzbarer Kapazität (SOC − Zone-3-Schwelle)</div><select onchange="dirtyDist()"><option selected>Gleichverteilung</option><option>SOC-gewichtet</option></select></div>`)}
-    </div>
-    <div class="save-bar" id="save-dist">
-      <span>Ungespeicherte Änderungen</span>
-      <button id="save-dist-btn">💾 Speichern</button>
-    </div>`;
-
-  vd.querySelector('#save-dist-btn').addEventListener('click',()=>hideSave('save-dist'));
-  const cbCap=vd.querySelector('#cb-cap'),blkMode=vd.querySelector('#blk-mode');
-  if(cbCap&&blkMode){
-    const applyCap=()=>{blkMode.className=cbCap.checked?'dimmed':'';};
-    applyCap();
-    cbCap.addEventListener('change',applyCap);
-  }
-}
-
-function rTab(d){
-  if(tab==='status')  return rStatus(d);
-  if(tab==='pi')      return rPI();
-  if(tab==='zones')   return rZones();
-  if(tab==='surplus') return rSurplus();
-  if(tab==='ac')      return rAC();
-  if(tab==='tariff')  return rTariff();
-  if(tab==='dynoff')  return rDynoff();
-  if(tab==='night')   return rNight();
-  if(tab==='debug')   return rDebug(d);
-  return '';
-}
-
-function rStatus(d){
-  const offLbl=d.cy?'Zone 1':'Zone 2';
-  const isDyn=d.cy?!!d.dyn_z1:!!d.dyn_z2;
-  return `<div class="zone-banner" style="background:${d.zc}">${d.zl}</div>
-  <div class="sgrid">
-    <div class="sc"><div class="sc-hdr" style="background:#0891b2">⚡ Messwerte</div><div class="sc-body">
-      <div class="sr2"><div class="sv"><div class="val">+${d.grid} W</div><div class="lbl">Netzleistung</div></div><div class="sv"><div class="val">${d.soc} %</div><div class="lbl">SOC</div></div></div>
-      <div class="sr2"><div class="sv"><div class="val">${d.out} W</div><div class="lbl">Ausgangsleistung</div></div><div class="sv"><div class="val">${d.solar} W</div><div class="lbl">Solarleistung</div></div></div>
-    </div></div>
-    <div class="sc"><div class="sc-hdr" style="background:#7c3aed">📈 Regelzustand</div><div class="sc-body">
-      <div class="sr2"><div class="sv"><div class="val">${d.int.toFixed(2)}</div><div class="lbl">PI Integral</div></div><div class="sv"><div class="val">${d.std.toFixed(1)} W</div><div class="lbl">Netz-StdDev</div></div></div>
-      <div class="sr2"><div class="sv"><div class="val">${d.alloc != null ? d.alloc+' W' : '—'}</div><div class="lbl">Zugeteilt (Multi)</div></div></div>
-      <div class="sv-full"><div class="val">${d.offset} W</div><div class="lbl">Aktiver Offset — ${offLbl}</div>
-        <div style="margin-top:3px"><span class="osrc ${isDyn?'dyn':'stat'}">${isDyn?'⚡ dynamisch':'dyn. inaktiv'}</span><span class="osrc stat">statisch: ${d.offset} W</span></div>
-      </div>
-      <div class="sr2"><div class="sv"><div class="val">3 s</div><div class="lbl">Seit letztem Output</div></div><div class="sv"><div class="val">4 min 12 s</div><div class="lbl">Seit Moduswechsel</div></div></div>
-    </div></div>
-    <div class="sc"><div class="sc-hdr" style="background:#b45309">🚦 Module & Status</div><div class="sc-body">
-      <div class="mlbl">Aktive Module</div>
-      <div class="flags"><span class="flag ${d.cy?'on':'off'}">${d.cy?'●':'○'} Zyklus</span><span class="flag off">○ Surplus</span><span class="flag off">○ AC Laden</span><span class="flag off">○ Tarif-Laden</span><span class="flag off">○ Nacht</span><span class="flag off">○ PV→Tarif</span><span class="flag off">○ PV→Surplus</span></div>
-      <div class="mlbl" style="margin-top:4px">Aktiver Fall</div><div class="mval">${d.fl}</div>
-      <div class="mlbl" style="margin-top:4px">Betriebsmodus</div><div class="mval">Modus ${d.mode} — INV Discharge PV Priority</div>
-      <div class="mlbl" style="margin-top:4px">Letzte Aktion</div><div class="mval">Output ${d.out} W gesetzt</div>
-      <div class="mlbl" style="margin-top:4px">Fehler</div><div class="mval" style="color:var(--color-text-secondary)">Keine</div>
-    </div></div>
-  </div>`;
-}
-
-function rPI(){
-  const D=T.tab_docs.pi,F=T.fields,C=T.col_titles;
-  return acc(D.summary,D.text)+
-  `<div class="cg2">
-    ${card('🎛️ '+C.pi_ctrl,'#0891b2',
-      fi(F.p_factor.l,F.p_factor.d,'number',1.3,'min=0.1 max=5 step=0.1')+
-      fi(F.i_factor.l,F.i_factor.d,'number',0.05,'min=0 max=0.5 step=0.01')+
-      fi(F.tolerance.l,F.tolerance.d,'number',15,'min=0 max=200 step=1')+
-      fi(F.wait_time.l,F.wait_time.d,'number',3,'min=0 max=30 step=1'))}
-    ${card('🎯 '+C.pi_saw,'#7c3aed',
-      fb(F.self_adjust_enabled.l,F.self_adjust_enabled.d,false)+
-      fi(F.self_adjust_tolerance.l,F.self_adjust_tolerance.d,'number',2,'min=1 max=50 step=1'))}
-  </div>`;
-}
-
-function rZones(){
-  const D=T.tab_docs.zones,F=T.fields,C=T.col_titles;
-  return acc(D.summary,D.text)+
-  `<div class="cg3">
-    ${card('🔋 '+C.zones_soc,'#0891b2',
-      fi(F.zone1_limit.l,F.zone1_limit.d,'number',50,'min=1 max=99 step=1')+
-      fi(F.zone3_limit.l,F.zone3_limit.d,'number',20,'min=1 max=49 step=1')+
-      fi(F.pv_reserve.l,F.pv_reserve.d,'number',50,'min=0 max=500 step=10'))}
-    ${card('⚙️ '+C.zones_power,'#b45309',
-      fi(F.hard_limit_z0.l,F.hard_limit_z0.d,'number',800,'min=100 max=2000 step=50')+
-      fi(F.hard_limit_z1.l,F.hard_limit_z1.d,'number',800,'min=100 max=2000 step=50')+
-      fi(F.discharge_max.l,F.discharge_max.d,'number',40,'min=1 max=100 step=1'))}
-    ${card('🎯 '+C.zones_offsets,'#7c3aed',
-      fi(F.offset_1.l,F.offset_1.d,'number',30,'min=-200 max=300 step=1')+
-      fi(F.offset_2.l,F.offset_2.d,'number',10,'min=-200 max=300 step=1'))}
-  </div>`;
-}
-
-function rSurplus(){
-  const D=T.tab_docs.surplus,F=T.fields,C=T.col_titles;
-  return acc(D.summary,D.text)+
-  card(T.general_section,'#475569',fb(F.surplus_enabled.l,F.surplus_enabled.d,false,'cb-surplus'))+
-  `<div id="blk-surplus-cols" class="dimmed" style="margin-top:10px"><div class="cg3">
-    ${card('🔋 '+C.surplus_soc,'#0891b2',
-      fi(F.surplus_soc_threshold.l,F.surplus_soc_threshold.d,'number',95,'min=50 max=100 step=1')+
-      fi(F.surplus_soc_hyst.l,F.surplus_soc_hyst.d,'number',5,'min=1 max=20 step=1'))}
-    ${card('☀️ '+C.surplus_pv,'#f59e0b',
-      fi(F.surplus_pv_hyst.l,F.surplus_pv_hyst.d,'number',50,'min=10 max=200 step=10'))}
-    ${card('🌤️ '+C.surplus_forecast,'#65a30d',
-      fb(F.surplus_forecast_enabled.l,F.surplus_forecast_enabled.d,false)+
-      fent(F.surplus_forecast_sensor.l,F.surplus_forecast_sensor.d,'','sensor.solcast_prognose','')+
-      fi(F.surplus_forecast_threshold.l,F.surplus_forecast_threshold.d,'number',5,'min=0 max=100 step=0.5'))}
-  </div></div>`;
-}
-
-function rAC(){
-  const D=T.tab_docs.ac,F=T.fields,C=T.col_titles;
-  return acc(D.summary,D.text)+
-  card(T.general_section,'#475569',fb(F.ac_enabled.l,F.ac_enabled.d,false,'cb-ac'))+
-  `<div id="blk-ac-cols" class="dimmed" style="margin-top:10px"><div class="cg2">
-    ${card('⚡ '+C.ac_entry,'#7c3aed',
-      fi(F.ac_soc_target.l,F.ac_soc_target.d,'number',90,'min=50 max=100 step=1')+
-      fi(F.ac_power_limit.l,F.ac_power_limit.d,'number',800,'min=100 max=2000 step=50')+
-      fi(F.ac_hysteresis.l,F.ac_hysteresis.d,'number',50,'min=10 max=500 step=10')+
-      fi(F.ac_offset.l,F.ac_offset.d,'number',-50,'min=-500 max=200 step=5'))}
-    ${card('🎛️ '+C.ac_pi,'#0891b2',
-      fi(F.ac_p_factor.l,F.ac_p_factor.d,'number',0.3,'min=0.1 max=3 step=0.1')+
-      fi(F.ac_i_factor.l,F.ac_i_factor.d,'number',0.07,'min=0 max=0.5 step=0.01'))}
-  </div></div>`;
-}
-
-function rTariff(){
-  const D=T.tab_docs.tariff,F=T.fields,C=T.col_titles;
-  return acc(D.summary,D.text)+
-  card(T.general_section,'#475569',
-    fb(F.tariff_enabled.l,F.tariff_enabled.d,false,'cb-tariff')+
-    fent(F.tariff_price_sensor.l,F.tariff_price_sensor.d,'sensor.tibber_price_current','','ok'))+
-  `<div id="blk-tariff-cols" class="dimmed" style="margin-top:10px"><div class="cg2">
-    ${card('💹 '+C.tariff_thresholds,'#0891b2',
-      fi(F.tariff_cheap_threshold.l,F.tariff_cheap_threshold.d,'number',10,'min=0 max=100 step=0.5')+
-      fent(F.tariff_cheap_entity.l,F.tariff_cheap_entity.d,'','input_number.xxx','')+
-      fi(F.tariff_exp_threshold.l,F.tariff_exp_threshold.d,'number',25,'min=0 max=100 step=0.5')+
-      fent(F.tariff_exp_entity.l,F.tariff_exp_entity.d,'','input_number.xxx',''))}
-    <div>
-      ${card('🔋 '+C.tariff_charge,'#16a34a',
-        fi(F.tariff_soc_target.l,F.tariff_soc_target.d,'number',90,'min=50 max=100 step=1')+
-        fi(F.tariff_power.l,F.tariff_power.d,'number',800,'min=100 max=2000 step=50'))}
-      ${card('☀️ '+C.tariff_forecast,'#f59e0b',
-        fb(F.pv_forecast_enabled.l,F.pv_forecast_enabled.d,false)+
-        fent(F.pv_forecast_sensor.l,F.pv_forecast_sensor.d,'','sensor.solcast_prognose','')+
-        fi(F.pv_forecast_threshold.l,F.pv_forecast_threshold.d,'number',5,'min=0 max=50 step=0.5'))}
-    </div>
-  </div></div>`;
-}
-
-function rDynoff(){
-  const D=T.tab_docs.dynoff,F=T.fields,C=T.col_titles;
-  const ic={z1:'⚡',z2:'🔋',ac:'⚡'};
-  const zn=(pre,col)=>{
-    const p='dyn_'+pre+'_';
-    return card(ic[pre]+' '+C['dynoff_'+pre],col,
-      fb(F[p+'enabled'].l,F[p+'enabled'].d,false)+
-      fi(F[p+'min'].l,F[p+'min'].d,'number',30,'min=0 max=500 step=1')+
-      fi(F[p+'max'].l,F[p+'max'].d,'number',250,'min=50 max=1000 step=10')+
-      fi(F[p+'noise'].l,F[p+'noise'].d,'number',15,'min=0 max=100 step=1')+
-      fi(F[p+'factor'].l,F[p+'factor'].d,'number',1.5,'min=0.5 max=5 step=0.1')+
-      fb(F[p+'negative'].l,F[p+'negative'].d,false));
+  // Das echte Panel fetcht Übersetzungen von einem HA-Static-Path (/<DOMAIN>/panel.xx.json).
+  // Hier gibt es keinen HA-Server — auf den repo-relativen Pfad umleiten, damit das
+  // sowohl lokal (`python -m http.server`) als auch auf GitHub Pages funktioniert.
+  const origFetch = window.fetch.bind(window);
+  window.fetch = (url, opts) => {
+    if (typeof url === "string" && url.startsWith(`/${DOMAIN}/`)) {
+      url = `custom_components/${DOMAIN}/frontend/` + url.slice(DOMAIN.length + 2);
+    }
+    return origFetch(url, opts);
   };
-  return acc(D.summary,D.text)+
-  card(T.general_section,'#475569',fi(F.stddev_window.l,F.stddev_window.d,'number',60,'min=30 max=300 step=10'))+
-  `<div class="cg3" style="margin-top:10px">${zn('z1','#16a34a')}${zn('z2','#0891b2')}${zn('ac','#7c3aed')}</div>`;
-}
 
-function rNight(){
-  const D=T.tab_docs.night,F=T.fields;
-  return acc(D.summary,D.text)+
-  card(T.general_section,'#475569',fb(F.night_enabled.l,F.night_enabled.d,false));
-}
+  const now = () => Math.floor(Date.now() / 1000);
 
-function rDebug(d){
-  const D=T.tab_docs.debug,Dbg=T.debug;
-  return acc(D.summary,D.text)+
-  `<div class="cg2">
-    ${card(Dbg.pi_hdr,'#7c3aed',`<p style="font-size:11px;color:var(--color-text-secondary);margin:0 0 8px">${Dbg.pi_desc}</p><button style="padding:7px 14px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-tertiary);border-radius:6px;cursor:pointer;font-size:11px;color:var(--color-text-primary)">${Dbg.reset_btn}</button>`)}
-    ${card(Dbg.zone_hdr,'#0891b2',`<p style="font-size:11px;color:var(--color-text-secondary);margin:0 0 4px">${Dbg.zone_desc}</p><p style="font-size:11px;margin:0 0 12px">${Dbg.zone_current}<strong>${d.cy?Dbg.zone1_state:Dbg.zone2_state}</strong></p><div style="display:flex;gap:8px"><button style="padding:6px 12px;background:#16a34a;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:11px">${Dbg.zone1_btn}</button><button style="padding:6px 12px;background:#0891b2;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:11px">${Dbg.zone2_btn}</button></div>`)}
-  </div>`;
-}
+  // Deckt sich mit SETTINGS_DEFAULTS in const.py.
+  const DEFAULT_SETTINGS = {
+    regulation_enabled: true,
+    p_factor: 1.3, i_factor: 0.05, tolerance: 15, wait_time: 3, stddev_window: 60,
+    zone1_limit: 50, zone3_limit: 20, discharge_max: 40,
+    hard_limit_z0: 800, hard_limit_z1: 800,
+    offset_1: 30, offset_2: 10, pv_reserve: 50,
+    surplus_enabled: false, surplus_soc_threshold: 95, surplus_soc_hyst: 5, surplus_pv_hyst: 50,
+    surplus_forecast_enabled: false, surplus_forecast_sensor: "", surplus_forecast_threshold: 5000,
+    ac_enabled: false, ac_soc_target: 90, ac_power_limit: 800, ac_hysteresis: 50,
+    ac_offset: -50, ac_p_factor: 0.3, ac_i_factor: 0.0,
+    tariff_enabled: false, tariff_price_sensor: "", tariff_cheap_threshold: 10, tariff_exp_threshold: 25,
+    tariff_soc_target: 90, tariff_power: 800, tariff_cheap_entity: "", tariff_exp_entity: "",
+    pv_forecast_enabled: false, pv_forecast_sensor: "", pv_forecast_threshold: 5000,
+    night_enabled: false,
+    periodic_enabled: false, periodic_interval: 10,
+    self_adjust_enabled: false, self_adjust_tolerance: 2,
+    dyn_z1_enabled: false, dyn_z1_min: 30, dyn_z1_max: 250, dyn_z1_noise: 15, dyn_z1_factor: 1.5, dyn_z1_negative: false,
+    dyn_z2_enabled: false, dyn_z2_min: 30, dyn_z2_max: 250, dyn_z2_noise: 15, dyn_z2_factor: 1.5, dyn_z2_negative: false,
+    dyn_ac_enabled: false, dyn_ac_min: 30, dyn_ac_max: 250, dyn_ac_noise: 15, dyn_ac_factor: 1.5, dyn_ac_negative: false,
+  };
 
-async function init(){
-  document.getElementById('content').innerHTML='<div style="padding:24px;color:var(--color-text-secondary);font-size:12px">Lade…</div>';
-  const base='custom_components/solakon_nulleinspeisung/frontend/panel';
-  const results=await Promise.allSettled(['de','en'].map(l=>
-    fetch(`${base}.${l}.json`).then(r=>{if(!r.ok)throw new Error(r.status);return r.json();}).then(j=>({l,j}))
-  ));
-  results.forEach(r=>{if(r.status==='fulfilled')LANGS[r.value.l]=r.value.j;});
-  if(!LANGS.de){
-    document.getElementById('content').innerHTML='<div style="padding:24px;color:#f59e0b;font-size:12px">⚠️ panel.de.json konnte nicht geladen werden.<br>Seite über HTTP öffnen: <code>python -m http.server</code></div>';
-    return;
+  // Zwei Demo-Instanzen — zeigt Verteilung/Übersicht-Tab (nur bei >1 Instanz sichtbar).
+  // SOC-Werte bewusst wie im realen Issue-#13-Fall (Kapazitätssensor-Tippfehler → Divergenz).
+  const INSTANCES = {
+    demo_a: {
+      name: "Solakon A",
+      settings: { ...DEFAULT_SETTINGS, tariff_enabled: true, tariff_price_sensor: "sensor.tibber_price_current" },
+      status: mkStatus({ zone: 1, soc: 58, actual_power: 110, grid: -5, active_fall: "A", cycle_active: true }),
+    },
+    demo_b: {
+      name: "Solakon B",
+      settings: { ...DEFAULT_SETTINGS, surplus_enabled: true, surplus_forecast_enabled: true, surplus_forecast_sensor: "sensor.solcast_prognose" },
+      status: mkStatus({ zone: 1, soc: 81, actual_power: 140, grid: 8, active_fall: "A", cycle_active: true }),
+    },
+  };
+
+  function mkStatus(o) {
+    return {
+      zone: o.zone, zone_label: `Zone ${o.zone}`, mode_label: "INV Discharge PV Priority",
+      last_action: "Output → " + o.actual_power + " W", last_action_ts: now() - 12,
+      last_output_ts: now() - 12, mode_label_ts: now() - 340,
+      last_error: null, integral: 4.2, grid: o.grid, actual_power: o.actual_power,
+      solar: 850, soc: o.soc, cycle_active: o.cycle_active, surplus_active: false,
+      ac_charge: false, tariff_charge: false, regulation_enabled: true, stddev: 8.4,
+      dyn_z1_enabled: false, dyn_z2_enabled: false, dyn_ac_enabled: false,
+      dyn_z1: 0, dyn_z2: 0, dyn_ac: 0, active_fall: o.active_fall, is_night: false,
+      forecast_tariff_suppressed: false, forecast_surplus_forced: false, allocated_power: 400,
+    };
   }
-  T=LANGS[lang];
-  si('ov');
-}
 
-init();
+  // Demo-Entities für die Live-Validierungspunkte (grün/gelb/rot) an Entity-Feldern.
+  const STATES = {
+    "sensor.solakon_one_leistung":            { state: "120",  attributes: { unit_of_measurement: "W", friendly_name: "Solakon ONE Leistung" } },
+    "sensor.solakon_one_pv_leistung":          { state: "850",  attributes: { unit_of_measurement: "W", friendly_name: "Solakon ONE PV-Leistung" } },
+    "sensor.solakon_one_batterie_ladestand":   { state: "72",   attributes: { unit_of_measurement: "%", friendly_name: "Solakon ONE Batterie-Ladestand" } },
+    "sensor.solakon_one_batteriekapazitat":    { state: "10.5", attributes: { unit_of_measurement: "kWh", friendly_name: "Solakon ONE Batteriekapazität" } },
+    "sensor.tibber_price_current":             { state: "0.28", attributes: { unit_of_measurement: "EUR/kWh", friendly_name: "Tibber Preis aktuell" } },
+    "sensor.solcast_prognose":                 { state: "unavailable", attributes: { friendly_name: "Solcast PV-Prognose" } },
+    // sensor.solakon_one_batteriekapzitat (Tippfehler, Instanz B) existiert absichtlich nicht → roter Punkt
+  };
+
+  // Distribution-Config: Kapazitätsausgleich aktiv, ein Sensor korrekt (Instanz A),
+  // einer vertippt (Instanz B) — reproduziert die Issue-#13-Szene.
+  let distConfig = {
+    global_max_power: 800,
+    distribution_mode: "weighted",
+    capacity_weighting: true,
+    inst_demo_a_capacity_sensor: "sensor.solakon_one_batteriekapazitat",
+    inst_demo_b_capacity_sensor: "sensor.solakon_one_batteriekapzitat",
+  };
+
+  const hass = {
+    language: new URLSearchParams(location.search).get("lang") === "en" ? "en" : "de",
+    states: STATES,
+    callWS(msg) {
+      const type = msg.type.slice(DOMAIN.length + 1);
+      const inst = msg.entry_id ? INSTANCES[msg.entry_id] : null;
+      switch (type) {
+        case "get_all_instances":
+          return Promise.resolve({ instances: Object.entries(INSTANCES).map(([entry_id, v]) => ({ entry_id, instance_name: v.name })) });
+        case "get_config":
+          return Promise.resolve({ ...inst.settings });
+        case "save_config":
+          Object.assign(inst.settings, msg.changes);
+          return Promise.resolve({ success: true });
+        case "get_status":
+          return Promise.resolve({ ...inst.status });
+        case "reset_integral":
+          inst.status.integral = 0;
+          return Promise.resolve({ success: true });
+        case "set_cycle":
+          inst.status.cycle_active = msg.active;
+          return Promise.resolve({ success: true });
+        case "get_distribution_config":
+          return Promise.resolve({ distribution: { ...distConfig } });
+        case "save_distribution_config":
+          distConfig = { ...msg.distribution };
+          return Promise.resolve({ success: true });
+        default:
+          return Promise.reject(new Error("Demo-Vorschau: unbekannter WS-Typ " + msg.type));
+      }
+    },
+  };
+
+  document.getElementById("panel").hass = hass;
+})();
 </script>

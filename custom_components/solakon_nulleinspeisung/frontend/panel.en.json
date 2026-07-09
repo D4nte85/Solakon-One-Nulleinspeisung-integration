@@ -134,10 +134,6 @@
       "l": "Max. Discharge Current Zone 1 (A)",
       "d": "Discharge current in Zone 1. Zone 2 and AC charging automatically set 0 A. Surplus sets 2 A."
     },
-    "battery_capacity_sensor": {
-      "l": "Battery Capacity Sensor (kWh, Optional)",
-      "d": "Relevant for multi-instancing only: sensor.solakon_one_battery_capacity from the Solakon ONE device integration. Weights the error share proportional to usable energy — (SOC − min-SOC) / 100 × capacity_kWh. Leave empty = pure SOC-%-weighting. If any active instance lacks the sensor, capacity is treated as neutral (1.0) for all — capacity weighting only applies when every instance reports a valid value."
-    },
     "offset_1": {
       "l": "Offset Zone 1 (W)",
       "d": "Control target in Zone 1. Positive = controller maintains slight grid import as safety buffer. Negative = controller slightly exports. Overridden when dynamic offset for Zone 1 is active."

@@ -16,7 +16,7 @@ from .const import (
     DOMAIN, PLATFORMS, S_REGULATION_ENABLED,
     CONF_INSTANCE_NAME,
     CONF_GRID_SENSOR, CONF_ACTUAL_SENSOR, CONF_SOLAR_SENSOR, CONF_SOC_SENSOR,
-    STORAGE_VERSION,
+    STORAGE_VERSION, S_BATTERY_CAPACITY_SENSOR,
 )
 
 STORAGE_VERSION_DIST = 1
@@ -203,6 +203,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.data[f"{DOMAIN}_dist_store"] = store
         stored = await store.async_load() or {}
         hass.data[f"{DOMAIN}_dist_config"] = {**DIST_DEFAULTS, **stored}
+
+    # Einmalige Migration: alter Instanz-Sensor (battery_capacity_sensor, vor
+    # Einführung des Verteilungs-Tabs) wird ins Distribution-Store übernommen,
+    # falls dort für diese Instanz noch kein Kapazitätssensor hinterlegt ist.
+    dist_key = f"inst_{entry.entry_id}_capacity_sensor"
+    old_cap_sensor = coordinator.settings.get(S_BATTERY_CAPACITY_SENSOR)
+    if old_cap_sensor and not hass.data[f"{DOMAIN}_dist_config"].get(dist_key):
+        hass.data[f"{DOMAIN}_dist_config"][dist_key] = old_cap_sensor
+        await hass.data[f"{DOMAIN}_dist_store"].async_save(hass.data[f"{DOMAIN}_dist_config"])
 
     # WebSocket-Commands nur einmal registrieren
     if not hass.data.get(f"{DOMAIN}_ws_registered"):
