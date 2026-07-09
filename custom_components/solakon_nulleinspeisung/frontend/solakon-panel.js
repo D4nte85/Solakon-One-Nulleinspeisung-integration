@@ -297,6 +297,16 @@ class SolakonPanel extends HTMLElement {
   _fl(key) { return this._t.fields?.[key]?.l || key; }
   _fd(key) { return this._t.fields?.[key]?.d || ""; }
 
+  // Gültigkeit einer händisch eingetragenen Entity-ID: err = existiert nicht,
+  // warn = existiert, aber unknown/unavailable, ok = liefert einen Wert.
+  _entityDotClass(entityId) {
+    if (!entityId) return "";
+    const st = this._hass?.states?.[entityId];
+    if (!st) return "err";
+    if (st.state === "unknown" || st.state === "unavailable") return "warn";
+    return "ok";
+  }
+
   async _ws(cmd, extra = {}) {
     return this._hass.callWS({ type: `${DOMAIN}/${cmd}`, entry_id: this._entryId, ...extra });
   }
@@ -361,15 +371,16 @@ class SolakonPanel extends HTMLElement {
     const html = this._instances.map(inst => {
       const st = this._allStatuses[inst.entry_id] || {};
       const zs = ZONE_STYLE[st.zone] ?? ZONE_STYLE[2];
-      const zLabel = this._t.zone_cfg?.[st.zone] ?? `Zone ${st.zone}`;
       const fl = this._t.fall_labels?.[st.active_fall] || st.active_fall || "—";
       return `<div class="ov-card" data-eid="${inst.entry_id}">
-        <div class="ov-hdr" style="background:${zs.color}">${zs.icon} ${inst.instance_name}</div>
+        <div class="ov-hdr" id="ov-hdr-${inst.entry_id}" style="background:${zs.color}">
+          <span id="ov-icon-${inst.entry_id}">${zs.icon}</span> ${inst.instance_name}
+        </div>
         <div class="ov-body">
-          <div class="ov-row"><span>${ov.soc    || "SOC"}</span><strong>${st.soc ?? "—"} %</strong></div>
-          <div class="ov-row"><span>${ov.output || "Output"}</span><strong>${st.actual_power != null ? st.actual_power + " W" : "—"}</strong></div>
-          <div class="ov-row"><span>${ov.grid   || "Grid"}</span><strong>${st.grid != null ? st.grid.toFixed(0) + " W" : "—"}</strong></div>
-          <div class="ov-row"><span>${ov.fall   || "Case"}</span><strong>${fl}</strong></div>
+          <div class="ov-row"><span>${ov.soc    || "SOC"}</span><strong id="ov-soc-${inst.entry_id}">${st.soc ?? "—"} %</strong></div>
+          <div class="ov-row"><span>${ov.output || "Output"}</span><strong id="ov-output-${inst.entry_id}">${st.actual_power != null ? st.actual_power + " W" : "—"}</strong></div>
+          <div class="ov-row"><span>${ov.grid   || "Grid"}</span><strong id="ov-grid-${inst.entry_id}">${st.grid != null ? st.grid.toFixed(0) + " W" : "—"}</strong></div>
+          <div class="ov-row"><span>${ov.fall   || "Case"}</span><strong id="ov-fall-${inst.entry_id}">${fl}</strong></div>
         </div>
       </div>`;
     }).join("");
@@ -382,6 +393,37 @@ class SolakonPanel extends HTMLElement {
     distContainer.style.marginTop = "16px";
     c.appendChild(distContainer);
     this._renderVerteilung(distContainer);
+  }
+
+  // Leichtgewichtiges Update der Live-Werte auf der Overview-Seite — patcht
+  // nur einzelne Textknoten statt die Overview (inkl. Verteilungs-Inputs)
+  // bei jedem 1s-Poll komplett neu zu rendern (sonst verliert ein gerade
+  // fokussiertes Eingabefeld im Verteilungsblock jede Sekunde den Fokus).
+  _updateOverviewCards() {
+    for (const inst of this._instances) {
+      const st = this._allStatuses[inst.entry_id] || {};
+      const zs = ZONE_STYLE[st.zone] ?? ZONE_STYLE[2];
+      const fl = this._t.fall_labels?.[st.active_fall] || st.active_fall || "—";
+
+      const hdr = this.shadowRoot.getElementById(`ov-hdr-${inst.entry_id}`);
+      if (hdr) hdr.style.background = zs.color;
+      const icon = this.shadowRoot.getElementById(`ov-icon-${inst.entry_id}`);
+      if (icon) icon.textContent = zs.icon;
+      const soc = this.shadowRoot.getElementById(`ov-soc-${inst.entry_id}`);
+      if (soc) soc.textContent = `${st.soc ?? "—"} %`;
+      const out = this.shadowRoot.getElementById(`ov-output-${inst.entry_id}`);
+      if (out) out.textContent = st.actual_power != null ? `${st.actual_power} W` : "—";
+      const grid = this.shadowRoot.getElementById(`ov-grid-${inst.entry_id}`);
+      if (grid) grid.textContent = st.grid != null ? `${st.grid.toFixed(0)} W` : "—";
+      const fallEl = this.shadowRoot.getElementById(`ov-fall-${inst.entry_id}`);
+      if (fallEl) fallEl.textContent = fl;
+
+      // Kapazitäts-Sensor-Dot im Verteilungsblock live mitziehen (Sensor kann
+      // zwischendurch unavailable werden), ohne den Input selbst anzufassen.
+      const dot = this.shadowRoot.getElementById(`cap-dot-${inst.entry_id}`);
+      const inp = this.shadowRoot.getElementById(`cap-input-${inst.entry_id}`);
+      if (dot && inp) dot.className = `entity-dot ${this._entityDotClass(inp.value)}`;
+    }
   }
 
   // ── Config / Status Laden ─────────────────────────────────────────────────
@@ -401,7 +443,10 @@ class SolakonPanel extends HTMLElement {
         } catch (_) {}
       }
       const c = this.shadowRoot.getElementById("content");
-      if (c) this._renderOverview(c);
+      if (c) {
+        if (c.querySelector(".ov-grid")) this._updateOverviewCards();
+        else this._renderOverview(c);
+      }
       return;
     }
     try {
@@ -536,6 +581,12 @@ class SolakonPanel extends HTMLElement {
         .field label { display: flex; align-items: center; gap: 8px; font-size: .9em; font-weight: 500; cursor: pointer; }
         .field input[type="number"], .field input[type="text"] { padding: 6px 10px; border: 1px solid var(--divider-color, #ddd); border-radius: 6px; background: var(--secondary-background-color, #f5f5f5); color: var(--primary-text-color, #333); font-size: .9em; width: 100%; box-sizing: border-box; }
         .field input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; accent-color: var(--primary-color, #03a9f4); }
+        .entity-row { display: flex; align-items: center; gap: 6px; }
+        .entity-row input { flex: 1; min-width: 0; }
+        .entity-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; background: #6b7280; }
+        .entity-dot.ok   { background: #16a34a; }
+        .entity-dot.warn { background: #f59e0b; }
+        .entity-dot.err  { background: #dc2626; }
         .desc { font-size: .78em; color: var(--secondary-text-color, #888); line-height: 1.5; }
 
         /* ── Status tab ──────────────────────────────────────────────────── */
@@ -751,8 +802,14 @@ class SolakonPanel extends HTMLElement {
       });
     } else if (f.t === "entity") {
       const eid = `ep_${f.k}`;
-      div.innerHTML = `<label>${label}</label><div class="desc">${desc}</div><input type="text" list="${eid}_list" value="${cur || ""}" placeholder="sensor.xxx"/><datalist id="${eid}_list"></datalist>`;
+      div.innerHTML = `<label>${label}</label><div class="desc">${desc}</div>
+        <div class="entity-row">
+          <input type="text" list="${eid}_list" value="${cur || ""}" placeholder="sensor.xxx"/>
+          <span class="entity-dot ${this._entityDotClass(cur)}"></span>
+        </div>
+        <datalist id="${eid}_list"></datalist>`;
       const inp = div.querySelector("input");
+      const dot = div.querySelector(".entity-dot");
       const dl  = div.querySelector("datalist");
       if (this._hass?.states) {
         const domain = f.domain || "";
@@ -764,6 +821,9 @@ class SolakonPanel extends HTMLElement {
           dl.appendChild(opt);
         });
       }
+      inp.addEventListener("input", () => {
+        dot.className = `entity-dot ${this._entityDotClass(inp.value)}`;
+      });
       inp.addEventListener("change", () => { this._dirty[f.k] = inp.value; this._updateSaveBar(); });
     }
     return div;
@@ -1102,10 +1162,14 @@ class SolakonPanel extends HTMLElement {
       return `
         <div class="field">
           <label>${inst.instance_name}</label>
-          <input type="text" placeholder="${dt.cap_sensor_placeholder || "sensor.battery_capacity_kwh"}"
-            value="${capSensor}"
-            data-dist-inst="${inst.entry_id}" data-dist-key="capacity_sensor"
-            style="width:100%;box-sizing:border-box"/>
+          <div class="entity-row">
+            <input type="text" placeholder="${dt.cap_sensor_placeholder || "sensor.battery_capacity_kwh"}"
+              value="${capSensor}"
+              data-dist-inst="${inst.entry_id}" data-dist-key="capacity_sensor"
+              style="width:100%;box-sizing:border-box"
+              id="cap-input-${inst.entry_id}"/>
+            <span class="entity-dot ${this._entityDotClass(capSensor)}" id="cap-dot-${inst.entry_id}"></span>
+          </div>
         </div>`;
     }).join("");
 
@@ -1169,6 +1233,13 @@ class SolakonPanel extends HTMLElement {
                   : el.value;
         if (inst) this._setDistInstVal(inst, key, val);
         else      this._setDistVal(key, val);
+      });
+    });
+
+    c.querySelectorAll('input[data-dist-key="capacity_sensor"]').forEach(inp => {
+      const dot = c.querySelector(`#cap-dot-${inp.dataset.distInst}`);
+      inp.addEventListener("input", () => {
+        if (dot) dot.className = `entity-dot ${this._entityDotClass(inp.value)}`;
       });
     });
   }

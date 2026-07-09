@@ -383,7 +383,7 @@
     "cap_hdr":                 "🔋 Kapazitätsausgleich",
     "cap_toggle_lbl":          "SOC aller Instanzen gleichschnell entladen",
     "cap_toggle_desc":         "Verteilt Leistung proportional zur Batteriekapazität, sodass der SOC aller Instanzen gleich schnell sinkt. Erfordert einen Kapazitätssensor (kWh) pro Instanz.",
-    "cap_sensor_desc":         "Batteriekapazitätssensor (in kWh) pro Instanz — bestimmt die Leistungsaufteilung:",
+    "cap_sensor_desc":         "Batteriekapazitätssensor (in kWh) pro Instanz — bestimmt die Leistungsaufteilung. Der Punkt neben dem Feld zeigt die Gültigkeit der Entity live: grün = liefert einen Wert, gelb = existiert, aber unknown/unavailable, rot = existiert nicht (Tippfehler prüfen):",
     "cap_sensor_placeholder":  "sensor.solakon_one_batteriekapazitat",
     "cap_overrides_mode":      "Verteilungs-Modus wird durch Kapazitätsausgleich übersteuert.",
     "mode_hdr":           "⚖️ Verteilungs-Modus",

@@ -5,6 +5,12 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+### Behoben
+- Übersichtsseite wurde bei jedem 1-s-Poll komplett neu gerendert — Eingabefelder im Verteilungsblock verloren dadurch sekündlich den Fokus, sobald die Übersicht sichtbar war. Live-Werte (Zone, SOC, Output, Grid, Fall) werden jetzt gezielt in bestehende Elemente gepatcht, statt das DOM neu aufzubauen (Issue #13)
+
+### Hinzugefügt
+- Live-Validierungspunkte an allen Entity-Eingabefeldern (Config-Tabs und Kapazitätssensoren im Verteilungs-Tab): grün = Entity liefert einen Wert, gelb = existiert, aber `unknown`/`unavailable`, rot = existiert nicht. Aktualisieren beim Tippen und im Polling — macht Tippfehler in Entity-IDs sofort sichtbar (Issue #13). In der Live-Vorschau (`index.html`) mit allen drei Zuständen abgebildet
+
 ## [2.1.2] – 2026-07-08
 
 ### Behoben

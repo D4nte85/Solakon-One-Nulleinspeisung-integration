@@ -107,7 +107,7 @@ Im Panel wird bei mehreren Instanzen ein zusätzlicher **Verteilungs-Tab** einge
 |-----------|-------------|
 | Gesamte Max. Ausgangsleistung (W) | Absolute Obergrenze aller Instanzen zusammen |
 | Kapazitätsausgleich | Verteilt proportional zur Batteriekapazität — alle SOC sinken gleich schnell. Überschreibt „Gleichverteilung": ist Kapazitätsausgleich aktiv, wird immer SOC-/Kapazitäts-gewichtet verteilt, unabhängig vom Verteilungs-Modus. |
-| Kapazitätssensor (pro Instanz) | `sensor.solakon_one_batteriekapazitat` — optional, Standard = reine SOC-%-Gewichtung |
+| Kapazitätssensor (pro Instanz) | `sensor.solakon_one_batteriekapazitat` — optional, Standard = reine SOC-%-Gewichtung. Der Validierungspunkt neben dem Feld zeigt live, ob die Entity existiert und einen Wert liefert (grün/gelb/rot) |
 | Verteilungs-Modus | Gleichverteilung oder SOC-gewichtet |
 
 ---
@@ -171,6 +171,8 @@ Im Einrichtungsformular werden zunächst ein **Instanzname** (z. B. „Speicher 
 ## Konfiguration im Sidebar-Panel
 
 Nach der Einrichtung erscheint in der HA-Seitenleiste der Eintrag **Solakon ONE**. Das Panel ist in neun Tabs gegliedert. Änderungen werden erst nach Klick auf **💾 Speichern** übernommen — die Speicherleiste erscheint automatisch sobald ein Wert geändert wurde.
+
+Alle Eingabefelder für Entity-IDs (z. B. Kapazitäts-, Vorhersage- und Preis-Sensoren) zeigen rechts einen **Validierungspunkt**, der die eingetragene Entity live gegen Home Assistant prüft: **grün** = Entity liefert einen Wert, **gelb** = Entity existiert, ist aber `unknown`/`unavailable`, **rot** = Entity existiert nicht (Tippfehler prüfen). Der Punkt aktualisiert sich beim Tippen und im laufenden Betrieb.
 
 ---
 
@@ -465,6 +467,9 @@ Der Modus-Reset-Timer läuft ab bevor der Regler ihn zurücksetzen kann. Solakon
 
 **Integration taucht nach Installation nicht auf**
 Home Assistant vollständig neu starten (nicht nur neu laden). HACS-Download-Status überprüfen.
+
+**SOC der Instanzen läuft bei mehreren Solakons auseinander**
+Im Verteilungs-Tab die Kapazitätssensoren prüfen — ein **roter Validierungspunkt** neben dem Feld bedeutet, dass die eingetragene Entity nicht existiert (häufig ein Tippfehler in der Entity-ID). Ohne gültigen Kapazitätswert bei allen Instanzen wird rein nach SOC-Prozentpunkten gewichtet; bei unterschiedlich großen Batterien stellt sich dann ein dauerhafter SOC-Abstand ein.
 
 ---
 

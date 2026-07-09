@@ -58,6 +58,12 @@ body{font-family:Roboto,sans-serif;font-size:13px;color:var(--color-text-primary
 .field label{font-size:11px;font-weight:500;color:var(--color-text-primary);display:flex;align-items:center;gap:6px;cursor:pointer}
 .field input[type=number],.field input[type=text]{padding:5px 8px;border:0.5px solid var(--color-border-tertiary);border-radius:5px;background:var(--color-background-secondary);color:var(--color-text-primary);font-size:11px;width:100%}
 .field input[type=checkbox]{width:14px;height:14px;cursor:pointer;accent-color:#03a9f4}
+.entity-row{display:flex;align-items:center;gap:5px}
+.entity-row input{flex:1;min-width:0}
+.entity-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;background:#6b7280}
+.entity-dot.ok{background:#16a34a}
+.entity-dot.warn{background:#f59e0b}
+.entity-dot.err{background:#dc2626}
 .field select{padding:5px 8px;border:0.5px solid var(--color-border-tertiary);border-radius:5px;background:var(--color-background-secondary);color:var(--color-text-primary);font-size:11px;width:100%}
 .desc{font-size:10px;color:var(--color-text-secondary);line-height:1.45}
 .zone-banner{padding:9px;border-radius:7px;color:#fff;font-weight:500;font-size:13px;margin-bottom:10px;text-align:center}
@@ -150,6 +156,7 @@ function dirtyDist(){
 function hideSave(id){ document.getElementById(id).className='save-bar'; }
 
 function fi(l,d,t,v,x=''){return `<div class="field"><label>${l}</label>${d?`<div class="desc">${d}</div>`:''}<input type="${t}" value="${v}" ${x} oninput="dirty()"></div>`;}
+function fent(l,d,v,ph,dot){return `<div class="field"><label>${l}</label>${d?`<div class="desc">${d}</div>`:''}<div class="entity-row"><input type="text" value="${v}" ${ph?`placeholder="${ph}"`:''} oninput="dirty()"><span class="entity-dot ${dot||''}"></span></div></div>`;}
 function fb(l,d,chk,id=''){return `<div class="field"><label><input type="checkbox" ${chk?'checked':''} ${id?`id="${id}"`:''}  onchange="dirty()"> ${l}</label>${d?`<div class="desc">${d}</div>`:''}</div>`;}
 function fsel(l,d,opts,sel,id=''){const os=opts.map(o=>`<option${o===sel?' selected':''}>${o}</option>`).join('');return `<div class="field"><label>${l}</label>${d?`<div class="desc">${d}</div>`:''}<select ${id?`id="${id}"`:''}  onchange="dirty()">${os}</select></div>`;}
 function card(t,col,body){return `<div class="col-card"><div class="col-hdr" style="background:${col}">${t}</div><div class="col-body">${body}</div></div>`;}
@@ -224,9 +231,9 @@ function renderOv(c){
       `<div class="field"><label>Gesamte Max. Ausgangsleistung (W)</label><div class="desc">Absolute Obergrenze aller Instanzen zusammen. Standard: 800 W.</div><input type="number" value="800" min="0" max="9600" step="10" oninput="dirtyDist()"></div>`)}
     ${card('🔋 Kapazitätsausgleich','#059669',
       `<div class="field"><label><input type="checkbox" id="cb-cap" onchange="dirtyDist()"> Kapazitätsausgleich aktivieren</label><div class="desc">Verteilt Leistung proportional zur Batteriekapazität, sodass der SOC aller Instanzen gleich schnell sinkt. Erfordert einen Kapazitätssensor (kWh) pro Instanz.</div></div>
-       <div class="desc" style="margin:6px 0 4px">Kapazitätssensor (kWh) pro Instanz:</div>
-       <div class="field"><label>Solakon A</label><input type="text" placeholder="sensor.solakon_one_batteriekapazitat" style="width:100%;box-sizing:border-box" oninput="dirtyDist()"></div>
-       <div class="field"><label>Solakon B</label><input type="text" placeholder="sensor.solakon_one_batteriekapazitat" style="width:100%;box-sizing:border-box" oninput="dirtyDist()"></div>`)}
+       <div class="desc" style="margin:6px 0 4px">Kapazitätssensor (kWh) pro Instanz — der Punkt zeigt die Gültigkeit der Entity live: grün = liefert einen Wert, gelb = unknown/unavailable, rot = existiert nicht (Tippfehler prüfen):</div>
+       <div class="field"><label>Solakon A</label><div class="entity-row"><input type="text" value="sensor.solakon_one_batteriekapazitat" placeholder="sensor.solakon_one_batteriekapazitat" style="width:100%;box-sizing:border-box" oninput="dirtyDist()"><span class="entity-dot ok"></span></div></div>
+       <div class="field"><label>Solakon B</label><div class="entity-row"><input type="text" value="sensor.solakon_one_batteriekapzitat" placeholder="sensor.solakon_one_batteriekapazitat" style="width:100%;box-sizing:border-box" oninput="dirtyDist()"><span class="entity-dot err"></span></div></div>`)}
     <div id="blk-mode">
       ${card('⚖️ Verteilungs-Modus','#7c3aed',
         `<div class="field"><label>Modus</label><div class="desc">Gleichverteilung: gleich viel · SOC-gewichtet: nach nutzbarer Kapazität (SOC − Zone-3-Schwelle)</div><select onchange="dirtyDist()"><option selected>Gleichverteilung</option><option>SOC-gewichtet</option></select></div>`)}
@@ -331,7 +338,7 @@ function rSurplus(){
       fi(F.surplus_pv_hyst.l,F.surplus_pv_hyst.d,'number',50,'min=10 max=200 step=10'))}
     ${card('🌤️ '+C.surplus_forecast,'#65a30d',
       fb(F.surplus_forecast_enabled.l,F.surplus_forecast_enabled.d,false)+
-      fi(F.surplus_forecast_sensor.l,F.surplus_forecast_sensor.d,'text','','placeholder="sensor.solcast_prognose"')+
+      fent(F.surplus_forecast_sensor.l,F.surplus_forecast_sensor.d,'','sensor.solcast_prognose','')+
       fi(F.surplus_forecast_threshold.l,F.surplus_forecast_threshold.d,'number',5,'min=0 max=100 step=0.5'))}
   </div></div>`;
 }
@@ -357,20 +364,20 @@ function rTariff(){
   return acc(D.summary,D.text)+
   card(T.general_section,'#475569',
     fb(F.tariff_enabled.l,F.tariff_enabled.d,false,'cb-tariff')+
-    fi(F.tariff_price_sensor.l,F.tariff_price_sensor.d,'text','sensor.tibber_price_current',''))+
+    fent(F.tariff_price_sensor.l,F.tariff_price_sensor.d,'sensor.tibber_price_current','','ok'))+
   `<div id="blk-tariff-cols" class="dimmed" style="margin-top:10px"><div class="cg2">
     ${card('💹 '+C.tariff_thresholds,'#0891b2',
       fi(F.tariff_cheap_threshold.l,F.tariff_cheap_threshold.d,'number',10,'min=0 max=100 step=0.5')+
-      fi(F.tariff_cheap_entity.l,F.tariff_cheap_entity.d,'text','','placeholder="input_number.xxx"')+
+      fent(F.tariff_cheap_entity.l,F.tariff_cheap_entity.d,'','input_number.xxx','')+
       fi(F.tariff_exp_threshold.l,F.tariff_exp_threshold.d,'number',25,'min=0 max=100 step=0.5')+
-      fi(F.tariff_exp_entity.l,F.tariff_exp_entity.d,'text','','placeholder="input_number.xxx"'))}
+      fent(F.tariff_exp_entity.l,F.tariff_exp_entity.d,'','input_number.xxx',''))}
     <div>
       ${card('🔋 '+C.tariff_charge,'#16a34a',
         fi(F.tariff_soc_target.l,F.tariff_soc_target.d,'number',90,'min=50 max=100 step=1')+
         fi(F.tariff_power.l,F.tariff_power.d,'number',800,'min=100 max=2000 step=50'))}
       ${card('☀️ '+C.tariff_forecast,'#f59e0b',
         fb(F.pv_forecast_enabled.l,F.pv_forecast_enabled.d,false)+
-        fi(F.pv_forecast_sensor.l,F.pv_forecast_sensor.d,'text','','placeholder="sensor.solcast_prognose"')+
+        fent(F.pv_forecast_sensor.l,F.pv_forecast_sensor.d,'','sensor.solcast_prognose','')+
         fi(F.pv_forecast_threshold.l,F.pv_forecast_threshold.d,'number',5,'min=0 max=50 step=0.5'))}
     </div>
   </div></div>`;
