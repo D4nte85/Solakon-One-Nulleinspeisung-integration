@@ -350,13 +350,19 @@ class SolakonPanel extends HTMLElement {
   _switchInstance(id) {
     this._activeInstance = id;
     this._renderInstBar();
+    const topCard = this.shadowRoot.querySelector(".top-card");
+    const tabBar  = this.shadowRoot.getElementById("tabs");
     if (id === "__overview__") {
+      if (topCard) topCard.style.display = "none";
+      if (tabBar)  tabBar.style.display  = "none";
       const c = this.shadowRoot.getElementById("content");
       if (c) this._renderOverview(c);
       const bar = this.shadowRoot.getElementById("save-bar");
       if (bar) bar.style.display = "none";
       return;
     }
+    if (topCard) topCard.style.display = "";
+    if (tabBar)  tabBar.style.display  = "";
     this._entryId   = id;
     this._settings  = {};
     this._dirty     = {};
