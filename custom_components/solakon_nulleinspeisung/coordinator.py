@@ -26,6 +26,7 @@ from .const import (
     S_OFFSET_1, S_OFFSET_2, S_PV_RESERVE,
     S_SURPLUS_ENABLED, S_SURPLUS_SOC_THRESHOLD, S_SURPLUS_SOC_HYST, S_SURPLUS_PV_HYST,
     S_SURPLUS_FORECAST_ENABLED, S_SURPLUS_FORECAST_SENSOR, S_SURPLUS_FORECAST_THRESHOLD,
+    S_SURPLUS_LOCK_ENABLED, S_SURPLUS_LOCK_SENSOR, S_SURPLUS_LOCK_FACTOR,
     S_AC_ENABLED, S_AC_SOC_TARGET, S_AC_POWER_LIMIT, S_AC_HYSTERESIS,
     S_AC_OFFSET, S_AC_P_FACTOR, S_AC_I_FACTOR,
     S_PERIODIC_ENABLED, S_PERIODIC_INTERVAL,
@@ -99,6 +100,8 @@ class SolakonCoordinator:
         self.forecast_tariff_suppressed: bool = False
         self._surplus_forecast_unsub = None
         self.forecast_surplus_forced: bool = False
+        self._surplus_lock_unsub = None
+        self.forecast_exit_lock: bool = False
 
     # ── Setup / Teardown ─────────────────────────────────────────────────────
 
@@ -140,6 +143,7 @@ class SolakonCoordinator:
         self._update_periodic_tracker()
         self._update_forecast_tracker()
         self._update_surplus_forecast_tracker()
+        self._update_surplus_lock_tracker()
 
     async def async_shutdown(self) -> None:
         """Listener abräumen, Integral speichern."""
@@ -158,6 +162,9 @@ class SolakonCoordinator:
         if self._surplus_forecast_unsub:
             self._surplus_forecast_unsub()
             self._surplus_forecast_unsub = None
+        if self._surplus_lock_unsub:
+            self._surplus_lock_unsub()
+            self._surplus_lock_unsub = None
     # ── Settings-Management ──────────────────────────────────────────────────
 
     async def async_update_settings(self, changes: dict[str, Any]) -> None:
@@ -187,6 +194,8 @@ class SolakonCoordinator:
         old_pv_en = self.settings.get(S_PV_FORECAST_ENABLED, False)
         old_sf = self.settings.get(S_SURPLUS_FORECAST_SENSOR, "")
         old_sf_en = self.settings.get(S_SURPLUS_FORECAST_ENABLED, False)
+        old_sl = self.settings.get(S_SURPLUS_LOCK_SENSOR, "")
+        old_sl_en = self.settings.get(S_SURPLUS_LOCK_ENABLED, False)
 
         self.settings.update(changes)
         await self._store.async_save(self._store_data())
@@ -211,6 +220,11 @@ class SolakonCoordinator:
         new_sf_en = self.settings.get(S_SURPLUS_FORECAST_ENABLED, False)
         if old_sf != new_sf or old_sf_en != new_sf_en:
             self._update_surplus_forecast_tracker()
+
+        new_sl = self.settings.get(S_SURPLUS_LOCK_SENSOR, "")
+        new_sl_en = self.settings.get(S_SURPLUS_LOCK_ENABLED, False)
+        if old_sl != new_sl or old_sl_en != new_sl_en:
+            self._update_surplus_lock_tracker()
 
         self.notify_listeners()
 
@@ -256,6 +270,19 @@ class SolakonCoordinator:
 
         if enabled and sensor:
             self._surplus_forecast_unsub = async_track_state_change_event(
+                self.hass, [sensor], self._on_state_change
+            )
+
+    def _update_surplus_lock_tracker(self) -> None:
+        if self._surplus_lock_unsub:
+            self._surplus_lock_unsub()
+            self._surplus_lock_unsub = None
+
+        enabled = self.settings.get(S_SURPLUS_LOCK_ENABLED, False)
+        sensor  = self.settings.get(S_SURPLUS_LOCK_SENSOR, "")
+
+        if enabled and sensor:
+            self._surplus_lock_unsub = async_track_state_change_event(
                 self.hass, [sensor], self._on_state_change
             )
 
@@ -665,6 +692,22 @@ class SolakonCoordinator:
         else:
             self.forecast_surplus_forced = False
 
+        surplus_lock_enabled = bool(s.get(S_SURPLUS_LOCK_ENABLED, False))
+        surplus_lock_sensor  = str(s.get(S_SURPLUS_LOCK_SENSOR, ""))
+        surplus_lock_factor  = float(s.get(S_SURPLUS_LOCK_FACTOR, 1.5))
+
+        if surplus_lock_enabled and surplus_lock_sensor and self._entity_ok(surplus_lock_sensor):
+            # Sperrt nur den PV-Austritt aus Zone 0: liegt die Vorhersage deutlich über
+            # dem Ausgabelimit, ist ein gemessener PV-Einbruch transient (Wolke) und
+            # Zone 0 wird gehalten. Der SOC-Austritt bleibt ungesperrt; die Zone-3-Grenze
+            # verhindert ein Ankämpfen gegen den Sicherheitsstopp.
+            self.forecast_exit_lock = (
+                self._flt_kilo_normalized(surplus_lock_sensor) >= surplus_lock_factor * hard_limit_z0
+                and soc > zone3_limit
+            )
+        else:
+            self.forecast_exit_lock = False
+
         if pv_forecast_enabled and pv_forecast_sensor:
             if self._entity_ok(pv_forecast_sensor):
                 self.forecast_tariff_suppressed = (
@@ -732,9 +775,10 @@ class SolakonCoordinator:
             surplus_entry = normal_entry or self.forecast_surplus_forced
 
             # Austritt: bei aktiver Forcierung gesperrt (SOC- und Verbrauchsterm ausgeklammert),
-            # sonst normal über SOC- oder Verbrauchsschwelle.
+            # sonst normal über SOC- oder Verbrauchsschwelle. Der Exit-Lock sperrt nur den
+            # Verbrauchsterm — der SOC-Austritt greift immer.
             soc_exit = soc < (surplus_threshold - surplus_soc_hyst)
-            power_exit = solar <= (consumption_share - pv_hyst_share)
+            power_exit = solar <= (consumption_share - pv_hyst_share) and not self.forecast_exit_lock
             surplus_exit = not self.forecast_surplus_forced and (soc_exit or power_exit)
             if self.surplus_active:
                 new_surplus = not surplus_exit

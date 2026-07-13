@@ -178,7 +178,7 @@ Alle Eingabefelder für Entity-IDs (z. B. Kapazitäts-, Vorhersage- und Preis-Se
 
 ### 📊 Status
 
-Echtzeit-Übersicht aller Regelzustände: aktive Zone mit farblichem Banner (Zone 0–3), Netzleistung, Solarleistung, Ausgangsleistung, SOC, Netz-Standardabweichung (Stabilitätsindikator), PI-Integral-Wert, aktiver Offset (Zone 1 / Zone 2 / Zone AC) mit Quelle (dynamisch / statisch), Zeitabstand seit letzter Regelaktion und seit letztem Moduswechsel, letzte Aktion und etwaige Fehlermeldungen, Status-Flags: Zyklus, Surplus, AC Laden, Tarif-Laden, Schaltfläche zum manuellen Zurücksetzen des PI-Integrals.
+Echtzeit-Übersicht aller Regelzustände: aktive Zone mit farblichem Banner (Zone 0–3), Netzleistung, Solarleistung, Ausgangsleistung, SOC, Netz-Standardabweichung (Stabilitätsindikator), PI-Integral-Wert, aktiver Offset (Zone 1 / Zone 2 / Zone AC) mit Quelle (dynamisch / statisch), Zeitabstand seit letzter Regelaktion und seit letztem Moduswechsel, letzte Aktion und etwaige Fehlermeldungen, Status-Flags: Zyklus, Surplus, AC Laden, Tarif-Laden, Nacht, PV→Tarif, PV→Surplus, Austritts-Sperre, Schaltfläche zum manuellen Zurücksetzen des PI-Integrals.
 
 ---
 
@@ -245,12 +245,23 @@ Optionale Überschuss-Einspeisung (Zone 0). **Hat absoluten Vorrang vor allen an
 
 > Solange die Forcierung aktiv ist (Vorhersage ≥ Schwelle **und** PV > Hard Limit Z0 **und** SOC > Zone-3-Schwelle), ist der Austritt komplett gesperrt — SOC- und Verbrauchsterm sind ausgeklammert, damit bei großem PV-Tag früh eingespeist statt abgeregelt wird, ohne auf vollen Akku zu warten. Sobald die PV unter das Hard Limit fällt, die Vorhersage unter die Schwelle sinkt oder der SOC die Zone-3-Schwelle unterschreitet, endet die Forcierung und der normale Austritt greift: bei vollem Akku über den PV-Term (Überschuss weg), bei noch nicht vollem Akku sofort über den SOC-Term. Nachts ist PV = 0 < Hard Limit → Forcierung aus → Austritt, auch bei Tages-/Morgen-Vorhersage. Zone 3 (Safety-Stopp) beendet Surplus zusätzlich jederzeit.
 
+**Austritts-Sperre (optional):** PV-Austritt gesperrt solange Leistungs-Vorhersage ≥ Sperr-Faktor × Hard Limit Z0 UND SOC > Zone-3-Schwelle
+
+> Hält Zone 0 bei kurzen PV-Einbrüchen (Wolken). Liegt die aktuell prognostizierte PV-Leistung deutlich über dem Ausgabelimit (Faktor als Sicherheitsmarge gegen Vorhersagefehler, Standard 1,5), muss ein gemessener Einbruch transient sein — Zone 0 wird gehalten statt auszutreten. Nur der PV-Term ist gesperrt: Der SOC-Austritt bleibt immer aktiv, Zone 3 beendet Surplus jederzeit, und bei nicht verfügbarem Sensor ist die Sperre inaktiv. Der Sensor muss die **aktuelle** prognostizierte PV-Leistung in W liefern (z. B. Solcast `power_now`); k-Einheiten (kW) werden automatisch ×1000 normalisiert.
+>
+> Hintergrund: Verlässt Zone 0 bei vollem Akku, drosselt der Wechselrichter die PV exakt auf den Eigenbedarf herunter — der Überschuss ist danach nicht mehr messbar, und der Wiedereintritt hängt an zufälligen Verbrauchsschwankungen (minutenlange Verzögerung). Die Sperre vermeidet genau diesen Zustand, indem sie den Austritt bei transienten Einbrüchen gar nicht erst zulässt.
+
+**Warum die SOC-Schwelle unter dem Vollladepunkt liegen muss:** Der Eintritt prüft `PV > Eigenbedarf + Hysterese`. Das ist nur messbar, solange der Akku noch lädt — dann läuft die PV ungedrosselt und zeigt `Eigenbedarf + Ladeleistung`. Am Vollladepunkt (App-Ladeobergrenze) drosselt der Wechselrichter die PV exakt auf den Eigenbedarf herunter; der Überschuss ist dann unsichtbar und der Eintritt hängt von zufälligen Verbrauchsschwankungen ab — minutenlange Verzögerung möglich. Eine Schwelle ~5 % unter der App-Ladeobergrenze (z. B. 95 % bei Max 100 %) legt den Eintritt sicher in die Ladephase, wo der Überschuss zuverlässig messbar ist. Aus demselben Grund kann der Wiedereintritt nach einer Wolke verzögert sein, wenn der SOC bereits am Maximum gepinnt ist — während der Wolke wird die Batterie nicht entladen (solange Solar existiert, bleibt sie unangetastet), der SOC bewegt sich nicht. Dagegen hilft die Austritts-Sperre (siehe oben).
+
 | Parameter | Beschreibung | Empfehlung |
 |-----------|-------------|------------|
 | Aktivieren | Ein/Aus-Schalter | — |
-| SOC-Schwelle (%) | Ab diesem SOC wird Überschuss eingespeist | 90–98 |
+| SOC-Schwelle (%) | Ab diesem SOC wird Überschuss eingespeist | ~5 % unter App-Ladeobergrenze (z. B. 95) |
 | SOC-Hysterese (%) | Austritt erst bei SOC < (Schwelle − Hysterese) | 3–5 |
 | PV-Hysterese (W) | Mindestüberschuss über Eigenbedarf für Eintritt und Austritt | 30–80 |
+| Austritts-Sperre | Ein/Aus — PV-Austritt gesperrt solange Vorhersage ≥ Faktor × Hard Limit Z0 | — |
+| Leistungs-Vorhersage-Sensor (W) | Aktuell prognostizierte PV-Leistung (z. B. Solcast `power_now`) | — |
+| Sperr-Faktor | Sicherheitsmarge der Austritts-Sperre gegen Vorhersagefehler | 1,5 |
 
 ---
 
@@ -425,6 +436,7 @@ Die Integration erzeugt automatisch folgende Entitäten unter dem Gerät **Solak
 | `binary_sensor.solakon_one_nachtabschaltung` | Binary Sensor | Flag Nachtabschaltung aktiv |
 | `binary_sensor.solakon_one_pv_vorhersage_tarif_gesperrt` | Binary Sensor | PV-Vorhersage sperrt Tarif-Laden |
 | `binary_sensor.solakon_one_pv_vorhersage_surplus_erzwungen` | Binary Sensor | PV-Vorhersage erzwingt Surplus-Eintritt |
+| `binary_sensor.solakon_one_pv_vorhersage_surplus_austritt_gesperrt` | Binary Sensor | Austritts-Sperre aktiv (Vorhersage ≥ Faktor × Hard Limit Z0) |
 
 Die Diagnose-Binärsensoren sind read-only — sie spiegeln interne Coordinator-Zustände wider.
 

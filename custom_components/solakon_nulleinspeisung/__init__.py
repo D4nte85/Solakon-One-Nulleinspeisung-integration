@@ -122,6 +122,7 @@ async def _ws_get_status(
         "is_night":          coord.is_night,
         "forecast_tariff_suppressed": coord.forecast_tariff_suppressed,
         "forecast_surplus_forced": coord.forecast_surplus_forced,
+        "forecast_exit_lock": coord.forecast_exit_lock,
         "allocated_power":   coord.allocated_power,
     })
 

@@ -43,7 +43,7 @@
     },
     "surplus": {
       "summary": "Surplus Feed-In — activating Zone 0",
-      "text": "Highest priority — blocks tariff charging, discharge-lock and AC charging while Zone 0 is active.\n\nNormal entry: SOC ≥ SOC threshold AND (PV > consumption reference + PV hysteresis OR (PV = 0 AND output = 0 across two consecutive cycles — debounce against nightly re-entry)).\nForecast entry: forecast ≥ threshold AND PV > Hard Limit Z0 AND SOC > zone-3 threshold (no export threshold required).\n\nZone 0 always sits on top of an active Zone-1 cycle: entry activates Zone 1, on exit the zone is re-derived from the SOC (SOC > zone-1 threshold → Zone 1, otherwise Zone 2). The SOC threshold must be above the zone-1 threshold — otherwise regulation pauses with an error message.\n\nExit: PV ≤ consumption reference − PV hysteresis OR SOC < (threshold − SOC hysteresis).\nConsumption reference: single instance = output + grid. Multi-instance = (ΣOutput_all + grid) × error share — keeps the dead band consistent relative to true household consumption.\nForecast forcing is active while forecast ≥ threshold AND PV > Hard Limit Z0 AND SOC > zone-3 threshold: as long as all hold, exit is blocked (both SOC and consumption terms excluded — curtailment avoidance). Once PV drops below Hard Limit Z0 (incl. at night: PV = 0), the forecast drops below the threshold or the SOC drops below the zone-3 threshold, forcing ends and the normal exit applies. Zone 3 (safety) ends surplus at any time as well.\n\nOutput is set to Hard Limit Z0. Integral frozen (no PI call)."
+      "text": "Highest priority — blocks tariff charging, discharge-lock and AC charging while Zone 0 is active.\n\nNormal entry: SOC ≥ SOC threshold AND (PV > consumption reference + PV hysteresis OR (PV = 0 AND output = 0 across two consecutive cycles — debounce against nightly re-entry)).\nForecast entry: forecast ≥ threshold AND PV > Hard Limit Z0 AND SOC > zone-3 threshold (no export threshold required).\n\nZone 0 always sits on top of an active Zone-1 cycle: entry activates Zone 1, on exit the zone is re-derived from the SOC (SOC > zone-1 threshold → Zone 1, otherwise Zone 2). The SOC threshold must be above the zone-1 threshold — otherwise regulation pauses with an error message.\n\nExit: PV ≤ consumption reference − PV hysteresis OR SOC < (threshold − SOC hysteresis).\nConsumption reference: single instance = output + grid. Multi-instance = (ΣOutput_all + grid) × error share — keeps the dead band consistent relative to true household consumption.\nExit lock (optional): while the power forecast is ≥ lock factor × Hard Limit Z0 AND SOC > zone-3 threshold, only the PV exit is blocked — short dips (clouds) are ridden out in Zone 0 instead of exiting. Rationale: exiting with a full battery enters a state where the hardware throttles PV down to consumption and the surplus becomes unmeasurable — re-entry is then delayed by minutes. The SOC exit stays unblocked and always ends surplus.\nForecast forcing is active while forecast ≥ threshold AND PV > Hard Limit Z0 AND SOC > zone-3 threshold: as long as all hold, exit is blocked (both SOC and consumption terms excluded — curtailment avoidance). Once PV drops below Hard Limit Z0 (incl. at night: PV = 0), the forecast drops below the threshold or the SOC drops below the zone-3 threshold, forcing ends and the normal exit applies. Zone 3 (safety) ends surplus at any time as well.\n\nOutput is set to Hard Limit Z0. Integral frozen (no PI call)."
     },
     "ac": {
       "summary": "AC Charging — grid charges the battery",
@@ -75,6 +75,7 @@
     "surplus_soc":      "SOC Condition",
     "surplus_pv":       "PV Condition",
     "surplus_forecast": "PV Forecast",
+    "surplus_lock":     "Exit Lock",
     "ac_entry":         "Entry & Limits",
     "ac_pi":            "PI Parameters",
     "tariff_thresholds":"Price Thresholds",
@@ -148,7 +149,7 @@
     },
     "surplus_soc_threshold": {
       "l": "SOC Threshold (%)",
-      "d": "Zone 0 only starts at this SOC. Must be above the zone-1 threshold — otherwise regulation pauses with an error message. Typical: 90–98 %."
+      "d": "Zone 0 only starts at this SOC. Must be above the zone-1 threshold — otherwise regulation pauses with an error message. Recommendation: ~5 % below the app charge limit (e.g. 95 % with max 100 %) — entry is only measurable while the battery is still charging; at the full-charge point the hardware throttles PV down to consumption and the surplus becomes invisible."
     },
     "surplus_soc_hyst": {
       "l": "SOC Hysteresis (%)",
@@ -169,6 +170,18 @@
     "surplus_forecast_threshold": {
       "l": "Minimum Yield for Surplus",
       "d": "PV > Hard Limit Z0 + forecast ≥ threshold + SOC > zone-3 threshold → surplus starts without export threshold and stays active while all three conditions hold."
+    },
+    "surplus_lock_enabled": {
+      "l": "Enable Exit Lock",
+      "d": "Keeps Zone 0 alive through short PV dips (clouds): while the power forecast is ≥ lock factor × Hard Limit Z0, the PV exit is blocked — the measured dip must be transient. The SOC exit always stays active, Zone 3 ends surplus at any time. Background: exiting with a full battery enters a state where the hardware throttles PV down to consumption — the surplus becomes unmeasurable and re-entry is delayed by minutes."
+    },
+    "surplus_lock_sensor": {
+      "l": "Power Forecast Sensor (W)",
+      "d": "Sensor with the currently forecast PV power in W (e.g. Solcast power_now). k-units (kW) are normalized ×1000 automatically. If the sensor is unavailable, the lock is inactive."
+    },
+    "surplus_lock_factor": {
+      "l": "Lock Factor",
+      "d": "Lock active while forecast ≥ factor × Hard Limit Z0. Higher factor = more safety margin against forecast errors. Default: 1.5."
     },
     "ac_enabled": {
       "l": "Enable AC Charging",
@@ -335,6 +348,7 @@
     "flag_night":        "Night",
     "flag_pv_tariff":    "PV→Tariff",
     "flag_pv_surplus":   "PV→Surplus",
+    "flag_exit_lock":    "Exit Lock",
     "offset_zone_ac":    "Zone AC Charge",
     "offset_zone_1":     "Zone 1",
     "offset_zone_2":     "Zone 2",

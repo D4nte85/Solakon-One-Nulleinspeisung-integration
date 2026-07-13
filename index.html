@@ -62,6 +62,7 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
     offset_1: 30, offset_2: 10, pv_reserve: 50,
     surplus_enabled: false, surplus_soc_threshold: 95, surplus_soc_hyst: 5, surplus_pv_hyst: 50,
     surplus_forecast_enabled: false, surplus_forecast_sensor: "", surplus_forecast_threshold: 5000,
+    surplus_lock_enabled: false, surplus_lock_sensor: "", surplus_lock_factor: 1.5,
     ac_enabled: false, ac_soc_target: 90, ac_power_limit: 800, ac_hysteresis: 50,
     ac_offset: -50, ac_p_factor: 0.3, ac_i_factor: 0.0,
     tariff_enabled: false, tariff_price_sensor: "", tariff_cheap_threshold: 10, tariff_exp_threshold: 25,
@@ -85,7 +86,7 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
     },
     demo_b: {
       name: "Solakon B",
-      settings: { ...DEFAULT_SETTINGS, surplus_enabled: true, surplus_forecast_enabled: true, surplus_forecast_sensor: "sensor.solcast_prognose" },
+      settings: { ...DEFAULT_SETTINGS, surplus_enabled: true, surplus_forecast_enabled: true, surplus_forecast_sensor: "sensor.solcast_prognose", surplus_lock_enabled: true, surplus_lock_sensor: "sensor.solcast_leistung_jetzt" },
       status: mkStatus({ zone: 1, soc: 81, actual_power: 140, grid: 8, active_fall: "A", cycle_active: true }),
     },
   };
@@ -100,7 +101,7 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
       ac_charge: false, tariff_charge: false, regulation_enabled: true, stddev: 8.4,
       dyn_z1_enabled: false, dyn_z2_enabled: false, dyn_ac_enabled: false,
       dyn_z1: 0, dyn_z2: 0, dyn_ac: 0, active_fall: o.active_fall, is_night: false,
-      forecast_tariff_suppressed: false, forecast_surplus_forced: false, allocated_power: 400,
+      forecast_tariff_suppressed: false, forecast_surplus_forced: false, forecast_exit_lock: false, allocated_power: 400,
     };
   }
 
@@ -112,6 +113,7 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
     "sensor.solakon_one_batteriekapazitat":    { state: "10.5", attributes: { unit_of_measurement: "kWh", friendly_name: "Solakon ONE Batteriekapazität" } },
     "sensor.tibber_price_current":             { state: "0.28", attributes: { unit_of_measurement: "EUR/kWh", friendly_name: "Tibber Preis aktuell" } },
     "sensor.solcast_prognose":                 { state: "unavailable", attributes: { friendly_name: "Solcast PV-Prognose" } },
+    "sensor.solcast_leistung_jetzt":           { state: "1450", attributes: { unit_of_measurement: "W", friendly_name: "Solcast Leistung jetzt" } },
     // sensor.solakon_one_batteriekapzitat (Tippfehler, Instanz B) existiert absichtlich nicht → roter Punkt
   };
 

@@ -122,6 +122,14 @@ const TAB_LAYOUT = {
           { k: "surplus_forecast_threshold", t: "num", min: 0, max: 100, step: 0.5 },
         ],
       },
+      {
+        tk: "surplus_lock", icon: "⛅", color: "#dc2626",
+        fields: [
+          { k: "surplus_lock_enabled", t: "bool" },
+          { k: "surplus_lock_sensor",  t: "entity" },
+          { k: "surplus_lock_factor",  t: "num", min: 1.0, max: 3.0, step: 0.1 },
+        ],
+      },
     ],
   },
 
@@ -937,6 +945,7 @@ class SolakonPanel extends HTMLElement {
       [s.flag_night       || "Night",          st.is_night],
       [s.flag_pv_tariff   || "PV→Tariff",      st.forecast_tariff_suppressed],
       [s.flag_pv_surplus  || "PV→Surplus",     st.forecast_surplus_forced],
+      [s.flag_exit_lock   || "Exit-Lock",      st.forecast_exit_lock],
     ].map(([n, v]) => `<span class="flag ${v ? "on" : "off"}">${v ? "●" : "○"} ${n}</span>`).join("");
 
     set("st-active-fall", this._t.fall_labels?.[st.active_fall] || st.active_fall || "—");
