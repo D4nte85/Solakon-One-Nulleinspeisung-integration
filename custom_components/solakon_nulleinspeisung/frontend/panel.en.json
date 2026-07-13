@@ -173,7 +173,7 @@
     },
     "surplus_lock_enabled": {
       "l": "Enable Exit Lock",
-      "d": "Keeps Zone 0 alive through short PV dips (clouds): while the power forecast is ≥ lock factor × Hard Limit Z0, the PV exit is blocked — the measured dip must be transient. The SOC exit always stays active, Zone 3 ends surplus at any time. Background: exiting with a full battery enters a state where the hardware throttles PV down to consumption — the surplus becomes unmeasurable and re-entry is delayed by minutes."
+      "d": "Keeps Zone 0 alive through short PV dips (clouds): while the power forecast is ≥ lock factor × Hard Limit Z0, the PV exit is blocked — the measured dip must be transient. The SOC exit always stays active, Zone 3 ends surplus at any time. Background: exiting with a full battery enters a state where the hardware throttles PV down to consumption — the surplus becomes unmeasurable and re-entry is delayed by minutes. Risk: if the sensor reports a stuck, too-high value, Zone 0 stays active for just as long — until the SOC exit kicks in."
     },
     "surplus_lock_sensor": {
       "l": "Power Forecast Sensor (W)",

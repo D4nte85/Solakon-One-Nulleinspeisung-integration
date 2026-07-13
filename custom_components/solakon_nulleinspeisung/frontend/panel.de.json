@@ -173,7 +173,7 @@
     },
     "surplus_lock_enabled": {
       "l": "Austritts-Sperre aktivieren",
-      "d": "Hält Zone 0 bei kurzen PV-Einbrüchen (Wolken): Solange die Leistungs-Vorhersage ≥ Sperr-Faktor × Hard-Limit-Z0 liegt, ist der PV-Austritt gesperrt — der gemessene Einbruch muss transient sein. Der SOC-Austritt bleibt immer aktiv, Zone 3 beendet Surplus jederzeit. Hintergrund: Nach einem Austritt bei vollem Akku drosselt die Hardware die PV auf den Verbrauch — der Überschuss ist dann nicht mehr messbar und der Wiedereintritt verzögert sich um Minuten."
+      "d": "Hält Zone 0 bei kurzen PV-Einbrüchen (Wolken): Solange die Leistungs-Vorhersage ≥ Sperr-Faktor × Hard-Limit-Z0 liegt, ist der PV-Austritt gesperrt — der gemessene Einbruch muss transient sein. Der SOC-Austritt bleibt immer aktiv, Zone 3 beendet Surplus jederzeit. Hintergrund: Nach einem Austritt bei vollem Akku drosselt die Hardware die PV auf den Verbrauch — der Überschuss ist dann nicht mehr messbar und der Wiedereintritt verzögert sich um Minuten. Risiko: Meldet der Sensor dauerhaft einen zu hohen Wert, bleibt Zone 0 entsprechend lange aktiv — bis der SOC-Austritt eingreift."
     },
     "surplus_lock_sensor": {
       "l": "Leistungs-Vorhersage-Sensor (W)",
