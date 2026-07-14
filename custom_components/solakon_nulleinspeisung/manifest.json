@@ -1,7 +1,7 @@
 {
   "domain": "solakon_nulleinspeisung",
   "name": "Solakon ONE Nulleinspeisung",
-  "version": "2.1.2",
+  "version": "2.1.3",
   "documentation": "https://github.com/D4nte85/Solakon-One-Nulleinspeisung-integration",
   "issue_tracker": "https://github.com/D4nte85/Solakon-One-Nulleinspeisung-integration/issues",
   "codeowners": ["@D4nte85"],
