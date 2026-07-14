@@ -1,14 +1,14 @@
 {
   "domain": "solakon_nulleinspeisung",
   "name": "Solakon ONE Nulleinspeisung",
-  "version": "2.1.3",
-  "documentation": "https://github.com/D4nte85/Solakon-One-Nulleinspeisung-integration",
-  "issue_tracker": "https://github.com/D4nte85/Solakon-One-Nulleinspeisung-integration/issues",
+  "after_dependencies": ["number", "select", "sensor", "switch"],
   "codeowners": ["@D4nte85"],
   "config_flow": true,
+  "dependencies": ["frontend", "http", "panel_custom"],
+  "documentation": "https://github.com/D4nte85/Solakon-One-Nulleinspeisung-integration",
   "integration_type": "hub",
   "iot_class": "local_push",
+  "issue_tracker": "https://github.com/D4nte85/Solakon-One-Nulleinspeisung-integration/issues",
   "requirements": [],
-  "dependencies": ["frontend", "http", "panel_custom"],
-  "after_dependencies": ["number", "select", "sensor", "switch"]
+  "version": "2.1.3"
 }
