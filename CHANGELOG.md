@@ -5,6 +5,12 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+## [2.1.4] – 2026-07-14
+
+### Behoben
+- `manifest.json`: `http`-Komponente als Dependency ergänzt — Panel nutzt `hass.http.async_register_static_paths` direkt, ohne dass `http` explizit deklariert war (Hassfest-Validierungsfehler, aufgefallen bei der Aufnahme ins HACS-Default-Repository)
+- `manifest.json`: Reihenfolge der Schlüssel alphabetisch sortiert (nach `domain`/`name`), wie von Hassfest gefordert
+
 ## [2.1.3] – 2026-07-14
 
 ### Behoben
