@@ -203,7 +203,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         store = Store(hass, STORAGE_VERSION_DIST, STORAGE_KEY_DIST)
         hass.data[f"{DOMAIN}_dist_store"] = store
         stored = await store.async_load() or {}
-        hass.data[f"{DOMAIN}_dist_config"] = {**DIST_DEFAULTS, **stored}
+        migrated = _migrate_dist_config(stored)
+        hass.data[f"{DOMAIN}_dist_config"] = {**DIST_DEFAULTS, **migrated}
+        if migrated != stored:
+            await store.async_save(migrated)
 
     # Einmalige Migration: alter Instanz-Sensor (battery_capacity_sensor, vor
     # Einführung des Verteilungs-Tabs) wird ins Distribution-Store übernommen,
@@ -287,10 +290,25 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
 
 
 DIST_DEFAULTS = {
-    "global_max_power":   800,
-    "distribution_mode":  "equal",
-    "capacity_weighting": False,
+    "global_max_power":  800,
+    "distribution_mode": "equal",  # equal | soc | capacity
 }
+
+
+def _migrate_dist_config(cfg: dict) -> dict:
+    """Alte Zwei-Feld-Form (`distribution_mode` equal/weighted + separates
+    `capacity_weighting`-Bool) auf den neuen Drei-Wert-`distribution_mode`
+    (equal/soc/capacity) abbilden. Nur relevant für vor der UI-Vereinfachung
+    gespeicherte Configs — neue Speicherungen enthalten `capacity_weighting` nicht mehr.
+    """
+    if "capacity_weighting" not in cfg:
+        return cfg
+    migrated = dict(cfg)
+    if migrated.pop("capacity_weighting", False):
+        migrated["distribution_mode"] = "capacity"
+    elif migrated.get("distribution_mode") == "weighted":
+        migrated["distribution_mode"] = "soc"
+    return migrated
 
 
 @websocket_api.websocket_command({
@@ -305,7 +323,7 @@ async def _ws_get_distribution_config(
         connection.send_result(msg["id"], {"distribution": DIST_DEFAULTS.copy()})
         return
     stored = await store.async_load() or {}
-    data = {**DIST_DEFAULTS, **stored}
+    data = {**DIST_DEFAULTS, **_migrate_dist_config(stored)}
     connection.send_result(msg["id"], {"distribution": data})
 
 
@@ -321,8 +339,9 @@ async def _ws_save_distribution_config(
     if store is None:
         connection.send_error(msg["id"], "not_ready", "Distribution-Store nicht initialisiert")
         return
-    await store.async_save(msg["distribution"])
-    hass.data[f"{DOMAIN}_dist_config"] = {**DIST_DEFAULTS, **msg["distribution"]}
+    distribution = _migrate_dist_config(msg["distribution"])
+    await store.async_save(distribution)
+    hass.data[f"{DOMAIN}_dist_config"] = {**DIST_DEFAULTS, **distribution}
 
     # Neue Verteilung sofort auf alle Instanzen anwenden — sonst greift die
     # geänderte allocated_power erst beim nächsten Sensor-Event. Lock-geschützt

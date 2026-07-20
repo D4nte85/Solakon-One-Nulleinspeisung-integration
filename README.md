@@ -77,10 +77,14 @@ Laufen mehrere Instanzen gleichzeitig, berechnet jeder Coordinator seinen **Gewi
 
 ```
 # Pool 1 — Nulleinspeisung (nur Instanzen aktuell in Modus '1'):
-# Gleichverteilung (Standard):
+# Gleichverteilung:
 w_i = 1 / Anzahl_Instanzen_in_Modus_1
 
 # SOC-gewichtet:
+nutzbar_i = (SOC_i − Zone-3-Schwelle_i) / 100
+w_i       = nutzbar_i / Σ nutzbar_j
+
+# Kapazitätsgewichtet:
 nutzbar_i = (SOC_i − Zone-3-Schwelle_i) / 100 × Kapazität_kWh_i
 w_i       = nutzbar_i / Σ nutzbar_j
 
@@ -89,7 +93,7 @@ allocated_power_i = total_power × w_i   → effektives Hard-Limit in Zone 1 / 2
 error_share_i     = w_i                 → Anteil am Netzfehler im normalen PI-Regler
 
 # Pool 2 — AC Laden (nur Instanzen aktuell mit ac_charge_active):
-# gleiche Gleichverteilung/SOC-Gewichtungs-Logik, aber ausschließlich unter
+# gleiche Gleichverteilungs-/Gewichtungs-Logik, aber ausschließlich unter
 # gleichzeitig ladenden Instanzen — kein allocated_power (AC-Ladeleistung
 # bleibt unabhängig vom Hard-Limit), nur ein eigener error_share für den
 # AC-Lade-PI (siehe „AC Laden" unten).
@@ -97,7 +101,7 @@ error_share_i     = w_i                 → Anteil am Netzfehler im normalen PI-
 
 Eine Instanz, die gerade in Modus `'0'` (idle) steht, trägt zu keinem der beiden Pools bei und bekommt `error_share = 0` sowie `allocated_power = None` (statisches Hard-Limit gilt unverändert). Eine Instanz, die aktuell AC lädt, verwässert **nicht** den Nulleinspeisungs-Pool der anderen — und umgekehrt beeinflusst eine nulleinspeisende Instanz nicht den AC-Lade-Pool. Bei nur einer aktiven Instanz je Pool bleibt `w_i = 1,0`.
 
-> **Batteriekapazität (kWh):** Optional. Fehlt der Sensor bei irgendeiner aktiven Instanz, wird die Kapazität für alle neutral (1.0) gewertet — die Gewichtung erfolgt dann rein nach SOC-Prozentpunkten. Kapazitätsgewichtung greift nur, wenn alle Instanzen einen gültigen Wert liefern. Sinnvoll wenn die Instanzen Batterien unterschiedlicher Kapazität steuern.
+> **Batteriekapazität (kWh):** Nur bei Verteilungs-Modus „Kapazitätsgewichtet" relevant. Fehlt der Sensor bei irgendeiner aktiven Instanz, wird die Kapazität für alle neutral (1.0) gewertet — die Gewichtung entspricht dann „SOC-gewichtet". Sinnvoll wenn die Instanzen Batterien unterschiedlicher Kapazität steuern.
 
 ### Leistungsverteilung konfigurieren
 
@@ -106,9 +110,8 @@ Im Panel wird bei mehreren Instanzen ein zusätzlicher **Verteilungs-Tab** einge
 | Parameter | Beschreibung |
 |-----------|-------------|
 | Gesamte Max. Ausgangsleistung (W) | Absolute Obergrenze aller Instanzen zusammen |
-| Kapazitätsausgleich | Verteilt proportional zur Batteriekapazität — alle SOC sinken gleich schnell. Überschreibt „Gleichverteilung": ist Kapazitätsausgleich aktiv, wird immer SOC-/Kapazitäts-gewichtet verteilt, unabhängig vom Verteilungs-Modus. |
-| Kapazitätssensor (pro Instanz) | `sensor.solakon_one_batteriekapazitat` — optional, Standard = reine SOC-%-Gewichtung. Der Validierungspunkt neben dem Feld zeigt live, ob die Entity existiert und einen Wert liefert (grün/gelb/rot) |
-| Verteilungs-Modus | Gleichverteilung oder SOC-gewichtet |
+| Verteilungs-Modus | Gleichverteilung / SOC-gewichtet / Kapazitätsgewichtet — drei sich gegenseitig ausschließende Optionen, siehe Formeln oben |
+| Kapazitätssensor (pro Instanz) | Nur bei Modus „Kapazitätsgewichtet" wirksam (Feld sonst ausgegraut). `sensor.solakon_one_batteriekapazitat`. Der Validierungspunkt neben dem Feld zeigt live, ob die Entity existiert und einen Wert liefert (grün/gelb/rot) |
 
 ---
 
@@ -483,7 +486,7 @@ Der Modus-Reset-Timer läuft ab bevor der Regler ihn zurücksetzen kann. Solakon
 Home Assistant vollständig neu starten (nicht nur neu laden). HACS-Download-Status überprüfen.
 
 **SOC der Instanzen läuft bei mehreren Solakons auseinander**
-Im Verteilungs-Tab die Kapazitätssensoren prüfen — ein **roter Validierungspunkt** neben dem Feld bedeutet, dass die eingetragene Entity nicht existiert (häufig ein Tippfehler in der Entity-ID). Ohne gültigen Kapazitätswert bei allen Instanzen wird rein nach SOC-Prozentpunkten gewichtet; bei unterschiedlich großen Batterien stellt sich dann ein dauerhafter SOC-Abstand ein.
+Bei unterschiedlich großen Batterien im Verteilungs-Tab prüfen, dass der Verteilungs-Modus wirklich auf **„Kapazitätsgewichtet"** steht (nicht „SOC-gewichtet" — das gewichtet bewusst rein nach Prozentpunkten, ohne Kapazität, und lässt unterschiedlich große Batterien dauerhaft auseinanderlaufen). Danach die Kapazitätssensoren prüfen — ein **roter Validierungspunkt** neben dem Feld bedeutet, dass die eingetragene Entity nicht existiert (häufig ein Tippfehler in der Entity-ID). Ohne gültigen Kapazitätswert bei allen Instanzen degradiert „Kapazitätsgewichtet" automatisch zu reiner SOC-%-Gewichtung.
 
 ---
 

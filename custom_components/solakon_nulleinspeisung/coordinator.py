@@ -1190,45 +1190,55 @@ class SolakonCoordinator:
         if self.entry.entry_id not in active:
             return 0.0
 
-        n = len(active)
+        n  = len(active)
+        eq = 1.0 / n
         if n <= 1:
             return 1.0
 
         dist = self.hass.data.get(f"{DOMAIN}_dist_config") or {}
-        mode          = dist.get("distribution_mode", "equal")
-        cap_weighting = bool(dist.get("capacity_weighting", False))
+        mode = dist.get("distribution_mode", "equal")
 
-        if mode == "equal" and not cap_weighting:
-            return 1.0 / n
+        if mode == "equal":
+            return eq
 
-        def _cap_kwh(eid: str, c) -> float | None:
-            cap_s = str(dist.get(f"inst_{eid}_capacity_sensor", ""))
-            if not cap_s:
-                return None
-            cap_st = c.hass.states.get(cap_s)
-            if not cap_st or cap_st.state in ("unknown", "unavailable"):
-                return None
-            try:
-                cv   = state_as_number(cap_st)
-                unit = cap_st.attributes.get("unit_of_measurement", "")
-                return cv if unit == "kWh" else cv / 1000.0
-            except (ValueError, TypeError):
-                return None
+        if mode == "capacity":
+            def _cap_kwh(eid: str, c) -> float | None:
+                cap_s = str(dist.get(f"inst_{eid}_capacity_sensor", ""))
+                if not cap_s:
+                    return None
+                cap_st = c.hass.states.get(cap_s)
+                if not cap_st or cap_st.state in ("unknown", "unavailable"):
+                    return None
+                try:
+                    cv   = state_as_number(cap_st)
+                    unit = (cap_st.attributes.get("unit_of_measurement") or "").strip().lower()
+                    return cv / 1000.0 if unit == "wh" else cv
+                except (ValueError, TypeError):
+                    return None
 
-        # Kapazitäten pro Instanz; sobald eine keinen gültigen Wert liefert,
-        # zählen alle neutral 1.0 (reine SOC-Gewichtung, keine Dominanz)
-        caps = {eid: _cap_kwh(eid, c) for eid, c in active.items()}
-        if any(cap is None for cap in caps.values()):
-            caps = {eid: 1.0 for eid in caps}
-        # SOC-Gewichte: nutzbare kWh pro Instanz
+            # Kapazitäten pro Instanz; sobald eine keinen gültigen Wert liefert,
+            # zählen alle neutral 1.0 (degradiert zu reiner SOC-Gewichtung)
+            caps = {eid: _cap_kwh(eid, c) for eid, c in active.items()}
+            if any(cap is None for cap in caps.values()):
+                caps = {eid: 1.0 for eid in caps}
+        else:
+            # mode == "soc": reine SOC-Prozentpunkt-Gewichtung, keine
+            # Kapazitätssensoren beteiligt.
+            caps = {eid: 1.0 for eid in active}
+
+        # SOC-Gewichte: nutzbare kWh (mode "capacity") bzw. nutzbare SOC-% (mode "soc")
         soc_weights: dict[str, float] = {}
         for eid, c in active.items():
-            soc   = c._flt(c.entry.data.get(CONF_SOC_SENSOR, ""), 0)
+            soc_eid = c.entry.data.get(CONF_SOC_SENSOR, "")
+            if not c._entity_ok(soc_eid):
+                # SOC-Read einer Fremdinstanz unsicher — auf Gleichverteilung ausweichen
+                # statt eine falsche 0 in die Gewichtung einfließen zu lassen.
+                return eq
+            soc   = c._flt(soc_eid, 0)
             zone3 = float(c.settings.get(S_ZONE3_LIMIT, 20))
             soc_weights[eid] = max(0.0, (soc - zone3) / 100.0 * caps[eid])
 
         total_soc = sum(soc_weights.values())
-        eq = 1.0 / n
         return soc_weights.get(self.entry.entry_id, 0.0) / total_soc if total_soc > 0 else eq
 
     def _compute_distribution(self) -> tuple[float, float | None]:

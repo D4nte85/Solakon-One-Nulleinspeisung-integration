@@ -5,6 +5,14 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+### Behoben
+- Verteilungs-Tab: „Kapazitätsausgleich"-Checkbox war unabhängig vom Verteilungs-Modus-Dropdown, steuerte im Backend aber nichts eigenständig — bei Modus „SOC-gewichtet" wurden konfigurierte Kapazitätssensoren immer mitverwendet, auch mit deaktivierter Checkbox (Issue #14)
+- `_weighted_share()`: Kapazitätssensor-Unit-Vergleich war ein exakter String-Match auf `"kWh"` — jede Abweichung (Groß-/Kleinschreibung, `"Wh"`, kein Unit gesetzt) führte zu einer stillen 1000×-Fehlinterpretation. Jetzt toleranter: nur bei erkanntem `"wh"` wird umgerechnet, alles andere als bereits-kWh behandelt
+- `_weighted_share()`: SOC-Read anderer Instanzen prüfte anders als jeder sonstige Sensor-Zugriff im Coordinator nicht auf `unknown`/`unavailable` — eine unsichere Fremdinstanz-SOC fällt jetzt auf Gleichverteilung zurück statt mit einer falschen 0 weiterzurechnen
+
+### Geändert
+- Verteilungs-Modus ist jetzt ein einzelnes Dropdown mit drei sich gegenseitig ausschließenden Optionen: Gleichverteilung / SOC-gewichtet (reine Prozentpunkte, keine Kapazitätssensoren) / Kapazitätsgewichtet (zusätzlich × Batteriekapazität). Ersetzt die bisherige Kombination aus Zwei-Optionen-Dropdown + separater Checkbox. Kapazitätssensor-Felder sind nur noch bei „Kapazitätsgewichtet" aktiv, sonst ausgegraut. Bestehende Configs werden beim Start automatisch migriert.
+
 ## [2.1.4] – 2026-07-14
 
 ### Behoben

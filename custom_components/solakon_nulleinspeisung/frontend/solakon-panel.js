@@ -1167,9 +1167,8 @@ class SolakonPanel extends HTMLElement {
       return;
     }
 
-    const mode         = this._distVal("distribution_mode")  ?? "equal";
-    const globalMax    = this._distVal("global_max_power")   ?? 800;
-    const capWeighting = this._distVal("capacity_weighting") ?? false;
+    const mode      = this._distVal("distribution_mode") ?? "equal";
+    const globalMax = this._distVal("global_max_power")  ?? 800;
 
     const instCards = this._instances.map(inst => {
       const capSensor = this._distInstVal(inst.entry_id, "capacity_sensor");
@@ -1200,35 +1199,25 @@ class SolakonPanel extends HTMLElement {
       </div>
 
       <div class="col-card top-item">
-        <div class="col-header" style="background:#059669">${dt.cap_hdr || "🔋"}</div>
-        <div class="col-body">
-          <div class="field">
-            <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-              <input type="checkbox" data-dist-key="capacity_weighting" ${capWeighting ? "checked" : ""}
-                style="width:16px;height:16px;cursor:pointer"/>
-              ${dt.cap_toggle_lbl || ""}
-            </label>
-            <div class="desc">${dt.cap_toggle_desc || ""}</div>
-          </div>
-          <div style="${!capWeighting ? "opacity:.4;pointer-events:none" : ""}">
-            <div class="desc" style="margin-bottom:8px">${dt.cap_sensor_desc || ""}</div>
-            ${instCards}
-          </div>
-        </div>
-      </div>
-
-      <div class="col-card top-item" style="${capWeighting ? "opacity:.4;pointer-events:none" : ""}">
         <div class="col-header" style="background:#7c3aed">${dt.mode_hdr || "⚖️"}</div>
         <div class="col-body">
-          ${capWeighting ? `<div class="desc">${dt.cap_overrides_mode || ""}</div>` : `
           <div class="field">
             <label>${dt.mode_lbl || ""}</label>
             <div class="desc">${(dt.mode_desc || "").replace(/\n/g, "<br>")}</div>
             <select data-dist-key="distribution_mode">
               <option value="equal"${mode === "equal" ? " selected" : ""}>${dt.mode_equal || "Equal"}</option>
-              <option value="weighted"${mode !== "equal" ? " selected" : ""}>${dt.mode_soc || "SOC-weighted"}</option>
+              <option value="soc"${mode === "soc" ? " selected" : ""}>${dt.mode_soc || "SOC-weighted"}</option>
+              <option value="capacity"${mode === "capacity" ? " selected" : ""}>${dt.mode_capacity || "Capacity-weighted"}</option>
             </select>
-          </div>`}
+          </div>
+        </div>
+      </div>
+
+      <div class="col-card top-item" style="${mode !== "capacity" ? "opacity:.4;pointer-events:none" : ""}">
+        <div class="col-header" style="background:#059669">${dt.cap_hdr || "🔋"}</div>
+        <div class="col-body">
+          <div class="desc" style="margin-bottom:8px">${dt.cap_sensor_desc || ""}</div>
+          ${instCards}
         </div>
       </div>
 
