@@ -1210,7 +1210,8 @@ class SolakonCoordinator:
                 if not cap_st or cap_st.state in ("unknown", "unavailable"):
                     return None
                 try:
-                    cv   = state_as_number(cap_st)
+                    cv = state_as_number(cap_st)
+                    # Case-insensitiver Vergleich — HA liefert die Unit i. d. R. als "Wh", nicht "wh".
                     unit = (cap_st.attributes.get("unit_of_measurement") or "").strip().lower()
                     return cv / 1000.0 if unit == "wh" else cv
                 except (ValueError, TypeError):
