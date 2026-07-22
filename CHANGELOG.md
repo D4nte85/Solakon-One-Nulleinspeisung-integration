@@ -5,6 +5,9 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+### Behoben
+- Race Condition beim parallelen Setup mehrerer Instanzen (Issue #15): `hass.data[..._dist_config]` entstand erst nach einem `await store.async_load()`, während der Store-Guard schon vorher gesetzt wurde. Startete eine zweite Instanz in diesem Zeitfenster (z. B. HA-Neustart, Stromausfall-Wiederanlauf), sah sie den Guard bereits gesetzt, übersprang die Initialisierung und griff auf den noch nicht existierenden Key zu → `KeyError`, Setup schlug mit `setup_error` fehl. Fix: `_dist_config` wird jetzt synchron mit Defaults angelegt, bevor der `await` den Event-Loop abgibt
+
 ## [2.1.5] – 2026-07-20
 
 ### Behoben

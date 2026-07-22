@@ -202,6 +202,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         from homeassistant.helpers.storage import Store
         store = Store(hass, STORAGE_VERSION_DIST, STORAGE_KEY_DIST)
         hass.data[f"{DOMAIN}_dist_store"] = store
+        # Defaults synchron setzen, bevor async_load() an den Event-Loop yieldet —
+        # sonst sieht ein parallel setup_entry-Aufruf den Store-Guard bereits gesetzt,
+        # aber _dist_config existiert noch nicht (KeyError).
+        hass.data[f"{DOMAIN}_dist_config"] = dict(DIST_DEFAULTS)
         stored = await store.async_load() or {}
         migrated = _migrate_dist_config(stored)
         hass.data[f"{DOMAIN}_dist_config"] = {**DIST_DEFAULTS, **migrated}
