@@ -485,6 +485,9 @@ Der Modus-Reset-Timer läuft ab bevor der Regler ihn zurücksetzen kann. Solakon
 **Integration taucht nach Installation nicht auf**
 Home Assistant vollständig neu starten (nicht nur neu laden). HACS-Download-Status überprüfen.
 
+**Eine Instanz zeigt „setup_error" nach HA-Neustart oder Stromausfall (nur bei mehreren Instanzen)**
+Seltene Race Condition beim parallelen Setup mehrerer Config-Entries, behoben (siehe CHANGELOG). Tückisch: die betroffene Instanz friert dabei auf ihrem letzten Wert ein, statt einen sichtbaren Fehlerzustand zu zeigen — im Dashboard wirkt sie gesund, ist aber ungeregelt. Workaround bei betroffener Version: den fehlgeschlagenen Config-Entry manuell neu laden (Einstellungen → Geräte & Dienste → Solakon-Instanz → drei Punkte → Neu laden).
+
 **SOC der Instanzen läuft bei mehreren Solakons auseinander**
 Bei unterschiedlich großen Batterien im Verteilungs-Tab prüfen, dass der Verteilungs-Modus wirklich auf **„Kapazitätsgewichtet"** steht (nicht „SOC-gewichtet" — das gewichtet bewusst rein nach Prozentpunkten, ohne Kapazität, und lässt unterschiedlich große Batterien dauerhaft auseinanderlaufen). Danach die Kapazitätssensoren prüfen — ein **roter Validierungspunkt** neben dem Feld bedeutet, dass die eingetragene Entity nicht existiert (häufig ein Tippfehler in der Entity-ID). Ohne gültigen Kapazitätswert bei allen Instanzen degradiert „Kapazitätsgewichtet" automatisch zu reiner SOC-%-Gewichtung.
 
