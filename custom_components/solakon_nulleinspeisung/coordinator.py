@@ -759,9 +759,11 @@ class SolakonCoordinator:
         prev_actual = self._prev_actual
         self._prev_actual = actual
 
+        total_actual = self._total_actual_power()
+
         if surplus_enabled:
             # Lastanteil dieser Instanz für Ein- und Austritt: (Σactual + grid) × error_share.
-            consumption_share = (self._total_actual_power() + grid) * error_share
+            consumption_share = (total_actual + grid) * error_share
             pv_hyst_share = surplus_pv_hyst * error_share
 
             normal_entry = (
@@ -812,7 +814,7 @@ class SolakonCoordinator:
             tariff_price_valid=tariff_price_valid,
             tariff_cheap=tariff_cheap, tariff_exp=tariff_exp,
             tariff_soc=tariff_soc, tariff_power=tariff_power,
-            is_night=is_night,
+            is_night=is_night, total_actual=total_actual,
         )
         if fall_executed:
             self.active_fall = fall_executed
@@ -915,6 +917,7 @@ class SolakonCoordinator:
         mode = v["mode"]
         grid = v["grid"]
         actual = v["actual"]
+        total_actual = v["total_actual"]
         zone1 = v["zone1_limit"]
         zone3 = v["zone3_limit"]
 
@@ -1087,6 +1090,7 @@ class SolakonCoordinator:
 
         # ── Fall G: AC Laden Start ───────────────────────────────────────────
         # Überschuss-Einspeisung hat Vorrang — kein AC Laden während Zone 0 aktiv
+        # total_actual summiert über alle entladenden Instanzen (Einzelbetrieb: eigener Wert)
         if (
             v["ac_enabled"]
             and not self.ac_charge_active
@@ -1094,7 +1098,7 @@ class SolakonCoordinator:
             and not self.surplus_active
             and soc < v["ac_soc_target"]
             and mode != MODE_AC_CHARGE
-            and (grid + actual) < -v["ac_hysteresis"]
+            and (grid + total_actual) < -v["ac_hysteresis"]
         ):
             self.ac_charge_active = True
             await self._timer_toggle()
