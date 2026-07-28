@@ -7,6 +7,7 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ### Behoben
 - Fall-G-Eintritt (AC Laden Start) im Multi-Instanz-Betrieb: Bedingung `(grid + actual) < −ac_hysteresis` verglich den eigenen Output der prüfenden Instanz statt der Summe aller Instanzen im Entlademodus (Issue #16). Dadurch konnte eine Instanz die Entladung einer Schwester-Instanz als externen Netzüberschuss werten und daraufhin genau diese Menge aus dem Netz nachladen — Batterie-zu-Batterie-Umpumpen mit doppelten Wandlungsverlusten, sowohl nachts (reale Schwester-Entladung) als auch tagsüber bei Lasttransienten (kurzzeitiger eigener Regel-Nachlauf nach Lastabwurf). Fix: `actual` durch `self._total_actual_power()` ersetzt, analog zur bereits korrekten Zone-0-Referenz. Die Fall-H-Abbruchbedingung bleibt unverändert auf den eigenen Output bezogen (prüft das Ende der eigenen Ladesession)
+- Zone-0-Eintritt oszillierte nachts bei vollem Akku im Sekundentakt (Issue #17): Der `PV = 0`-Sonderzweig (deckt PV-Hardwaredrosselung bei vollem Akku ab, Issue #11) nutzte eine reine Zwei-Zyklen-Entprellung über `Output = 0`, die nachts nicht ausreichte — nach einem Austritt genügte ein einzelner erneuter Nullwert der Ausgangsleistung, um sofort wieder einzutreten. Fix: Zusätzlicher Latch — der Zweig bleibt nach jedem Austritt bei `PV = 0` gesperrt, bis erneut echtes `PV > 0` gemessen wurde (tagsüber sofort der Fall, nachts erst bei Sonnenaufgang). SOC- und Verbrauchs-Austritt bleiben unverändert
 
 ## [2.1.6] – 2026-07-22
 

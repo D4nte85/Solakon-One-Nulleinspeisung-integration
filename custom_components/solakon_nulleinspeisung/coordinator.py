@@ -89,6 +89,10 @@ class SolakonCoordinator:
         # Vorheriger actual-Wert (für Surplus-Einstiegs-Entprellung)
         self._prev_actual: float = 0.0
 
+        # Sperrt den solar==0-Sonderfall-Eintritt nach einem Austritt, bis wieder
+        # echtes Solar > 0 gemessen wurde
+        self._solar_zero_entry_armed: bool = True
+
         # Interne Mechanik
         self._timer_toggled_in_cycle: bool = False
         self._lock = asyncio.Lock()
@@ -762,6 +766,9 @@ class SolakonCoordinator:
         total_actual = self._total_actual_power()
 
         if surplus_enabled:
+            if solar > 0:
+                self._solar_zero_entry_armed = True
+
             # Lastanteil dieser Instanz für Ein- und Austritt: (Σactual + grid) × error_share.
             consumption_share = (total_actual + grid) * error_share
             pv_hyst_share = surplus_pv_hyst * error_share
@@ -770,7 +777,12 @@ class SolakonCoordinator:
                 soc >= surplus_threshold
                 and (
                     solar > (consumption_share + pv_hyst_share)
-                    or (solar == 0 and actual == 0 and prev_actual == 0)
+                    or (
+                        solar == 0
+                        and actual == 0
+                        and prev_actual == 0
+                        and self._solar_zero_entry_armed
+                    )
                 )
             )
             # Forcierung ist bereits an solar > hard_limit_z0 gekoppelt → SOC-unabhängiger Eintritt.
@@ -784,6 +796,8 @@ class SolakonCoordinator:
             surplus_exit = not self.forecast_surplus_forced and (soc_exit or power_exit)
             if self.surplus_active:
                 new_surplus = not surplus_exit
+                if surplus_exit and solar == 0:
+                    self._solar_zero_entry_armed = False
             else:
                 new_surplus = surplus_entry
         else:

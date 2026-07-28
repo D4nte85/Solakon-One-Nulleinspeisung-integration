@@ -230,11 +230,11 @@ Optionale Überschuss-Einspeisung (Zone 0). **Hat absoluten Vorrang vor allen an
 
 **Zone 0 ist ein Overlay über Zone 1:** Der Eintritt aktiviert immer auch den Zone-1-Zyklus (`cycle_active`), beim Austritt wird die Zone aus dem SOC neu abgeleitet (SOC > Zone-1-Schwelle → Zone 1 läuft weiter, sonst Zone 2). Deshalb muss die Export-Schwelle über der Zone-1-Schwelle liegen — die Integration prüft das in jedem Zyklus.
 
-**Normaler Eintritt:** SOC ≥ Export-Schwelle UND (PV > ((Σ Output aller Instanzen + Grid) × Fehler-Anteil + PV-Hysterese × Fehler-Anteil) ODER (PV = 0 UND Output = 0 im aktuellen *und* vorherigen Zyklus))
+**Normaler Eintritt:** SOC ≥ Export-Schwelle UND (PV > ((Σ Output aller Instanzen + Grid) × Fehler-Anteil + PV-Hysterese × Fehler-Anteil) ODER (PV = 0 UND Output = 0 im aktuellen *und* vorherigen Zyklus UND seit dem letzten Austritt erneut PV > 0 gemessen))
 
 > Ein- und Austritt nutzen denselben Verbrauchsbezug `(Σ Output + Grid) × Fehler-Anteil` (im Einzelbetrieb = `Output + Grid`). Gleiche Referenz für beide ist zwingend, sonst bricht das Hysterese-Totband zusammen und Zone 0 flackert.
 
-> Der `PV = 0`-Zweig deckt den Fall ab, dass das MPPT die PV bei vollem Akku auf 0 W drosselt. Die zusätzliche Bedingung `Output = 0` über zwei aufeinanderfolgende Zyklen (Entprellung) verhindert ein Wieder-Eintreten nachts: Sobald Zone 0 den Entladestrom auf 2 A setzt (Output ≈ 96 W), blockiert dieser Wert für einen Zyklus den Neueintritt — lang genug, dass bei vollem Akku Zone 1 (Fall A) übernimmt und die Ausgangsleistung dauerhaft > 0 hält. (Der Blueprint erreicht dasselbe über getaktete Trigger statt Entprellung.)
+> Der `PV = 0`-Zweig deckt den Fall ab, dass das MPPT die PV bei vollem Akku auf 0 W drosselt. Die Bedingung `Output = 0` über zwei aufeinanderfolgende Zyklen (Entprellung) allein reicht nachts nicht: Nach einem Austritt bleibt PV weiterhin bei 0, und sobald die Ausgangsleistung zwei Zyklen in Folge wieder auf 0 zurückfällt (z. B. während der PI aus Zone 1 erst hochregelt), feuert derselbe Zweig erneut — ein Ein-/Austritts-Loop im Sekundentakt (Issue #17). Zusätzliche Sperre (Latch): Nach jedem Austritt bei `PV = 0` bleibt der Zweig deaktiviert, bis wieder echtes `PV > 0` gemessen wurde — das passiert tagsüber sofort (die Hardware gibt PV nach dem erzwungenen Zone-0-Eintritt wieder frei), nachts erst bei Sonnenaufgang. Der SOC- und Verbrauchs-Austritt bleiben davon unberührt. (Der Blueprint erreicht dasselbe über getaktete Trigger statt Entprellung.)
 
 **Forecast-Eintritt:** PV-Vorhersage ≥ Schwelle UND PV > Hard Limit Z0 UND SOC > Zone-3-Schwelle
 
