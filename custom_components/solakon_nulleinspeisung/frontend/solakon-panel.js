@@ -74,8 +74,8 @@ const TAB_LAYOUT = {
       {
         tk: "zones_soc", icon: "🔋", color: "#0891b2",
         fields: [
-          { k: "zone1_limit", t: "num", min: 1,  max: 99,  step: 1  },
-          { k: "zone3_limit", t: "num", min: 1,  max: 49,  step: 1  },
+          { k: "zone1_limit", t: "num", min: 0,  max: 100, step: 1  },
+          { k: "zone3_limit", t: "num", min: 0,  max: 100, step: 1  },
           { k: "pv_reserve",  t: "num", min: 0,  max: 500, step: 10 },
         ],
       },
@@ -100,7 +100,7 @@ const TAB_LAYOUT = {
           { k: "zone1_force_enabled",      t: "bool" },
           { k: "zone1_force_sensor_note",  t: "note" },
           { k: "zone1_force_threshold",    t: "num", min: 0, max: 50, step: 0.5 },
-          { k: "zone1_force_min_soc",      t: "num", min: 1, max: 49, step: 1 },
+          { k: "zone1_force_min_soc",      t: "num", min: 0, max: 100, step: 1 },
         ],
       },
     ],
@@ -131,7 +131,7 @@ const TAB_LAYOUT = {
       {
         tk: "surplus_soc", icon: "🔋", color: "#0891b2",
         fields: [
-          { k: "surplus_soc_threshold", t: "num", min: 50,  max: 100, step: 1 },
+          { k: "surplus_soc_threshold", t: "num", min: 0,   max: 100, step: 1 },
           { k: "surplus_soc_hyst",      t: "num", min: 1,   max: 20,  step: 1 },
         ],
       },
@@ -169,7 +169,7 @@ const TAB_LAYOUT = {
       {
         tk: "ac_entry", icon: "⚡", color: "#7c3aed",
         fields: [
-          { k: "ac_soc_target",  t: "num", min: 50,  max: 100,  step: 1   },
+          { k: "ac_soc_target",  t: "num", min: 0,   max: 100,  step: 1   },
           { k: "ac_power_limit", t: "num", min: 100, max: 1200, step: 50  },
           { k: "ac_hysteresis",  t: "num", min: 10,  max: 500,  step: 10  },
           { k: "ac_offset",      t: "num", min: -500,max: 200,  step: 5   },
@@ -203,7 +203,7 @@ const TAB_LAYOUT = {
       {
         tk: "tariff_charge", icon: "🔋", color: "#16a34a",
         fields: [
-          { k: "tariff_soc_target", t: "num", min: 50,  max: 100,  step: 1  },
+          { k: "tariff_soc_target", t: "num", min: 0,   max: 100,  step: 1  },
           { k: "tariff_power",      t: "num", min: 100, max: 1200, step: 50 },
         ],
       },

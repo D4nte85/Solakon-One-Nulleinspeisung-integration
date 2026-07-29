@@ -10,6 +10,7 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ### Behoben
 - `zone1_force_threshold` hatte Default `5000.0`, während der zugehörige UI-Slider nur 0–50 kWh zulässt (Wert außerhalb des eigenen Wertebereichs, blind von `pv_forecast_threshold`/`surplus_forecast_threshold` übernommen) — Feature blieb bei Werkseinstellung und aktiviertem Enable-Flag wirkungslos, da kein realer Vorhersage-Sensor je ≥5000 kWh meldet. Default auf `15.0` korrigiert
+- SOC-Zahlenfelder (`zone1_limit`, `zone3_limit`, `zone1_force_min_soc`, `surplus_soc_threshold`, `ac_soc_target`, `tariff_soc_target`) hatten uneinheitliche, willkürlich enge UI-Slider-Bereiche (z. B. `zone3_limit`/`zone1_force_min_soc` nur bis 49 %, `surplus_soc_threshold`/`ac_soc_target`/`tariff_soc_target` erst ab 50 %) — Restriktion gehörte in die bestehende gegenseitige Validierung (`zone1_limit`/`zone3_limit`/`surplus_soc_threshold` in `coordinator.py`), nicht ins UI. Alle sechs Felder jetzt einheitlich 0–100 %, Abhängigkeiten weiterhin ausschließlich über die Coordinator-Validierung erzwungen. `surplus_soc_hyst` unverändert (Hysterese-Differenz, kein absoluter SOC-Wert)
 
 ## [2.1.7] – 2026-07-29
 
