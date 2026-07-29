@@ -171,7 +171,10 @@
     },
     "surplus_forecast_enabled": {
       "l": "Enable Forecast Override",
-      "d": "When forecast ≥ threshold: surplus starts as soon as PV > Hard Limit Z0 AND SOC > zone-3 threshold (no export threshold required). Forcing stays active while forecast ≥ threshold AND PV > Hard Limit Z0 AND SOC > zone 3 — feeds in early on a big PV day instead of curtailing, without waiting for a full battery. Once PV drops below Hard Limit Z0 (incl. at night: PV = 0), the forecast drops below the threshold or the SOC drops below zone 3, forcing ends and the normal exit (SOC OR consumption) applies — no nightly stick. Sensor: shared field with the tariff PV forecast, see the Tariff tab or, for multi-instance setups, the Distribution tab (global value)."
+      "d": "When forecast ≥ threshold: surplus starts as soon as PV > Hard Limit Z0 AND SOC > zone-3 threshold (no export threshold required). Forcing stays active while forecast ≥ threshold AND PV > Hard Limit Z0 AND SOC > zone 3 — feeds in early on a big PV day instead of curtailing, without waiting for a full battery. Once PV drops below Hard Limit Z0 (incl. at night: PV = 0), the forecast drops below the threshold or the SOC drops below zone 3, forcing ends and the normal exit (SOC OR consumption) applies — no nightly stick."
+    },
+    "surplus_forecast_sensor_note": {
+      "d": "🔌 Without the \"PV Forecast Today\" entity (Entities tab) this function stays inactive — shared field with the tariff PV forecast."
     },
     "surplus_forecast_threshold": {
       "l": "Minimum Yield for Surplus",
@@ -186,7 +189,7 @@
       "d": "Sensor with the currently forecast PV power in W (e.g. Solcast power_now, k-units normalized ×1000 automatically). Feeds the exit lock for Zone 0 (Surplus tab)."
     },
     "surplus_lock_sensor_note": {
-      "d": "🔌 Sensor is assigned in the Entities tab."
+      "d": "🔌 Without the \"Power Forecast Sensor\" entity (Entities tab) this lock stays inactive."
     },
     "surplus_lock_factor": {
       "l": "Lock Factor",
@@ -229,7 +232,7 @@
       "d": "Sensor entity with the current electricity price in ct/kWh. Feeds tariff arbitrage (Tariff tab)."
     },
     "tariff_price_sensor_note": {
-      "d": "🔌 Price sensor is assigned in the Entities tab."
+      "d": "🔌 Without the \"Price Sensor\" entity (Entities tab) tariff arbitrage stays inactive."
     },
     "tariff_cheap_threshold": {
       "l": "Cheap Threshold (ct/kWh)",
@@ -248,7 +251,7 @@
       "d": "Optional input_number entity, overrides the static expensive threshold. Feeds tariff arbitrage (Tariff tab)."
     },
     "tariff_dynamic_entities_note": {
-      "d": "🔌 Dynamic threshold entities (cheap/expensive) are assigned in the Entities tab."
+      "d": "🔌 Optional \"Dynamic Cheap Threshold\" / \"Dynamic Expensive Threshold\" entities (Entities tab) override the numeric values above when set."
     },
     "tariff_soc_target": {
       "l": "Charge Target SOC (%)",
@@ -267,7 +270,7 @@
       "d": "input_number or sensor entity with the expected kWh yield today (e.g. weather integration or Solcast account). Feeds tariff-lock suppression (Tariff tab), Surplus Forecast Override (Surplus tab) and, between 0–12h, Zone-1 Night Forcing (Zones tab)."
     },
     "pv_forecast_sensor_note": {
-      "d": "🔌 Sensor is assigned in the Entities tab — shared field with the Surplus Forecast Override in the Zone-0 tab."
+      "d": "🔌 Without the \"PV Forecast Today\" entity (Entities tab) this function stays inactive."
     },
     "pv_forecast_threshold": {
       "l": "Threshold (kWh)",
@@ -282,7 +285,7 @@
       "d": "input_number or sensor entity with the expected kWh yield for tomorrow. Feeds Zone-1 Night Forcing (Zones tab), read before midnight — after midnight \"PV Forecast Today\" above is used automatically instead (same target day, only the sensor changes)."
     },
     "zone1_force_sensor_note": {
-      "d": "🔌 Sensor is assigned in the Entities tab (\"PV Forecast Tomorrow\")."
+      "d": "🔌 Without the \"PV Forecast Tomorrow\" entity (Entities tab) this function stays inactive."
     },
     "zone1_force_threshold": {
       "l": "Minimum Yield (kWh)",

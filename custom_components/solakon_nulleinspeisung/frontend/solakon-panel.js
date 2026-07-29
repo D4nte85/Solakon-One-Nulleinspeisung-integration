@@ -143,8 +143,9 @@ const TAB_LAYOUT = {
       {
         tk: "surplus_forecast", icon: "🌤️", color: "#65a30d",
         fields: [
-          { k: "surplus_forecast_enabled",   t: "bool" },
-          { k: "surplus_forecast_threshold", t: "num", min: 0, max: 100, step: 0.5 },
+          { k: "surplus_forecast_enabled",      t: "bool" },
+          { k: "surplus_forecast_sensor_note",  t: "note" },
+          { k: "surplus_forecast_threshold",    t: "num", min: 0, max: 100, step: 0.5 },
         ],
       },
       {
@@ -587,7 +588,10 @@ class SolakonPanel extends HTMLElement {
 
         /* ── Tab panel ───────────────────────────────────────────────────── */
         .tab-panel { border: 1px solid var(--divider-color, #ddd); border-radius: 10px; overflow: hidden; margin-bottom: 14px; }
-        .tab-bar { background: var(--secondary-background-color, #f0f0f0); border-bottom: 2px solid var(--divider-color, #ddd); display: flex; flex-wrap: nowrap; overflow-x: auto; padding: 8px 8px 0; gap: 2px; }
+        .tab-bar { background: var(--secondary-background-color, #f0f0f0); border-bottom: 2px solid var(--divider-color, #ddd); display: flex; flex-wrap: nowrap; overflow-x: auto; scrollbar-gutter: stable; padding: 8px 8px 0; gap: 2px; scrollbar-width: thin; scrollbar-color: var(--divider-color, #bbb) transparent; }
+        .tab-bar::-webkit-scrollbar { height: 7px; }
+        .tab-bar::-webkit-scrollbar-track { background: transparent; }
+        .tab-bar::-webkit-scrollbar-thumb { background: var(--divider-color, #bbb); border-radius: 4px; }
         .tab { padding: 7px 11px; border-radius: 8px 8px 0 0; cursor: pointer; background: var(--card-background-color, #fff); border: 1px solid var(--divider-color, #ddd); border-bottom: 2px solid var(--card-background-color, #fff); font-size: .82em; white-space: nowrap; position: relative; bottom: -2px; transition: background .15s; }
         .tab:hover:not(.active) { background: var(--secondary-background-color, #f5f5f5); }
         .tab.active { background: var(--primary-color, #03a9f4); color: #fff; border-color: var(--primary-color, #03a9f4); border-bottom-color: var(--primary-color, #03a9f4); font-weight: 600; }

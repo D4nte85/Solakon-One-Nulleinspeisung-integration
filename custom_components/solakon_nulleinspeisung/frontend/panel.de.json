@@ -171,7 +171,10 @@
     },
     "surplus_forecast_enabled": {
       "l": "Forecast-Erzwingung aktivieren",
-      "d": "Wenn Vorhersage ≥ Schwelle: Surplus startet sobald PV > Hard-Limit-Z0 UND SOC > Zone-3-Schwelle (keine Export-Schwelle nötig). Die Forcierung bleibt aktiv solange Vorhersage ≥ Schwelle UND PV > Hard-Limit-Z0 UND SOC > Zone 3 — so wird bei großem PV-Tag früh eingespeist statt abgeregelt, ohne auf vollen Akku zu warten. Fällt die PV unter Hard-Limit-Z0 (auch nachts: PV = 0), die Vorhersage unter die Schwelle oder der SOC unter Zone 3, endet die Forcierung und der normale Austritt (SOC ODER Verbrauch) greift — kein Hängenbleiben. Sensor: gemeinsames Feld mit der Tarif-PV-Vorhersage, siehe Tarif-Tab bzw. bei Multi-Instanz das Verteilungs-Tab (globaler Wert)."
+      "d": "Wenn Vorhersage ≥ Schwelle: Surplus startet sobald PV > Hard-Limit-Z0 UND SOC > Zone-3-Schwelle (keine Export-Schwelle nötig). Die Forcierung bleibt aktiv solange Vorhersage ≥ Schwelle UND PV > Hard-Limit-Z0 UND SOC > Zone 3 — so wird bei großem PV-Tag früh eingespeist statt abgeregelt, ohne auf vollen Akku zu warten. Fällt die PV unter Hard-Limit-Z0 (auch nachts: PV = 0), die Vorhersage unter die Schwelle oder der SOC unter Zone 3, endet die Forcierung und der normale Austritt (SOC ODER Verbrauch) greift — kein Hängenbleiben."
+    },
+    "surplus_forecast_sensor_note": {
+      "d": "🔌 Ohne Entität „PV-Vorhersage heute“ (Entitäten-Tab) bleibt diese Funktion inaktiv — gemeinsames Feld mit der Tarif-PV-Vorhersage."
     },
     "surplus_forecast_threshold": {
       "l": "Mindest-Ertrag für Surplus",
@@ -186,7 +189,7 @@
       "d": "Sensor mit der aktuell prognostizierten PV-Leistung in W (z. B. Solcast power_now, k-Einheiten automatisch ×1000). Speist die Austritts-Sperre aus Zone 0 (Überschuss-Tab)."
     },
     "surplus_lock_sensor_note": {
-      "d": "🔌 Sensor wird im Entitäten-Tab zugewiesen."
+      "d": "🔌 Ohne Entität „Leistungs-Vorhersage-Sensor“ (Entitäten-Tab) bleibt diese Sperre inaktiv."
     },
     "surplus_lock_factor": {
       "l": "Sperr-Faktor",
@@ -229,7 +232,7 @@
       "d": "Sensor-Entität mit aktuellem Strompreis in ct/kWh. Speist die Tarif-Arbitrage (Tarif-Tab)."
     },
     "tariff_price_sensor_note": {
-      "d": "🔌 Preis-Sensor wird im Entitäten-Tab zugewiesen."
+      "d": "🔌 Ohne Entität „Preis-Sensor“ (Entitäten-Tab) bleibt Tarif-Arbitrage inaktiv."
     },
     "tariff_cheap_threshold": {
       "l": "Günstig-Schwelle (ct/kWh)",
@@ -248,7 +251,7 @@
       "d": "Optionale input_number-Entität, überschreibt die statische Teuer-Schwelle. Speist die Tarif-Arbitrage (Tarif-Tab)."
     },
     "tariff_dynamic_entities_note": {
-      "d": "🔌 Dynamische Schwellen-Entitäten (Günstig/Teuer) werden im Entitäten-Tab zugewiesen."
+      "d": "🔌 Optionale Entitäten „Günstig-Schwelle dynamisch“ / „Teuer-Schwelle dynamisch“ (Entitäten-Tab) überschreiben die Zahlenwerte oben, wenn gesetzt."
     },
     "tariff_soc_target": {
       "l": "Ladeziel SOC (%)",
@@ -267,7 +270,7 @@
       "d": "input_number- oder sensor-Entität mit dem erwarteten kWh-Ertrag heute (z. B. Wetter-Integration oder Solcast-Account). Speist die Tarif-Lock-Unterdrückung (Tarif-Tab), die Surplus-Forecast-Erzwingung (Überschuss-Tab) und, zwischen 0–12 Uhr, die Zone-1-Nacht-Forcierung (Zonen-Tab)."
     },
     "pv_forecast_sensor_note": {
-      "d": "🔌 Sensor wird im Entitäten-Tab zugewiesen — gemeinsames Feld mit der Surplus-Forecast-Erzwingung im Zone-0-Tab."
+      "d": "🔌 Ohne Entität „PV-Vorhersage heute“ (Entitäten-Tab) bleibt diese Funktion inaktiv."
     },
     "pv_forecast_threshold": {
       "l": "Schwellwert (kWh)",
@@ -282,7 +285,7 @@
       "d": "input_number- oder sensor-Entität mit dem erwarteten kWh-Ertrag für morgen. Speist die Zone-1-Nacht-Forcierung (Zonen-Tab), gelesen vor Mitternacht — danach automatisch „PV-Vorhersage heute“ oben (derselbe Zieltag, nur der Sensor wechselt)."
     },
     "zone1_force_sensor_note": {
-      "d": "🔌 Sensor wird im Entitäten-Tab zugewiesen (\"PV-Vorhersage morgen\")."
+      "d": "🔌 Ohne Entität „PV-Vorhersage morgen“ (Entitäten-Tab) bleibt diese Funktion inaktiv."
     },
     "zone1_force_threshold": {
       "l": "Mindest-Ertrag (kWh)",
