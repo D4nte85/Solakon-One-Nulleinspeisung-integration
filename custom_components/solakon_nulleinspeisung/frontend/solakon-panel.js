@@ -108,29 +108,14 @@ const TAB_LAYOUT = {
   entities: {
     cols: [
       {
-        tk: "ent_zones", icon: "🌙", color: "#4338ca",
+        tk: "entities_all", descKey: "entities_all", icon: "🔌", color: "#0284c7",
         fields: [
-          { k: "zone1_force_sensor", t: "entity" },
-        ],
-      },
-      {
-        tk: "ent_surplus", icon: "⛅", color: "#dc2626",
-        fields: [
+          { k: "pv_forecast_sensor",  t: "entity" },
+          { k: "zone1_force_sensor",  t: "entity" },
           { k: "surplus_lock_sensor", t: "entity" },
-        ],
-      },
-      {
-        tk: "ent_tariff", icon: "💹", color: "#0891b2",
-        fields: [
           { k: "tariff_price_sensor", t: "entity", domain: "sensor" },
           { k: "tariff_cheap_entity", t: "entity", domain: "input_number" },
           { k: "tariff_exp_entity",   t: "entity", domain: "input_number" },
-        ],
-      },
-      {
-        tk: "ent_forecast", icon: "☀️", color: "#f59e0b",
-        fields: [
-          { k: "pv_forecast_sensor", t: "entity" },
         ],
       },
     ],
@@ -602,7 +587,7 @@ class SolakonPanel extends HTMLElement {
 
         /* ── Tab panel ───────────────────────────────────────────────────── */
         .tab-panel { border: 1px solid var(--divider-color, #ddd); border-radius: 10px; overflow: hidden; margin-bottom: 14px; }
-        .tab-bar { background: var(--secondary-background-color, #f0f0f0); border-bottom: 2px solid var(--divider-color, #ddd); display: flex; flex-wrap: wrap; padding: 8px 8px 0; gap: 2px; }
+        .tab-bar { background: var(--secondary-background-color, #f0f0f0); border-bottom: 2px solid var(--divider-color, #ddd); display: flex; flex-wrap: nowrap; overflow-x: auto; padding: 8px 8px 0; gap: 2px; }
         .tab { padding: 7px 11px; border-radius: 8px 8px 0 0; cursor: pointer; background: var(--card-background-color, #fff); border: 1px solid var(--divider-color, #ddd); border-bottom: 2px solid var(--card-background-color, #fff); font-size: .82em; white-space: nowrap; position: relative; bottom: -2px; transition: background .15s; }
         .tab:hover:not(.active) { background: var(--secondary-background-color, #f5f5f5); }
         .tab.active { background: var(--primary-color, #03a9f4); color: #fff; border-color: var(--primary-color, #03a9f4); border-bottom-color: var(--primary-color, #03a9f4); font-weight: 600; }
@@ -817,6 +802,10 @@ class SolakonPanel extends HTMLElement {
       card.appendChild(hdr);
       const body = document.createElement("div");
       body.className = "col-body";
+      if (col.descKey) {
+        const introDesc = this._t.col_descs?.[col.descKey];
+        if (introDesc) body.innerHTML = `<div class="desc" style="margin-bottom:8px">${introDesc}</div>`;
+      }
       for (const f of col.fields) body.appendChild(this._makeField(f));
       card.appendChild(body);
       colGrid.appendChild(card);

@@ -117,7 +117,7 @@ Im Panel wird bei mehreren Instanzen ein zusätzlicher **Verteilungs-Tab** einge
 
 | Globaler Sensor | Speist |
 |---|---|
-| PV-Vorhersage heute (kWh) | Surplus-Forecast-Erzwingung (Überschuss-Tab), Tarif-Lock-Unterdrückung (Tarif-Tab) |
+| PV-Vorhersage heute (kWh) | Surplus-Forecast-Erzwingung (Überschuss-Tab), Tarif-Lock-Unterdrückung (Tarif-Tab), 0–12 Uhr zusätzlich Zone-1-Nacht-Forcierung (Zonen-Tab) |
 | PV-Vorhersage morgen (kWh) | Zone-1-Nacht-Forcierung (Zonen-Tab) |
 | Leistungs-Vorhersage jetzt (W) | Austritts-Sperre (Überschuss-Tab) |
 | Strompreis-Sensor | Tarif-Arbitrage (Tarif-Tab) |
@@ -246,20 +246,16 @@ Ein positiver Offset von z. B. 30 W lässt den Regler auf 30 W Netzbezug regeln 
 
 ### 🔌 Entitäten
 
-Bündelt alle optionalen Entity-Picker-Felder dieser Instanz an einer Stelle, statt sie über Zonen-, Überschuss- und Tarif-Tab verstreut zu pflegen. Enable-Flags und Zahlen-Schwellen bleiben in ihrem jeweiligen Feature-Tab — hier wird ausschließlich zugewiesen, **welche** Entität gelesen wird.
+Bündelt alle optionalen Entity-Picker-Felder dieser Instanz an einer Stelle, statt sie über Zonen-, Überschuss- und Tarif-Tab verstreut zu pflegen. Enable-Flags und Zahlen-Schwellen bleiben in ihrem jeweiligen Feature-Tab — hier wird ausschließlich zugewiesen, **welche** Entität gelesen wird. Bei Multi-Instanz: lokal (hier) überschreibt den globalen Wert aus dem [Verteilungs-Tab](#multi-instancing), sonst gilt dieser. Bleibt ein Feld sowohl hier als auch global leer, ist die jeweilige Funktion inaktiv — auch wenn ihr Enable-Flag gesetzt ist.
 
-Bei Multi-Instanz existiert zusätzlich eine globale Vorgabe pro Sensor im [Verteilungs-Tab](#multi-instancing): lokal (hier) überschreibt global, sonst gilt der globale Wert. Bleibt ein Feld sowohl hier als auch global leer, ist die jeweilige Funktion wirkungslos — auch wenn ihr Enable-Flag gesetzt ist.
-
-| Parameter | Beschreibung | Verwendet von |
-|-----------|-------------|---------------|
-| PV-Vorhersage morgen (optional lokal) | input_number- oder sensor-Entität mit dem erwarteten kWh-Ertrag für morgen. Vor Mitternacht gelesen; nach Mitternacht automatisch „PV-Vorhersage heute" (siehe unten) — derselbe Zieltag, nur der Sensor wechselt. | Zonen — Nacht-Forcierung |
-| Leistungs-Vorhersage-Sensor (W, optional lokal) | Aktuell prognostizierte PV-Leistung (z. B. Solcast `power_now`). k-Einheiten (kW) werden automatisch ×1000 normalisiert. | Überschuss — Austritts-Sperre |
-| Preis-Sensor (optional lokal) | Sensor-Entität mit aktuellem Strompreis in ct/kWh. | Tarif |
-| Günstig-Schwelle dynamisch (optional lokal) | Optionale input_number-Entität, überschreibt die statische Günstig-Schwelle wenn gesetzt und verfügbar. | Tarif |
-| Teuer-Schwelle dynamisch (optional lokal) | Optionale input_number-Entität, überschreibt die statische Teuer-Schwelle wenn gesetzt und verfügbar. | Tarif |
-| PV-Vorhersage heute (optional lokal) | input_number- oder sensor-Entität mit einem kWh-Wert für die erwartete Solarproduktion heute. Gemeinsames Feld — speist die Tarif-Lock-Unterdrückung, die Surplus-Forecast-Erzwingung UND (0–12 Uhr) die Zone-1-Nacht-Forcierung. | Tarif — PV-Vorhersage, Überschuss — Forecast-Eintritt, Zonen — Nacht-Forcierung (0–12 Uhr) |
-
-Für jedes Feld gilt: leer lassen → bei Multi-Instanz greift der globale Wert aus dem Verteilungs-Tab, sonst ist die jeweilige Funktion inaktiv.
+| Parameter | Speist |
+|-----------|--------|
+| PV-Vorhersage heute (optional lokal) | Tarif-Lock-Unterdrückung (Tarif-Tab), Surplus-Forecast-Erzwingung (Überschuss-Tab), 0–12 Uhr zusätzlich Zone-1-Nacht-Forcierung (Zonen-Tab) |
+| PV-Vorhersage morgen (optional lokal) | Zone-1-Nacht-Forcierung (Zonen-Tab), gelesen vor Mitternacht — danach automatisch obiges Feld |
+| Leistungs-Vorhersage-Sensor (W, optional lokal) | Austritts-Sperre (Überschuss-Tab) |
+| Preis-Sensor (optional lokal) | Tarif-Arbitrage (Tarif-Tab) |
+| Günstig-Schwelle dynamisch (optional lokal) | Tarif-Arbitrage (Tarif-Tab) |
+| Teuer-Schwelle dynamisch (optional lokal) | Tarif-Arbitrage (Tarif-Tab) |
 
 ---
 

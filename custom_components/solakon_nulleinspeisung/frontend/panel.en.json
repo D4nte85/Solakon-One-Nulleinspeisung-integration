@@ -91,10 +91,10 @@
     "dynoff_z2":        "Zone 2",
     "dynoff_ac":        "Zone AC Charge",
     "periodic":         "Periodic Trigger",
-    "ent_zones":        "Zones — Night Forcing",
-    "ent_surplus":      "Surplus — Exit Lock",
-    "ent_tariff":       "Tariff",
-    "ent_forecast":     "PV Forecast"
+    "entities_all":     "Sensors"
+  },
+  "col_descs": {
+    "entities_all": "Optional entity assignments for this instance. Enable flags and numeric thresholds stay in their respective feature tab (Zones, Surplus, Tariff) — this only assigns which entity is read. With multiple instances: local (here) overrides the global value from the Distribution tab, otherwise the global value applies."
   },
   "fields": {
     "p_factor":  {
@@ -183,7 +183,7 @@
     },
     "surplus_lock_sensor": {
       "l": "Power Forecast Sensor (W, optional local)",
-      "d": "Sensor with the currently forecast PV power in W (e.g. Solcast power_now). k-units (kW) are normalized ×1000 automatically. Leave empty → in multi-instance setups the global value from the Distribution tab applies. If no sensor ends up set or it is unavailable, the lock is inactive."
+      "d": "Sensor with the currently forecast PV power in W (e.g. Solcast power_now, k-units normalized ×1000 automatically). Feeds the exit lock for Zone 0 (Surplus tab)."
     },
     "surplus_lock_sensor_note": {
       "d": "🔌 Sensor is assigned in the Entities tab."
@@ -226,7 +226,7 @@
     },
     "tariff_price_sensor": {
       "l": "Price Sensor (optional local)",
-      "d": "Sensor entity with the current electricity price as a numeric value in ct/kWh. Leave empty → in multi-instance setups the global value from the Distribution tab applies (usually one shared household tariff)."
+      "d": "Sensor entity with the current electricity price in ct/kWh. Feeds tariff arbitrage (Tariff tab)."
     },
     "tariff_price_sensor_note": {
       "d": "🔌 Price sensor is assigned in the Entities tab."
@@ -237,7 +237,7 @@
     },
     "tariff_cheap_entity": {
       "l": "Dynamic Cheap Threshold (optional local)",
-      "d": "Optional input_number entity, overrides the static value when set and available. Leave empty → in multi-instance setups the global value from the Distribution tab applies."
+      "d": "Optional input_number entity, overrides the static cheap threshold. Feeds tariff arbitrage (Tariff tab)."
     },
     "tariff_exp_threshold": {
       "l": "Expensive Threshold (ct/kWh)",
@@ -245,7 +245,7 @@
     },
     "tariff_exp_entity": {
       "l": "Dynamic Expensive Threshold (optional local)",
-      "d": "Optional input_number entity, overrides the static value when set and available. Leave empty → in multi-instance setups the global value from the Distribution tab applies."
+      "d": "Optional input_number entity, overrides the static expensive threshold. Feeds tariff arbitrage (Tariff tab)."
     },
     "tariff_dynamic_entities_note": {
       "d": "🔌 Dynamic threshold entities (cheap/expensive) are assigned in the Entities tab."
@@ -264,7 +264,7 @@
     },
     "pv_forecast_sensor": {
       "l": "PV Forecast Today (optional local)",
-      "d": "input_number or sensor entity with a kWh value for expected solar generation today (e.g. from a weather integration or a Solcast account). Shared field — feeds this tariff-lock suppression, the Surplus Forecast Override in the Zone-0 tab, AND between 0–12h also Zone-1 Night Forcing (automatically replaces the \"PV Forecast Tomorrow\" field there, see its description). Leave empty → in multi-instance setups the global value from the Distribution tab applies."
+      "d": "input_number or sensor entity with the expected kWh yield today (e.g. weather integration or Solcast account). Feeds tariff-lock suppression (Tariff tab), Surplus Forecast Override (Surplus tab) and, between 0–12h, Zone-1 Night Forcing (Zones tab)."
     },
     "pv_forecast_sensor_note": {
       "d": "🔌 Sensor is assigned in the Entities tab — shared field with the Surplus Forecast Override in the Zone-0 tab."
@@ -279,7 +279,7 @@
     },
     "zone1_force_sensor": {
       "l": "PV Forecast Tomorrow (optional local)",
-      "d": "input_number or sensor entity with the expected kWh yield for tomorrow. Read before midnight; after midnight the \"PV Forecast Today\" field is used automatically instead (same target day, only the sensor changes — the \"tomorrow\" sensor would otherwise point one day too far ahead). Leave empty → in multi-instance setups the global value from the Distribution tab applies."
+      "d": "input_number or sensor entity with the expected kWh yield for tomorrow. Feeds Zone-1 Night Forcing (Zones tab), read before midnight — after midnight \"PV Forecast Today\" above is used automatically instead (same target day, only the sensor changes)."
     },
     "zone1_force_sensor_note": {
       "d": "🔌 Sensor is assigned in the Entities tab (\"PV Forecast Tomorrow\")."
@@ -435,7 +435,7 @@
     "global_sensors_hdr":  "🌍 Global Sensors",
     "global_sensors_desc": "Cross-instance default for sensors that typically apply to the whole household (one weather/Solcast account, one electricity tariff) — each instance can optionally override locally in its own tab, otherwise this value applies. The dot next to each field shows entity validity live (green/amber/red).",
     "global_pv_today_lbl":     "PV Forecast Today (kWh)",
-    "global_pv_today_desc":   "Feeds the Surplus Forecast Override (Zone-0 tab) and the Tariff Lock suppression (Tariff tab), unless an instance overrides it locally.",
+    "global_pv_today_desc":   "Feeds the Surplus Forecast Override (Zone-0 tab), the Tariff Lock suppression (Tariff tab) and, between 0–12h, Zone-1 Night Forcing (Zones tab), unless an instance overrides it locally.",
     "global_pv_today_ph":      "sensor.pv_forecast_today",
     "global_pv_tomorrow_lbl":  "PV Forecast Tomorrow (kWh)",
     "global_pv_tomorrow_desc": "Feeds the Zone-1 Night Forcing (Zones tab). Read before midnight; after midnight \"PV Forecast Today\" above is used automatically instead (same target day).",

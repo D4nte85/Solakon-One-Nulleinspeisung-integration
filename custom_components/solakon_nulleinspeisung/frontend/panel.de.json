@@ -91,10 +91,10 @@
     "dynoff_z2":        "Zone 2",
     "dynoff_ac":        "Zone AC Laden",
     "periodic":         "Periodischer Trigger",
-    "ent_zones":        "Zonen — Nacht-Forcierung",
-    "ent_surplus":      "Surplus — Austritts-Sperre",
-    "ent_tariff":       "Tarif",
-    "ent_forecast":     "PV-Vorhersage"
+    "entities_all":     "Sensoren"
+  },
+  "col_descs": {
+    "entities_all": "Optionale Entity-Zuweisungen dieser Instanz. Enable-Flags und Zahlen-Schwellen bleiben im jeweiligen Feature-Tab (Zonen, Überschuss, Tarif) — hier wird nur zugewiesen, welche Entität gelesen wird. Bei Multi-Instanz: lokal (hier) überschreibt den globalen Wert aus dem Verteilungs-Tab, sonst gilt dieser."
   },
   "fields": {
     "p_factor":  {
@@ -183,7 +183,7 @@
     },
     "surplus_lock_sensor": {
       "l": "Leistungs-Vorhersage-Sensor (W, optional lokal)",
-      "d": "Sensor mit der aktuell prognostizierten PV-Leistung in W (z. B. Solcast power_now). k-Einheiten (kW) werden automatisch ×1000 normalisiert. Leer lassen → bei Multi-Instanz greift der globale Wert aus dem Verteilungs-Tab. Ist am Ende kein Sensor gesetzt oder nicht verfügbar, ist die Sperre inaktiv."
+      "d": "Sensor mit der aktuell prognostizierten PV-Leistung in W (z. B. Solcast power_now, k-Einheiten automatisch ×1000). Speist die Austritts-Sperre aus Zone 0 (Überschuss-Tab)."
     },
     "surplus_lock_sensor_note": {
       "d": "🔌 Sensor wird im Entitäten-Tab zugewiesen."
@@ -226,7 +226,7 @@
     },
     "tariff_price_sensor": {
       "l": "Preis-Sensor (optional lokal)",
-      "d": "Sensor-Entität mit aktuellem Strompreis als numerischem Wert in ct/kWh. Leer lassen → bei Multi-Instanz greift der globale Wert aus dem Verteilungs-Tab (meist ein gemeinsamer Hausstrom-Tarif)."
+      "d": "Sensor-Entität mit aktuellem Strompreis in ct/kWh. Speist die Tarif-Arbitrage (Tarif-Tab)."
     },
     "tariff_price_sensor_note": {
       "d": "🔌 Preis-Sensor wird im Entitäten-Tab zugewiesen."
@@ -237,7 +237,7 @@
     },
     "tariff_cheap_entity": {
       "l": "Günstig-Schwelle dynamisch (optional lokal)",
-      "d": "Optionale input_number-Entität, überschreibt den statischen Wert wenn gesetzt und verfügbar. Leer lassen → bei Multi-Instanz greift der globale Wert aus dem Verteilungs-Tab."
+      "d": "Optionale input_number-Entität, überschreibt die statische Günstig-Schwelle. Speist die Tarif-Arbitrage (Tarif-Tab)."
     },
     "tariff_exp_threshold": {
       "l": "Teuer-Schwelle (ct/kWh)",
@@ -245,7 +245,7 @@
     },
     "tariff_exp_entity": {
       "l": "Teuer-Schwelle dynamisch (optional lokal)",
-      "d": "Optionale input_number-Entität, überschreibt den statischen Wert wenn gesetzt und verfügbar. Leer lassen → bei Multi-Instanz greift der globale Wert aus dem Verteilungs-Tab."
+      "d": "Optionale input_number-Entität, überschreibt die statische Teuer-Schwelle. Speist die Tarif-Arbitrage (Tarif-Tab)."
     },
     "tariff_dynamic_entities_note": {
       "d": "🔌 Dynamische Schwellen-Entitäten (Günstig/Teuer) werden im Entitäten-Tab zugewiesen."
@@ -264,7 +264,7 @@
     },
     "pv_forecast_sensor": {
       "l": "PV-Vorhersage heute (optional lokal)",
-      "d": "input_number- oder sensor-Entität mit einem kWh-Wert für die erwartete Solarproduktion heute (z. B. von einer Wetter-Integration oder einem Solcast-Account). Gemeinsames Feld — speist diese Tarif-Lock-Unterdrückung, die Surplus-Forecast-Erzwingung im Zone-0-Tab, UND zwischen 0–12 Uhr auch die Zone-1-Nacht-Forcierung (löst dort automatisch das Feld „PV-Vorhersage morgen“ ab, siehe dessen Beschreibung). Leer lassen → bei Multi-Instanz greift der globale Wert aus dem Verteilungs-Tab."
+      "d": "input_number- oder sensor-Entität mit dem erwarteten kWh-Ertrag heute (z. B. Wetter-Integration oder Solcast-Account). Speist die Tarif-Lock-Unterdrückung (Tarif-Tab), die Surplus-Forecast-Erzwingung (Überschuss-Tab) und, zwischen 0–12 Uhr, die Zone-1-Nacht-Forcierung (Zonen-Tab)."
     },
     "pv_forecast_sensor_note": {
       "d": "🔌 Sensor wird im Entitäten-Tab zugewiesen — gemeinsames Feld mit der Surplus-Forecast-Erzwingung im Zone-0-Tab."
@@ -279,7 +279,7 @@
     },
     "zone1_force_sensor": {
       "l": "PV-Vorhersage morgen (optional lokal)",
-      "d": "input_number- oder sensor-Entität mit dem erwarteten kWh-Ertrag für morgen. Vor Mitternacht wird dieser Sensor gelesen; nach Mitternacht automatisch das Feld „PV-Vorhersage heute“ (derselbe Zieltag, nur der Sensor wechselt — der „morgen“-Sensor würde sonst auf den übernächsten Tag zeigen). Leer lassen → bei Multi-Instanz greift der globale Wert aus dem Verteilungs-Tab."
+      "d": "input_number- oder sensor-Entität mit dem erwarteten kWh-Ertrag für morgen. Speist die Zone-1-Nacht-Forcierung (Zonen-Tab), gelesen vor Mitternacht — danach automatisch „PV-Vorhersage heute“ oben (derselbe Zieltag, nur der Sensor wechselt)."
     },
     "zone1_force_sensor_note": {
       "d": "🔌 Sensor wird im Entitäten-Tab zugewiesen (\"PV-Vorhersage morgen\")."
@@ -435,7 +435,7 @@
     "global_sensors_hdr":  "🌍 Globale Sensoren",
     "global_sensors_desc": "Instanzübergreifende Vorgabe für Sensoren, die typischerweise für den ganzen Haushalt gelten (ein Wetter-/Solcast-Account, ein Stromtarif) — jede Instanz kann im jeweiligen Tab optional lokal überschreiben, sonst gilt dieser Wert. Der Punkt neben jedem Feld zeigt die Gültigkeit der Entity live (grün/gelb/rot).",
     "global_pv_today_lbl":     "PV-Vorhersage heute (kWh)",
-    "global_pv_today_desc":   "Speist Surplus-Forecast-Erzwingung (Zone-0-Tab) und Tarif-Lock-Unterdrückung (Tarif-Tab), sofern keine Instanz lokal überschreibt.",
+    "global_pv_today_desc":   "Speist Surplus-Forecast-Erzwingung (Zone-0-Tab), Tarif-Lock-Unterdrückung (Tarif-Tab) und, zwischen 0–12 Uhr, die Zone-1-Nacht-Forcierung (Zonen-Tab), sofern keine Instanz lokal überschreibt.",
     "global_pv_today_ph":      "sensor.pv_forecast_today",
     "global_pv_tomorrow_lbl":  "PV-Vorhersage morgen (kWh)",
     "global_pv_tomorrow_desc": "Speist die Zone-1-Nacht-Forcierung (Zonen-Tab). Vor Mitternacht gelesen; nach Mitternacht greift automatisch stattdessen \"PV-Vorhersage heute\" oben (derselbe Zieltag).",
