@@ -61,13 +61,14 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
     hard_limit_z0: 800, hard_limit_z1: 800,
     offset_1: 30, offset_2: 10, pv_reserve: 50,
     surplus_enabled: false, surplus_soc_threshold: 95, surplus_soc_hyst: 5, surplus_pv_hyst: 50,
-    surplus_forecast_enabled: false, surplus_forecast_sensor: "", surplus_forecast_threshold: 5000,
+    surplus_forecast_enabled: false, surplus_forecast_threshold: 5000,
     surplus_lock_enabled: false, surplus_lock_sensor: "", surplus_lock_factor: 1.5,
     ac_enabled: false, ac_soc_target: 90, ac_power_limit: 800, ac_hysteresis: 50,
     ac_offset: -50, ac_p_factor: 0.3, ac_i_factor: 0.0,
     tariff_enabled: false, tariff_price_sensor: "", tariff_cheap_threshold: 10, tariff_exp_threshold: 25,
     tariff_soc_target: 90, tariff_power: 800, tariff_cheap_entity: "", tariff_exp_entity: "",
     pv_forecast_enabled: false, pv_forecast_sensor: "", pv_forecast_threshold: 5000,
+    zone1_force_enabled: false, zone1_force_sensor: "", zone1_force_threshold: 5000,
     night_enabled: false,
     periodic_enabled: false, periodic_interval: 10,
     self_adjust_enabled: false, self_adjust_tolerance: 2,
@@ -86,7 +87,7 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
     },
     demo_b: {
       name: "Solakon B",
-      settings: { ...DEFAULT_SETTINGS, surplus_enabled: true, surplus_forecast_enabled: true, surplus_forecast_sensor: "sensor.solcast_prognose", surplus_lock_enabled: true, surplus_lock_sensor: "sensor.solcast_leistung_jetzt" },
+      settings: { ...DEFAULT_SETTINGS, surplus_enabled: true, surplus_forecast_enabled: true, pv_forecast_sensor: "sensor.solcast_prognose", surplus_lock_enabled: true, surplus_lock_sensor: "sensor.solcast_leistung_jetzt" },
       status: mkStatus({ zone: 1, soc: 81, actual_power: 140, grid: 8, active_fall: "A", cycle_active: true }),
     },
   };
@@ -125,6 +126,12 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
     capacity_weighting: true,
     inst_demo_a_capacity_sensor: "sensor.solakon_one_batteriekapazitat",
     inst_demo_b_capacity_sensor: "sensor.solakon_one_batteriekapzitat",
+    global_pv_forecast_today_sensor: "",
+    global_pv_forecast_tomorrow_sensor: "",
+    global_surplus_lock_sensor: "",
+    global_tariff_price_sensor: "",
+    global_tariff_cheap_entity: "",
+    global_tariff_exp_entity: "",
   };
 
   const hass = {
