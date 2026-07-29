@@ -278,7 +278,7 @@
     },
     "zone1_force_enabled": {
       "l": "Nacht-Forcierung aktivieren",
-      "d": "Erlaubt den Zone-1-Entladezyklus auch unter der normalen Zone-1-Schwelle, wenn der PV-Ertrag des Zieltags die Nacht ohnehin wieder auffüllt — verhindert, dass an einem wolkigen Tag zu wenig geladene Kapazität ungenutzt über Nacht liegen bleibt. Nur der Eintritt wird vorgezogen; der Austritt läuft unverändert über die Zone-3-Schwelle. Gilt nur solange es gerade dunkel ist (PV < PV-Reserve) und SOC über der Zone-3-Schutzgrenze liegt."
+      "d": "Erlaubt den Zone-1-Entladezyklus auch unter der normalen Zone-1-Schwelle, wenn der PV-Ertrag des Zieltags die Nacht ohnehin wieder auffüllt — verhindert, dass an einem wolkigen Tag zu wenig geladene Kapazität ungenutzt über Nacht liegen bleibt. Nur der Eintritt wird vorgezogen; der Austritt läuft unverändert über die Zone-3-Schwelle. Gilt nur solange es gerade dunkel ist (PV < PV-Reserve) und SOC über dem eigenen Mindest-SOC (unten) liegt."
     },
     "zone1_force_sensor": {
       "l": "PV-Vorhersage morgen (optional lokal)",
@@ -290,6 +290,10 @@
     "zone1_force_threshold": {
       "l": "Mindest-Ertrag (kWh)",
       "d": "Forcierung nur wenn die PV-Vorhersage für den Zieltag diesen Wert erreicht oder überschreitet."
+    },
+    "zone1_force_min_soc": {
+      "l": "Mindest-SOC (%)",
+      "d": "Eigener Sicherheits-Floor der Nacht-Forcierung, unabhängig von der Zone-3-Schwelle (die nur den regulären Austritt steuert). Muss strikt zwischen Zone-3- und Zone-1-Schwelle liegen — verhindert Forcierung bei SOC-Werten, in denen die SOC-Schätzung unzuverlässig wird."
     },
     "stddev_window": {
       "l": "Stabw.-Fenster (s)",

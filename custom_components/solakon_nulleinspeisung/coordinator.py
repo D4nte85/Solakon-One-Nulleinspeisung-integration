@@ -35,7 +35,7 @@ from .const import (
     S_TARIFF_EXP_THRESHOLD, S_TARIFF_SOC_TARGET, S_TARIFF_POWER,
     S_TARIFF_CHEAP_ENTITY, S_TARIFF_EXP_ENTITY,
     S_PV_FORECAST_ENABLED, S_PV_FORECAST_SENSOR, S_PV_FORECAST_THRESHOLD,
-    S_ZONE1_FORCE_ENABLED, S_ZONE1_FORCE_SENSOR, S_ZONE1_FORCE_THRESHOLD,
+    S_ZONE1_FORCE_ENABLED, S_ZONE1_FORCE_SENSOR, S_ZONE1_FORCE_THRESHOLD, S_ZONE1_FORCE_MIN_SOC,
     S_NIGHT_ENABLED,
     S_SELF_ADJUST, S_SELF_ADJUST_TOL,
     S_DYN_Z1_ENABLED, S_DYN_Z1_MIN, S_DYN_Z1_MAX, S_DYN_Z1_NOISE, S_DYN_Z1_FACTOR, S_DYN_Z1_NEGATIVE,
@@ -809,6 +809,7 @@ class SolakonCoordinator:
         # "heute" (_effective_zone1_force_sensor) — der Zieltag bleibt derselbe.
         zone1_force_enabled = bool(s.get(S_ZONE1_FORCE_ENABLED, False))
         zone1_force_threshold = float(s.get(S_ZONE1_FORCE_THRESHOLD, 0.0))
+        zone1_force_min_soc = int(s.get(S_ZONE1_FORCE_MIN_SOC, 0))
         zone1_force_sensor = self._effective_zone1_force_sensor()
 
         if zone1_force_enabled and not zone1_force_sensor:
@@ -818,8 +819,8 @@ class SolakonCoordinator:
             if self._entity_ok(zone1_force_sensor):
                 self.zone1_forced = (
                     self._flt_kilo_normalized(zone1_force_sensor) >= zone1_force_threshold
-                    and solar < pv_reserve   # "gerade dunkel", gleiche Bedingung wie is_night
-                    and soc > zone3_limit    # Sicherheits-Floor, gleiches Muster wie forecast_exit_lock
+                    and solar < pv_reserve         # "gerade dunkel", gleiche Bedingung wie is_night
+                    and soc > zone1_force_min_soc  # eigener Floor, unabhängig von zone3_limit (Exit-Schwelle)
                 )
             else:
                 soft_errors.append(f"Zone-1-Forcierung: Sensor {zone1_force_sensor!r} nicht verfügbar")
@@ -842,6 +843,11 @@ class SolakonCoordinator:
 
         if surplus_enabled and surplus_threshold <= zone1_limit:
             self.last_error = "SOC-Limits ungültig (Überschuss-Schwelle muss > Zone1)"
+            self.notify_listeners()
+            return
+
+        if zone1_force_enabled and not (zone3_limit < zone1_force_min_soc < zone1_limit):
+            self.last_error = "SOC-Limits ungültig (Zone-1-Forcierung-Mindest-SOC muss zwischen Zone3 und Zone1 liegen)"
             self.notify_listeners()
             return
 

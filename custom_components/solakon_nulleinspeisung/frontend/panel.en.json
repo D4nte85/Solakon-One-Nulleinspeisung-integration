@@ -278,7 +278,7 @@
     },
     "zone1_force_enabled": {
       "l": "Enable Night Forcing",
-      "d": "Allows the Zone-1 discharge cycle to start even below the normal Zone-1 threshold when the target day's PV forecast will refill the battery anyway — prevents charge left unused overnight after a cloudy day. Only the entry is brought forward; the exit still runs through the normal Zone-3 threshold. Only applies while it is currently dark (PV < PV reserve) and SOC is above the Zone-3 safety floor."
+      "d": "Allows the Zone-1 discharge cycle to start even below the normal Zone-1 threshold when the target day's PV forecast will refill the battery anyway — prevents charge left unused overnight after a cloudy day. Only the entry is brought forward; the exit still runs through the normal Zone-3 threshold. Only applies while it is currently dark (PV < PV reserve) and SOC is above its own minimum SOC floor (below)."
     },
     "zone1_force_sensor": {
       "l": "PV Forecast Tomorrow (optional local)",
@@ -290,6 +290,10 @@
     "zone1_force_threshold": {
       "l": "Minimum Yield (kWh)",
       "d": "Forcing only applies once the PV forecast for the target day reaches or exceeds this value."
+    },
+    "zone1_force_min_soc": {
+      "l": "Minimum SOC (%)",
+      "d": "Dedicated safety floor for Night Forcing, independent of the Zone-3 threshold (which only governs the regular exit). Must lie strictly between the Zone-3 and Zone-1 thresholds — prevents forcing at SOC values where the state-of-charge estimate becomes unreliable."
     },
     "stddev_window": {
       "l": "StdDev Window (s)",

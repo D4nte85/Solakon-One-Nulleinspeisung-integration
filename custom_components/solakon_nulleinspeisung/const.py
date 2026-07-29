@@ -113,6 +113,7 @@ S_PV_FORECAST_THRESHOLD  = "pv_forecast_threshold"
 S_ZONE1_FORCE_ENABLED   = "zone1_force_enabled"
 S_ZONE1_FORCE_SENSOR    = "zone1_force_sensor"
 S_ZONE1_FORCE_THRESHOLD = "zone1_force_threshold"
+S_ZONE1_FORCE_MIN_SOC   = "zone1_force_min_soc"
 
 S_NIGHT_ENABLED = "night_enabled"
 
@@ -195,7 +196,8 @@ SETTINGS_DEFAULTS: dict = {
 
     S_ZONE1_FORCE_ENABLED:   False,
     S_ZONE1_FORCE_SENSOR:    "",
-    S_ZONE1_FORCE_THRESHOLD: 5000.0,
+    S_ZONE1_FORCE_THRESHOLD: 15.0,
+    S_ZONE1_FORCE_MIN_SOC:   20,
 
     S_NIGHT_ENABLED: False,
 

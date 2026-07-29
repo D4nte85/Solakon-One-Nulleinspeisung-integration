@@ -100,6 +100,7 @@ const TAB_LAYOUT = {
           { k: "zone1_force_enabled",      t: "bool" },
           { k: "zone1_force_sensor_note",  t: "note" },
           { k: "zone1_force_threshold",    t: "num", min: 0, max: 50, step: 0.5 },
+          { k: "zone1_force_min_soc",      t: "num", min: 1, max: 49, step: 1 },
         ],
       },
     ],
