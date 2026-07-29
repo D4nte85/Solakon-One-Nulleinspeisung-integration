@@ -5,9 +5,22 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+### Hinzugefügt
+- Zone-1-Nacht-Forcierung (Issue #80): erlaubt den Zone-1-Entladezyklus auch unter der normalen Zone-1-Schwelle, wenn die PV-Vorhersage für den Zieltag zeigt, dass die Nacht ohnehin wieder aufgefüllt wird — verhindert ungenutzt liegen gebliebene Kapazität nach einem wolkigen Tag mit gutem Folgetag. Neue Settings `zone1_force_enabled`/`zone1_force_sensor`/`zone1_force_threshold`, neuer Fall-A-Zusatzpfad, neuer Diagnose-Binärsensor. Der Vorhersage-Sensor wechselt an der Mitternachtsgrenze automatisch zwischen "morgen" und "heute" (derselbe Zieltag — der "morgen"-Sensor würde nach Mitternacht sonst auf den übernächsten Tag zeigen), Mittag als Umschaltpunkt.
+- Instanzübergreifende globale Sensor-Vorgaben im Verteilungs-Tab (Multi-Instanz): PV-Vorhersage heute/morgen, Leistungs-Vorhersage jetzt, Strompreis-Sensor, dynamische Preisschwellen — jede Instanz kann optional lokal überschreiben, sonst gilt der globale Wert. Reduziert Konfigurationsaufwand bei mehreren Instanzen desselben Haushalts (ein Wetter-/Tarif-Sensor statt N identischer Einzelkonfigurationen).
+
+### Geändert
+- `surplus_forecast_sensor` und `pv_forecast_sensor` zu einem gemeinsamen Feld verschmolzen (beide lasen denselben Werttyp — PV-Ertrag heute in kWh — für zwei unterschiedliche Features). Bestehende `surplus_forecast_sensor`-Werte werden beim ersten Start nach dem Update automatisch übernommen, sofern `pv_forecast_sensor` noch leer ist.
+
 ### Behoben
 - Fall-G-Eintritt (AC Laden Start) im Multi-Instanz-Betrieb: Bedingung `(grid + actual) < −ac_hysteresis` verglich den eigenen Output der prüfenden Instanz statt der Summe aller Instanzen im Entlademodus (Issue #16). Dadurch konnte eine Instanz die Entladung einer Schwester-Instanz als externen Netzüberschuss werten und daraufhin genau diese Menge aus dem Netz nachladen — Batterie-zu-Batterie-Umpumpen mit doppelten Wandlungsverlusten, sowohl nachts (reale Schwester-Entladung) als auch tagsüber bei Lasttransienten (kurzzeitiger eigener Regel-Nachlauf nach Lastabwurf). Fix: `actual` durch `self._total_actual_power()` ersetzt, analog zur bereits korrekten Zone-0-Referenz. Die Fall-H-Abbruchbedingung bleibt unverändert auf den eigenen Output bezogen (prüft das Ende der eigenen Ladesession)
 - Zone-0-Eintritt oszillierte nachts bei vollem Akku im Sekundentakt (Issue #17): Der `PV = 0`-Sonderzweig (deckt PV-Hardwaredrosselung bei vollem Akku ab, Issue #11) nutzte eine reine Zwei-Zyklen-Entprellung über `Output = 0`, die nachts nicht ausreichte — nach einem Austritt genügte ein einzelner erneuter Nullwert der Ausgangsleistung, um sofort wieder einzutreten. Fix: Zusätzlicher Latch — der Zweig bleibt nach jedem Austritt bei `PV = 0` gesperrt, bis erneut echtes `PV > 0` gemessen wurde (tagsüber sofort der Fall, nachts erst bei Sonnenaufgang). SOC- und Verbrauchs-Austritt bleiben unverändert
+
+### Geändert
+- Sichtbare Fehlermeldung bei fehlendem/ungültigem Sensor auf Surplus-Forecast-Erzwingung, Austritts-Sperre und PV-Vorhersage ausgeweitet — bisher scheiterten diese drei Features bei aktivem Enable-Flag, aber leerem oder nicht verfügbarem Sensor, still (Flag einfach wirkungslos, kein Hinweis). Bisher galt das nur für den Tarif-Preis-Sensor. Da `last_error` ein einzelner String ist, werden mehrere gleichzeitig zutreffende Fehler jetzt mit „ • " verkettet statt sich gegenseitig zu überschreiben — so bleibt sichtbar, dass es sich um mehrere getrennte Probleme handelt
+
+### Entfernt
+- Einmalige Migration des alten Zonen-Tab-Kapazitätssensors (`battery_capacity_sensor`) ins Verteilungs-Tab: seit v2.1.5 überflüssig, jede seitdem aktualisierte Installation hat sie bereits durchlaufen
 
 ## [2.1.6] – 2026-07-22
 

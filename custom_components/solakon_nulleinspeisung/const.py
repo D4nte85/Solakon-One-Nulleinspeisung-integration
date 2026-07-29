@@ -68,7 +68,6 @@ S_DISCHARGE_MAX  = "discharge_max"
 S_HARD_LIMIT     = "hard_limit"
 S_HARD_LIMIT_Z0  = "hard_limit_z0"
 S_HARD_LIMIT_Z1  = "hard_limit_z1"
-S_BATTERY_CAPACITY_SENSOR = "battery_capacity_sensor"
 S_OFFSET_1      = "offset_1"
 S_OFFSET_2      = "offset_2"
 S_PV_RESERVE    = "pv_reserve"
@@ -78,6 +77,9 @@ S_SURPLUS_SOC_THRESHOLD = "surplus_soc_threshold"
 S_SURPLUS_SOC_HYST      = "surplus_soc_hyst"
 S_SURPLUS_PV_HYST       = "surplus_pv_hyst"
 S_SURPLUS_FORECAST_ENABLED   = "surplus_forecast_enabled"
+# Nur noch Migrationsquelle — der Sensor selbst kommt aus dem gemergten
+# PV-Vorhersage-Feld (S_PV_FORECAST_SENSOR + globaler Fallback), siehe
+# _effective_pv_forecast_today_sensor(). Kein eigener Default mehr in SETTINGS_DEFAULTS.
 S_SURPLUS_FORECAST_SENSOR    = "surplus_forecast_sensor"
 S_SURPLUS_FORECAST_THRESHOLD = "surplus_forecast_threshold"
 S_SURPLUS_LOCK_ENABLED = "surplus_lock_enabled"
@@ -104,6 +106,13 @@ S_TARIFF_EXP_ENTITY       = "tariff_exp_entity"
 S_PV_FORECAST_ENABLED    = "pv_forecast_enabled"
 S_PV_FORECAST_SENSOR     = "pv_forecast_sensor"
 S_PV_FORECAST_THRESHOLD  = "pv_forecast_threshold"
+
+# Zone-1-Nacht-Forcierung. Sensor ist zeitabhängig "heute" (S_PV_FORECAST_SENSOR
+# + globaler Fallback) oder "morgen" (S_ZONE1_FORCE_SENSOR + globaler Fallback) — siehe
+# _effective_zone1_force_sensor() in coordinator.py.
+S_ZONE1_FORCE_ENABLED   = "zone1_force_enabled"
+S_ZONE1_FORCE_SENSOR    = "zone1_force_sensor"
+S_ZONE1_FORCE_THRESHOLD = "zone1_force_threshold"
 
 S_NIGHT_ENABLED = "night_enabled"
 
@@ -149,7 +158,6 @@ SETTINGS_DEFAULTS: dict = {
     S_HARD_LIMIT:     800,
     S_HARD_LIMIT_Z0:  800,
     S_HARD_LIMIT_Z1:  800,
-    S_BATTERY_CAPACITY_SENSOR: "",
     S_OFFSET_1:      30,
     S_OFFSET_2:      10,
     S_PV_RESERVE:    50,
@@ -159,7 +167,6 @@ SETTINGS_DEFAULTS: dict = {
     S_SURPLUS_SOC_HYST:      5,
     S_SURPLUS_PV_HYST:       50,
     S_SURPLUS_FORECAST_ENABLED:   False,
-    S_SURPLUS_FORECAST_SENSOR:    "",
     S_SURPLUS_FORECAST_THRESHOLD: 5000.0,
     S_SURPLUS_LOCK_ENABLED: False,
     S_SURPLUS_LOCK_SENSOR:  "",
@@ -185,6 +192,10 @@ SETTINGS_DEFAULTS: dict = {
     S_PV_FORECAST_ENABLED:   False,
     S_PV_FORECAST_SENSOR:    "",
     S_PV_FORECAST_THRESHOLD: 5000.0,
+
+    S_ZONE1_FORCE_ENABLED:   False,
+    S_ZONE1_FORCE_SENSOR:    "",
+    S_ZONE1_FORCE_THRESHOLD: 5000.0,
 
     S_NIGHT_ENABLED: False,
 

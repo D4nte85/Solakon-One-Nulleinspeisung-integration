@@ -113,6 +113,16 @@ Im Panel wird bei mehreren Instanzen ein zusätzlicher **Verteilungs-Tab** einge
 | Verteilungs-Modus | Gleichverteilung / SOC-gewichtet / Kapazitätsgewichtet — drei sich gegenseitig ausschließende Optionen, siehe Formeln oben |
 | Kapazitätssensor (pro Instanz) | Nur bei Modus „Kapazitätsgewichtet" wirksam (Feld sonst ausgegraut). `sensor.solakon_one_batteriekapazitat`. Der Validierungspunkt neben dem Feld zeigt live, ob die Entity existiert und einen Wert liefert (grün/gelb/rot) |
 
+**Globale Sensoren:** Zusätzliche Karte im Verteilungs-Tab für Sensoren, die typischerweise für den ganzen Haushalt gelten statt pro Solakon-Instanz zu unterscheiden — eine Wetter-/Solcast-Vorhersage, ein Stromtarif. Jede Instanz kann im jeweiligen Tab (Überschuss/Zonen/Tarif) optional lokal überschreiben; ist dort nichts gesetzt, gilt der globale Wert. Anders als der Kapazitätssensor (real pro Instanz unterschiedlich, keine sinnvolle globale Vorgabe) sind das reine Entity-Picker ohne eigene Enable-Flags oder Schwellen — die bleiben ausschließlich lokal pro Instanz.
+
+| Globaler Sensor | Speist |
+|---|---|
+| PV-Vorhersage heute (kWh) | Surplus-Forecast-Erzwingung (Überschuss-Tab), Tarif-Lock-Unterdrückung (Tarif-Tab) |
+| PV-Vorhersage morgen (kWh) | Zone-1-Nacht-Forcierung (Zonen-Tab) |
+| Leistungs-Vorhersage jetzt (W) | Austritts-Sperre (Überschuss-Tab) |
+| Strompreis-Sensor | Tarif-Arbitrage (Tarif-Tab) |
+| Günstig-/Teuer-Schwelle dynamisch | Tarif-Arbitrage (Tarif-Tab) |
+
 ---
 
 ## Voraussetzungen
@@ -222,6 +232,16 @@ Ein positiver Offset von z. B. 30 W lässt den Regler auf 30 W Netzbezug regeln 
 
 **Wichtig:** Zone-1-Schwelle muss größer als Zone-3-Schwelle sein, und bei aktivierter Überschuss-Einspeisung muss die Export-Schwelle über der Zone-1-Schwelle liegen. Die Integration prüft beides in jedem Regelzyklus und pausiert mit Fehlermeldung, solange die Grenzen ungültig sind.
 
+**Nacht-Forcierung (optional):** Erlaubt den Zone-1-Entladezyklus auch unter der normalen Zone-1-Schwelle, wenn die PV-Vorhersage für den Zieltag zeigt, dass die Nacht ohnehin wieder aufgefüllt wird — verhindert ungenutzt liegen gebliebene Kapazität nach einem wolkigen Tag. Bedingung: Vorhersage ≥ Mindest-Ertrag UND PV < PV-Ladereserve (gerade dunkel) UND SOC > Zone-3-Schwelle (Sicherheits-Floor). Reiner Eintritts-Trigger — der Austritt läuft unverändert ausschließlich über die Zone-3-Schwelle, ein späteres Zurückfallen der Vorhersage beeinflusst einen bereits laufenden Zyklus nicht.
+
+> **Sensor wechselt an der Mitternachtsgrenze:** Vor Mitternacht wird die "PV-Vorhersage morgen" gelesen — das ist der korrekte Zieltag, dessen Ertrag die Nacht auffüllt. Nach Mitternacht (neuer Kalendertag) würde derselbe "morgen"-Sensor auf den *übernächsten* Tag zeigen, deshalb wird automatisch stattdessen die "PV-Vorhersage heute" verwendet — der Zieltag bleibt über die ganze Nacht hinweg derselbe, nur die Quelle wechselt. Kein Sonnenauf-/untergangs-Helper nötig, Mittag (12 Uhr) ist der Umschaltpunkt.
+
+| Parameter | Beschreibung | Empfehlung |
+|-----------|-------------|------------|
+| Aktivieren | Ein/Aus-Schalter | — |
+| PV-Vorhersage morgen (optional lokal) | Sensor mit dem erwarteten kWh-Ertrag für morgen. Leer lassen → bei Multi-Instanz greift der globale Wert aus dem Verteilungs-Tab | — |
+| Mindest-Ertrag (kWh) | Forcierung nur ab dieser Vorhersage | abhängig vom Speicher |
+
 ---
 
 ### ☀️ Überschuss
@@ -234,11 +254,13 @@ Optionale Überschuss-Einspeisung (Zone 0). **Hat absoluten Vorrang vor allen an
 
 > Ein- und Austritt nutzen denselben Verbrauchsbezug `(Σ Output + Grid) × Fehler-Anteil` (im Einzelbetrieb = `Output + Grid`). Gleiche Referenz für beide ist zwingend, sonst bricht das Hysterese-Totband zusammen und Zone 0 flackert.
 
-> Der `PV = 0`-Zweig deckt den Fall ab, dass das MPPT die PV bei vollem Akku auf 0 W drosselt. Die Bedingung `Output = 0` über zwei aufeinanderfolgende Zyklen (Entprellung) allein reicht nachts nicht: Nach einem Austritt bleibt PV weiterhin bei 0, und sobald die Ausgangsleistung zwei Zyklen in Folge wieder auf 0 zurückfällt (z. B. während der PI aus Zone 1 erst hochregelt), feuert derselbe Zweig erneut — ein Ein-/Austritts-Loop im Sekundentakt (Issue #17). Zusätzliche Sperre (Latch): Nach jedem Austritt bei `PV = 0` bleibt der Zweig deaktiviert, bis wieder echtes `PV > 0` gemessen wurde — das passiert tagsüber sofort (die Hardware gibt PV nach dem erzwungenen Zone-0-Eintritt wieder frei), nachts erst bei Sonnenaufgang. Der SOC- und Verbrauchs-Austritt bleiben davon unberührt. (Der Blueprint erreicht dasselbe über getaktete Trigger statt Entprellung.)
+> Der `PV = 0`-Zweig deckt den Fall ab, dass das MPPT die PV bei vollem Akku auf 0 W drosselt. Die Bedingung `Output = 0` über zwei aufeinanderfolgende Zyklen (Entprellung) allein reicht nachts nicht: Nach einem Austritt bleibt PV weiterhin bei 0, und sobald die Ausgangsleistung zwei Zyklen in Folge wieder auf 0 zurückfällt (z. B. während der PI aus Zone 1 erst hochregelt), feuert derselbe Zweig erneut — ein Ein-/Austritts-Loop im Sekundentakt. Zusätzliche Sperre (Latch): Nach jedem Austritt bei `PV = 0` bleibt der Zweig deaktiviert, bis wieder echtes `PV > 0` gemessen wurde — das passiert tagsüber sofort (die Hardware gibt PV nach dem erzwungenen Zone-0-Eintritt wieder frei), nachts erst bei Sonnenaufgang. Der SOC- und Verbrauchs-Austritt bleiben davon unberührt. (Der Blueprint erreicht dasselbe über getaktete Trigger statt Entprellung.)
 
 **Forecast-Eintritt:** PV-Vorhersage ≥ Schwelle UND PV > Hard Limit Z0 UND SOC > Zone-3-Schwelle
 
 > Sensorwerte mit k-Präfix (kW, kWh, kWp …) werden automatisch ×1000 normalisiert — Schwelle immer in der Basiseinheit (W bzw. Wh) angeben. Standard: 5000 Wh.
+>
+> Der Vorhersage-Sensor ist ein gemergtes Feld ("PV-Vorhersage heute", konfiguriert im Tarif-Tab) — dieselbe Quelle speist auch die Tarif-Lock-Unterdrückung unten, da beide Features denselben Werttyp brauchen. Bei Multi-Instanz kann dieser Sensor zusätzlich global im Verteilungs-Tab hinterlegt werden; jede Instanz überschreibt optional lokal.
 
 > Keine Export-Schwelle — Surplus startet sobald PV die maximale Ausgangsleistung übersteigt, der SOC muss nur über der Zone-3-Schutzgrenze liegen. Gedacht für sonnige Tage: 800 W werden dauerhaft ausgegeben, der Rest lädt die Batterie. Die Forcierung ist an PV > Hard Limit Z0 gekoppelt und endet von selbst, sobald die PV unter das Limit fällt (kein Abregel-Risiko mehr). Die SOC-Untergrenze verhindert, dass die Forcierung gegen den Zone-3-Sicherheitsstopp ankämpft (Modus-Flattern 0A ↔ C).
 
@@ -312,6 +334,16 @@ Drei Preisstufen: **Günstig** (Preis < Günstig-Schwelle): Tarif-Laden mit fest
 | Teuer-Schwelle (ct/kWh) | Über diesem Preis → normale SOC-Logik | 20–35 |
 | Ladeziel SOC (%) | Tarif-Laden stoppt bei diesem SOC | 85–95 |
 | Ladeleistung (W) | Feste Leistung während Tarif-Laden | 400–800 |
+
+**PV-Vorhersage-Unterdrückung (optional):** Meldet der Vorhersage-Sensor einen Wert ≥ Schwelle, werden Tarif-Laden und Discharge-Lock unterdrückt — automatische Flexibilität an sonnigen Tagen, unabhängig vom aktuellen Preis.
+
+| Parameter | Beschreibung | Empfehlung |
+|-----------|-------------|------------|
+| Aktivieren | Ein/Aus-Schalter | — |
+| PV-Vorhersage heute (optional lokal) | kWh-Sensor für die erwartete Solarproduktion heute — gemergtes Feld, speist auch die Surplus-Forecast-Erzwingung (siehe Überschuss oben). Leer lassen → bei Multi-Instanz greift der globale Wert aus dem Verteilungs-Tab | — |
+| Schwellwert (kWh) | Ab diesem Wert wird Tarif-Laden/Discharge-Lock unterdrückt | 5–15 |
+
+**Dynamische Preisschwellen und Preis-Sensor (optional lokal):** Preis-Sensor, Günstig-Schwelle-Entität und Teuer-Schwelle-Entität können bei Multi-Instanz zusätzlich global im Verteilungs-Tab hinterlegt werden (meist ein gemeinsamer Hausstrom-Tarif) — jede Instanz überschreibt optional lokal.
 
 ---
 
@@ -443,6 +475,7 @@ Die Integration erzeugt automatisch folgende Entitäten unter dem Gerät **Solak
 | `binary_sensor.solakon_one_pv_vorhersage_tarif_gesperrt` | Binary Sensor | PV-Vorhersage sperrt Tarif-Laden |
 | `binary_sensor.solakon_one_pv_vorhersage_surplus_erzwungen` | Binary Sensor | PV-Vorhersage erzwingt Surplus-Eintritt |
 | `binary_sensor.solakon_one_pv_vorhersage_surplus_austritt_gesperrt` | Binary Sensor | Austritts-Sperre aktiv (Vorhersage ≥ Faktor × Hard Limit Z0) |
+| `binary_sensor.solakon_one_pv_vorhersage_zone_1_nacht_forcierung_aktiv` | Binary Sensor | Zone-1-Nacht-Forcierung aktiv |
 
 Die Diagnose-Binärsensoren sind read-only — sie spiegeln interne Coordinator-Zustände wider.
 

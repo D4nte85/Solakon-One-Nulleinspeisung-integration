@@ -72,6 +72,7 @@
     "zones_soc":        "SOC-Grenzen",
     "zones_power":      "Leistungsgrenzen",
     "zones_offsets":    "Offsets",
+    "zones_force":      "Nacht-Forcierung",
     "surplus_soc":      "SOC-Bedingung",
     "surplus_pv":       "PV-Bedingung",
     "surplus_forecast": "PV-Vorhersage",
@@ -161,11 +162,7 @@
     },
     "surplus_forecast_enabled": {
       "l": "Forecast-Erzwingung aktivieren",
-      "d": "Wenn Vorhersage ≥ Schwelle: Surplus startet sobald PV > Hard-Limit-Z0 UND SOC > Zone-3-Schwelle (keine Export-Schwelle nötig). Die Forcierung bleibt aktiv solange Vorhersage ≥ Schwelle UND PV > Hard-Limit-Z0 UND SOC > Zone 3 — so wird bei großem PV-Tag früh eingespeist statt abgeregelt, ohne auf vollen Akku zu warten. Fällt die PV unter Hard-Limit-Z0 (auch nachts: PV = 0), die Vorhersage unter die Schwelle oder der SOC unter Zone 3, endet die Forcierung und der normale Austritt (SOC ODER Verbrauch) greift — kein Hängenbleiben."
-    },
-    "surplus_forecast_sensor": {
-      "l": "Vorhersage-Sensor",
-      "d": "Sensor mit dem prognostizierten PV-Ertrag (z. B. Forecast.Solar, Solcast). Einheit muss zur Schwelle passen (z. B. kWh)."
+      "d": "Wenn Vorhersage ≥ Schwelle: Surplus startet sobald PV > Hard-Limit-Z0 UND SOC > Zone-3-Schwelle (keine Export-Schwelle nötig). Die Forcierung bleibt aktiv solange Vorhersage ≥ Schwelle UND PV > Hard-Limit-Z0 UND SOC > Zone 3 — so wird bei großem PV-Tag früh eingespeist statt abgeregelt, ohne auf vollen Akku zu warten. Fällt die PV unter Hard-Limit-Z0 (auch nachts: PV = 0), die Vorhersage unter die Schwelle oder der SOC unter Zone 3, endet die Forcierung und der normale Austritt (SOC ODER Verbrauch) greift — kein Hängenbleiben. Sensor: gemeinsames Feld mit der Tarif-PV-Vorhersage, siehe Tarif-Tab bzw. bei Multi-Instanz das Verteilungs-Tab (globaler Wert)."
     },
     "surplus_forecast_threshold": {
       "l": "Mindest-Ertrag für Surplus",
@@ -176,8 +173,8 @@
       "d": "Hält Zone 0 bei kurzen PV-Einbrüchen (Wolken): Solange die Leistungs-Vorhersage ≥ Sperr-Faktor × Hard-Limit-Z0 liegt, ist der PV-Austritt gesperrt — der gemessene Einbruch muss transient sein. Der SOC-Austritt bleibt immer aktiv, Zone 3 beendet Surplus jederzeit. Hintergrund: Nach einem Austritt bei vollem Akku drosselt die Hardware die PV auf den Verbrauch — der Überschuss ist dann nicht mehr messbar und der Wiedereintritt verzögert sich um Minuten. Risiko: Meldet der Sensor dauerhaft einen zu hohen Wert, bleibt Zone 0 entsprechend lange aktiv — bis der SOC-Austritt eingreift."
     },
     "surplus_lock_sensor": {
-      "l": "Leistungs-Vorhersage-Sensor (W)",
-      "d": "Sensor mit der aktuell prognostizierten PV-Leistung in W (z. B. Solcast power_now). k-Einheiten (kW) werden automatisch ×1000 normalisiert. Ist der Sensor nicht verfügbar, ist die Sperre inaktiv."
+      "l": "Leistungs-Vorhersage-Sensor (W, optional lokal)",
+      "d": "Sensor mit der aktuell prognostizierten PV-Leistung in W (z. B. Solcast power_now). k-Einheiten (kW) werden automatisch ×1000 normalisiert. Leer lassen → bei Multi-Instanz greift der globale Wert aus dem Verteilungs-Tab. Ist am Ende kein Sensor gesetzt oder nicht verfügbar, ist die Sperre inaktiv."
     },
     "surplus_lock_factor": {
       "l": "Sperr-Faktor",
@@ -216,24 +213,24 @@
       "d": "Günstig (< Günstig-Schwelle): Tarif-Laden. Mittel (dazwischen): Discharge-Lock — Zone 1 und Zone 2 gesperrt. Teuer (≥ Teuer-Schwelle): normale SOC-Logik. Wird blockiert solange Überschuss-Einspeisung (Zone 0) aktiv ist. Unabhängig vom AC-Laden-Modul."
     },
     "tariff_price_sensor": {
-      "l": "Preis-Sensor",
-      "d": "Sensor-Entität mit aktuellem Strompreis als numerischem Wert in ct/kWh."
+      "l": "Preis-Sensor (optional lokal)",
+      "d": "Sensor-Entität mit aktuellem Strompreis als numerischem Wert in ct/kWh. Leer lassen → bei Multi-Instanz greift der globale Wert aus dem Verteilungs-Tab (meist ein gemeinsamer Hausstrom-Tarif)."
     },
     "tariff_cheap_threshold": {
       "l": "Günstig-Schwelle (ct/kWh)",
       "d": "Tarif-Laden startet wenn Preis diese Schwelle unterschreitet UND SOC < Ladeziel. Auch untere Grenze des Discharge-Locks."
     },
     "tariff_cheap_entity": {
-      "l": "Günstig-Schwelle dynamisch",
-      "d": "Optionale input_number-Entität. Wenn gesetzt und verfügbar, überschreibt sie den statischen Wert."
+      "l": "Günstig-Schwelle dynamisch (optional lokal)",
+      "d": "Optionale input_number-Entität, überschreibt den statischen Wert wenn gesetzt und verfügbar. Leer lassen → bei Multi-Instanz greift der globale Wert aus dem Verteilungs-Tab."
     },
     "tariff_exp_threshold": {
       "l": "Teuer-Schwelle (ct/kWh)",
       "d": "Über dieser Schwelle: normale SOC-Logik, Discharge-Lock hebt sich. Dazwischen (Günstig ≤ Preis < Teuer): Discharge-Lock Zone 1 und Zone 2. Muss größer als Günstig-Schwelle sein."
     },
     "tariff_exp_entity": {
-      "l": "Teuer-Schwelle dynamisch",
-      "d": "Optionale input_number-Entität. Wenn gesetzt und verfügbar, überschreibt sie den statischen Wert."
+      "l": "Teuer-Schwelle dynamisch (optional lokal)",
+      "d": "Optionale input_number-Entität, überschreibt den statischen Wert wenn gesetzt und verfügbar. Leer lassen → bei Multi-Instanz greift der globale Wert aus dem Verteilungs-Tab."
     },
     "tariff_soc_target": {
       "l": "Ladeziel SOC (%)",
@@ -248,12 +245,24 @@
       "d": "Wenn aktiv und der Vorhersage-Sensor einen Wert ≥ Schwelle meldet, wird Tarif-Laden und Discharge-Lock unterdrückt. Automatische Flexibilität für gute Wetterlagen."
     },
     "pv_forecast_sensor": {
-      "l": "Vorhersage-Sensor",
-      "d": "input_number- oder sensor-Entität mit einem kWh-Wert (z.B. erwartete Solarproduktion heute). Kann von einer Wetter-Integration oder einem Solcast-Account kommen."
+      "l": "PV-Vorhersage heute (optional lokal)",
+      "d": "input_number- oder sensor-Entität mit einem kWh-Wert für die erwartete Solarproduktion heute (z. B. von einer Wetter-Integration oder einem Solcast-Account). Gemeinsames Feld — speist sowohl diese Tarif-Lock-Unterdrückung als auch die Surplus-Forecast-Erzwingung im Zone-0-Tab. Leer lassen → bei Multi-Instanz greift der globale Wert aus dem Verteilungs-Tab."
     },
     "pv_forecast_threshold": {
       "l": "Schwellwert (kWh)",
       "d": "Wenn Vorhersage ≥ diesem Wert, gilt: Tarif-Laden und Discharge-Lock sind gesperrt, normale Nulleinspeisung läuft weiter."
+    },
+    "zone1_force_enabled": {
+      "l": "Nacht-Forcierung aktivieren",
+      "d": "Erlaubt den Zone-1-Entladezyklus auch unter der normalen Zone-1-Schwelle, wenn der PV-Ertrag des Zieltags die Nacht ohnehin wieder auffüllt — verhindert, dass an einem wolkigen Tag zu wenig geladene Kapazität ungenutzt über Nacht liegen bleibt. Nur der Eintritt wird vorgezogen; der Austritt läuft unverändert über die Zone-3-Schwelle. Gilt nur solange es gerade dunkel ist (PV < PV-Reserve) und SOC über der Zone-3-Schutzgrenze liegt."
+    },
+    "zone1_force_sensor": {
+      "l": "PV-Vorhersage morgen (optional lokal)",
+      "d": "input_number- oder sensor-Entität mit dem erwarteten kWh-Ertrag für morgen. Vor Mitternacht wird dieser Sensor gelesen; nach Mitternacht automatisch das Feld „PV-Vorhersage heute“ (derselbe Zieltag, nur der Sensor wechselt — der „morgen“-Sensor würde sonst auf den übernächsten Tag zeigen). Leer lassen → bei Multi-Instanz greift der globale Wert aus dem Verteilungs-Tab."
+    },
+    "zone1_force_threshold": {
+      "l": "Mindest-Ertrag (kWh)",
+      "d": "Forcierung nur wenn die PV-Vorhersage für den Zieltag diesen Wert erreicht oder überschreitet."
     },
     "stddev_window": {
       "l": "Stabw.-Fenster (s)",
@@ -399,6 +408,26 @@
     "mode_equal":         "Gleichverteilung",
     "mode_soc":           "SOC-gewichtet",
     "mode_capacity":      "Kapazitätsgewichtet",
+    "global_sensors_hdr":  "🌍 Globale Sensoren",
+    "global_sensors_desc": "Instanzübergreifende Vorgabe für Sensoren, die typischerweise für den ganzen Haushalt gelten (ein Wetter-/Solcast-Account, ein Stromtarif) — jede Instanz kann im jeweiligen Tab optional lokal überschreiben, sonst gilt dieser Wert. Der Punkt neben jedem Feld zeigt die Gültigkeit der Entity live (grün/gelb/rot).",
+    "global_pv_today_lbl":     "PV-Vorhersage heute (kWh)",
+    "global_pv_today_desc":   "Speist Surplus-Forecast-Erzwingung (Zone-0-Tab) und Tarif-Lock-Unterdrückung (Tarif-Tab), sofern keine Instanz lokal überschreibt.",
+    "global_pv_today_ph":      "sensor.pv_forecast_today",
+    "global_pv_tomorrow_lbl":  "PV-Vorhersage morgen (kWh)",
+    "global_pv_tomorrow_desc": "Speist die Zone-1-Nacht-Forcierung (Zonen-Tab). Vor Mitternacht gelesen; nach Mitternacht greift automatisch stattdessen \"PV-Vorhersage heute\" oben (derselbe Zieltag).",
+    "global_pv_tomorrow_ph":   "sensor.pv_forecast_tomorrow",
+    "global_surplus_lock_lbl":  "Leistungs-Vorhersage jetzt (W)",
+    "global_surplus_lock_desc":"Speist die Austritts-Sperre aus Zone 0 (Zone-0-Tab), sofern keine Instanz lokal überschreibt.",
+    "global_surplus_lock_ph":   "sensor.solcast_power_now",
+    "global_tariff_price_lbl":  "Strompreis-Sensor",
+    "global_tariff_price_desc":"Speist die Tarif-Arbitrage (Tarif-Tab), sofern keine Instanz lokal überschreibt.",
+    "global_tariff_price_ph":   "sensor.strompreis_ct_kwh",
+    "global_tariff_cheap_lbl":  "Günstig-Schwelle dynamisch",
+    "global_tariff_cheap_desc":"Optionale input_number-Entität, überschreibt die statische Günstig-Schwelle, sofern keine Instanz lokal überschreibt.",
+    "global_tariff_cheap_ph":   "input_number.tarif_guenstig",
+    "global_tariff_exp_lbl":    "Teuer-Schwelle dynamisch",
+    "global_tariff_exp_desc":  "Optionale input_number-Entität, überschreibt die statische Teuer-Schwelle, sofern keine Instanz lokal überschreibt.",
+    "global_tariff_exp_ph":     "input_number.tarif_teuer",
     "unsaved":            "Ungespeicherte Änderungen",
     "save":               "💾 Speichern"
   }

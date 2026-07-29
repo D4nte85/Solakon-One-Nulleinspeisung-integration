@@ -92,6 +92,14 @@ const TAB_LAYOUT = {
           { k: "offset_2", t: "num", min: -200, max: 300, step: 1 },
         ],
       },
+      {
+        tk: "zones_force", icon: "🌙", color: "#4338ca",
+        fields: [
+          { k: "zone1_force_enabled",   t: "bool" },
+          { k: "zone1_force_sensor",    t: "entity" },
+          { k: "zone1_force_threshold", t: "num", min: 0, max: 50, step: 0.5 },
+        ],
+      },
     ],
   },
 
@@ -118,7 +126,6 @@ const TAB_LAYOUT = {
         tk: "surplus_forecast", icon: "🌤️", color: "#65a30d",
         fields: [
           { k: "surplus_forecast_enabled",   t: "bool" },
-          { k: "surplus_forecast_sensor",    t: "entity" },
           { k: "surplus_forecast_threshold", t: "num", min: 0, max: 100, step: 0.5 },
         ],
       },
@@ -1170,6 +1177,31 @@ class SolakonPanel extends HTMLElement {
     const mode      = this._distVal("distribution_mode") ?? "equal";
     const globalMax = this._distVal("global_max_power")  ?? 800;
 
+    // Instanzübergreifende Entity-Picker: jede Instanz
+    // kann lokal überschreiben (Zonen-/Tarif-Tab), sonst greift dieser Wert.
+    const GLOBAL_SENSOR_FIELDS = [
+      { key: "global_pv_forecast_today_sensor",    lk: "global_pv_today",    domain: "" },
+      { key: "global_pv_forecast_tomorrow_sensor", lk: "global_pv_tomorrow", domain: "" },
+      { key: "global_surplus_lock_sensor",         lk: "global_surplus_lock",domain: "" },
+      { key: "global_tariff_price_sensor",         lk: "global_tariff_price",domain: "sensor" },
+      { key: "global_tariff_cheap_entity",         lk: "global_tariff_cheap",domain: "input_number" },
+      { key: "global_tariff_exp_entity",           lk: "global_tariff_exp",  domain: "input_number" },
+    ];
+    const globalSensorCards = GLOBAL_SENSOR_FIELDS.map(f => {
+      const val = this._distVal(f.key) || "";
+      return `
+        <div class="field">
+          <label>${dt[`${f.lk}_lbl`] || f.key}</label>
+          <div class="desc">${dt[`${f.lk}_desc`] || ""}</div>
+          <div class="entity-row">
+            <input type="text" placeholder="${dt[`${f.lk}_ph`] || "sensor.xxx"}"
+              value="${val}" data-dist-key="${f.key}"
+              style="width:100%;box-sizing:border-box"/>
+            <span class="entity-dot ${this._entityDotClass(val)}"></span>
+          </div>
+        </div>`;
+    }).join("");
+
     const instCards = this._instances.map(inst => {
       const capSensor = this._distInstVal(inst.entry_id, "capacity_sensor");
       return `
@@ -1221,6 +1253,14 @@ class SolakonPanel extends HTMLElement {
         </div>
       </div>
 
+      <div class="col-card top-item">
+        <div class="col-header" style="background:#0284c7">${dt.global_sensors_hdr || "🌍"}</div>
+        <div class="col-body">
+          <div class="desc" style="margin-bottom:8px">${dt.global_sensors_desc || ""}</div>
+          ${globalSensorCards}
+        </div>
+      </div>
+
       <div id="dist-save-bar" style="position:sticky;bottom:0;background:var(--primary-color,#03a9f4);color:#fff;padding:10px 16px;border-radius:8px;margin-top:4px;align-items:center;justify-content:space-between;display:${Object.keys(this._distDirty).length ? "flex" : "none"}">
         <span>${dt.unsaved || ""}</span>
         <button onclick="this.getRootNode().host._saveDistConfig()" style="background:#fff;color:var(--primary-color,#03a9f4);border:none;padding:6px 16px;border-radius:6px;cursor:pointer;font-weight:600">${dt.save || "Save"}</button>
@@ -1241,6 +1281,13 @@ class SolakonPanel extends HTMLElement {
 
     c.querySelectorAll('input[data-dist-key="capacity_sensor"]').forEach(inp => {
       const dot = c.querySelector(`#cap-dot-${inp.dataset.distInst}`);
+      inp.addEventListener("input", () => {
+        if (dot) dot.className = `entity-dot ${this._entityDotClass(inp.value)}`;
+      });
+    });
+
+    c.querySelectorAll(".entity-row input[type=\"text\"]:not([id])").forEach(inp => {
+      const dot = inp.parentElement.querySelector(".entity-dot");
       inp.addEventListener("input", () => {
         if (dot) dot.className = `entity-dot ${this._entityDotClass(inp.value)}`;
       });

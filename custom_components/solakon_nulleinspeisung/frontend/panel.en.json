@@ -72,6 +72,7 @@
     "zones_soc":        "SOC Limits",
     "zones_power":      "Power Limits",
     "zones_offsets":    "Offsets",
+    "zones_force":      "Night Forcing",
     "surplus_soc":      "SOC Condition",
     "surplus_pv":       "PV Condition",
     "surplus_forecast": "PV Forecast",
@@ -161,11 +162,7 @@
     },
     "surplus_forecast_enabled": {
       "l": "Enable Forecast Override",
-      "d": "When forecast ≥ threshold: surplus starts as soon as PV > Hard Limit Z0 AND SOC > zone-3 threshold (no export threshold required). Forcing stays active while forecast ≥ threshold AND PV > Hard Limit Z0 AND SOC > zone 3 — feeds in early on a big PV day instead of curtailing, without waiting for a full battery. Once PV drops below Hard Limit Z0 (incl. at night: PV = 0), the forecast drops below the threshold or the SOC drops below zone 3, forcing ends and the normal exit (SOC OR consumption) applies — no nightly stick."
-    },
-    "surplus_forecast_sensor": {
-      "l": "Forecast Sensor",
-      "d": "Sensor with the predicted PV yield (e.g. Forecast.Solar, Solcast). Unit must match the threshold (e.g. kWh)."
+      "d": "When forecast ≥ threshold: surplus starts as soon as PV > Hard Limit Z0 AND SOC > zone-3 threshold (no export threshold required). Forcing stays active while forecast ≥ threshold AND PV > Hard Limit Z0 AND SOC > zone 3 — feeds in early on a big PV day instead of curtailing, without waiting for a full battery. Once PV drops below Hard Limit Z0 (incl. at night: PV = 0), the forecast drops below the threshold or the SOC drops below zone 3, forcing ends and the normal exit (SOC OR consumption) applies — no nightly stick. Sensor: shared field with the tariff PV forecast, see the Tariff tab or, for multi-instance setups, the Distribution tab (global value)."
     },
     "surplus_forecast_threshold": {
       "l": "Minimum Yield for Surplus",
@@ -176,8 +173,8 @@
       "d": "Keeps Zone 0 alive through short PV dips (clouds): while the power forecast is ≥ lock factor × Hard Limit Z0, the PV exit is blocked — the measured dip must be transient. The SOC exit always stays active, Zone 3 ends surplus at any time. Background: exiting with a full battery enters a state where the hardware throttles PV down to consumption — the surplus becomes unmeasurable and re-entry is delayed by minutes. Risk: if the sensor reports a stuck, too-high value, Zone 0 stays active for just as long — until the SOC exit kicks in."
     },
     "surplus_lock_sensor": {
-      "l": "Power Forecast Sensor (W)",
-      "d": "Sensor with the currently forecast PV power in W (e.g. Solcast power_now). k-units (kW) are normalized ×1000 automatically. If the sensor is unavailable, the lock is inactive."
+      "l": "Power Forecast Sensor (W, optional local)",
+      "d": "Sensor with the currently forecast PV power in W (e.g. Solcast power_now). k-units (kW) are normalized ×1000 automatically. Leave empty → in multi-instance setups the global value from the Distribution tab applies. If no sensor ends up set or it is unavailable, the lock is inactive."
     },
     "surplus_lock_factor": {
       "l": "Lock Factor",
@@ -216,24 +213,24 @@
       "d": "Cheap (< cheap threshold): tariff charging. Medium (in between): discharge-lock — Zone 1 and Zone 2 blocked. Expensive (≥ expensive threshold): normal SOC logic. Blocked while surplus feed-in (Zone 0) is active. Independent of the AC charging module."
     },
     "tariff_price_sensor": {
-      "l": "Price Sensor",
-      "d": "Sensor entity with the current electricity price as a numeric value in ct/kWh."
+      "l": "Price Sensor (optional local)",
+      "d": "Sensor entity with the current electricity price as a numeric value in ct/kWh. Leave empty → in multi-instance setups the global value from the Distribution tab applies (usually one shared household tariff)."
     },
     "tariff_cheap_threshold": {
       "l": "Cheap Threshold (ct/kWh)",
       "d": "Tariff charging starts when price is below this threshold AND SOC < target. Also the lower bound of the discharge-lock."
     },
     "tariff_cheap_entity": {
-      "l": "Dynamic Cheap Threshold",
-      "d": "Optional input_number entity. When set and available, overrides the static value."
+      "l": "Dynamic Cheap Threshold (optional local)",
+      "d": "Optional input_number entity, overrides the static value when set and available. Leave empty → in multi-instance setups the global value from the Distribution tab applies."
     },
     "tariff_exp_threshold": {
       "l": "Expensive Threshold (ct/kWh)",
       "d": "Above this threshold: normal SOC logic, discharge-lock lifts. In between (cheap ≤ price < expensive): discharge-lock Zone 1 and Zone 2. Must be greater than the cheap threshold."
     },
     "tariff_exp_entity": {
-      "l": "Dynamic Expensive Threshold",
-      "d": "Optional input_number entity. When set and available, overrides the static value."
+      "l": "Dynamic Expensive Threshold (optional local)",
+      "d": "Optional input_number entity, overrides the static value when set and available. Leave empty → in multi-instance setups the global value from the Distribution tab applies."
     },
     "tariff_soc_target": {
       "l": "Charge Target SOC (%)",
@@ -248,12 +245,24 @@
       "d": "When active and the forecast sensor reports a value ≥ threshold, tariff charging and discharge-lock are suppressed. Automatic flexibility for sunny days."
     },
     "pv_forecast_sensor": {
-      "l": "Forecast Sensor",
-      "d": "input_number or sensor entity with a kWh value (e.g. expected solar generation today). Can come from a weather integration or a Solcast account."
+      "l": "PV Forecast Today (optional local)",
+      "d": "input_number or sensor entity with a kWh value for expected solar generation today (e.g. from a weather integration or a Solcast account). Shared field — feeds both this tariff-lock suppression and the Surplus Forecast Override in the Zone-0 tab. Leave empty → in multi-instance setups the global value from the Distribution tab applies."
     },
     "pv_forecast_threshold": {
       "l": "Threshold (kWh)",
       "d": "When forecast ≥ this value: tariff charging and discharge-lock are blocked, normal zero-export continues."
+    },
+    "zone1_force_enabled": {
+      "l": "Enable Night Forcing",
+      "d": "Allows the Zone-1 discharge cycle to start even below the normal Zone-1 threshold when the target day's PV forecast will refill the battery anyway — prevents charge left unused overnight after a cloudy day. Only the entry is brought forward; the exit still runs through the normal Zone-3 threshold. Only applies while it is currently dark (PV < PV reserve) and SOC is above the Zone-3 safety floor."
+    },
+    "zone1_force_sensor": {
+      "l": "PV Forecast Tomorrow (optional local)",
+      "d": "input_number or sensor entity with the expected kWh yield for tomorrow. Read before midnight; after midnight the \"PV Forecast Today\" field is used automatically instead (same target day, only the sensor changes — the \"tomorrow\" sensor would otherwise point one day too far ahead). Leave empty → in multi-instance setups the global value from the Distribution tab applies."
+    },
+    "zone1_force_threshold": {
+      "l": "Minimum Yield (kWh)",
+      "d": "Forcing only applies once the PV forecast for the target day reaches or exceeds this value."
     },
     "stddev_window": {
       "l": "StdDev Window (s)",
@@ -399,6 +408,26 @@
     "mode_equal":         "Equal",
     "mode_soc":           "SOC-weighted",
     "mode_capacity":      "Capacity-weighted",
+    "global_sensors_hdr":  "🌍 Global Sensors",
+    "global_sensors_desc": "Cross-instance default for sensors that typically apply to the whole household (one weather/Solcast account, one electricity tariff) — each instance can optionally override locally in its own tab, otherwise this value applies. The dot next to each field shows entity validity live (green/amber/red).",
+    "global_pv_today_lbl":     "PV Forecast Today (kWh)",
+    "global_pv_today_desc":   "Feeds the Surplus Forecast Override (Zone-0 tab) and the Tariff Lock suppression (Tariff tab), unless an instance overrides it locally.",
+    "global_pv_today_ph":      "sensor.pv_forecast_today",
+    "global_pv_tomorrow_lbl":  "PV Forecast Tomorrow (kWh)",
+    "global_pv_tomorrow_desc": "Feeds the Zone-1 Night Forcing (Zones tab). Read before midnight; after midnight \"PV Forecast Today\" above is used automatically instead (same target day).",
+    "global_pv_tomorrow_ph":   "sensor.pv_forecast_tomorrow",
+    "global_surplus_lock_lbl":  "Power Forecast Now (W)",
+    "global_surplus_lock_desc":"Feeds the Zone-0 exit lock (Zone-0 tab), unless an instance overrides it locally.",
+    "global_surplus_lock_ph":   "sensor.solcast_power_now",
+    "global_tariff_price_lbl":  "Electricity Price Sensor",
+    "global_tariff_price_desc":"Feeds the tariff arbitrage (Tariff tab), unless an instance overrides it locally.",
+    "global_tariff_price_ph":   "sensor.electricity_price_ct_kwh",
+    "global_tariff_cheap_lbl":  "Dynamic Cheap Threshold",
+    "global_tariff_cheap_desc":"Optional input_number entity, overrides the static cheap threshold, unless an instance overrides it locally.",
+    "global_tariff_cheap_ph":   "input_number.tariff_cheap",
+    "global_tariff_exp_lbl":    "Dynamic Expensive Threshold",
+    "global_tariff_exp_desc":  "Optional input_number entity, overrides the static expensive threshold, unless an instance overrides it locally.",
+    "global_tariff_exp_ph":     "input_number.tariff_expensive",
     "unsaved":            "Unsaved changes",
     "save":               "💾 Save"
   }

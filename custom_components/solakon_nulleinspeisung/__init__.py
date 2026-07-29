@@ -16,7 +16,7 @@ from .const import (
     DOMAIN, PLATFORMS, S_REGULATION_ENABLED,
     CONF_INSTANCE_NAME,
     CONF_GRID_SENSOR, CONF_ACTUAL_SENSOR, CONF_SOLAR_SENSOR, CONF_SOC_SENSOR,
-    STORAGE_VERSION, S_BATTERY_CAPACITY_SENSOR,
+    STORAGE_VERSION,
 )
 
 STORAGE_VERSION_DIST = 1
@@ -212,15 +212,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if migrated != stored:
             await store.async_save(migrated)
 
-    # Einmalige Migration: alter Instanz-Sensor (battery_capacity_sensor, vor
-    # Einführung des Verteilungs-Tabs) wird ins Distribution-Store übernommen,
-    # falls dort für diese Instanz noch kein Kapazitätssensor hinterlegt ist.
-    dist_key = f"inst_{entry.entry_id}_capacity_sensor"
-    old_cap_sensor = coordinator.settings.get(S_BATTERY_CAPACITY_SENSOR)
-    if old_cap_sensor and not hass.data[f"{DOMAIN}_dist_config"].get(dist_key):
-        hass.data[f"{DOMAIN}_dist_config"][dist_key] = old_cap_sensor
-        await hass.data[f"{DOMAIN}_dist_store"].async_save(hass.data[f"{DOMAIN}_dist_config"])
-
     # WebSocket-Commands nur einmal registrieren
     if not hass.data.get(f"{DOMAIN}_ws_registered"):
         websocket_api.async_register_command(hass, _ws_get_all_instances)
@@ -296,6 +287,17 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
 DIST_DEFAULTS = {
     "global_max_power":  800,
     "distribution_mode": "equal",  # equal | soc | capacity
+    # Instanzübergreifende Sensor-Vorgaben — jede Instanz kann
+    # diese optional lokal überschreiben (S_PV_FORECAST_SENSOR, S_ZONE1_FORCE_SENSOR,
+    # S_SURPLUS_LOCK_SENSOR, S_TARIFF_PRICE_SENSOR, S_TARIFF_CHEAP_ENTITY,
+    # S_TARIFF_EXP_ENTITY); lokal gewinnt, sonst greift dieser globale Wert. Nur bei
+    # >1 Instanz im Panel sichtbar, siehe coordinator.py _effective_*_sensor()-Helper.
+    "global_pv_forecast_today_sensor":    "",
+    "global_pv_forecast_tomorrow_sensor": "",
+    "global_surplus_lock_sensor":         "",
+    "global_tariff_price_sensor":         "",
+    "global_tariff_cheap_entity":         "",
+    "global_tariff_exp_entity":           "",
 }
 
 
@@ -350,7 +352,17 @@ async def _ws_save_distribution_config(
     # Neue Verteilung sofort auf alle Instanzen anwenden — sonst greift die
     # geänderte allocated_power erst beim nächsten Sensor-Event. Lock-geschützt
     # (parallele Läufe werden verworfen), daher rein additiv.
+    #
+    # Globale Sensor-Felder (PV-Vorhersage heute/morgen, Austritts-Sperre, Tarif)
+    # ändern ggf. die effektiv wirksame Sensor-Entität einer Instanz, ohne dass
+    # deren eigene Settings sich ändern — Listener müssen deshalb hier explizit
+    # neu registriert werden, sonst reagiert die Instanz erst beim nächsten
+    # ohnehin fälligen Regelzyklus auf State-Changes des neuen Sensors.
     for coord in hass.data.get(DOMAIN, {}).values():
+        coord._update_tariff_tracker()
+        coord._update_pv_forecast_tracker()
+        coord._update_surplus_lock_tracker()
+        coord._update_zone1_force_tracker()
         hass.async_create_task(coord._async_regulate())
 
     connection.send_result(msg["id"], {"success": True})
