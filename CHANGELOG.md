@@ -5,6 +5,8 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+## [2.1.8] – 2026-07-29
+
 ### Hinzugefügt
 - Neues Setting `zone1_force_min_soc`: eigener, unabhängig einstellbarer Sicherheits-Floor für die Zone-1-Nacht-Forcierung (Default 20 %). Bisher wurde dafür die Zone-3-Schwelle wiederverwendet — die aber als Austritts-/Sicherheitsstopp-Schwelle eine andere Rolle hat und frei von 1–49 % einstellbar ist, wodurch der Forcierungs-Floor im Extremfall bei 1 % SOC gelegen hätte (Bereich, in dem die SOC-Schätzung unzuverlässig wird). Validierung: muss strikt zwischen Zone-3- und Zone-1-Schwelle liegen, sonst Fehlermeldung analog zu den bestehenden SOC-Limit-Checks
 
