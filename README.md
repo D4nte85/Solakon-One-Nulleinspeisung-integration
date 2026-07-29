@@ -265,6 +265,8 @@ Optionale Überschuss-Einspeisung (Zone 0). **Hat absoluten Vorrang vor allen an
 
 **Zone 0 ist ein Overlay über Zone 1:** Der Eintritt aktiviert immer auch den Zone-1-Zyklus (`cycle_active`), beim Austritt wird die Zone aus dem SOC neu abgeleitet (SOC > Zone-1-Schwelle → Zone 1 läuft weiter, sonst Zone 2). Deshalb muss die Export-Schwelle über der Zone-1-Schwelle liegen — die Integration prüft das in jedem Zyklus.
 
+**Zum 2-A-Stabilitätspuffer:** Ist der Akku voll, kann kein Strom mehr hineinfließen — der Solakon kann PV aber nur regeln solange Batteriestrom fließt, also muss er in diesem Fall herausfließen. Ohne diesen Stromfluss (0 A) schaltet das Gerät komplett ab. Die 2 A sind deshalb eine Entladefreigabe (Obergrenze, kein fester Sollwert) und bewusst niedrig gewählt, um die Batterie dabei so wenig wie möglich zu belasten.
+
 **Normaler Eintritt:** SOC ≥ Export-Schwelle UND (PV > ((Σ Output aller Instanzen + Grid) × Fehler-Anteil + PV-Hysterese × Fehler-Anteil) ODER (PV = 0 UND Output = 0 im aktuellen *und* vorherigen Zyklus UND seit dem letzten Austritt erneut PV > 0 gemessen))
 
 > Ein- und Austritt nutzen denselben Verbrauchsbezug `(Σ Output + Grid) × Fehler-Anteil` (im Einzelbetrieb = `Output + Grid`). Gleiche Referenz für beide ist zwingend, sonst bricht das Hysterese-Totband zusammen und Zone 0 flackert.
@@ -293,7 +295,7 @@ Optionale Überschuss-Einspeisung (Zone 0). **Hat absoluten Vorrang vor allen an
 >
 > Risiko: Meldet der Sensor dauerhaft einen zu hohen Wert, bleibt Zone 0 entsprechend lange aktiv — bis der SOC-Austritt eingreift.
 
-**Warum die SOC-Schwelle unter dem Vollladepunkt liegen muss:** Der Eintritt prüft `PV > Eigenbedarf + Hysterese`. Das ist nur messbar, solange der Akku noch lädt — dann läuft die PV ungedrosselt und zeigt `Eigenbedarf + Ladeleistung`. Am Vollladepunkt (App-Ladeobergrenze) drosselt der Wechselrichter die PV exakt auf den Eigenbedarf herunter; der Überschuss ist dann unsichtbar und der Eintritt hängt von zufälligen Verbrauchsschwankungen ab — minutenlange Verzögerung möglich. Eine Schwelle ~5 % unter der App-Ladeobergrenze (z. B. 95 % bei Max 100 %) legt den Eintritt sicher in die Ladephase, wo der Überschuss zuverlässig messbar ist. Aus demselben Grund kann der Wiedereintritt nach einer Wolke verzögert sein, wenn der SOC bereits am Maximum gepinnt ist — während der Wolke wird die Batterie nicht entladen (solange Solar existiert, bleibt sie unangetastet), der SOC bewegt sich nicht. Dagegen hilft die Austritts-Sperre (siehe oben).
+**Warum die SOC-Schwelle unter dem Vollladepunkt liegen muss:** Der Eintritt prüft `PV > Eigenbedarf + Hysterese`. Das ist nur messbar, solange der Akku noch lädt — dann läuft die PV ungedrosselt und zeigt `Eigenbedarf + Ladeleistung`. Am Vollladepunkt (App-Ladeobergrenze) drosselt der Wechselrichter die PV exakt auf den Eigenbedarf herunter; der Überschuss ist dann unsichtbar und der Eintritt hängt von zufälligen Verbrauchsschwankungen ab — minutenlange Verzögerung möglich. Eine Schwelle ~5 % unter der App-Ladeobergrenze (z. B. 95 % bei Max 100 %) legt den Eintritt sicher in die Ladephase, wo der Überschuss zuverlässig messbar ist. Aus demselben Grund kann der Wiedereintritt nach einer Wolke verzögert sein, wenn der SOC bereits am Maximum gepinnt ist — während der Wolke entlädt sich die Batterie nur über den 2-A-Stabilitätspuffer (siehe oben), das bewegt den SOC praktisch nicht. Dagegen hilft die Austritts-Sperre (siehe oben).
 
 | Parameter | Beschreibung | Empfehlung |
 |-----------|-------------|------------|
