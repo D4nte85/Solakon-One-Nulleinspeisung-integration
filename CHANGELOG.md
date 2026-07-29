@@ -18,6 +18,7 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ### Geändert
 - Sichtbare Fehlermeldung bei fehlendem/ungültigem Sensor auf Surplus-Forecast-Erzwingung, Austritts-Sperre und PV-Vorhersage ausgeweitet — bisher scheiterten diese drei Features bei aktivem Enable-Flag, aber leerem oder nicht verfügbarem Sensor, still (Flag einfach wirkungslos, kein Hinweis). Bisher galt das nur für den Tarif-Preis-Sensor. Da `last_error` ein einzelner String ist, werden mehrere gleichzeitig zutreffende Fehler jetzt mit „ • " verkettet statt sich gegenseitig zu überschreiben — so bleibt sichtbar, dass es sich um mehrere getrennte Probleme handelt
+- Neues Panel-Tab „Entitäten" bündelt alle optionalen Entity-Picker-Felder dieser Instanz (`zone1_force_sensor`, `surplus_lock_sensor`, `tariff_price_sensor`, `tariff_cheap_entity`, `tariff_exp_entity`, `pv_forecast_sensor`) an einer Stelle, statt sie über Zonen-, Überschuss- und Tarif-Tab verstreut zu pflegen. Enable-Flags und Zahlen-Schwellen bleiben in ihrem jeweiligen Feature-Tab, die dortigen Felder verweisen nur noch auf das neue Tab. Reine Frontend-Umsortierung, keine neuen Settings-Keys, keine Backend-Änderung
 
 ### Entfernt
 - Einmalige Migration des alten Zonen-Tab-Kapazitätssensors (`battery_capacity_sensor`) ins Verteilungs-Tab: seit v2.1.5 überflüssig, jede seitdem aktualisierte Installation hat sie bereits durchlaufen

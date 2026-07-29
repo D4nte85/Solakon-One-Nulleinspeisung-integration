@@ -22,15 +22,16 @@
     "TM": "Discharge-Lock: Price too high"
   },
   "tabs": {
-    "status":  "Status",
-    "pi":      "PI Controller",
-    "zones":   "Zones",
-    "surplus": "Surplus",
-    "ac":      "AC Charge",
-    "tariff":  "Tariff",
-    "dynoff":  "Dyn. Offset",
-    "night":   "Night",
-    "debug":   "Debug"
+    "status":   "Status",
+    "pi":       "PI Controller",
+    "zones":    "Zones",
+    "entities": "Entities",
+    "surplus":  "Surplus",
+    "ac":       "AC Charge",
+    "tariff":   "Tariff",
+    "dynoff":   "Dyn. Offset",
+    "night":    "Night",
+    "debug":    "Debug"
   },
   "tab_docs": {
     "pi": {
@@ -64,6 +65,10 @@
     "debug": {
       "summary": "Debug — manual intervention in the control state",
       "text": "Reset integral: sets the I-part of the PI controller to 0.\n\nSet zone manually: toggles the internal cycle_active flag and resets the integral.\n• Activate Zone 1: cycle_active = true → aggressive discharge, full discharge current.\n• Activate Zone 2: cycle_active = false → battery-friendly operation, 0 A discharge current, dynamic output limit.\n\nAll actions are logged under 'Last action' in the Status tab."
+    },
+    "entities": {
+      "summary": "Entities — every optional sensor assignment for this instance in one place",
+      "text": "Bundles the entity-picker fields that would otherwise be scattered across the Zones, Surplus and Tariff tabs. Enable flags and numeric thresholds stay in their respective feature tab — this tab only assigns WHAT is read.\n\nWith multiple instances there's also a global default per sensor in the Distribution tab: local (here) overrides global, otherwise the global value applies. If a field is left empty both here and globally, that function has no effect — even if its enable flag is set."
     }
   },
   "col_titles": {
@@ -85,7 +90,11 @@
     "dynoff_z1":        "Zone 1",
     "dynoff_z2":        "Zone 2",
     "dynoff_ac":        "Zone AC Charge",
-    "periodic":         "Periodic Trigger"
+    "periodic":         "Periodic Trigger",
+    "ent_zones":        "Zones — Night Forcing",
+    "ent_surplus":      "Surplus — Exit Lock",
+    "ent_tariff":       "Tariff",
+    "ent_forecast":     "PV Forecast"
   },
   "fields": {
     "p_factor":  {
@@ -176,6 +185,9 @@
       "l": "Power Forecast Sensor (W, optional local)",
       "d": "Sensor with the currently forecast PV power in W (e.g. Solcast power_now). k-units (kW) are normalized ×1000 automatically. Leave empty → in multi-instance setups the global value from the Distribution tab applies. If no sensor ends up set or it is unavailable, the lock is inactive."
     },
+    "surplus_lock_sensor_note": {
+      "d": "🔌 Sensor is assigned in the Entities tab."
+    },
     "surplus_lock_factor": {
       "l": "Lock Factor",
       "d": "Lock active while forecast ≥ factor × Hard Limit Z0. Higher factor = more safety margin against forecast errors. Default: 1.5."
@@ -216,6 +228,9 @@
       "l": "Price Sensor (optional local)",
       "d": "Sensor entity with the current electricity price as a numeric value in ct/kWh. Leave empty → in multi-instance setups the global value from the Distribution tab applies (usually one shared household tariff)."
     },
+    "tariff_price_sensor_note": {
+      "d": "🔌 Price sensor is assigned in the Entities tab."
+    },
     "tariff_cheap_threshold": {
       "l": "Cheap Threshold (ct/kWh)",
       "d": "Tariff charging starts when price is below this threshold AND SOC < target. Also the lower bound of the discharge-lock."
@@ -232,6 +247,9 @@
       "l": "Dynamic Expensive Threshold (optional local)",
       "d": "Optional input_number entity, overrides the static value when set and available. Leave empty → in multi-instance setups the global value from the Distribution tab applies."
     },
+    "tariff_dynamic_entities_note": {
+      "d": "🔌 Dynamic threshold entities (cheap/expensive) are assigned in the Entities tab."
+    },
     "tariff_soc_target": {
       "l": "Charge Target SOC (%)",
       "d": "Tariff charging stops when this SOC is reached. Independent of the AC charging module's SOC target."
@@ -246,7 +264,10 @@
     },
     "pv_forecast_sensor": {
       "l": "PV Forecast Today (optional local)",
-      "d": "input_number or sensor entity with a kWh value for expected solar generation today (e.g. from a weather integration or a Solcast account). Shared field — feeds both this tariff-lock suppression and the Surplus Forecast Override in the Zone-0 tab. Leave empty → in multi-instance setups the global value from the Distribution tab applies."
+      "d": "input_number or sensor entity with a kWh value for expected solar generation today (e.g. from a weather integration or a Solcast account). Shared field — feeds this tariff-lock suppression, the Surplus Forecast Override in the Zone-0 tab, AND between 0–12h also Zone-1 Night Forcing (automatically replaces the \"PV Forecast Tomorrow\" field there, see its description). Leave empty → in multi-instance setups the global value from the Distribution tab applies."
+    },
+    "pv_forecast_sensor_note": {
+      "d": "🔌 Sensor is assigned in the Entities tab — shared field with the Surplus Forecast Override in the Zone-0 tab."
     },
     "pv_forecast_threshold": {
       "l": "Threshold (kWh)",
@@ -259,6 +280,9 @@
     "zone1_force_sensor": {
       "l": "PV Forecast Tomorrow (optional local)",
       "d": "input_number or sensor entity with the expected kWh yield for tomorrow. Read before midnight; after midnight the \"PV Forecast Today\" field is used automatically instead (same target day, only the sensor changes — the \"tomorrow\" sensor would otherwise point one day too far ahead). Leave empty → in multi-instance setups the global value from the Distribution tab applies."
+    },
+    "zone1_force_sensor_note": {
+      "d": "🔌 Sensor is assigned in the Entities tab (\"PV Forecast Tomorrow\")."
     },
     "zone1_force_threshold": {
       "l": "Minimum Yield (kWh)",

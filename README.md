@@ -183,7 +183,7 @@ Im Einrichtungsformular werden zunächst ein **Instanzname** (z. B. „Speicher 
 
 ## Konfiguration im Sidebar-Panel
 
-Nach der Einrichtung erscheint in der HA-Seitenleiste der Eintrag **Solakon ONE**. Das Panel ist in neun Tabs gegliedert. Änderungen werden erst nach Klick auf **💾 Speichern** übernommen — die Speicherleiste erscheint automatisch sobald ein Wert geändert wurde.
+Nach der Einrichtung erscheint in der HA-Seitenleiste der Eintrag **Solakon ONE**. Das Panel ist in zehn Tabs gegliedert. Änderungen werden erst nach Klick auf **💾 Speichern** übernommen — die Speicherleiste erscheint automatisch sobald ein Wert geändert wurde.
 
 Alle Eingabefelder für Entity-IDs (z. B. Kapazitäts-, Vorhersage- und Preis-Sensoren) zeigen rechts einen **Validierungspunkt**, der die eingetragene Entity live gegen Home Assistant prüft: **grün** = Entity liefert einen Wert, **gelb** = Entity existiert, ist aber `unknown`/`unavailable`, **rot** = Entity existiert nicht (Tippfehler prüfen). Der Punkt aktualisiert sich beim Tippen und im laufenden Betrieb.
 
@@ -239,8 +239,27 @@ Ein positiver Offset von z. B. 30 W lässt den Regler auf 30 W Netzbezug regeln 
 | Parameter | Beschreibung | Empfehlung |
 |-----------|-------------|------------|
 | Aktivieren | Ein/Aus-Schalter | — |
-| PV-Vorhersage morgen (optional lokal) | Sensor mit dem erwarteten kWh-Ertrag für morgen. Leer lassen → bei Multi-Instanz greift der globale Wert aus dem Verteilungs-Tab | — |
+| PV-Vorhersage morgen | 🔌 Sensor wird im **Entitäten**-Tab zugewiesen | — |
 | Mindest-Ertrag (kWh) | Forcierung nur ab dieser Vorhersage | abhängig vom Speicher |
+
+---
+
+### 🔌 Entitäten
+
+Bündelt alle optionalen Entity-Picker-Felder dieser Instanz an einer Stelle, statt sie über Zonen-, Überschuss- und Tarif-Tab verstreut zu pflegen. Enable-Flags und Zahlen-Schwellen bleiben in ihrem jeweiligen Feature-Tab — hier wird ausschließlich zugewiesen, **welche** Entität gelesen wird.
+
+Bei Multi-Instanz existiert zusätzlich eine globale Vorgabe pro Sensor im [Verteilungs-Tab](#multi-instancing): lokal (hier) überschreibt global, sonst gilt der globale Wert. Bleibt ein Feld sowohl hier als auch global leer, ist die jeweilige Funktion wirkungslos — auch wenn ihr Enable-Flag gesetzt ist.
+
+| Parameter | Beschreibung | Verwendet von |
+|-----------|-------------|---------------|
+| PV-Vorhersage morgen (optional lokal) | input_number- oder sensor-Entität mit dem erwarteten kWh-Ertrag für morgen. Vor Mitternacht gelesen; nach Mitternacht automatisch „PV-Vorhersage heute" (siehe unten) — derselbe Zieltag, nur der Sensor wechselt. | Zonen — Nacht-Forcierung |
+| Leistungs-Vorhersage-Sensor (W, optional lokal) | Aktuell prognostizierte PV-Leistung (z. B. Solcast `power_now`). k-Einheiten (kW) werden automatisch ×1000 normalisiert. | Überschuss — Austritts-Sperre |
+| Preis-Sensor (optional lokal) | Sensor-Entität mit aktuellem Strompreis in ct/kWh. | Tarif |
+| Günstig-Schwelle dynamisch (optional lokal) | Optionale input_number-Entität, überschreibt die statische Günstig-Schwelle wenn gesetzt und verfügbar. | Tarif |
+| Teuer-Schwelle dynamisch (optional lokal) | Optionale input_number-Entität, überschreibt die statische Teuer-Schwelle wenn gesetzt und verfügbar. | Tarif |
+| PV-Vorhersage heute (optional lokal) | input_number- oder sensor-Entität mit einem kWh-Wert für die erwartete Solarproduktion heute. Gemeinsames Feld — speist die Tarif-Lock-Unterdrückung, die Surplus-Forecast-Erzwingung UND (0–12 Uhr) die Zone-1-Nacht-Forcierung. | Tarif — PV-Vorhersage, Überschuss — Forecast-Eintritt, Zonen — Nacht-Forcierung (0–12 Uhr) |
+
+Für jedes Feld gilt: leer lassen → bei Multi-Instanz greift der globale Wert aus dem Verteilungs-Tab, sonst ist die jeweilige Funktion inaktiv.
 
 ---
 
@@ -287,7 +306,7 @@ Optionale Überschuss-Einspeisung (Zone 0). **Hat absoluten Vorrang vor allen an
 | SOC-Hysterese (%) | Austritt erst bei SOC < (Schwelle − Hysterese) | 3–5 |
 | PV-Hysterese (W) | Mindestüberschuss über Eigenbedarf für Eintritt und Austritt | 30–80 |
 | Austritts-Sperre | Ein/Aus — PV-Austritt gesperrt solange Vorhersage ≥ Faktor × Hard Limit Z0 | — |
-| Leistungs-Vorhersage-Sensor (W) | Aktuell prognostizierte PV-Leistung (z. B. Solcast `power_now`) | — |
+| Leistungs-Vorhersage-Sensor | 🔌 Sensor wird im **Entitäten**-Tab zugewiesen | — |
 | Sperr-Faktor | Sicherheitsmarge der Austritts-Sperre gegen Vorhersagefehler | 1,5 |
 
 ---
@@ -329,7 +348,7 @@ Drei Preisstufen: **Günstig** (Preis < Günstig-Schwelle): Tarif-Laden mit fest
 | Parameter | Beschreibung | Empfehlung |
 |-----------|-------------|------------|
 | Aktivieren | Ein/Aus-Schalter | — |
-| Preis-Sensor | Sensor-Entität mit aktuellem Strompreis in ct/kWh | — |
+| Preis-Sensor | 🔌 Sensor wird im **Entitäten**-Tab zugewiesen | — |
 | Günstig-Schwelle (ct/kWh) | Unter diesem Preis → Laden | 5–15 |
 | Teuer-Schwelle (ct/kWh) | Über diesem Preis → normale SOC-Logik | 20–35 |
 | Ladeziel SOC (%) | Tarif-Laden stoppt bei diesem SOC | 85–95 |
@@ -340,10 +359,10 @@ Drei Preisstufen: **Günstig** (Preis < Günstig-Schwelle): Tarif-Laden mit fest
 | Parameter | Beschreibung | Empfehlung |
 |-----------|-------------|------------|
 | Aktivieren | Ein/Aus-Schalter | — |
-| PV-Vorhersage heute (optional lokal) | kWh-Sensor für die erwartete Solarproduktion heute — gemergtes Feld, speist auch die Surplus-Forecast-Erzwingung (siehe Überschuss oben). Leer lassen → bei Multi-Instanz greift der globale Wert aus dem Verteilungs-Tab | — |
+| PV-Vorhersage heute | 🔌 Sensor wird im **Entitäten**-Tab zugewiesen — gemergtes Feld, speist auch die Surplus-Forecast-Erzwingung (siehe Überschuss oben) | — |
 | Schwellwert (kWh) | Ab diesem Wert wird Tarif-Laden/Discharge-Lock unterdrückt | 5–15 |
 
-**Dynamische Preisschwellen und Preis-Sensor (optional lokal):** Preis-Sensor, Günstig-Schwelle-Entität und Teuer-Schwelle-Entität können bei Multi-Instanz zusätzlich global im Verteilungs-Tab hinterlegt werden (meist ein gemeinsamer Hausstrom-Tarif) — jede Instanz überschreibt optional lokal.
+**Dynamische Preisschwellen (optional lokal):** Günstig-Schwelle-Entität und Teuer-Schwelle-Entität, siehe **Entitäten**. Können bei Multi-Instanz zusätzlich global im Verteilungs-Tab hinterlegt werden (meist ein gemeinsamer Hausstrom-Tarif) — jede Instanz überschreibt optional lokal.
 
 ---
 

@@ -22,15 +22,16 @@
     "TM": "Discharge-Lock: Preis zu hoch"
   },
   "tabs": {
-    "status":  "Status",
-    "pi":      "PI-Regler",
-    "zones":   "Zonen",
-    "surplus": "Überschuss",
-    "ac":      "AC Laden",
-    "tariff":  "Tarif",
-    "dynoff":  "Dyn. Offset",
-    "night":   "Nacht",
-    "debug":   "Debug"
+    "status":   "Status",
+    "pi":       "PI-Regler",
+    "zones":    "Zonen",
+    "entities": "Entitäten",
+    "surplus":  "Überschuss",
+    "ac":       "AC Laden",
+    "tariff":   "Tarif",
+    "dynoff":   "Dyn. Offset",
+    "night":    "Nacht",
+    "debug":    "Debug"
   },
   "tab_docs": {
     "pi": {
@@ -64,6 +65,10 @@
     "debug": {
       "summary": "Debug — manuelle Eingriffe in den Regelzustand",
       "text": "Integral zurücksetzen: Setzt den I-Anteil des PI-Reglers auf 0.\n\nZone manuell setzen: Schaltet den internen cycle_active-Flag und setzt das Integral zurück.\n• Zone 1 aktivieren: cycle_active = true → aggressiver Entladebetrieb, voller Entladestrom.\n• Zone 2 aktivieren: cycle_active = false → batterieschonender Betrieb, 0 A Entladestrom, dynamisches Output-Limit.\n\nAlle Aktionen werden unter 'Letzte Aktion' im Status-Tab protokolliert."
+    },
+    "entities": {
+      "summary": "Entitäten — alle optionalen Sensor-Zuweisungen dieser Instanz an einer Stelle",
+      "text": "Bündelt die Entity-Picker-Felder, die sonst über Zonen-, Surplus- und Tarif-Tab verstreut wären. Enable-Flags und Zahlen-Schwellen bleiben in ihrem jeweiligen Feature-Tab — hier wird nur zugewiesen, WAS gelesen wird.\n\nBei Multi-Instanz existiert zusätzlich eine globale Vorgabe pro Sensor im Verteilungs-Tab: lokal (hier) überschreibt global, sonst gilt der globale Wert. Bleibt ein Feld sowohl hier als auch global leer, ist die jeweilige Funktion wirkungslos — auch wenn ihr Enable-Flag gesetzt ist."
     }
   },
   "col_titles": {
@@ -85,7 +90,11 @@
     "dynoff_z1":        "Zone 1",
     "dynoff_z2":        "Zone 2",
     "dynoff_ac":        "Zone AC Laden",
-    "periodic":         "Periodischer Trigger"
+    "periodic":         "Periodischer Trigger",
+    "ent_zones":        "Zonen — Nacht-Forcierung",
+    "ent_surplus":      "Surplus — Austritts-Sperre",
+    "ent_tariff":       "Tarif",
+    "ent_forecast":     "PV-Vorhersage"
   },
   "fields": {
     "p_factor":  {
@@ -176,6 +185,9 @@
       "l": "Leistungs-Vorhersage-Sensor (W, optional lokal)",
       "d": "Sensor mit der aktuell prognostizierten PV-Leistung in W (z. B. Solcast power_now). k-Einheiten (kW) werden automatisch ×1000 normalisiert. Leer lassen → bei Multi-Instanz greift der globale Wert aus dem Verteilungs-Tab. Ist am Ende kein Sensor gesetzt oder nicht verfügbar, ist die Sperre inaktiv."
     },
+    "surplus_lock_sensor_note": {
+      "d": "🔌 Sensor wird im Entitäten-Tab zugewiesen."
+    },
     "surplus_lock_factor": {
       "l": "Sperr-Faktor",
       "d": "Sperre aktiv solange Vorhersage ≥ Faktor × Hard-Limit-Z0. Höherer Faktor = mehr Sicherheitsmarge gegen Vorhersagefehler. Standard: 1,5."
@@ -216,6 +228,9 @@
       "l": "Preis-Sensor (optional lokal)",
       "d": "Sensor-Entität mit aktuellem Strompreis als numerischem Wert in ct/kWh. Leer lassen → bei Multi-Instanz greift der globale Wert aus dem Verteilungs-Tab (meist ein gemeinsamer Hausstrom-Tarif)."
     },
+    "tariff_price_sensor_note": {
+      "d": "🔌 Preis-Sensor wird im Entitäten-Tab zugewiesen."
+    },
     "tariff_cheap_threshold": {
       "l": "Günstig-Schwelle (ct/kWh)",
       "d": "Tarif-Laden startet wenn Preis diese Schwelle unterschreitet UND SOC < Ladeziel. Auch untere Grenze des Discharge-Locks."
@@ -232,6 +247,9 @@
       "l": "Teuer-Schwelle dynamisch (optional lokal)",
       "d": "Optionale input_number-Entität, überschreibt den statischen Wert wenn gesetzt und verfügbar. Leer lassen → bei Multi-Instanz greift der globale Wert aus dem Verteilungs-Tab."
     },
+    "tariff_dynamic_entities_note": {
+      "d": "🔌 Dynamische Schwellen-Entitäten (Günstig/Teuer) werden im Entitäten-Tab zugewiesen."
+    },
     "tariff_soc_target": {
       "l": "Ladeziel SOC (%)",
       "d": "Tarif-Laden stoppt wenn dieser SOC erreicht wird. Unabhängig vom SOC-Ladeziel des AC-Lade-Moduls."
@@ -246,7 +264,10 @@
     },
     "pv_forecast_sensor": {
       "l": "PV-Vorhersage heute (optional lokal)",
-      "d": "input_number- oder sensor-Entität mit einem kWh-Wert für die erwartete Solarproduktion heute (z. B. von einer Wetter-Integration oder einem Solcast-Account). Gemeinsames Feld — speist sowohl diese Tarif-Lock-Unterdrückung als auch die Surplus-Forecast-Erzwingung im Zone-0-Tab. Leer lassen → bei Multi-Instanz greift der globale Wert aus dem Verteilungs-Tab."
+      "d": "input_number- oder sensor-Entität mit einem kWh-Wert für die erwartete Solarproduktion heute (z. B. von einer Wetter-Integration oder einem Solcast-Account). Gemeinsames Feld — speist diese Tarif-Lock-Unterdrückung, die Surplus-Forecast-Erzwingung im Zone-0-Tab, UND zwischen 0–12 Uhr auch die Zone-1-Nacht-Forcierung (löst dort automatisch das Feld „PV-Vorhersage morgen“ ab, siehe dessen Beschreibung). Leer lassen → bei Multi-Instanz greift der globale Wert aus dem Verteilungs-Tab."
+    },
+    "pv_forecast_sensor_note": {
+      "d": "🔌 Sensor wird im Entitäten-Tab zugewiesen — gemeinsames Feld mit der Surplus-Forecast-Erzwingung im Zone-0-Tab."
     },
     "pv_forecast_threshold": {
       "l": "Schwellwert (kWh)",
@@ -259,6 +280,9 @@
     "zone1_force_sensor": {
       "l": "PV-Vorhersage morgen (optional lokal)",
       "d": "input_number- oder sensor-Entität mit dem erwarteten kWh-Ertrag für morgen. Vor Mitternacht wird dieser Sensor gelesen; nach Mitternacht automatisch das Feld „PV-Vorhersage heute“ (derselbe Zieltag, nur der Sensor wechselt — der „morgen“-Sensor würde sonst auf den übernächsten Tag zeigen). Leer lassen → bei Multi-Instanz greift der globale Wert aus dem Verteilungs-Tab."
+    },
+    "zone1_force_sensor_note": {
+      "d": "🔌 Sensor wird im Entitäten-Tab zugewiesen (\"PV-Vorhersage morgen\")."
     },
     "zone1_force_threshold": {
       "l": "Mindest-Ertrag (kWh)",

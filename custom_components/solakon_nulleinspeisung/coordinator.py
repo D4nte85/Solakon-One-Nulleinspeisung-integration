@@ -268,8 +268,11 @@ class SolakonCoordinator:
 
     def _update_pv_forecast_tracker(self) -> None:
         """PV-Vorhersage-heute-Listener dynamisch (de-)registrieren — gemergtes
-        Feld, gemeinsam genutzt von Surplus-Forecast-Erzwingung und
-        Tarif-Lock-Unterdrückung (vorher zwei separate Sensoren/Tracker)."""
+        Feld, gemeinsam genutzt von Surplus-Forecast-Erzwingung, Tarif-Lock-
+        Unterdrückung (vorher zwei separate Sensoren/Tracker) und zwischen
+        0–12 Uhr zusätzlich von der Zone-1-Nacht-Forcierung (_effective_zone1_force_sensor
+        fällt in diesem Fenster auf denselben Sensor zurück, eigener Tracker
+        bleibt trotzdem aktiv — zwei Listener auf derselben Entity in dem Fenster)."""
         if self._forecast_unsub:
             self._forecast_unsub()
             self._forecast_unsub = None

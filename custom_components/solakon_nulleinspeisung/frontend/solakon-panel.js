@@ -13,28 +13,30 @@ const ZONE_STYLE = {
 };
 
 const TABS = [
-  { id: "status"  },
-  { id: "pi"      },
-  { id: "zones"   },
-  { id: "surplus" },
-  { id: "ac"      },
-  { id: "tariff"  },
-  { id: "dynoff"  },
-  { id: "night"   },
-  { id: "debug"   },
+  { id: "status"   },
+  { id: "pi"       },
+  { id: "zones"    },
+  { id: "entities" },
+  { id: "surplus"  },
+  { id: "ac"       },
+  { id: "tariff"   },
+  { id: "dynoff"   },
+  { id: "night"    },
+  { id: "debug"    },
 ];
 
 // Tab icons — not translated
 const TAB_ICONS = {
-  status:  "📊",
-  pi:      "🎛️",
-  zones:   "🔋",
-  surplus: "☀️",
-  ac:      "⚡",
-  tariff:  "💹",
-  dynoff:  "📈",
-  night:   "🌙",
-  debug:   "🔧",
+  status:   "📊",
+  pi:       "🎛️",
+  zones:    "🔋",
+  entities: "🔌",
+  surplus:  "☀️",
+  ac:       "⚡",
+  tariff:   "💹",
+  dynoff:   "📈",
+  night:    "🌙",
+  debug:    "🔧",
 };
 
 // Layout: field keys + numeric constraints only — labels/descriptions in translation files
@@ -95,9 +97,40 @@ const TAB_LAYOUT = {
       {
         tk: "zones_force", icon: "🌙", color: "#4338ca",
         fields: [
-          { k: "zone1_force_enabled",   t: "bool" },
-          { k: "zone1_force_sensor",    t: "entity" },
-          { k: "zone1_force_threshold", t: "num", min: 0, max: 50, step: 0.5 },
+          { k: "zone1_force_enabled",      t: "bool" },
+          { k: "zone1_force_sensor_note",  t: "note" },
+          { k: "zone1_force_threshold",    t: "num", min: 0, max: 50, step: 0.5 },
+        ],
+      },
+    ],
+  },
+
+  entities: {
+    cols: [
+      {
+        tk: "ent_zones", icon: "🌙", color: "#4338ca",
+        fields: [
+          { k: "zone1_force_sensor", t: "entity" },
+        ],
+      },
+      {
+        tk: "ent_surplus", icon: "⛅", color: "#dc2626",
+        fields: [
+          { k: "surplus_lock_sensor", t: "entity" },
+        ],
+      },
+      {
+        tk: "ent_tariff", icon: "💹", color: "#0891b2",
+        fields: [
+          { k: "tariff_price_sensor", t: "entity", domain: "sensor" },
+          { k: "tariff_cheap_entity", t: "entity", domain: "input_number" },
+          { k: "tariff_exp_entity",   t: "entity", domain: "input_number" },
+        ],
+      },
+      {
+        tk: "ent_forecast", icon: "☀️", color: "#f59e0b",
+        fields: [
+          { k: "pv_forecast_sensor", t: "entity" },
         ],
       },
     ],
@@ -132,9 +165,9 @@ const TAB_LAYOUT = {
       {
         tk: "surplus_lock", icon: "⛅", color: "#dc2626",
         fields: [
-          { k: "surplus_lock_enabled", t: "bool" },
-          { k: "surplus_lock_sensor",  t: "entity" },
-          { k: "surplus_lock_factor",  t: "num", min: 1.0, max: 3.0, step: 0.1 },
+          { k: "surplus_lock_enabled",     t: "bool" },
+          { k: "surplus_lock_sensor_note", t: "note" },
+          { k: "surplus_lock_factor",      t: "num", min: 1.0, max: 3.0, step: 0.1 },
         ],
       },
     ],
@@ -167,18 +200,17 @@ const TAB_LAYOUT = {
 
   tariff: {
     top: [
-      { k: "tariff_enabled",      t: "bool" },
-      { k: "tariff_price_sensor", t: "entity", domain: "sensor" },
+      { k: "tariff_enabled",           t: "bool" },
+      { k: "tariff_price_sensor_note", t: "note" },
     ],
     enabledKey: "tariff_enabled",
     cols: [
       {
         tk: "tariff_thresholds", icon: "💹", color: "#0891b2",
         fields: [
-          { k: "tariff_cheap_threshold", t: "num",    min: 0, max: 100, step: 0.5 },
-          { k: "tariff_cheap_entity",    t: "entity", domain: "input_number" },
-          { k: "tariff_exp_threshold",   t: "num",    min: 0, max: 100, step: 0.5 },
-          { k: "tariff_exp_entity",      t: "entity", domain: "input_number" },
+          { k: "tariff_cheap_threshold",     t: "num", min: 0, max: 100, step: 0.5 },
+          { k: "tariff_exp_threshold",       t: "num", min: 0, max: 100, step: 0.5 },
+          { k: "tariff_dynamic_entities_note", t: "note" },
         ],
       },
       {
@@ -191,9 +223,9 @@ const TAB_LAYOUT = {
       {
         tk: "tariff_forecast", icon: "☀️", color: "#f59e0b",
         fields: [
-          { k: "pv_forecast_enabled",   t: "bool" },
-          { k: "pv_forecast_sensor",    t: "entity" },
-          { k: "pv_forecast_threshold", t: "num", min: 0, max: 50, step: 0.5 },
+          { k: "pv_forecast_enabled",     t: "bool" },
+          { k: "pv_forecast_sensor_note", t: "note" },
+          { k: "pv_forecast_threshold",   t: "num", min: 0, max: 50, step: 0.5 },
         ],
       },
     ],
@@ -608,6 +640,7 @@ class SolakonPanel extends HTMLElement {
         .entity-dot.warn { background: #f59e0b; }
         .entity-dot.err  { background: #dc2626; }
         .desc { font-size: .78em; color: var(--secondary-text-color, #888); line-height: 1.5; }
+        .field-note .desc { font-style: italic; }
 
         /* ── Status tab ──────────────────────────────────────────────────── */
         .zone-banner { padding: 12px; border-radius: 8px; color: #fff; font-weight: 600; font-size: 1.1em; margin-bottom: 12px; text-align: center; }
@@ -845,6 +878,9 @@ class SolakonPanel extends HTMLElement {
         dot.className = `entity-dot ${this._entityDotClass(inp.value)}`;
       });
       inp.addEventListener("change", () => { this._dirty[f.k] = inp.value; this._updateSaveBar(); });
+    } else if (f.t === "note") {
+      div.className = "field field-note";
+      div.innerHTML = `<div class="desc">${desc}</div>`;
     }
     return div;
   }
