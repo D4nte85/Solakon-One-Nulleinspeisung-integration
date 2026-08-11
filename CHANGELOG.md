@@ -5,6 +5,8 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+## [2.2.0] – 2026-08-11
+
 ### Hinzugefügt
 - Neuer Verteilungs-Modus „SOC-Umschaltung" (Issue #14): Statt alle Instanzen parallel gewichtet zu entladen, entlädt immer nur eine Instanz exklusiv, bis ihr SOC seit Übernahme um eine einstellbare Divergenz-Schwelle (Prozentpunkte, Standard 5) gefallen ist — dann übernimmt die Instanz mit dem höchsten verbleibenden SOC. Baut auf der in v2.1.9 gefixten Gruppen-Sollwert-PI-Basis (Issue #19) auf, die harte Anteilswechsel (0 % ↔ 100 %) sauber und ohne Nachlauf verarbeitet. Aktive Instanz + ihr Start-SOC sind Pool-weit über einen eigenen Store persistiert, unabhängig vom `_dist_config`-Store der Nutzereinstellungen, und überstehen HA-Neustarts. Zone-3-Sicherheitsstopp (Fall B/C) übergibt automatisch an die nächste Instanz, da die gestoppte Instanz den Modus-1-Pool verlässt. Zone 0 (Überschuss-Einspeisung) hat absoluten Vorrang vor der regulären Entladung anderer Instanzen — konsistent mit dem bestehenden Zone-0-Vorrang gegenüber AC-/Tarif-Laden derselben Instanz: eine einzelne Zone-0-Instanz übernimmt bedingungslos und sofort die Führung; sind mehrere Instanzen gleichzeitig in Zone 0, teilen sie sich den Anteil gleichmäßig statt exklusiv (Wechselrichterverlust bei diesen kleinen Leistungen vernachlässigbar, vermeidet eine 0-W-Zwangslage mit Abschaltrisiko). Das gemeinsame Leistungslimit (`global_max_power`) bleibt dabei unverändert über die reguläre `_compute_distribution`-Formel gewahrt
 
