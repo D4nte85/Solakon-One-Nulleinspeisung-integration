@@ -1204,8 +1204,9 @@ class SolakonPanel extends HTMLElement {
       return;
     }
 
-    const mode      = this._distVal("distribution_mode") ?? "equal";
-    const globalMax = this._distVal("global_max_power")  ?? 800;
+    const mode          = this._distVal("distribution_mode")     ?? "equal";
+    const globalMax     = this._distVal("global_max_power")      ?? 800;
+    const socSwitchDiv  = this._distVal("soc_switch_divergence") ?? 5;
 
     // Instanzübergreifende Entity-Picker: jede Instanz
     // kann lokal überschreiben (Zonen-/Tarif-Tab), sonst greift dieser Wert.
@@ -1270,6 +1271,7 @@ class SolakonPanel extends HTMLElement {
               <option value="equal"${mode === "equal" ? " selected" : ""}>${dt.mode_equal || "Equal"}</option>
               <option value="soc"${mode === "soc" ? " selected" : ""}>${dt.mode_soc || "SOC-weighted"}</option>
               <option value="capacity"${mode === "capacity" ? " selected" : ""}>${dt.mode_capacity || "Capacity-weighted"}</option>
+              <option value="soc_switch"${mode === "soc_switch" ? " selected" : ""}>${dt.mode_soc_switch || "SOC-switching"}</option>
             </select>
           </div>
         </div>
@@ -1280,6 +1282,17 @@ class SolakonPanel extends HTMLElement {
         <div class="col-body">
           <div class="desc" style="margin-bottom:8px">${dt.cap_sensor_desc || ""}</div>
           ${instCards}
+        </div>
+      </div>
+
+      <div class="col-card top-item" style="${mode !== "soc_switch" ? "opacity:.4;pointer-events:none" : ""}">
+        <div class="col-header" style="background:#ea580c">${dt.soc_switch_hdr || "🔀"}</div>
+        <div class="col-body">
+          <div class="field">
+            <label>${dt.soc_switch_divergence_lbl || ""}</label>
+            <div class="desc">${dt.soc_switch_divergence_desc || ""}</div>
+            <input type="number" min="1" max="50" step="1" value="${socSwitchDiv}" data-dist-key="soc_switch_divergence"/>
+          </div>
         </div>
       </div>
 

@@ -88,6 +88,22 @@ w_i       = nutzbar_i / Σ nutzbar_j
 nutzbar_i = (SOC_i − Zone-3-Schwelle_i) / 100 × Kapazität_kWh_i
 w_i       = nutzbar_i / Σ nutzbar_j
 
+# SOC-Umschaltung: genau eine Instanz aktiv (w_i = 1), alle anderen w_i = 0.
+# Aktive Instanz bleibt aktiv, bis ihr SOC seit Übernahme um die
+# Divergenz-Schwelle gefallen ist — dann übernimmt die Instanz mit dem
+# höchsten verbleibenden SOC (Rotation, nie zweimal in Folge dieselbe).
+# Zustand (aktive Instanz + Start-SOC) ist Pool-weit persistiert, übersteht
+# HA-Neustarts.
+# Ausnahme Zone 0 (Überschuss-Einspeisung): hat absoluten Vorrang vor der
+# regulären Entladung anderer Instanzen (analog zum bestehenden Zone-0-
+# Vorrang gegenüber AC-/Tarif-Laden derselben Instanz) — eine einzelne
+# Zone-0-Instanz übernimmt sofort und bedingungslos die Führung. Sind
+# mehrere Instanzen gleichzeitig in Zone 0, teilen sie sich w_i = 1/n
+# gleichmäßig statt exklusiv — der Wechselrichterverlust ist bei diesen
+# kleinen Leistungen vernachlässigbar, eine 0-W-Zwangslage wird vermieden.
+# Das gemeinsame Leistungslimit bleibt dabei über dieselbe Formel unten
+# gewahrt (kein Sonderpfad für Zone 0).
+
 # Ergebnis pro Instanz:
 allocated_power_i = total_power × w_i   → effektives Hard-Limit in Zone 1 / 2
 error_share_i     = w_i                 → Anteil am Netzfehler im normalen PI-Regler
@@ -117,8 +133,9 @@ Im Panel wird bei mehreren Instanzen ein zusätzlicher **Verteilungs-Tab** einge
 | Parameter | Beschreibung |
 |-----------|-------------|
 | Gesamte Max. Ausgangsleistung (W) | Absolute Obergrenze aller Instanzen zusammen |
-| Verteilungs-Modus | Gleichverteilung / SOC-gewichtet / Kapazitätsgewichtet — drei sich gegenseitig ausschließende Optionen, siehe Formeln oben |
+| Verteilungs-Modus | Gleichverteilung / SOC-gewichtet / Kapazitätsgewichtet / SOC-Umschaltung — vier sich gegenseitig ausschließende Optionen, siehe Formeln oben |
 | Kapazitätssensor (pro Instanz) | Nur bei Modus „Kapazitätsgewichtet" wirksam (Feld sonst ausgegraut). `sensor.solakon_one_batteriekapazitat`. Der Validierungspunkt neben dem Feld zeigt live, ob die Entity existiert und einen Wert liefert (grün/gelb/rot) |
+| Divergenz-Schwelle (Prozentpunkte) | Nur bei Modus „SOC-Umschaltung" wirksam. Die aktive Instanz entlädt exklusiv, bis ihr SOC um diesen Wert gefallen ist, dann Übergabe an die Instanz mit dem höchsten verbleibenden SOC. Standard 5 |
 
 **Globale Sensoren:** Zusätzliche Karte im Verteilungs-Tab für Sensoren, die typischerweise für den ganzen Haushalt gelten statt pro Solakon-Instanz zu unterscheiden — eine Wetter-/Solcast-Vorhersage, ein Stromtarif. Jede Instanz kann im jeweiligen Tab (Überschuss/Zonen/Tarif) optional lokal überschreiben; ist dort nichts gesetzt, gilt der globale Wert. Anders als der Kapazitätssensor (real pro Instanz unterschiedlich, keine sinnvolle globale Vorgabe) sind das reine Entity-Picker ohne eigene Enable-Flags oder Schwellen — die bleiben ausschließlich lokal pro Instanz.
 

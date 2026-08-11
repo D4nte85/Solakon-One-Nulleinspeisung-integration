@@ -1346,6 +1346,12 @@ class SolakonCoordinator:
         if mode == "equal":
             return eq
 
+        if mode == "soc_switch":
+            shares = self._soc_switch_shares(active)
+            if shares is None:
+                return eq
+            return shares.get(self.entry.entry_id, 0.0)
+
         if mode == "capacity":
             def _cap_kwh(eid: str, c) -> float | None:
                 cap_s = str(dist.get(f"inst_{eid}_capacity_sensor", ""))
@@ -1386,6 +1392,82 @@ class SolakonCoordinator:
 
         total_soc = sum(soc_weights.values())
         return soc_weights.get(self.entry.entry_id, 0.0) / total_soc if total_soc > 0 else eq
+
+    def _soc_switch_shares(self, active: dict[str, "SolakonCoordinator"]) -> dict[str, float] | None:
+        """Anteile für Modus `soc_switch`, ein Eintrag je Instanz in `active`.
+
+        Regulärer Fall (keine oder eine Zone-0-Instanz im Pool): exakt eine Instanz
+        erhält vollen Anteil, alle anderen 0 — bis ihr SOC seit Übernahme um
+        `soc_switch_divergence` Prozentpunkte gefallen ist, dann übernimmt die Instanz
+        mit dem höchsten SOC unter den übrigen (Rotation, nie zweimal in Folge dieselbe).
+        Zustand ist Pool-weit über einen eigenen Store persistiert (`_soc_switch_state`)
+        — getrennt von `_dist_config`, damit ein Speichern der Nutzereinstellungen im
+        Verteilungs-Tab diesen Laufzeitzustand nicht überschreibt.
+
+        Zone 0 (Überschuss-Einspeisung) hat absoluten Vorrang vor der regulären
+        Entladung anderer Instanzen — konsistent mit dem bestehenden Zone-0-Vorrang
+        gegenüber AC-/Tarif-Laden derselben Instanz. Eine einzelne Zone-0-Instanz
+        übernimmt bedingungslos und sofort die Führung, ohne Divergenz-Wartezeit (das
+        gemeinsame Leistungslimit bleibt dabei unverändert über die reguläre
+        `_compute_distribution`-Formel gewahrt, kein Bypass). Sind mehrere Instanzen
+        gleichzeitig in Zone 0 (z. B. beide Akkus voll bei gemeinsamem PV-Überschuss),
+        teilen sie sich den Anteil gleichmäßig statt exklusiv — bei den kleinen Zone-0-
+        Leistungen ist der zusätzliche Wechselrichterverlust vernachlässigbar, und eine
+        0-W-Zwangslage mit Abschaltrisiko für eine der beiden wird so vermieden.
+
+        `None`: eine Fremdinstanz-SOC ist unsicher (unknown/unavailable) — Aufrufer
+        weicht dann auf Gleichverteilung aus statt mit einem falschen Wert weiterzurechnen.
+        """
+        socs: dict[str, float] = {}
+        for eid, c in active.items():
+            soc_eid = c.entry.data.get(CONF_SOC_SENSOR, "")
+            if not c._entity_ok(soc_eid):
+                return None
+            socs[eid] = c._flt(soc_eid, 0)
+
+        zone0 = {eid for eid, c in active.items() if c.surplus_active}
+
+        if len(zone0) > 1:
+            n = len(zone0)
+            return {eid: (1.0 / n if eid in zone0 else 0.0) for eid in socs}
+
+        state = self.hass.data.get(f"{DOMAIN}_soc_switch_state")
+        if state is None:
+            state = {"active_id": None, "start_soc": None}
+            self.hass.data[f"{DOMAIN}_soc_switch_state"] = state
+
+        dist = self.hass.data.get(f"{DOMAIN}_dist_config") or {}
+        divergence = float(dist.get("soc_switch_divergence", 5))
+
+        active_id = state.get("active_id")
+        changed = False
+
+        if zone0:
+            z0_leader = next(iter(zone0))
+            if active_id != z0_leader:
+                active_id, changed = z0_leader, True
+                state["start_soc"] = socs[active_id]
+        elif active_id not in socs:
+            active_id = max(socs, key=socs.get)
+            state["start_soc"] = socs[active_id]
+            changed = True
+        elif state.get("start_soc") is None:
+            state["start_soc"] = socs[active_id]
+            changed = True
+        elif state["start_soc"] - socs[active_id] >= divergence:
+            remaining = {eid: s for eid, s in socs.items() if eid != active_id}
+            active_id = max(remaining, key=remaining.get) if remaining else active_id
+            state["start_soc"] = socs[active_id]
+            changed = True
+
+        if changed:
+            state["active_id"] = active_id
+            store = self.hass.data.get(f"{DOMAIN}_soc_switch_store")
+            if store is not None:
+                snapshot = dict(state)
+                store.async_delay_save(lambda: snapshot, 2)
+
+        return {eid: (1.0 if eid == active_id else 0.0) for eid in socs}
 
     def _compute_distribution(self) -> tuple[float, float | None]:
         """Fehler-Anteil + zugeteilte Leistung für Nulleinspeisung-Instanzen (Modus '1').

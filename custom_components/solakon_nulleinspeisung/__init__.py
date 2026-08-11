@@ -22,6 +22,9 @@ from .const import (
 STORAGE_VERSION_DIST = 1
 STORAGE_KEY_DIST     = f"{DOMAIN}_distribution"
 
+STORAGE_VERSION_SOC_SWITCH = 1
+STORAGE_KEY_SOC_SWITCH     = f"{DOMAIN}_soc_switch_state"
+
 _LOGGER = logging.getLogger(__name__)
 PANEL_JS_URL = f"/{DOMAIN}/panel.js"
 
@@ -212,6 +215,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if migrated != stored:
             await store.async_save(migrated)
 
+    # SOC-Switch-Laufzeitzustand (Modus `soc_switch`) — eigener Store, getrennt von
+    # _dist_store: das sind Nutzereinstellungen, die beim Speichern im Verteilungs-Tab
+    # komplett überschrieben werden; der hier gehaltene Zustand (welche Instanz gerade
+    # exklusiv entlädt) ist Engine-Laufzeitzustand und darf davon nicht betroffen sein.
+    if not hass.data.get(f"{DOMAIN}_soc_switch_store"):
+        from homeassistant.helpers.storage import Store
+        soc_switch_store = Store(hass, STORAGE_VERSION_SOC_SWITCH, STORAGE_KEY_SOC_SWITCH)
+        hass.data[f"{DOMAIN}_soc_switch_store"] = soc_switch_store
+        hass.data[f"{DOMAIN}_soc_switch_state"] = {"active_id": None, "start_soc": None}
+        stored_switch = await soc_switch_store.async_load() or {}
+        hass.data[f"{DOMAIN}_soc_switch_state"] = {
+            "active_id": stored_switch.get("active_id"),
+            "start_soc": stored_switch.get("start_soc"),
+        }
+
     # WebSocket-Commands nur einmal registrieren
     if not hass.data.get(f"{DOMAIN}_ws_registered"):
         websocket_api.async_register_command(hass, _ws_get_all_instances)
@@ -272,6 +290,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             hass.data.pop(DOMAIN, None)
             hass.data.pop(f"{DOMAIN}_dist_store", None)
             hass.data.pop(f"{DOMAIN}_dist_config", None)
+            hass.data.pop(f"{DOMAIN}_soc_switch_store", None)
+            hass.data.pop(f"{DOMAIN}_soc_switch_state", None)
             hass.data.pop(f"{DOMAIN}_panel_registered", None)
             hass.data.pop(f"{DOMAIN}_ws_registered", None)
 
@@ -286,7 +306,11 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
 
 DIST_DEFAULTS = {
     "global_max_power":  800,
-    "distribution_mode": "equal",  # equal | soc | capacity
+    "distribution_mode": "equal",  # equal | soc | capacity | soc_switch
+    # Divergenz-Schwelle (Prozentpunkte) für Modus `soc_switch`: exklusiv
+    # aktive Instanz gibt ab, sobald ihr SOC seit Aktivierung um diesen Wert
+    # gefallen ist — Rotation an die Instanz mit dem höchsten verbleibenden SOC.
+    "soc_switch_divergence": 5,
     # Instanzübergreifende Sensor-Vorgaben — jede Instanz kann
     # diese optional lokal überschreiben (S_PV_FORECAST_SENSOR, S_ZONE1_FORCE_SENSOR,
     # S_SURPLUS_LOCK_SENSOR, S_TARIFF_PRICE_SENSOR, S_TARIFF_CHEAP_ENTITY,
