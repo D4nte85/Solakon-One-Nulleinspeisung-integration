@@ -332,6 +332,13 @@ Der Lademodus verwendet einen **eigenen invertierten PI-Regler**: `raw_error = (
 
 > Der `Fehler-Anteil` hier ist [Pool 2](#multi-instancing) — unabhängig von der Nulleinspeisungs-Verteilung. Laden mehrere Instanzen gleichzeitig, teilen sie sich denselben Netzüberschuss über diesen eigenen Pool, statt sich gegenseitig zu überschätzen.
 
+**Ausgangsbasis für den AC-PI-Stelleingriff:** Wie beim normalen Nulleinspeisungs-PI baut die Korrektur nicht auf dem eigenen zuletzt kommandierten Wert dieser Instanz auf, sondern auf ihrem proportionalen Anteil am Gruppen-Sollwert:
+```
+ac_power_base_i = (Σ kommandierte Leistung aller gleichzeitig ladenden Instanzen) × Fehler-Anteil_i
+neuer_output_i  = ac_power_base_i + PI-Korrektur
+```
+Einzelbetrieb bzw. nur eine ladende Instanz: identisch zum eigenen kommandierten Wert.
+
 | Parameter | Beschreibung | Empfehlung |
 |-----------|-------------|------------|
 | Aktivieren | Ein/Aus-Schalter | — |

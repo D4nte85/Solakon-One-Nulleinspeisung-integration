@@ -999,8 +999,9 @@ class SolakonCoordinator:
         elif self.ac_charge_active:
             ac_grid_err = grid - ac_offset
             if abs(ac_grid_err) > tolerance:
+                ac_power_base = self._total_commanded_ac_power() * ac_error_share
                 new_pw = self._pi_calculate(
-                    grid, current_power, ac_offset, ac_power_limit,
+                    grid, ac_power_base, ac_offset, ac_power_limit,
                     tolerance, ac_p, ac_i, ac_charge_mode=True,
                     error_share=ac_error_share,
                 )
@@ -1449,6 +1450,23 @@ class SolakonCoordinator:
             c for c in all_coords.values()
             if c.settings.get(S_REGULATION_ENABLED, False)
             and c._str(c.entry.data.get(CONF_MODE_SELECT, "")) == MODE_DISCHARGE
+        ]
+        if len(active) <= 1:
+            return self._flt(self.entry.data.get(CONF_ACTIVE_POWER, ""))
+        return sum(
+            c._flt(c.entry.data.get(CONF_ACTIVE_POWER, ""))
+            for c in active
+        )
+
+    def _total_commanded_ac_power(self) -> float:
+        """Summe der von allen gleichzeitig AC-ladenden Instanzen kommandierten Leistung.
+
+        Einzelbetrieb bzw. keine weitere ladende Instanz: eigener kommandierter Wert.
+        """
+        all_coords = self.hass.data.get(DOMAIN, {})
+        active = [
+            c for c in all_coords.values()
+            if c.settings.get(S_REGULATION_ENABLED, False) and c.ac_charge_active
         ]
         if len(active) <= 1:
             return self._flt(self.entry.data.get(CONF_ACTIVE_POWER, ""))
