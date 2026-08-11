@@ -137,6 +137,7 @@ class SolakonCoordinator:
             self.surplus_active = bool(stored.get("surplus_active", False))
             self.ac_charge_active = bool(stored.get("ac_charge_active", False))
             self.tariff_charge_active = bool(stored.get("tariff_charge_active", False))
+            self._solar_zero_entry_armed = bool(stored.get("solar_zero_entry_armed", True))
             _LOGGER.debug("Solakon: Einstellungen aus Speicher geladen")
         else:
             self.settings = SETTINGS_DEFAULTS.copy()
@@ -323,6 +324,7 @@ class SolakonCoordinator:
             "surplus_active":      self.surplus_active,
             "ac_charge_active":    self.ac_charge_active,
             "tariff_charge_active": self.tariff_charge_active,
+            "solar_zero_entry_armed": self._solar_zero_entry_armed,
         }
 
     # ── Entity-Listener-Pattern ──────────────────────────────────────────────
@@ -643,7 +645,7 @@ class SolakonCoordinator:
 
         self._timer_toggled_in_cycle = False
 
-        _prev_flags = (self.cycle_active, self.surplus_active, self.ac_charge_active, self.tariff_charge_active)
+        _prev_flags = (self.cycle_active, self.surplus_active, self.ac_charge_active, self.tariff_charge_active, self._solar_zero_entry_armed)
 
         # ── 1. Sensor-Werte lesen ────────────────────────────────────────────
         # Kernsensoren müssen verfügbar sein — 0.0-Fallback würde Regler fehlleiten
@@ -972,7 +974,7 @@ class SolakonCoordinator:
         # ── 7. PI-Gate ───────────────────────────────────────────────────────
         if mode not in (MODE_DISCHARGE, MODE_AC_CHARGE):
             self._update_zone_display(soc, zone1_limit, zone3_limit, mode)
-            if (self.cycle_active, self.surplus_active, self.ac_charge_active, self.tariff_charge_active) != _prev_flags:
+            if (self.cycle_active, self.surplus_active, self.ac_charge_active, self.tariff_charge_active, self._solar_zero_entry_armed) != _prev_flags:
                 self._store.async_delay_save(self._store_data, 5)
             self.notify_listeners()
             return
@@ -1032,7 +1034,7 @@ class SolakonCoordinator:
 
         # ── 10. Display + Flag-Persistenz ────────────────────────────────────
         self._update_zone_display(soc, zone1_limit, zone3_limit, mode)
-        if (self.cycle_active, self.surplus_active, self.ac_charge_active, self.tariff_charge_active) != _prev_flags:
+        if (self.cycle_active, self.surplus_active, self.ac_charge_active, self.tariff_charge_active, self._solar_zero_entry_armed) != _prev_flags:
             self._store.async_delay_save(self._store_data, 5)
         self.notify_listeners()
 
@@ -1073,6 +1075,7 @@ class SolakonCoordinator:
             # Zone nach Overlay-Ende aus dem SOC ableiten
             self.cycle_active = soc > zone1
             self.integral = 0.0
+            await self._set_output(0)
             self._set_last_action("Zone 0: Surplus beendet")
             return "0B"
 

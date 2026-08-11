@@ -5,6 +5,10 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+### Behoben
+- Fall 0B (Surplus Ende) setzte den Output anders als alle übrigen Zonenwechsel-Falls (B/C/F/G/H) nicht explizit auf 0 zurück — der Zone-0-Wert (nahe Hard-Limit-Z0) blieb bis zur nächsten PI-Korrektur stehen. Im Multi-Instanz-Betrieb ein Einstiegspunkt für die in Issue #19 gemeldete Verteilungs-Drift (Fall-G/#16 hatte dasselbe Muster). `_set_output(0)` ergänzt
+- Latch-Flag `_solar_zero_entry_armed` (Zone-0-`PV = 0`-Entprellung, Issue #17) war reiner In-Memory-Zustand und wurde bei jedem HA-Neustart wieder auf `True` initialisiert, unabhängig vom tatsächlichen PV-Zustand — konnte den in #17 gefixten nächtlichen Oszillations-Loop einmalig zurückbringen, wenn ein Neustart ins Beobachtungsfenster fiel (Issue #20). Flag wird jetzt über die bestehende `Store`-Infrastruktur persistiert; dafür auch in den bisher auf die vier Haupt-Flags beschränkten Speicher-Trigger-Vergleich (`_prev_flags`) aufgenommen, da es sich unabhängig von `cycle_active`/`surplus_active`/etc. ändern kann
+
 ## [2.1.8] – 2026-07-29
 
 ### Hinzugefügt
