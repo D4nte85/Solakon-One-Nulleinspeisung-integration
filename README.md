@@ -101,11 +101,25 @@ w_i       = nutzbar_i / Σ nutzbar_j
 # mehrere Instanzen gleichzeitig in Zone 0, teilen sie sich w_i = 1/n
 # gleichmäßig statt exklusiv — der Wechselrichterverlust ist bei diesen
 # kleinen Leistungen vernachlässigbar, eine 0-W-Zwangslage wird vermieden.
-# Das gemeinsame Leistungslimit bleibt dabei über dieselbe Formel unten
-# gewahrt (kein Sonderpfad für Zone 0).
+# Verlässt die aktive Instanz Zone 0 wieder und geht in die reguläre
+# Rotation über, wird die Divergenz-Baseline (Start-SOC) auf den aktuellen
+# SOC neu verankert — sonst zählt der während Zone 0 bereits verbrauchte
+# SOC-Abstand gegen das Rotationsbudget und löst den nächsten Wechsel
+# vorzeitig aus. Das gemeinsame Leistungslimit bleibt dabei über dieselbe
+# Formel unten gewahrt (kein Sonderpfad für Zone 0).
 
-# Ergebnis pro Instanz:
-allocated_power_i = total_power × w_i   → effektives Hard-Limit in Zone 1 / 2
+# Ergebnis pro Instanz — Wasserfüllverfahren statt reiner Proportionalrechnung:
+# 1. roh_i = total_power × w_i
+# 2. Übersteigt roh_i das lokale Hard-Limit einer Instanz (Zone 0: Hard-Limit-Z0,
+#    sonst Hard-Limit-Z1), wird sie auf ihr Hard-Limit gekappt und aus der Runde
+#    genommen; der ungenutzte Rest von total_power wird unter den verbleibenden
+#    Instanzen erneut proportional zu ihrem w_i aufgeteilt (iterativ, bis kein
+#    Rest mehr verteilbar ist oder alle am Limit sind).
+# Ohne Kappung (gleich dimensionierte Instanzen) identisch zu roh_i. Mit
+# heterogenen Hard-Limits verhindert das, dass eine schwächere Instanz
+# ungenutzten Spielraum verfallen lässt statt ihn an Instanzen mit Reserve
+# weiterzureichen — sonst würde der Pool total_power strukturell nie erreichen.
+allocated_power_i = wasserfill(total_power, {w_1, w_2, …}, {hard_limit_1, hard_limit_2, …})
 error_share_i     = w_i                 → Anteil am Netzfehler im normalen PI-Regler
 
 # Pool 2 — AC Laden (nur Instanzen aktuell mit ac_charge_active):
@@ -118,6 +132,8 @@ error_share_i     = w_i                 → Anteil am Netzfehler im normalen PI-
 Eine Instanz, die gerade in Modus `'0'` (idle) steht, trägt zu keinem der beiden Pools bei und bekommt `error_share = 0` sowie `allocated_power = None` (statisches Hard-Limit gilt unverändert). Eine Instanz, die aktuell AC lädt, verwässert **nicht** den Nulleinspeisungs-Pool der anderen — und umgekehrt beeinflusst eine nulleinspeisende Instanz nicht den AC-Lade-Pool. Bei nur einer aktiven Instanz je Pool bleibt `w_i = 1,0`.
 
 > **Batteriekapazität (kWh):** Nur bei Verteilungs-Modus „Kapazitätsgewichtet" relevant. Fehlt der Sensor bei irgendeiner aktiven Instanz, wird die Kapazität für alle neutral (1.0) gewertet — die Gewichtung entspricht dann „SOC-gewichtet". Sinnvoll wenn die Instanzen Batterien unterschiedlicher Kapazität steuern.
+
+> **Degradations-Warnung:** Ist bei Modus „SOC-gewichtet", „Kapazitätsgewichtet" oder „SOC-Umschaltung" der SOC- oder Kapazitätssensor **einer fremden** Instanz gerade `unknown`/`unavailable` (z. B. kurz nach einem HA-Neustart der anderen Instanz), fällt der gesamte Pool für diesen Regelzyklus automatisch auf Gleichverteilung zurück (bzw. „Kapazitätsgewichtet" auf „SOC-gewichtet"). Das erscheint als Meldung im Status-/Fehlerfeld jeder betroffenen Instanz, bis der Sensor wieder verfügbar ist — kein stiller Fallback.
 
 **Ausgangsbasis für den PI-Stelleingriff (Pool 1):** Im normalen Nulleinspeisungs-PI baut die Korrektur nicht auf dem eigenen zuletzt kommandierten Wert dieser Instanz auf, sondern auf ihrem proportionalen Anteil am Gruppen-Sollwert:
 ```
@@ -571,7 +587,13 @@ Home Assistant vollständig neu starten (nicht nur neu laden). HACS-Download-Sta
 Seltene Race Condition beim parallelen Setup mehrerer Config-Entries, behoben (siehe CHANGELOG). Tückisch: die betroffene Instanz friert dabei auf ihrem letzten Wert ein, statt einen sichtbaren Fehlerzustand zu zeigen — im Dashboard wirkt sie gesund, ist aber ungeregelt. Workaround bei betroffener Version: den fehlgeschlagenen Config-Entry manuell neu laden (Einstellungen → Geräte & Dienste → Solakon-Instanz → drei Punkte → Neu laden).
 
 **SOC der Instanzen läuft bei mehreren Solakons auseinander**
-Bei unterschiedlich großen Batterien im Verteilungs-Tab prüfen, dass der Verteilungs-Modus wirklich auf **„Kapazitätsgewichtet"** steht (nicht „SOC-gewichtet" — das gewichtet bewusst rein nach Prozentpunkten, ohne Kapazität, und lässt unterschiedlich große Batterien dauerhaft auseinanderlaufen). Danach die Kapazitätssensoren prüfen — ein **roter Validierungspunkt** neben dem Feld bedeutet, dass die eingetragene Entity nicht existiert (häufig ein Tippfehler in der Entity-ID). Ohne gültigen Kapazitätswert bei allen Instanzen degradiert „Kapazitätsgewichtet" automatisch zu reiner SOC-%-Gewichtung.
+Bei unterschiedlich großen Batterien im Verteilungs-Tab prüfen, dass der Verteilungs-Modus wirklich auf **„Kapazitätsgewichtet"** steht (nicht „SOC-gewichtet" — das gewichtet bewusst rein nach Prozentpunkten, ohne Kapazität, und lässt unterschiedlich große Batterien dauerhaft auseinanderlaufen). Danach die Kapazitätssensoren prüfen — ein **roter Validierungspunkt** neben dem Feld bedeutet, dass die eingetragene Entity nicht existiert (häufig ein Tippfehler in der Entity-ID). Ohne gültigen Kapazitätswert bei allen Instanzen degradiert „Kapazitätsgewichtet" automatisch zu reiner SOC-%-Gewichtung — das erscheint jetzt als Meldung im Status-/Fehlerfeld der betroffenen Instanzen, statt still zu bleiben.
+
+**Pool erreicht „Gesamte Max. Ausgangsleistung" nicht, obwohl der Verbrauch das rechtfertigen würde**
+Prüfen ob die Instanzen unterschiedliche Hard-Limits (Zonen-Tab, Zone 0/1) haben — eine Instanz mit niedrigerem Hard-Limit als ihr rechnerischer Verteilungs-Anteil wird auf ihr Hard-Limit gekappt. Der ungenutzte Rest wird per Wasserfüllverfahren automatisch an Instanzen mit Reserve weitergereicht (siehe [Automatische Fehleraufteilung](#automatische-fehleraufteilung-und-leistungsverteilung)) — bleibt der Pool trotzdem unter dem Ziel, reicht die *Summe* der Hard-Limits selbst nicht aus, unabhängig vom Verteilungs-Modus.
+
+**SOC-Umschaltung rotiert häufiger als die eingestellte Divergenz-Schwelle erwarten lässt**
+Normal, wenn eine Instanz zwischendurch in Zone 0 (Überschuss-Einspeisung) war: die Rotations-Baseline wird beim Verlassen von Zone 0 auf den aktuellen SOC neu verankert, der während Zone 0 verbrauchte SOC-Abstand zählt also nicht doppelt gegen das Budget. Rotiert es trotzdem spürbar häufiger als erwartet, Divergenz-Schwelle im Verteilungs-Tab erhöhen.
 
 ---
 

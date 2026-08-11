@@ -87,6 +87,11 @@ class SolakonCoordinator:
 
         # Multi-Instanz: zugeteiltes Leistungslimit (None = Einzelbetrieb)
         self.allocated_power: float | None = None
+        # Transienter Warnkanal: von _all_shares() gesetzt wenn der Verteilungsmodus
+        # wegen eines fehlenden/ungültigen Fremdinstanz-Sensors degradiert (z. B.
+        # capacity → soc, soc/soc_switch → equal) — wird im selben Zyklus sofort
+        # nach dem jeweiligen Aufruf in soft_errors übernommen, siehe _run_regulation_cycle.
+        self._dist_warning: str = ""
 
         # Vorheriger actual-Wert (für Surplus-Einstiegs-Entprellung)
         self._prev_actual: float = 0.0
@@ -728,15 +733,19 @@ class SolakonCoordinator:
                 except (ValueError, TypeError):
                     pass
 
-        error_share, allocated_power = self._compute_distribution()
-        self.allocated_power = allocated_power
-        effective_hard    = min(int(allocated_power), hard_limit_z0) if allocated_power is not None else hard_limit_z0
-        effective_hard_z1 = min(int(allocated_power), hard_limit_z1) if allocated_power is not None else hard_limit_z1
-
         # Sammelt Meldungen zu Sensor-gated Features, die trotz aktivem Enable-Flag
         # wegen fehlendem/ungültigem Sensor wirkungslos bleiben — sonst scheitern sie
         # still, ohne dass der Nutzer einen Hinweis bekommt (siehe last_error unten).
+        # Vor _compute_distribution() angelegt, damit eine dort erkannte Verteilungs-
+        # Degradation (Sensor einer Fremdinstanz fehlt) ebenfalls sichtbar wird.
         soft_errors: list[str] = []
+
+        error_share, allocated_power = self._compute_distribution()
+        self.allocated_power = allocated_power
+        if self._dist_warning:
+            soft_errors.append(self._dist_warning)
+        effective_hard    = min(int(allocated_power), hard_limit_z0) if allocated_power is not None else hard_limit_z0
+        effective_hard_z1 = min(int(allocated_power), hard_limit_z1) if allocated_power is not None else hard_limit_z1
 
         pv_forecast_enabled = bool(s.get(S_PV_FORECAST_ENABLED, False))
         pv_forecast_threshold = float(s.get(S_PV_FORECAST_THRESHOLD, 0.0))
@@ -987,6 +996,9 @@ class SolakonCoordinator:
         # Eigener Pool für AC-Laden — erst nach den Falls berechnet, damit ein in
         # diesem Zyklus per Fall G neu gesetztes ac_charge_active bereits zählt.
         ac_error_share = self._compute_ac_distribution()
+        if self._dist_warning:
+            soft_errors.append(self._dist_warning)
+            self.last_error = " • ".join(soft_errors)
 
         # ── PI-Pfade ─────────────────────────────────────────────────────────
         if self.surplus_active:
@@ -1331,26 +1343,46 @@ class SolakonCoordinator:
         `active` ist die Menge der aktuell gleichrangig teilnehmenden Instanzen
         (Pool-spezifisch — z. B. alle in Modus '1', oder alle mit aktivem AC-Laden).
         Ist diese Instanz nicht Teil von `active`, bekommt sie keinen Anteil (0.0).
+        Dünner Wrapper um _all_shares() für den (häufigeren) Fall, dass nur der
+        eigene Anteil gebraucht wird (z. B. AC-Lade-Pool ohne Hard-Limit-Verteilung).
         """
         if self.entry.entry_id not in active:
             return 0.0
+        return self._all_shares(active).get(self.entry.entry_id, 0.0)
 
-        n  = len(active)
+    def _all_shares(self, active: dict[str, "SolakonCoordinator"]) -> dict[str, float]:
+        """SOC-/kapazitätsgewichteter oder gleichverteilter Fehler-Anteil für ALLE
+        Instanzen in `active` — Grundlage sowohl für _weighted_share() (eigener
+        Anteil) als auch für die Wasserfüll-Verteilung in _compute_distribution()
+        (dort werden alle Anteile gleichzeitig gebraucht, um kapp-limitierten
+        Instanzen ungenutzten Spielraum an andere weiterzureichen).
+
+        Degradiert ein Modus mangels gültigem Fremdinstanz-Sensor (SOC oder
+        Kapazität), wird das in self._dist_warning vermerkt statt still zu
+        bleiben — siehe _run_regulation_cycle, das den Kanal in soft_errors überführt.
+        """
+        n = len(active)
+        if n == 0:
+            return {}
         eq = 1.0 / n
         if n <= 1:
-            return 1.0
+            return {eid: 1.0 for eid in active}
 
         dist = self.hass.data.get(f"{DOMAIN}_dist_config") or {}
         mode = dist.get("distribution_mode", "equal")
 
         if mode == "equal":
-            return eq
+            return {eid: eq for eid in active}
 
         if mode == "soc_switch":
             shares = self._soc_switch_shares(active)
             if shares is None:
-                return eq
-            return shares.get(self.entry.entry_id, 0.0)
+                self._dist_warning = (
+                    "Verteilung (SOC-Switch): SOC-Sensor einer Instanz nicht "
+                    "verfügbar — auf Gleichverteilung zurückgefallen"
+                )
+                return {eid: eq for eid in active}
+            return shares
 
         if mode == "capacity":
             def _cap_kwh(eid: str, c) -> float | None:
@@ -1372,6 +1404,10 @@ class SolakonCoordinator:
             # zählen alle neutral 1.0 (degradiert zu reiner SOC-Gewichtung)
             caps = {eid: _cap_kwh(eid, c) for eid, c in active.items()}
             if any(cap is None for cap in caps.values()):
+                self._dist_warning = (
+                    "Verteilung: Kapazitätssensor einer Instanz nicht verfügbar "
+                    "— auf SOC-Gewichtung zurückgefallen"
+                )
                 caps = {eid: 1.0 for eid in caps}
         else:
             # mode == "soc": reine SOC-Prozentpunkt-Gewichtung, keine
@@ -1385,13 +1421,19 @@ class SolakonCoordinator:
             if not c._entity_ok(soc_eid):
                 # SOC-Read einer Fremdinstanz unsicher — auf Gleichverteilung ausweichen
                 # statt eine falsche 0 in die Gewichtung einfließen zu lassen.
-                return eq
+                self._dist_warning = (
+                    "Verteilung: SOC-Sensor einer anderen Instanz nicht verfügbar "
+                    "— auf Gleichverteilung zurückgefallen"
+                )
+                return {eid: eq for eid in active}
             soc   = c._flt(soc_eid, 0)
             zone3 = float(c.settings.get(S_ZONE3_LIMIT, 20))
             soc_weights[eid] = max(0.0, (soc - zone3) / 100.0 * caps[eid])
 
         total_soc = sum(soc_weights.values())
-        return soc_weights.get(self.entry.entry_id, 0.0) / total_soc if total_soc > 0 else eq
+        if total_soc <= 0:
+            return {eid: eq for eid in active}
+        return {eid: w / total_soc for eid, w in soc_weights.items()}
 
     def _soc_switch_shares(self, active: dict[str, "SolakonCoordinator"]) -> dict[str, float] | None:
         """Anteile für Modus `soc_switch`, ein Eintrag je Instanz in `active`.
@@ -1415,6 +1457,13 @@ class SolakonCoordinator:
         Leistungen ist der zusätzliche Wechselrichterverlust vernachlässigbar, und eine
         0-W-Zwangslage mit Abschaltrisiko für eine der beiden wird so vermieden.
 
+        Verlässt die zuletzt aktive Instanz Zone 0 (oder war Zone 0 zuvor mehrfach
+        besetzt) und geht in die reguläre Rotation über, wird `start_soc` auf den
+        aktuellen SOC neu verankert (`was_zone0`-Flag) — sonst zählt der während
+        Zone 0 bereits verbrauchte SOC-Abstand gegen das Divergenz-Budget der
+        Rotation und löst den nächsten Wechsel vorzeitig aus, da Zone 0 selbst
+        (Ausgabe auf effective_hard, nicht nur den 2-A-Puffer) den SOC spürbar senken kann.
+
         `None`: eine Fremdinstanz-SOC ist unsicher (unknown/unavailable) — Aufrufer
         weicht dann auf Gleichverteilung aus statt mit einem falschen Wert weiterzurechnen.
         """
@@ -1427,37 +1476,49 @@ class SolakonCoordinator:
 
         zone0 = {eid for eid, c in active.items() if c.surplus_active}
 
-        if len(zone0) > 1:
-            n = len(zone0)
-            return {eid: (1.0 / n if eid in zone0 else 0.0) for eid in socs}
-
         state = self.hass.data.get(f"{DOMAIN}_soc_switch_state")
         if state is None:
-            state = {"active_id": None, "start_soc": None}
+            state = {"active_id": None, "start_soc": None, "was_zone0": False}
             self.hass.data[f"{DOMAIN}_soc_switch_state"] = state
 
-        dist = self.hass.data.get(f"{DOMAIN}_dist_config") or {}
-        divergence = float(dist.get("soc_switch_divergence", 5))
-
+        was_zone0 = bool(state.get("was_zone0", False))
         active_id = state.get("active_id")
         changed = False
 
-        if zone0:
-            z0_leader = next(iter(zone0))
-            if active_id != z0_leader:
-                active_id, changed = z0_leader, True
+        if len(zone0) > 1:
+            result = {eid: (1.0 / len(zone0) if eid in zone0 else 0.0) for eid in socs}
+        else:
+            dist = self.hass.data.get(f"{DOMAIN}_dist_config") or {}
+            divergence = float(dist.get("soc_switch_divergence", 5))
+
+            if zone0:
+                z0_leader = next(iter(zone0))
+                if active_id != z0_leader:
+                    active_id, changed = z0_leader, True
+                    state["start_soc"] = socs[active_id]
+            elif was_zone0 and active_id in socs:
+                # Zone 0 gerade verlassen (einzelne oder mehrere Instanzen) — Baseline
+                # für die Rotation neu setzen statt mit dem alten Zone-0-Eintrittswert
+                # weiterzurechnen.
                 state["start_soc"] = socs[active_id]
-        elif active_id not in socs:
-            active_id = max(socs, key=socs.get)
-            state["start_soc"] = socs[active_id]
-            changed = True
-        elif state.get("start_soc") is None:
-            state["start_soc"] = socs[active_id]
-            changed = True
-        elif state["start_soc"] - socs[active_id] >= divergence:
-            remaining = {eid: s for eid, s in socs.items() if eid != active_id}
-            active_id = max(remaining, key=remaining.get) if remaining else active_id
-            state["start_soc"] = socs[active_id]
+                changed = True
+            elif active_id not in socs:
+                active_id = max(socs, key=socs.get)
+                state["start_soc"] = socs[active_id]
+                changed = True
+            elif state.get("start_soc") is None:
+                state["start_soc"] = socs[active_id]
+                changed = True
+            elif state["start_soc"] - socs[active_id] >= divergence:
+                remaining = {eid: s for eid, s in socs.items() if eid != active_id}
+                active_id = max(remaining, key=remaining.get) if remaining else active_id
+                state["start_soc"] = socs[active_id]
+                changed = True
+
+            result = {eid: (1.0 if eid == active_id else 0.0) for eid in socs}
+
+        if bool(zone0) != was_zone0:
+            state["was_zone0"] = bool(zone0)
             changed = True
 
         if changed:
@@ -1467,7 +1528,7 @@ class SolakonCoordinator:
                 snapshot = dict(state)
                 store.async_delay_save(lambda: snapshot, 2)
 
-        return {eid: (1.0 if eid == active_id else 0.0) for eid in socs}
+        return result
 
     def _compute_distribution(self) -> tuple[float, float | None]:
         """Fehler-Anteil + zugeteilte Leistung für Nulleinspeisung-Instanzen (Modus '1').
@@ -1475,6 +1536,13 @@ class SolakonCoordinator:
         Gibt (error_share, allocated_power) zurück.
         Im Einzelbetrieb oder wenn diese Instanz gerade nicht in Modus '1' steht:
         (1.0 bzw. 0.0, None) — kein Einfluss auf hard_limit.
+
+        allocated_power kommt aus einer Wasserfüll-Verteilung (_waterfill_allocate):
+        eine rein proportionale Aufteilung von global_max_power nach Anteil würde bei
+        heterogenen Hard-Limits (unterschiedlich starke Wechselrichter/Instanzen)
+        ungenutzten Spielraum kapp-limitierter Instanzen verschenken statt ihn an
+        Instanzen mit Reserve weiterzureichen — der Pool würde global_max_power dann
+        strukturell nie erreichen, selbst wenn andere Instanzen noch Kapazität hätten.
         """
         all_coords = self.hass.data.get(DOMAIN, {})
         active = {
@@ -1482,13 +1550,63 @@ class SolakonCoordinator:
             if c.settings.get(S_REGULATION_ENABLED, False)
             and c._str(c.entry.data.get(CONF_MODE_SELECT, "")) == MODE_DISCHARGE
         }
+        self._dist_warning = ""
         if self.entry.entry_id not in active or len(active) <= 1:
             return (1.0, None) if self.entry.entry_id in active else (0.0, None)
 
-        w_self = self._weighted_share(active)
+        shares = self._all_shares(active)
         dist = self.hass.data.get(f"{DOMAIN}_dist_config") or {}
         global_max = float(dist.get("global_max_power", 800))
-        return w_self, round(global_max * w_self)
+        allocations = self._waterfill_allocate(active, shares, global_max)
+        return shares.get(self.entry.entry_id, 0.0), allocations.get(self.entry.entry_id)
+
+    def _waterfill_allocate(
+        self,
+        active: dict[str, "SolakonCoordinator"],
+        shares: dict[str, float],
+        global_max: float,
+    ) -> dict[str, float]:
+        """Verteilt global_max proportional zu `shares`, gekappt am lokalen Hard-Limit
+        jeder Instanz (Zone-0- oder Zone-1/2-Wert, je nachdem ob die Instanz gerade
+        surplus_active ist), und reicht dabei ungenutzten Spielraum kapp-limitierter
+        Instanzen iterativ an die übrigen weiter (Wasserfüllverfahren) — terminiert
+        garantiert, da pro Runde mindestens eine Instanz endgültig aus dem Rest-Pool
+        entfernt wird, sobald `newly_capped` nicht leer ist.
+        """
+        caps: dict[str, float] = {}
+        for eid, c in active.items():
+            if c.surplus_active:
+                caps[eid] = float(c.settings.get(S_HARD_LIMIT_Z0, c.settings.get(S_HARD_LIMIT, 800)))
+            else:
+                caps[eid] = float(c.settings.get(S_HARD_LIMIT_Z1, c.settings.get(S_HARD_LIMIT, 800)))
+
+        remaining_ids = set(shares.keys())
+        allocations: dict[str, float] = {}
+        remaining_power = global_max
+
+        while remaining_ids:
+            share_sum = sum(shares[eid] for eid in remaining_ids)
+            if share_sum <= 0:
+                for eid in remaining_ids:
+                    allocations[eid] = 0.0
+                break
+
+            newly_capped = [
+                eid for eid in remaining_ids
+                if remaining_power * (shares[eid] / share_sum) >= caps[eid] - 0.01
+            ]
+
+            if not newly_capped:
+                for eid in remaining_ids:
+                    allocations[eid] = remaining_power * (shares[eid] / share_sum)
+                break
+
+            for eid in newly_capped:
+                allocations[eid] = caps[eid]
+                remaining_power -= caps[eid]
+            remaining_ids -= set(newly_capped)
+
+        return {eid: round(v) for eid, v in allocations.items()}
 
     def _compute_ac_distribution(self) -> float:
         """Fehler-Anteil unter gleichzeitig AC-ladenden Instanzen (Modus '3', `ac_charge_active`).
