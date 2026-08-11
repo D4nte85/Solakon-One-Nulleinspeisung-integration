@@ -1020,8 +1020,9 @@ class SolakonCoordinator:
             grid_error_abs = abs(grid_error)
 
             if grid_error_abs > tolerance and not (at_max_limit and not above_dynamic_max and grid_error > 0) and not (at_min_limit and grid_error < 0):
+                power_base = self._total_commanded_power() * error_share
                 new_pw = self._pi_calculate(
-                    grid, current_power, target_offset, dynamic_max,
+                    grid, power_base, target_offset, dynamic_max,
                     tolerance, p_factor, i_factor, ac_charge_mode=False,
                     error_share=error_share,
                 )
@@ -1435,6 +1436,24 @@ class SolakonCoordinator:
             return self._flt_power(self.entry.data.get(CONF_ACTUAL_SENSOR, ""))
         return sum(
             c._flt_power(c.entry.data.get(CONF_ACTUAL_SENSOR, ""))
+            for c in active
+        )
+
+    def _total_commanded_power(self) -> float:
+        """Summe der von allen Nulleinspeisung-Instanzen kommandierten Sollleistung (Modus '1').
+
+        Einzelbetrieb bzw. kein Modus-'1'-Teilnehmer: eigener kommandierter Wert.
+        """
+        all_coords = self.hass.data.get(DOMAIN, {})
+        active = [
+            c for c in all_coords.values()
+            if c.settings.get(S_REGULATION_ENABLED, False)
+            and c._str(c.entry.data.get(CONF_MODE_SELECT, "")) == MODE_DISCHARGE
+        ]
+        if len(active) <= 1:
+            return self._flt(self.entry.data.get(CONF_ACTIVE_POWER, ""))
+        return sum(
+            c._flt(c.entry.data.get(CONF_ACTIVE_POWER, ""))
             for c in active
         )
 

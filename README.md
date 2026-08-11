@@ -103,6 +103,13 @@ Eine Instanz, die gerade in Modus `'0'` (idle) steht, trägt zu keinem der beide
 
 > **Batteriekapazität (kWh):** Nur bei Verteilungs-Modus „Kapazitätsgewichtet" relevant. Fehlt der Sensor bei irgendeiner aktiven Instanz, wird die Kapazität für alle neutral (1.0) gewertet — die Gewichtung entspricht dann „SOC-gewichtet". Sinnvoll wenn die Instanzen Batterien unterschiedlicher Kapazität steuern.
 
+**Ausgangsbasis für den PI-Stelleingriff (Pool 1):** Im normalen Nulleinspeisungs-PI baut die Korrektur nicht auf dem eigenen zuletzt kommandierten Wert dieser Instanz auf, sondern auf ihrem proportionalen Anteil am Gruppen-Sollwert:
+```
+power_base_i = (Σ kommandierte Leistung aller Instanzen in Pool 1) × error_share_i
+neuer_output_i = power_base_i + PI-Korrektur
+```
+Dadurch gleicht sich die Aufteilung zwischen den Instanzen bei jedem Stelleingriff automatisch wieder an die Gewichtung `w_i` an, statt eine einmal entstandene Schieflage (z. B. durch zeitversetzte Rückkehr aus einem Zonenwechsel) über beliebig viele Zyklen fortzuschreiben. Im Einzelbetrieb (`error_share = 1,0`, nur eine Instanz im Pool) ist `power_base_i` identisch zum eigenen kommandierten Wert — kein Unterschied zum bisherigen Verhalten.
+
 ### Leistungsverteilung konfigurieren
 
 Im Panel wird bei mehreren Instanzen ein zusätzlicher **Verteilungs-Tab** eingeblendet.
