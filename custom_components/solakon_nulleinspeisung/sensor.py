@@ -30,6 +30,7 @@ async def async_setup_entry(
         GridStdDevSensor(coord),
         ActiveFallSensor(coord),
         IntegralSensor(coord),
+        SurplusPowerSensor(coord),
     ])
 
 
@@ -165,3 +166,21 @@ class IntegralSensor(SolakonEntity, SensorEntity):
     @property
     def native_value(self) -> float:
         return round(self._coordinator.integral, 1)
+
+
+class SurplusPowerSensor(SolakonEntity, SensorEntity):
+    """Verwertbarer PV-Überschuss — Luft zwischen aktuellem Output und dem
+    Maximum aus Hard-Limit und aktueller PV-Leistung. Für Automationen gedacht
+    (z. B. Zusatzverbraucher schalten), daher bewusst keine Diagnose-Entität."""
+    _attr_name = "Überschussleistung"
+    _attr_icon = "mdi:transmission-tower-export"
+    _attr_native_unit_of_measurement = UnitOfPower.WATT
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_suggested_display_precision = 0
+
+    def __init__(self, coord: SolakonCoordinator) -> None:
+        super().__init__(coord, "surplus_power")
+
+    @property
+    def native_value(self) -> float:
+        return round(self._coordinator.surplus_power, 0)

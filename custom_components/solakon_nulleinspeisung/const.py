@@ -228,3 +228,23 @@ SETTINGS_DEFAULTS: dict = {
     S_DYN_AC_FACTOR:   1.5,
     S_DYN_AC_NEGATIVE: False,
 }
+
+DIST_DEFAULTS: dict = {
+    "global_max_power":  800,
+    "distribution_mode": "equal",  # equal | soc | capacity | soc_switch
+    # Divergenz-Schwelle (Prozentpunkte) für Modus `soc_switch`: exklusiv
+    # aktive Instanz gibt ab, sobald ihr SOC seit Aktivierung um diesen Wert
+    # gefallen ist — Rotation an die Instanz mit dem höchsten verbleibenden SOC.
+    "soc_switch_divergence": 5,
+    # Instanzübergreifende Sensor-Vorgaben — jede Instanz kann
+    # diese optional lokal überschreiben (S_PV_FORECAST_SENSOR, S_ZONE1_FORCE_SENSOR,
+    # S_SURPLUS_LOCK_SENSOR, S_TARIFF_PRICE_SENSOR, S_TARIFF_CHEAP_ENTITY,
+    # S_TARIFF_EXP_ENTITY); lokal gewinnt, sonst greift dieser globale Wert. Nur bei
+    # >1 Instanz im Panel sichtbar, siehe coordinator.py _effective_*_sensor()-Helper.
+    "global_pv_forecast_today_sensor":    "",
+    "global_pv_forecast_tomorrow_sensor": "",
+    "global_surplus_lock_sensor":         "",
+    "global_tariff_price_sensor":         "",
+    "global_tariff_cheap_entity":         "",
+    "global_tariff_exp_entity":           "",
+}

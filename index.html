@@ -77,19 +77,34 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
     dyn_ac_enabled: false, dyn_ac_min: 30, dyn_ac_max: 250, dyn_ac_noise: 15, dyn_ac_factor: 1.5, dyn_ac_negative: false,
   };
 
+  // ?multigroup=1 fügt eine dritte Instanz an einem zweiten Netzsensor hinzu —
+  // einzige Möglichkeit, die Mehr-Gruppen-Navigation ohne zweiten physischen
+  // Smartmeter zu sehen. Ohne den Parameter bleiben zwei Instanzen in einer Gruppe.
+  const MULTI_GROUP = new URLSearchParams(location.search).get("multigroup") === "1";
+
   // Zwei Demo-Instanzen — zeigt Verteilung/Übersicht-Tab (nur bei >1 Instanz sichtbar).
-  // SOC-Werte bewusst wie im realen Issue-#13-Fall (Kapazitätssensor-Tippfehler → Divergenz).
+  // SOC-Werte bewusst so gewählt, dass ein Kapazitätssensor-Tippfehler zu SOC-Divergenz führt.
   const INSTANCES = {
     demo_a: {
       name: "Solakon A",
+      grid_sensor: "sensor.shelly_3em_leistung",
       settings: { ...DEFAULT_SETTINGS, tariff_enabled: true, tariff_price_sensor: "sensor.tibber_price_current" },
       status: mkStatus({ zone: 1, soc: 58, actual_power: 110, grid: -5, active_fall: "A", cycle_active: true }),
     },
     demo_b: {
       name: "Solakon B",
+      grid_sensor: "sensor.shelly_3em_leistung",
       settings: { ...DEFAULT_SETTINGS, surplus_enabled: true, surplus_forecast_enabled: true, pv_forecast_sensor: "sensor.solcast_prognose", surplus_lock_enabled: true, surplus_lock_sensor: "sensor.solcast_leistung_jetzt" },
       status: mkStatus({ zone: 1, soc: 81, actual_power: 140, grid: 8, active_fall: "A", cycle_active: true }),
     },
+    ...(MULTI_GROUP ? {
+      demo_c: {
+        name: "Solakon C (Netz West)",
+        grid_sensor: "sensor.shelly_west_leistung",
+        settings: { ...DEFAULT_SETTINGS },
+        status: mkStatus({ zone: 0, soc: 97, actual_power: 300, grid: -3, active_fall: "0A", cycle_active: false }),
+      },
+    } : {}),
   };
 
   function mkStatus(o) {
@@ -115,23 +130,34 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
     "sensor.tibber_price_current":             { state: "0.28", attributes: { unit_of_measurement: "EUR/kWh", friendly_name: "Tibber Preis aktuell" } },
     "sensor.solcast_prognose":                 { state: "unavailable", attributes: { friendly_name: "Solcast PV-Prognose" } },
     "sensor.solcast_leistung_jetzt":           { state: "1450", attributes: { unit_of_measurement: "W", friendly_name: "Solcast Leistung jetzt" } },
+    "sensor.shelly_3em_leistung":               { state: "3",    attributes: { unit_of_measurement: "W", friendly_name: "Shelly 3EM Leistung (Netz Ost)" } },
+    "sensor.shelly_west_leistung":              { state: "-3",   attributes: { unit_of_measurement: "W", friendly_name: "Shelly Leistung (Netz West)" } },
     // sensor.solakon_one_batteriekapzitat (Tippfehler, Instanz B) existiert absichtlich nicht → roter Punkt
   };
 
-  // Distribution-Config: Kapazitätsausgleich aktiv, ein Sensor korrekt (Instanz A),
-  // einer vertippt (Instanz B) — reproduziert die Issue-#13-Szene.
+  // Verteilungs-Config nach grid_power_sensor-Gruppe verschachtelt ({groupKey: {...}}).
+  // Gruppe "sensor.shelly_3em_leistung": Kapazitätsausgleich aktiv, ein Sensor
+  // korrekt (Instanz A), einer vertippt (Instanz B).
   let distConfig = {
-    global_max_power: 800,
-    distribution_mode: "weighted",
-    capacity_weighting: true,
-    inst_demo_a_capacity_sensor: "sensor.solakon_one_batteriekapazitat",
-    inst_demo_b_capacity_sensor: "sensor.solakon_one_batteriekapzitat",
-    global_pv_forecast_today_sensor: "",
-    global_pv_forecast_tomorrow_sensor: "",
-    global_surplus_lock_sensor: "",
-    global_tariff_price_sensor: "",
-    global_tariff_cheap_entity: "",
-    global_tariff_exp_entity: "",
+    "sensor.shelly_3em_leistung": {
+      global_max_power: 800,
+      distribution_mode: "weighted",
+      capacity_weighting: true,
+      inst_demo_a_capacity_sensor: "sensor.solakon_one_batteriekapazitat",
+      inst_demo_b_capacity_sensor: "sensor.solakon_one_batteriekapzitat",
+      global_pv_forecast_today_sensor: "",
+      global_pv_forecast_tomorrow_sensor: "",
+      global_surplus_lock_sensor: "",
+      global_tariff_price_sensor: "",
+      global_tariff_cheap_entity: "",
+      global_tariff_exp_entity: "",
+    },
+    ...(MULTI_GROUP ? {
+      "sensor.shelly_west_leistung": {
+        global_max_power: 800,
+        distribution_mode: "equal",
+      },
+    } : {}),
   };
 
   const hass = {
@@ -142,7 +168,7 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
       const inst = msg.entry_id ? INSTANCES[msg.entry_id] : null;
       switch (type) {
         case "get_all_instances":
-          return Promise.resolve({ instances: Object.entries(INSTANCES).map(([entry_id, v]) => ({ entry_id, instance_name: v.name })) });
+          return Promise.resolve({ instances: Object.entries(INSTANCES).map(([entry_id, v]) => ({ entry_id, instance_name: v.name, grid_sensor: v.grid_sensor })) });
         case "get_config":
           return Promise.resolve({ ...inst.settings });
         case "save_config":
@@ -157,9 +183,9 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
           inst.status.cycle_active = msg.active;
           return Promise.resolve({ success: true });
         case "get_distribution_config":
-          return Promise.resolve({ distribution: { ...distConfig } });
+          return Promise.resolve({ distribution: { ...(distConfig[msg.grid_sensor] || {}) } });
         case "save_distribution_config":
-          distConfig = { ...msg.distribution };
+          distConfig[msg.grid_sensor] = { ...msg.distribution };
           return Promise.resolve({ success: true });
         default:
           return Promise.reject(new Error("Demo-Vorschau: unbekannter WS-Typ " + msg.type));

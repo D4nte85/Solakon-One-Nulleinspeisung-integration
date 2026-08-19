@@ -5,6 +5,12 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+## [2.2.1] – 2026-08-19
+
+### Hinzugefügt
+- Netzgruppen (Discussion #21): Instanzen werden automatisch nach ihrem konfigurierten Netz-Leistungssensor gruppiert — Fehleraufteilung und Leistungsverteilung (`_compute_distribution`, `_compute_ac_distribution`, `_total_actual_power`, `_total_commanded_power`, `_total_commanded_ac_power`) laufen ab sofort nur noch innerhalb einer Gruppe statt über alle installierten Instanzen hinweg. Die Verteilungs-Konfiguration (Limit, Verteilungs-Modus, Kapazitätssensoren, globale Sensor-Vorgaben) ist jetzt pro Gruppe unabhängig einstellbar. Bei nur einer Gruppe (Normalfall) rechnerisch identisch zum bisherigen Verhalten. Panel: Verteilung ist jetzt ein eigener Tab (statt Teil der Übersichtsseite); bei mehreren Gruppen ersetzt eine Gruppen-Tab-Ebene die Instanz-Tabs, jede Gruppe öffnet darunter „Verteilung" + ihre Instanzen. Übersichtsseite zeigt Instanzen jetzt nach Gruppe sortiert mit Gesamt-Leistungsanzeige je Gruppe. Bestehende Verteilungs-Einstellungen werden beim Update automatisch auf alle zu diesem Zeitpunkt bekannten Gruppen übertragen (kein Reset)
+- Neuer Sensor `sensor.solakon_one_uberschussleistung` (Discussion #22): verwertbarer PV-Überschuss in W — `min(aktuell geltendes Hard-Limit, PV-Leistung) − Ausgangsleistung`, geklemmt auf ≥0. Für Automationen gedacht (z. B. Zusatzverbraucher bei Überschuss schalten), keine Diagnose-Entität
+
 ## [2.2.0] – 2026-08-11
 
 ### Hinzugefügt

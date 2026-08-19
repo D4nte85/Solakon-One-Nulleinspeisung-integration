@@ -397,11 +397,13 @@
     "static_tag":        "statisch"
   },
   "ov": {
-    "btn":    "📊 Übersicht",
-    "soc":    "SOC",
-    "output": "Ausgang",
-    "grid":   "Netz",
-    "fall":   "Fall"
+    "btn":          "📊 Übersicht",
+    "soc":          "SOC",
+    "output":       "Ausgang",
+    "grid":         "Netz",
+    "fall":         "Fall",
+    "group_prefix": "Gruppe",
+    "total_output": "Gesamt"
   },
   "debug": {
     "pi_hdr":     "🔄 PI-Integral",
@@ -427,6 +429,9 @@
   "dist": {
     "single_instance_note": "Leistungsverteilung wird nur bei mehreren Instanzen benötigt.",
     "loading":            "Lade…",
+    "tab_lbl":            "⚖️ Verteilung",
+    "group_prefix":       "Gruppe",
+    "groups_note":        "Instanzen werden automatisch nach ihrem konfigurierten Netz-Leistungssensor gruppiert — jede Netzgruppe (z. B. bei mehreren Smartmetern für getrennte Stromkreise) hat ihre eigene, unabhängige Leistungsverteilung. Bei nur einer Gruppe ist diese Zuordnung unsichtbar, es gibt nur einen gemeinsamen Pool.",
     "global_hdr":         "🌐 Globale Einstellungen",
     "global_max_lbl":     "Gesamte Max. Ausgangsleistung (W)",
     "global_max_desc":    "Absolute Obergrenze aller Instanzen zusammen — wird nach Gewichtung aufgeteilt. Kappt eine Instanz an ihrem eigenen Hard-Limit (Zonen-Tab), wird der ungenutzte Rest automatisch an Instanzen mit Reserve weitergereicht (Wasserfüllverfahren) — bei unterschiedlich starken Instanzen erreicht der Pool diesen Wert sonst nicht. Standard: 800 W (gesetzliches Einspeise-Maximum).",

@@ -16,7 +16,7 @@ from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .const import (
-    DOMAIN, STORAGE_VERSION, SETTINGS_DEFAULTS,
+    DOMAIN, STORAGE_VERSION, SETTINGS_DEFAULTS, DIST_DEFAULTS,
     CONF_GRID_SENSOR, CONF_ACTUAL_SENSOR, CONF_SOLAR_SENSOR,
     CONF_SOC_SENSOR, CONF_TIMEOUT_COUNTDOWN, CONF_ACTIVE_POWER,
     CONF_DISCHARGE_CURRENT, CONF_TIMEOUT_SET, CONF_MODE_SELECT, CONF_EXPORT_LIMIT,
@@ -87,6 +87,9 @@ class SolakonCoordinator:
 
         # Multi-Instanz: zugeteiltes Leistungslimit (None = Einzelbetrieb)
         self.allocated_power: float | None = None
+        # Verwertbarer PV-Überschuss: Luft zwischen aktuellem Output und dem
+        # Maximum aus Hard-Limit UND aktueller PV-Leistung.
+        self.surplus_power: float = 0.0
         # Transienter Warnkanal: von _all_shares() gesetzt wenn der Verteilungsmodus
         # wegen eines fehlenden/ungültigen Fremdinstanz-Sensors degradiert (z. B.
         # capacity → soc, soc/soc_switch → equal) — wird im selben Zyklus sofort
@@ -511,8 +514,7 @@ class SolakonCoordinator:
     # Instanz kann optional lokal überschreiben. Lokal gewinnt, sonst globaler Wert.
 
     def _global_sensor(self, key: str) -> str:
-        dist_cfg = self.hass.data.get(f"{DOMAIN}_dist_config") or {}
-        return str(dist_cfg.get(key, ""))
+        return str(self._dist_cfg().get(key, ""))
 
     def _effective_pv_forecast_today_sensor(self) -> str:
         """PV-Ertrag heute (kWh) — gemergtes Feld, gemeinsam genutzt von
@@ -746,6 +748,16 @@ class SolakonCoordinator:
             soft_errors.append(self._dist_warning)
         effective_hard    = min(int(allocated_power), hard_limit_z0) if allocated_power is not None else hard_limit_z0
         effective_hard_z1 = min(int(allocated_power), hard_limit_z1) if allocated_power is not None else hard_limit_z1
+
+        # Verwertbarer PV-Überschuss: Luft zwischen dem, was diese Instanz gerade
+        # ausgibt, und dem Maximum aus aktuell geltendem Hard-Limit UND aktueller
+        # PV-Leistung (mehr als die Sonne liefert, ginge nur zulasten des Akkus —
+        # kein "verwertbarer" Überschuss). Geklemmt auf ≥0. Nutzt die Zone des
+        # *vorherigen* Zyklus (self.surplus_active ist hier noch nicht aktualisiert)
+        # — konsistent, weil `actual` ebenfalls aus dieser Zone stammt.
+        self.surplus_power = max(0.0, min(
+            effective_hard if self.surplus_active else effective_hard_z1, solar
+        ) - actual)
 
         pv_forecast_enabled = bool(s.get(S_PV_FORECAST_ENABLED, False))
         pv_forecast_threshold = float(s.get(S_PV_FORECAST_THRESHOLD, 0.0))
@@ -1337,6 +1349,23 @@ class SolakonCoordinator:
 
     # ── Multi-Instanz Verteilung ─────────────────────────────────────────────
 
+    def _group_coords(self) -> dict[str, "SolakonCoordinator"]:
+        """Alle Coordinatoren mit demselben grid_power_sensor wie diese Instanz —
+        die Netzgruppe. Instanzen an unterschiedlichen Smartmetern teilen sich
+        physisch keinen Netzpunkt und dürfen sich nicht gegenseitig in die
+        Verteilung/Summenbildung einrechnen."""
+        my_grid = self.entry.data.get(CONF_GRID_SENSOR, "")
+        return {
+            eid: c for eid, c in self.hass.data.get(DOMAIN, {}).items()
+            if c.entry.data.get(CONF_GRID_SENSOR, "") == my_grid
+        }
+
+    def _dist_cfg(self) -> dict:
+        """Verteilungs-Config nur der eigenen Netzgruppe, mit Defaults aufgefüllt."""
+        all_groups = self.hass.data.get(f"{DOMAIN}_dist_config") or {}
+        group_key = self.entry.data.get(CONF_GRID_SENSOR, "")
+        return {**DIST_DEFAULTS, **all_groups.get(group_key, {})}
+
     def _weighted_share(self, active: dict[str, "SolakonCoordinator"]) -> float:
         """SOC-/kapazitätsgewichteter oder gleichverteilter Fehler-Anteil dieser Instanz.
 
@@ -1368,7 +1397,7 @@ class SolakonCoordinator:
         if n <= 1:
             return {eid: 1.0 for eid in active}
 
-        dist = self.hass.data.get(f"{DOMAIN}_dist_config") or {}
+        dist = self._dist_cfg()
         mode = dist.get("distribution_mode", "equal")
 
         if mode == "equal":
@@ -1488,7 +1517,7 @@ class SolakonCoordinator:
         if len(zone0) > 1:
             result = {eid: (1.0 / len(zone0) if eid in zone0 else 0.0) for eid in socs}
         else:
-            dist = self.hass.data.get(f"{DOMAIN}_dist_config") or {}
+            dist = self._dist_cfg()
             divergence = float(dist.get("soc_switch_divergence", 5))
 
             if zone0:
@@ -1544,7 +1573,7 @@ class SolakonCoordinator:
         Instanzen mit Reserve weiterzureichen — der Pool würde global_max_power dann
         strukturell nie erreichen, selbst wenn andere Instanzen noch Kapazität hätten.
         """
-        all_coords = self.hass.data.get(DOMAIN, {})
+        all_coords = self._group_coords()
         active = {
             eid: c for eid, c in all_coords.items()
             if c.settings.get(S_REGULATION_ENABLED, False)
@@ -1555,7 +1584,7 @@ class SolakonCoordinator:
             return (1.0, None) if self.entry.entry_id in active else (0.0, None)
 
         shares = self._all_shares(active)
-        dist = self.hass.data.get(f"{DOMAIN}_dist_config") or {}
+        dist = self._dist_cfg()
         global_max = float(dist.get("global_max_power", 800))
         allocations = self._waterfill_allocate(active, shares, global_max)
         return shares.get(self.entry.entry_id, 0.0), allocations.get(self.entry.entry_id)
@@ -1615,7 +1644,7 @@ class SolakonCoordinator:
         verhindert, dass mehrere AC-Lader denselben Netzüberschuss doppelt beanspruchen.
         Kein `allocated_power`: das AC-Leistungslimit bleibt unabhängig vom hard_limit.
         """
-        all_coords = self.hass.data.get(DOMAIN, {})
+        all_coords = self._group_coords()
         active = {
             eid: c for eid, c in all_coords.items()
             if c.settings.get(S_REGULATION_ENABLED, False) and c.ac_charge_active
@@ -1627,7 +1656,7 @@ class SolakonCoordinator:
 
         Einzelbetrieb bzw. kein Modus-'1'-Teilnehmer: eigener actual-Wert.
         """
-        all_coords = self.hass.data.get(DOMAIN, {})
+        all_coords = self._group_coords()
         active = [
             c for c in all_coords.values()
             if c.settings.get(S_REGULATION_ENABLED, False)
@@ -1645,7 +1674,7 @@ class SolakonCoordinator:
 
         Einzelbetrieb bzw. kein Modus-'1'-Teilnehmer: eigener kommandierter Wert.
         """
-        all_coords = self.hass.data.get(DOMAIN, {})
+        all_coords = self._group_coords()
         active = [
             c for c in all_coords.values()
             if c.settings.get(S_REGULATION_ENABLED, False)
@@ -1663,7 +1692,7 @@ class SolakonCoordinator:
 
         Einzelbetrieb bzw. keine weitere ladende Instanz: eigener kommandierter Wert.
         """
-        all_coords = self.hass.data.get(DOMAIN, {})
+        all_coords = self._group_coords()
         active = [
             c for c in all_coords.values()
             if c.settings.get(S_REGULATION_ENABLED, False) and c.ac_charge_active

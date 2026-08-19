@@ -16,7 +16,7 @@ from .const import (
     DOMAIN, PLATFORMS, S_REGULATION_ENABLED,
     CONF_INSTANCE_NAME,
     CONF_GRID_SENSOR, CONF_ACTUAL_SENSOR, CONF_SOLAR_SENSOR, CONF_SOC_SENSOR,
-    STORAGE_VERSION,
+    STORAGE_VERSION, DIST_DEFAULTS,
 )
 
 STORAGE_VERSION_DIST = 1
@@ -44,6 +44,7 @@ async def _ws_get_all_instances(
         instances.append({
             "entry_id":      entry_id,
             "instance_name": name,
+            "grid_sensor":   coord.entry.data.get(CONF_GRID_SENSOR, ""),
         })
     instances.sort(key=lambda x: x["instance_name"].lower())
     connection.send_result(msg["id"], {"instances": instances})
@@ -200,18 +201,27 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Setup gelesen).
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
-    # Distribution-Store einmalig anlegen + Config in synchron lesbaren Cache laden
+    # Distribution-Store einmalig anlegen + Config in synchron lesbaren Cache laden.
+    # Cache ist nach grid_power_sensor verschachtelt ({gruppe: {...DIST_DEFAULTS...}})
+    # — jede Netzgruppe hat unabhängige Verteilungs-Einstellungen.
     if not hass.data.get(f"{DOMAIN}_dist_store"):
         from homeassistant.helpers.storage import Store
         store = Store(hass, STORAGE_VERSION_DIST, STORAGE_KEY_DIST)
         hass.data[f"{DOMAIN}_dist_store"] = store
-        # Defaults synchron setzen, bevor async_load() an den Event-Loop yieldet —
+        # Leerer Cache synchron gesetzt, bevor async_load() an den Event-Loop yieldet —
         # sonst sieht ein parallel setup_entry-Aufruf den Store-Guard bereits gesetzt,
-        # aber _dist_config existiert noch nicht (KeyError).
-        hass.data[f"{DOMAIN}_dist_config"] = dict(DIST_DEFAULTS)
+        # aber _dist_config existiert noch nicht (KeyError). _dist_cfg() im Coordinator
+        # fällt bei fehlendem Gruppen-Eintrag ohnehin sicher auf DIST_DEFAULTS zurück.
+        hass.data[f"{DOMAIN}_dist_config"] = {}
         stored = await store.async_load() or {}
-        migrated = _migrate_dist_config(stored)
-        hass.data[f"{DOMAIN}_dist_config"] = {**DIST_DEFAULTS, **migrated}
+        # Gruppen aus ALLEN registrierten Config-Entries ableiten (nicht nur den
+        # bereits fertig aufgesetzten in hass.data[DOMAIN]) — sonst könnte die
+        # Migration bei parallelem Setup mehrerer Instanzen Gruppen übersehen.
+        group_keys = {
+            e.data.get(CONF_GRID_SENSOR, "") for e in hass.config_entries.async_entries(DOMAIN)
+        }
+        migrated = _migrate_dist_store(stored, group_keys)
+        hass.data[f"{DOMAIN}_dist_config"] = migrated
         if migrated != stored:
             await store.async_save(migrated)
 
@@ -304,32 +314,12 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     await store.async_remove()
 
 
-DIST_DEFAULTS = {
-    "global_max_power":  800,
-    "distribution_mode": "equal",  # equal | soc | capacity | soc_switch
-    # Divergenz-Schwelle (Prozentpunkte) für Modus `soc_switch`: exklusiv
-    # aktive Instanz gibt ab, sobald ihr SOC seit Aktivierung um diesen Wert
-    # gefallen ist — Rotation an die Instanz mit dem höchsten verbleibenden SOC.
-    "soc_switch_divergence": 5,
-    # Instanzübergreifende Sensor-Vorgaben — jede Instanz kann
-    # diese optional lokal überschreiben (S_PV_FORECAST_SENSOR, S_ZONE1_FORCE_SENSOR,
-    # S_SURPLUS_LOCK_SENSOR, S_TARIFF_PRICE_SENSOR, S_TARIFF_CHEAP_ENTITY,
-    # S_TARIFF_EXP_ENTITY); lokal gewinnt, sonst greift dieser globale Wert. Nur bei
-    # >1 Instanz im Panel sichtbar, siehe coordinator.py _effective_*_sensor()-Helper.
-    "global_pv_forecast_today_sensor":    "",
-    "global_pv_forecast_tomorrow_sensor": "",
-    "global_surplus_lock_sensor":         "",
-    "global_tariff_price_sensor":         "",
-    "global_tariff_cheap_entity":         "",
-    "global_tariff_exp_entity":           "",
-}
-
-
 def _migrate_dist_config(cfg: dict) -> dict:
     """Alte Zwei-Feld-Form (`distribution_mode` equal/weighted + separates
     `capacity_weighting`-Bool) auf den neuen Drei-Wert-`distribution_mode`
     (equal/soc/capacity) abbilden. Nur relevant für vor der UI-Vereinfachung
     gespeicherte Configs — neue Speicherungen enthalten `capacity_weighting` nicht mehr.
+    Arbeitet auf einem einzelnen Gruppen-Dict (nicht dem verschachtelten Store).
     """
     if "capacity_weighting" not in cfg:
         return cfg
@@ -341,8 +331,24 @@ def _migrate_dist_config(cfg: dict) -> dict:
     return migrated
 
 
+def _migrate_dist_store(stored: dict, group_keys: set[str]) -> dict:
+    """Bringt den Verteilungs-Store in die nach grid_power_sensor verschachtelte Form.
+
+    Erkennt eine flache Form (`distribution_mode`/`global_max_power` direkt auf
+    oberster Ebene) und kopiert sie auf jede Gruppe in `group_keys`. Bereits
+    verschachtelte Stores laufen nur noch durch die Feld-Migration je Gruppen-Dict.
+    """
+    if not stored:
+        return {}
+    if "distribution_mode" in stored or "global_max_power" in stored:
+        legacy = _migrate_dist_config(stored)
+        return {gk: dict(legacy) for gk in group_keys}
+    return {gk: _migrate_dist_config(cfg) for gk, cfg in stored.items()}
+
+
 @websocket_api.websocket_command({
-    vol.Required("type"): f"{DOMAIN}/get_distribution_config",
+    vol.Required("type"):        f"{DOMAIN}/get_distribution_config",
+    vol.Required("grid_sensor"): str,
 })
 @websocket_api.async_response
 async def _ws_get_distribution_config(
@@ -353,12 +359,15 @@ async def _ws_get_distribution_config(
         connection.send_result(msg["id"], {"distribution": DIST_DEFAULTS.copy()})
         return
     stored = await store.async_load() or {}
-    data = {**DIST_DEFAULTS, **_migrate_dist_config(stored)}
+    group_keys = {e.data.get(CONF_GRID_SENSOR, "") for e in hass.config_entries.async_entries(DOMAIN)}
+    all_groups = _migrate_dist_store(stored, group_keys)
+    data = {**DIST_DEFAULTS, **all_groups.get(msg["grid_sensor"], {})}
     connection.send_result(msg["id"], {"distribution": data})
 
 
 @websocket_api.websocket_command({
     vol.Required("type"):         f"{DOMAIN}/save_distribution_config",
+    vol.Required("grid_sensor"):  str,
     vol.Required("distribution"): dict,
 })
 @websocket_api.async_response
@@ -369,13 +378,20 @@ async def _ws_save_distribution_config(
     if store is None:
         connection.send_error(msg["id"], "not_ready", "Distribution-Store nicht initialisiert")
         return
-    distribution = _migrate_dist_config(msg["distribution"])
-    await store.async_save(distribution)
-    hass.data[f"{DOMAIN}_dist_config"] = {**DIST_DEFAULTS, **distribution}
 
-    # Neue Verteilung sofort auf alle Instanzen anwenden — sonst greift die
-    # geänderte allocated_power erst beim nächsten Sensor-Event. Lock-geschützt
-    # (parallele Läufe werden verworfen), daher rein additiv.
+    group_key = msg["grid_sensor"]
+    stored = await store.async_load() or {}
+    group_keys = {e.data.get(CONF_GRID_SENSOR, "") for e in hass.config_entries.async_entries(DOMAIN)}
+    all_groups = _migrate_dist_store(stored, group_keys)
+    all_groups[group_key] = _migrate_dist_config(msg["distribution"])
+
+    await store.async_save(all_groups)
+    hass.data[f"{DOMAIN}_dist_config"] = all_groups
+
+    # Neue Verteilung sofort auf die Instanzen DIESER Gruppe anwenden — sonst greift
+    # die geänderte allocated_power erst beim nächsten Sensor-Event. Lock-geschützt
+    # (parallele Läufe werden verworfen), daher rein additiv. Andere Gruppen bleiben
+    # unberührt und werden nicht angestoßen.
     #
     # Globale Sensor-Felder (PV-Vorhersage heute/morgen, Austritts-Sperre, Tarif)
     # ändern ggf. die effektiv wirksame Sensor-Entität einer Instanz, ohne dass
@@ -383,6 +399,8 @@ async def _ws_save_distribution_config(
     # neu registriert werden, sonst reagiert die Instanz erst beim nächsten
     # ohnehin fälligen Regelzyklus auf State-Changes des neuen Sensors.
     for coord in hass.data.get(DOMAIN, {}).values():
+        if coord.entry.data.get(CONF_GRID_SENSOR, "") != group_key:
+            continue
         coord._update_tariff_tracker()
         coord._update_pv_forecast_tracker()
         coord._update_surplus_lock_tracker()

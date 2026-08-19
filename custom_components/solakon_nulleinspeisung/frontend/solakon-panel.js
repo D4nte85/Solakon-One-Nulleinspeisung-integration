@@ -283,6 +283,10 @@ class SolakonPanel extends HTMLElement {
     this._instances      = [];
     this._activeInstance = null;
     this._allStatuses    = {};
+    // Netzgruppen — Instanzen mit gleichem grid_power_sensor
+    this._groups          = [];
+    this._activeGroup     = null;
+    // Verteilungs-Config pro Gruppe verschachtelt: {groupKey: {...}}
     this._distConfig     = {};
     this._distDirty      = {};
   }
@@ -352,49 +356,122 @@ class SolakonPanel extends HTMLElement {
       this._instances = res.instances || [];
     } catch (_) {
       this._instances = this._entryId
-        ? [{ entry_id: this._entryId, instance_name: "Solakon ONE" }]
+        ? [{ entry_id: this._entryId, instance_name: "Solakon ONE", grid_sensor: "" }]
         : [];
     }
+    this._computeGroups();
     if (this._instances.length > 0 && !this._activeInstance) {
       this._activeInstance = this._instances[0].entry_id;
       this._entryId        = this._instances[0].entry_id;
+    }
+    if (this._groups.length > 1 && !this._activeGroup) {
+      const g = this._groups.find(g => g.instances.some(i => i.entry_id === this._activeInstance));
+      if (g) this._activeGroup = g.key;
     }
     this._renderInstBar();
     await this._loadConfig();
   }
 
+  // Gruppiert Instanzen nach grid_power_sensor. Instanzen ohne gesetzten Sensor
+  // (sollte praktisch nicht vorkommen, Kernsensor ist Pflicht) fallen einzeln auf
+  // ihre eigene entry_id als Gruppenschlüssel zurück, statt fälschlich in einer
+  // gemeinsamen "leer"-Gruppe zu landen.
+  _computeGroups() {
+    const map = new Map();
+    for (const inst of this._instances) {
+      const key = inst.grid_sensor || `__ungrouped__${inst.entry_id}`;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(inst);
+    }
+    this._groups = [...map.entries()].map(([key, instances]) => ({
+      key,
+      label: this._hass?.states?.[key]?.attributes?.friendly_name || key,
+      instances,
+    }));
+    this._groups.sort((a, b) => a.label.localeCompare(b.label));
+  }
+
   _renderInstBar() {
-    const bar = this.shadowRoot.getElementById("inst-bar");
+    const bar    = this.shadowRoot.getElementById("inst-bar");
+    const subBar = this.shadowRoot.getElementById("group-sub-bar");
     if (!bar) return;
     bar.innerHTML = "";
+    if (subBar) subBar.innerHTML = "";
     if (this._instances.length <= 1) return;
 
-    const mkTab = (id, label) => {
+    const dt = this._t.dist || {};
+    const mkTab = (container, id, label, active) => {
       const el = document.createElement("div");
-      el.className = "inst-tab" + (this._activeInstance === id ? " active" : "");
+      el.className = "inst-tab" + (active ? " active" : "");
       el.textContent = label;
       el.addEventListener("click", () => this._switchInstance(id));
-      bar.appendChild(el);
+      container.appendChild(el);
     };
 
-    mkTab("__overview__", this._t.ov?.btn || "Overview");
-    for (const inst of this._instances) mkTab(inst.entry_id, inst.instance_name);
+    mkTab(bar, "__overview__", this._t.ov?.btn || "Overview", this._activeInstance === "__overview__");
+
+    if (this._groups.length <= 1) {
+      // Ein-Gruppen-Fall (Normalfall): flache Leiste, Verteilung als eigener Tab
+      // direkt nach Übersicht — kein Gruppen-Wrapper nötig, es gibt nur eine Gruppe.
+      mkTab(bar, "__dist__", dt.tab_lbl || "Distribution", this._activeInstance === "__dist__");
+      for (const inst of this._instances) {
+        mkTab(bar, inst.entry_id, inst.instance_name, this._activeInstance === inst.entry_id);
+      }
+      return;
+    }
+
+    // Mehrere Gruppen: oberste Ebene zeigt nur Gruppen (kein eigener Inhalt),
+    // die aktive Gruppe öffnet eine zweite Tab-Ebene [Verteilung | Instanzen...].
+    for (const g of this._groups) {
+      mkTab(bar, `__group__${g.key}`, `${dt.group_prefix || "Group"}: ${g.label}`, this._activeGroup === g.key);
+    }
+    if (this._activeGroup && subBar) {
+      const g = this._groups.find(x => x.key === this._activeGroup);
+      if (g) {
+        mkTab(subBar, "__dist__", dt.tab_lbl || "Distribution", this._activeInstance === "__dist__");
+        for (const inst of g.instances) {
+          mkTab(subBar, inst.entry_id, inst.instance_name, this._activeInstance === inst.entry_id);
+        }
+      }
+    }
   }
 
   _switchInstance(id) {
+    if (id.startsWith("__group__")) {
+      this._activeGroup = id.slice("__group__".length);
+      id = "__dist__"; // Gruppen-Tab selbst hat keinen Inhalt, springt direkt zur Verteilung
+    } else if (this._groups.length > 1 && id !== "__overview__" && id !== "__dist__") {
+      // Direktsprung auf eine Instanz (z. B. Klick auf Übersichts-Karte) außerhalb
+      // des aktuellen Gruppen-Kontexts — Gruppen-Tab passend nachziehen, sonst
+      // zeigt die obere Leiste keine aktive Gruppe und die Sub-Leiste fehlt.
+      const g = this._groups.find(g => g.instances.some(i => i.entry_id === id));
+      if (g) this._activeGroup = g.key;
+    }
+
     this._activeInstance = id;
     this._renderInstBar();
+
     const topCard = this.shadowRoot.querySelector(".top-card");
     const tabBar  = this.shadowRoot.getElementById("tabs");
+    const saveBar = this.shadowRoot.getElementById("save-bar");
+    const c       = this.shadowRoot.getElementById("content");
+
     if (id === "__overview__") {
       if (topCard) topCard.style.display = "none";
       if (tabBar)  tabBar.style.display  = "none";
-      const c = this.shadowRoot.getElementById("content");
       if (c) this._renderOverview(c);
-      const bar = this.shadowRoot.getElementById("save-bar");
-      if (bar) bar.style.display = "none";
+      if (saveBar) saveBar.style.display = "none";
       return;
     }
+
+    if (id === "__dist__") {
+      if (topCard) topCard.style.display = "none";
+      if (tabBar)  tabBar.style.display  = "none";
+      if (c) { c.innerHTML = ""; this._renderVerteilung(c); }
+      if (saveBar) saveBar.style.display = "none";
+      return;
+    }
+
     if (topCard) topCard.style.display = "";
     if (tabBar)  tabBar.style.display  = "";
     this._entryId   = id;
@@ -405,33 +482,51 @@ class SolakonPanel extends HTMLElement {
     this._loadConfig();
   }
 
+  // Immer von der Verteilung getrennt (auch im Ein-Gruppen-Fall) — Instanzen
+  // untereinander nach Netzgruppe sortiert, mit Gesamt-Leistungsanzeige je
+  // Gruppe (nur ab 2 Gruppen sichtbar, sonst eine einzige unbeschriftete Sektion).
   _renderOverview(c) {
     const ov = this._t.ov || {};
-    const html = this._instances.map(inst => {
-      const st = this._allStatuses[inst.entry_id] || {};
-      const zs = ZONE_STYLE[st.zone] ?? ZONE_STYLE[2];
-      const fl = this._t.fall_labels?.[st.active_fall] || st.active_fall || "—";
-      return `<div class="ov-card" data-eid="${inst.entry_id}">
-        <div class="ov-hdr" id="ov-hdr-${inst.entry_id}" style="background:${zs.color}">
-          <span id="ov-icon-${inst.entry_id}">${zs.icon}</span> ${inst.instance_name}
-        </div>
-        <div class="ov-body">
-          <div class="ov-row"><span>${ov.soc    || "SOC"}</span><strong id="ov-soc-${inst.entry_id}">${st.soc ?? "—"} %</strong></div>
-          <div class="ov-row"><span>${ov.output || "Output"}</span><strong id="ov-output-${inst.entry_id}">${st.actual_power != null ? st.actual_power + " W" : "—"}</strong></div>
-          <div class="ov-row"><span>${ov.grid   || "Grid"}</span><strong id="ov-grid-${inst.entry_id}">${st.grid != null ? st.grid.toFixed(0) + " W" : "—"}</strong></div>
-          <div class="ov-row"><span>${ov.fall   || "Case"}</span><strong id="ov-fall-${inst.entry_id}">${fl}</strong></div>
-        </div>
-      </div>`;
+    const showGroupHdr = this._groups.length > 1;
+
+    const groupsHtml = this._groups.map(g => {
+      let totalOutput = 0;
+      let gridVal = null;
+      for (const inst of g.instances) {
+        const st = this._allStatuses[inst.entry_id] || {};
+        if (st.actual_power != null) totalOutput += st.actual_power;
+        if (gridVal === null && st.grid != null) gridVal = st.grid;
+      }
+      const cardsHtml = g.instances.map(inst => {
+        const st = this._allStatuses[inst.entry_id] || {};
+        const zs = ZONE_STYLE[st.zone] ?? ZONE_STYLE[2];
+        const fl = this._t.fall_labels?.[st.active_fall] || st.active_fall || "—";
+        return `<div class="ov-card" data-eid="${inst.entry_id}">
+          <div class="ov-hdr" id="ov-hdr-${inst.entry_id}" style="background:${zs.color}">
+            <span id="ov-icon-${inst.entry_id}">${zs.icon}</span> ${inst.instance_name}
+          </div>
+          <div class="ov-body">
+            <div class="ov-row"><span>${ov.soc    || "SOC"}</span><strong id="ov-soc-${inst.entry_id}">${st.soc ?? "—"} %</strong></div>
+            <div class="ov-row"><span>${ov.output || "Output"}</span><strong id="ov-output-${inst.entry_id}">${st.actual_power != null ? st.actual_power + " W" : "—"}</strong></div>
+            <div class="ov-row"><span>${ov.grid   || "Grid"}</span><strong id="ov-grid-${inst.entry_id}">${st.grid != null ? st.grid.toFixed(0) + " W" : "—"}</strong></div>
+            <div class="ov-row"><span>${ov.fall   || "Case"}</span><strong id="ov-fall-${inst.entry_id}">${fl}</strong></div>
+          </div>
+        </div>`;
+      }).join("");
+
+      const headerHtml = showGroupHdr ? `
+        <div class="ov-group-hdr">
+          <span>${ov.group_prefix || "Group"}: ${g.label}</span>
+          <span class="ov-group-total">${ov.total_output || "Total"}: ${totalOutput.toFixed(0)} W · ${ov.grid || "Grid"}: ${gridVal != null ? gridVal.toFixed(0) + " W" : "—"}</span>
+        </div>` : "";
+
+      return `<div class="ov-group">${headerHtml}<div class="ov-grid">${cardsHtml}</div></div>`;
     }).join("");
-    c.innerHTML = `<div class="ov-grid">${html}</div>`;
+
+    c.innerHTML = groupsHtml;
     c.querySelectorAll(".ov-card").forEach(card => {
       card.addEventListener("click", () => this._switchInstance(card.dataset.eid));
     });
-
-    const distContainer = document.createElement("div");
-    distContainer.style.marginTop = "16px";
-    c.appendChild(distContainer);
-    this._renderVerteilung(distContainer);
   }
 
   // Leichtgewichtiges Update der Live-Werte auf der Overview-Seite — patcht
@@ -550,6 +645,10 @@ class SolakonPanel extends HTMLElement {
           border-bottom-color: var(--primary-color, #03a9f4); font-weight: 600; }
 
         /* ── Übersichts-Karten ───────────────────────────────────────────── */
+        .ov-group { margin-bottom: 16px; }
+        .ov-group:last-child { margin-bottom: 0; }
+        .ov-group-hdr { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px; padding: 6px 2px; font-size: .85em; font-weight: 600; color: var(--secondary-text-color, #666); }
+        .ov-group-total { font-weight: 500; color: var(--primary-text-color, #333); }
         .ov-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
         .ov-card { border: 1px solid var(--divider-color, #ddd); border-radius: 10px;
           overflow: hidden; cursor: pointer; transition: box-shadow .15s; }
@@ -676,6 +775,7 @@ class SolakonPanel extends HTMLElement {
         <span class="app-bar-title">Solakon ONE</span>
       </div>
       <div id="inst-bar" class="inst-bar"></div>
+      <div id="group-sub-bar" class="inst-bar"></div>
       <div class="wrap">
 
         <div class="top-card">
@@ -1147,45 +1247,70 @@ class SolakonPanel extends HTMLElement {
   }
 
   // ── Verteilung ───────────────────────────────────────────────────────────
+  // Config pro Netzgruppe verschachtelt: this._distConfig/_distDirty sind
+  // {groupKey: {...}}.
+
+  _distGroupKey() {
+    return this._activeGroup || (this._groups[0]?.key ?? "");
+  }
+
+  // Rendert die Verteilungsseite neu, direkt in #content. Nicht über
+  // _renderActiveTab() — das würde den per-Instanz-Tab-Inhalt rendern und
+  // die Verteilungsseite überschreiben.
+  _rerenderDist() {
+    const c = this.shadowRoot.getElementById("content");
+    if (c) { c.innerHTML = ""; this._renderVerteilung(c); }
+  }
 
   async _loadDistConfig() {
+    const gk = this._distGroupKey();
     try {
-      const res = await this._hass.callWS({ type: `${DOMAIN}/get_distribution_config` });
-      this._distConfig = res.distribution || {};
-    } catch (_) { this._distConfig = {}; }
-    this._distDirty = {};
+      const res = await this._hass.callWS({ type: `${DOMAIN}/get_distribution_config`, grid_sensor: gk });
+      this._distConfig[gk] = res.distribution || {};
+    } catch (_) { this._distConfig[gk] = {}; }
+    this._distDirty[gk] = {};
   }
 
   async _saveDistConfig() {
-    const merged = { ...this._distConfig, ...this._distDirty };
+    const gk     = this._distGroupKey();
+    const merged = { ...(this._distConfig[gk] || {}), ...(this._distDirty[gk] || {}) };
     const toast  = this._t.toast || {};
     try {
-      await this._hass.callWS({ type: `${DOMAIN}/save_distribution_config`, distribution: merged });
-      this._distConfig = merged;
-      this._distDirty  = {};
+      await this._hass.callWS({ type: `${DOMAIN}/save_distribution_config`, grid_sensor: gk, distribution: merged });
+      this._distConfig[gk] = merged;
+      this._distDirty[gk]  = {};
       this._showToast(toast.dist_saved || "✅");
-      this._renderActiveTab();
+      this._rerenderDist();
     } catch (e) { this._showToast("❌ " + e.message, true); }
   }
 
   _distVal(key) {
-    return key in this._distDirty ? this._distDirty[key] : this._distConfig[key];
+    const gk    = this._distGroupKey();
+    const dirty = this._distDirty[gk] || {};
+    const cfg   = this._distConfig[gk] || {};
+    return key in dirty ? dirty[key] : cfg[key];
   }
 
   _setDistVal(key, value) {
-    this._distDirty[key] = value;
-    this._renderActiveTab();
+    const gk = this._distGroupKey();
+    if (!this._distDirty[gk]) this._distDirty[gk] = {};
+    this._distDirty[gk][key] = value;
+    this._rerenderDist();
   }
 
   _distInstVal(entry_id, key) {
-    const k = `inst_${entry_id}_${key}`;
-    return k in this._distDirty ? this._distDirty[k]
-         : (this._distConfig[k] ?? "");
+    return this._distVal(`inst_${entry_id}_${key}`) ?? "";
   }
 
   _setDistInstVal(entry_id, key, value) {
-    this._distDirty[`inst_${entry_id}_${key}`] = value;
-    this._renderActiveTab();
+    this._setDistVal(`inst_${entry_id}_${key}`, value);
+  }
+
+  // Instanzen der aktuell aktiven Gruppe — bei nur einer Gruppe alle Instanzen.
+  _currentGroupInstances() {
+    if (this._groups.length <= 1) return this._instances;
+    const g = this._groups.find(x => x.key === this._activeGroup);
+    return g ? g.instances : this._instances;
   }
 
   _renderVerteilung(c) {
@@ -1197,9 +1322,10 @@ class SolakonPanel extends HTMLElement {
       return;
     }
 
-    const distLoaded = Object.keys(this._distConfig).length > 0 || Object.keys(this._distDirty).length > 0;
+    const gk = this._distGroupKey();
+    const distLoaded = Object.keys(this._distConfig[gk] || {}).length > 0 || Object.keys(this._distDirty[gk] || {}).length > 0;
     if (!distLoaded) {
-      this._loadDistConfig().then(() => this._renderActiveTab());
+      this._loadDistConfig().then(() => this._rerenderDist());
       c.innerHTML = `<p style="font-size:.88em;color:var(--secondary-text-color,#888);padding:12px 0">${dt.loading || "…"}</p>`;
       return;
     }
@@ -1233,7 +1359,7 @@ class SolakonPanel extends HTMLElement {
         </div>`;
     }).join("");
 
-    const instCards = this._instances.map(inst => {
+    const instCards = this._currentGroupInstances().map(inst => {
       const capSensor = this._distInstVal(inst.entry_id, "capacity_sensor");
       return `
         <div class="field">
@@ -1249,7 +1375,12 @@ class SolakonPanel extends HTMLElement {
         </div>`;
     }).join("");
 
+    const groupsNote = this._groups.length > 1
+      ? `<p class="desc" style="padding:0 0 8px">${dt.groups_note || ""} — <strong>${dt.group_prefix || "Group"}: ${this._groups.find(g => g.key === this._activeGroup)?.label ?? ""}</strong></p>`
+      : "";
+
     c.innerHTML = `
+      ${groupsNote}
       <div class="col-card top-item">
         <div class="col-header" style="background:#0891b2">${dt.global_hdr || "🌐"}</div>
         <div class="col-body">

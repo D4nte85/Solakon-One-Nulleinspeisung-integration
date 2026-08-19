@@ -397,11 +397,13 @@
     "static_tag":        "static"
   },
   "ov": {
-    "btn":    "📊 Overview",
-    "soc":    "SOC",
-    "output": "Output",
-    "grid":   "Grid",
-    "fall":   "Case"
+    "btn":          "📊 Overview",
+    "soc":          "SOC",
+    "output":       "Output",
+    "grid":         "Grid",
+    "fall":         "Case",
+    "group_prefix": "Group",
+    "total_output": "Total"
   },
   "debug": {
     "pi_hdr":     "🔄 PI Integral",
@@ -426,6 +428,9 @@
   },
   "dist": {
     "single_instance_note": "Power distribution is only needed with multiple instances.",
+    "tab_lbl":            "⚖️ Distribution",
+    "group_prefix":       "Group",
+    "groups_note":        "Instances are grouped automatically by their configured grid power sensor — each grid group (e.g. multiple smart meters for separate circuits) gets its own, independent power distribution. With only one group this grouping is invisible, there's just a single shared pool.",
     "loading":            "Loading…",
     "global_hdr":         "🌐 Global Settings",
     "global_max_lbl":     "Total Max. Output Power (W)",

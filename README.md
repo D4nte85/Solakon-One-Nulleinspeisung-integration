@@ -69,7 +69,13 @@ AC Laden und Tarif-Laden blockieren sich gegenseitig über den Modus-Guard (`Mod
 
 ## Multi-Instancing
 
-Bei mehr als einer installierten Instanz zeigt das Sidebar-Panel oben eine **Instanzleiste** sowie eine **Übersichtsseite** mit Echtzeit-Status aller Instanzen.
+Bei mehr als einer installierten Instanz zeigt das Sidebar-Panel oben eine **Instanzleiste** sowie eine **Übersichtsseite** mit Echtzeit-Status aller Instanzen und einen eigenen **Verteilungs-Tab**.
+
+### Netzgruppen (mehrere Smartmeter)
+
+Instanzen werden automatisch nach ihrem konfigurierten Netz-Leistungssensor gruppiert — Instanzen mit demselben Sensor bilden eine **Netzgruppe**. Fehleraufteilung und Leistungsverteilung (siehe unten) laufen ausschließlich **innerhalb** einer Gruppe; Instanzen an unterschiedlichen Smartmetern (z. B. zwei getrennte Stromkreise mit je eigenem Zähler) beeinflussen sich nicht gegenseitig.
+
+Bei nur einer Gruppe (Normalfall) ist diese Zuordnung unsichtbar — es gibt genau einen gemeinsamen Verteilungs-Tab. Bei mehreren Gruppen ersetzt die oberste Tab-Ebene die einzelnen Instanz-Tabs durch Gruppen-Tabs (`Gruppe: <Netzsensor>`); jede Gruppe öffnet darunter ihre eigene zweite Tab-Ebene mit „Verteilung" und den zugehörigen Instanzen. Die Übersichtsseite zeigt weiterhin alle Instanzen aller Gruppen, untereinander nach Gruppe sortiert mit einer Gesamt-Leistungsanzeige (Summe Ausgangsleistung, Netzleistung) je Gruppe.
 
 ### Automatische Fehleraufteilung und Leistungsverteilung
 
@@ -144,7 +150,7 @@ Dadurch gleicht sich die Aufteilung zwischen den Instanzen bei jedem Stelleingri
 
 ### Leistungsverteilung konfigurieren
 
-Im Panel wird bei mehreren Instanzen ein zusätzlicher **Verteilungs-Tab** eingeblendet.
+Im Panel wird bei mehreren Instanzen ein zusätzlicher **Verteilungs-Tab** eingeblendet — bei mehreren Netzgruppen (siehe oben) je Gruppe ein eigener, unabhängig konfigurierbarer Verteilungs-Tab.
 
 | Parameter | Beschreibung |
 |-----------|-------------|
@@ -223,7 +229,7 @@ Im Einrichtungsformular werden zunächst ein **Instanzname** (z. B. „Speicher 
 
 ## Konfiguration im Sidebar-Panel
 
-Nach der Einrichtung erscheint in der HA-Seitenleiste der Eintrag **Solakon ONE**. Das Panel ist in zehn Tabs gegliedert. Änderungen werden erst nach Klick auf **💾 Speichern** übernommen — die Speicherleiste erscheint automatisch sobald ein Wert geändert wurde.
+Nach der Einrichtung erscheint in der HA-Seitenleiste der Eintrag **Solakon ONE**. Jede Instanz ist in zehn Tabs gegliedert. Änderungen werden erst nach Klick auf **💾 Speichern** übernommen — die Speicherleiste erscheint automatisch sobald ein Wert geändert wurde. Bei mehr als einer Instanz kommen zusätzlich eine **Übersichtsseite** und ein **Verteilungs-Tab** hinzu, siehe [Multi-Instancing](#multi-instancing).
 
 Alle Eingabefelder für Entity-IDs (z. B. Kapazitäts-, Vorhersage- und Preis-Sensoren) zeigen rechts einen **Validierungspunkt**, der die eingetragene Entity live gegen Home Assistant prüft: **grün** = Entity liefert einen Wert, **gelb** = Entity existiert, ist aber `unknown`/`unavailable`, **rot** = Entity existiert nicht (Tippfehler prüfen). Der Punkt aktualisiert sich beim Tippen und im laufenden Betrieb.
 
@@ -530,6 +536,7 @@ Die Integration erzeugt automatisch folgende Entitäten unter dem Gerät **Solak
 | `sensor.solakon_one_netz_standardabweichung` | Sensor | Netz-Stabw. in W über das konfigurierte Fenster |
 | `sensor.solakon_one_aktiver_fall` | Sensor | Aktiver Fall (0A, A, B, … TM) mit Klartext-Label |
 | `sensor.solakon_one_pi_integral` | Sensor | Aktueller I-Anteil des PI-Reglers |
+| `sensor.solakon_one_uberschussleistung` | Sensor | Verwertbarer PV-Überschuss in W — `min(aktuell geltendes Hard-Limit, PV-Leistung) − Ausgangsleistung`, geklemmt auf ≥0. Zeigt die Leistung, die über das aktuelle Hard-Limit oder die verfügbare Sonne hinaus **nicht** mehr sinnvoll ausgegeben werden kann, ohne den Akku zu belasten — z. B. für eine Automation, die bei Überschuss einen Zusatzverbraucher schaltet |
 | `switch.solakon_one_regelung_aktiv` | Switch | Hauptschalter — aktiviert/deaktiviert den Schreibteil |
 | `binary_sensor.solakon_one_entladezyklus_aktiv` | Binary Sensor | Internes Flag Entladezyklus |
 | `binary_sensor.solakon_one_uberschuss_modus` | Binary Sensor | Flag Überschuss-Modus aktiv |
