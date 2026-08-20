@@ -440,7 +440,12 @@ class SolakonPanel extends HTMLElement {
     if (id.startsWith("__group__")) {
       this._activeGroup = id.slice("__group__".length);
       id = "__dist__"; // Gruppen-Tab selbst hat keinen Inhalt, springt direkt zur Verteilung
-    } else if (this._groups.length > 1 && id !== "__overview__" && id !== "__dist__") {
+    } else if (id === "__overview__") {
+      // Übersicht zeigt alle Gruppen gleichzeitig — kein einzelner Gruppen-Tab
+      // darf aktiv bleiben, sonst markiert die Leiste die alte Gruppe doppelt
+      // und die Sub-Leiste (Verteilung/Instanzen) bleibt sichtbar.
+      this._activeGroup = null;
+    } else if (this._groups.length > 1 && id !== "__dist__") {
       // Direktsprung auf eine Instanz (z. B. Klick auf Übersichts-Karte) außerhalb
       // des aktuellen Gruppen-Kontexts — Gruppen-Tab passend nachziehen, sonst
       // zeigt die obere Leiste keine aktive Gruppe und die Sub-Leiste fehlt.
@@ -491,12 +496,18 @@ class SolakonPanel extends HTMLElement {
 
     const groupsHtml = this._groups.map(g => {
       let totalOutput = 0;
-      let gridVal = null;
       for (const inst of g.instances) {
         const st = this._allStatuses[inst.entry_id] || {};
         if (st.actual_power != null) totalOutput += st.actual_power;
-        if (gridVal === null && st.grid != null) gridVal = st.grid;
       }
+      // Direkt aus dem HA-State lesen statt aus einer beliebigen Instanz-
+      // Momentaufnahme — der Netzsensor ist derselbe physische Sensor für die
+      // ganze Gruppe, unabhängig pollende Coordinator-Zyklen würden sonst je
+      // nach Render-Zeitpunkt unterschiedlich alte Werte einer zufälligen
+      // Instanz zeigen.
+      const gridState = this._hass?.states?.[g.key];
+      const gridNum   = gridState ? parseFloat(gridState.state) : NaN;
+      const gridVal   = Number.isFinite(gridNum) ? gridNum : null;
       const cardsHtml = g.instances.map(inst => {
         const st = this._allStatuses[inst.entry_id] || {};
         const zs = ZONE_STYLE[st.zone] ?? ZONE_STYLE[2];
@@ -1440,7 +1451,7 @@ class SolakonPanel extends HTMLElement {
         </div>
       </div>
 
-      <div id="dist-save-bar" style="position:sticky;bottom:0;background:var(--primary-color,#03a9f4);color:#fff;padding:10px 16px;border-radius:8px;margin-top:4px;align-items:center;justify-content:space-between;display:${Object.keys(this._distDirty).length ? "flex" : "none"}">
+      <div id="dist-save-bar" style="position:sticky;bottom:0;background:var(--primary-color,#03a9f4);color:#fff;padding:10px 16px;border-radius:8px;margin-top:4px;align-items:center;justify-content:space-between;display:${Object.keys(this._distDirty[gk] || {}).length ? "flex" : "none"}">
         <span>${dt.unsaved || ""}</span>
         <button onclick="this.getRootNode().host._saveDistConfig()" style="background:#fff;color:var(--primary-color,#03a9f4);border:none;padding:6px 16px;border-radius:6px;cursor:pointer;font-weight:600">${dt.save || "Save"}</button>
       </div>

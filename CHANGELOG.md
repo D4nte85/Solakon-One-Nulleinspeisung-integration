@@ -5,6 +5,11 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+### Behoben
+- Übersichtsseite: beim Wechsel zu „Übersicht" blieb bei mehreren Netzgruppen der zuletzt aktive Gruppen-Tab weiterhin optisch markiert und die zugehörige Verteilungs-/Instanzen-Unterleiste sichtbar (Discussion #21). `_switchInstance()` setzt die aktive Gruppe jetzt beim Wechsel zur Übersicht zurück
+- Übersichtsseite: der Netzleistungswert im Gruppen-Gesamtwert stammte von einer beliebigen Instanz der Gruppe statt vom gemeinsamen Netzsensor selbst — je nach Render-Zeitpunkt der unabhängig pollenden Instanzen zeigte er dadurch inkonsistente, unterschiedlich alte Werte (Discussion #21). Wird jetzt direkt aus dem HA-State des Netzsensors gelesen
+- Verteilungs-Tab: die Speicherleiste bei den globalen Sensoren zeigte dauerhaft „ungespeicherte Änderungen", auch direkt nach dem Speichern (Discussion #21). Die Sichtbarkeitsprüfung zählte fälschlich alle jemals geladenen Gruppen statt der tatsächlich geänderten Felder der aktiven Gruppe
+
 ## [2.2.3] – 2026-08-20
 
 ### Behoben
