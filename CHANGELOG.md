@@ -5,6 +5,8 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+## [2.2.5] – 2026-08-20
+
 ### Behoben
 - Live-Vorschau (`index.html`): fehlendes `<meta charset="utf-8">` — Umlaute, Gedankenstriche und Emoji (z. B. in der neuen Verteilungs-Modus-Zeile) konnten je nach Browser-/Locale-Fallback als Mojibake dargestellt werden, da weder der HTTP-Header noch die HTML-Datei eine Zeichenkodierung deklarierten. Betrifft nur die Vorschau, nicht die echte Integration — deren Panel läuft im bereits UTF-8-deklarierten Home-Assistant-Frontend-Dokument
 - Live-Vorschau (`index.html`): der angezeigte Verteilungs-Modus (`dist_mode_effective`) war beim Seitenaufbau einmalig hartkodiert statt bei jeder Statusabfrage neu aus der Demo-Konfiguration berechnet — Modusänderungen im Verteilungs-Tab spiegelten sich dadurch nicht in der Übersicht wider. Neue Funktion `computeDistModeEffective()` bildet die Backend-Degradationslogik nach und wird bei jedem `get_status`-Aufruf neu ausgewertet
