@@ -842,6 +842,11 @@ class SolakonPanel extends HTMLElement {
   // ── Tab rendering ─────────────────────────────────────────────────────────
 
   _renderActiveTab() {
+    // Aufrufer sind async (_loadConfig, Tab-Klick, _saveSettings) und können nach
+    // einem await zurückkommen, nachdem der Nutzer bereits zu Übersicht/Verteilung
+    // gewechselt hat — #content gehört dann diesen Views, nicht mehr dem Instanz-Tab.
+    if (this._activeInstance === "__overview__" || this._activeInstance === "__dist__") return;
+
     const c = this.shadowRoot.getElementById("content");
 
     if (this._activeTab === "status") {
@@ -1258,6 +1263,10 @@ class SolakonPanel extends HTMLElement {
   // _renderActiveTab() — das würde den per-Instanz-Tab-Inhalt rendern und
   // die Verteilungsseite überschreiben.
   _rerenderDist() {
+    // Aufrufer sind teils async (_saveDistConfig, _loadDistConfig().then()) und
+    // können zurückkommen, nachdem der Nutzer die Verteilungsseite bereits
+    // verlassen hat — dann gehört #content der Übersicht oder einem Instanz-Tab.
+    if (this._activeInstance !== "__dist__") return;
     const c = this.shadowRoot.getElementById("content");
     if (c) { c.innerHTML = ""; this._renderVerteilung(c); }
   }
