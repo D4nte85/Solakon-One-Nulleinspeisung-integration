@@ -432,9 +432,9 @@ offset_out        = −offset_abs  (Negativer Offset: Ein)
 | Netz-Zustand | StdDev | Ergebnis (min=30, noise=15, factor=1.5) |
 |:------------|:------:|:---------------------------------------:|
 | Sehr ruhig | 5 W | 30 W *(Minimum)* |
-| Normal | 30 W | 53 W |
+| Normal | 30 W | 52 W |
 | Unruhig | 80 W | 128 W |
-| Sehr unruhig | 160 W | 228 W |
+| Sehr unruhig | 160 W | 248 W |
 | Extrem | 250 W+ | 250 W *(Maximum)* |
 
 Jede Zone (Zone 1, Zone 2, Zone AC) hat einen eigenen Parameterblock:
@@ -587,7 +587,7 @@ Preis muss unterhalb der Teuer-Schwelle liegen (gilt für günstig UND mittel). 
 Stabw.-Sensor im Status-Tab prüfen. Nach dem ersten Start einige Minuten warten bis genug Samples gesammelt sind. Volatilitäts-Faktor erhöhen oder Rausch-Schwelle senken.
 
 **Dynamischer Offset kehrt nachts/in Ruhephasen nicht auf das Minimum zurück (Multi-Instanz)**
-Bei mehreren Instanzen am selben Netzsensor: vor dem gruppengemeinsamen StdDev-Ringpuffer (siehe CHANGELOG) konnte jede Instanz unabhängig eine leicht phasenversetzte StdDev-Historie berechnen — die Korrekturen der einen Instanz sahen für die andere wie externe Netzunruhe aus und hielten den Offset gegenseitig oben, ohne dass eine reale Störung mehr nötig war. Mit dem gruppengemeinsamen Ringpuffer sollte das nicht mehr auftreten; falls doch: Volatilitäts-Faktor senken (Empfehlung 1.0 statt 1.5) und Rausch-Schwelle deutlich unter Min. Offset setzen.
+Bei mehreren Instanzen am selben Netzsensor gleicht der gruppengemeinsame StdDev-Ringpuffer die Historie zwischen den Instanzen ab. Tritt der Effekt trotzdem auf: Volatilitäts-Faktor senken (Empfehlung 1.0 statt 1.5) und Rausch-Schwelle deutlich unter Min. Offset setzen.
 
 **Recovery (Fall D) greift zu oft**
 Der Modus-Reset-Timer läuft ab bevor der Regler ihn zurücksetzen kann. Solakon-Integration auf Polling-Intervall prüfen.
@@ -596,7 +596,7 @@ Der Modus-Reset-Timer läuft ab bevor der Regler ihn zurücksetzen kann. Solakon
 Home Assistant vollständig neu starten (nicht nur neu laden). HACS-Download-Status überprüfen.
 
 **Eine Instanz zeigt „setup_error" nach HA-Neustart oder Stromausfall (nur bei mehreren Instanzen)**
-Seltene Race Condition beim parallelen Setup mehrerer Config-Entries, behoben (siehe CHANGELOG). Tückisch: die betroffene Instanz friert dabei auf ihrem letzten Wert ein, statt einen sichtbaren Fehlerzustand zu zeigen — im Dashboard wirkt sie gesund, ist aber ungeregelt. Workaround bei betroffener Version: den fehlgeschlagenen Config-Entry manuell neu laden (Einstellungen → Geräte & Dienste → Solakon-Instanz → drei Punkte → Neu laden).
+Seltene Race Condition beim parallelen Setup mehrerer Config-Entries. Tückisch: die betroffene Instanz friert dabei auf ihrem letzten Wert ein, statt einen sichtbaren Fehlerzustand zu zeigen — im Dashboard wirkt sie gesund, ist aber ungeregelt. Workaround: den fehlgeschlagenen Config-Entry manuell neu laden (Einstellungen → Geräte & Dienste → Solakon-Instanz → drei Punkte → Neu laden).
 
 **SOC der Instanzen läuft bei mehreren Solakons auseinander**
 Bei unterschiedlich großen Batterien im Verteilungs-Tab prüfen, dass der Verteilungs-Modus wirklich auf **„Kapazitätsgewichtet"** steht (nicht „SOC-gewichtet" — das gewichtet bewusst rein nach Prozentpunkten, ohne Kapazität, und lässt unterschiedlich große Batterien dauerhaft auseinanderlaufen). Danach die Kapazitätssensoren prüfen — ein **roter Validierungspunkt** neben dem Feld bedeutet, dass die eingetragene Entity nicht existiert (häufig ein Tippfehler in der Entity-ID). Ohne gültigen Kapazitätswert bei allen Instanzen degradiert „Kapazitätsgewichtet" automatisch zu reiner SOC-%-Gewichtung — das erscheint jetzt als Meldung im Status-/Fehlerfeld der betroffenen Instanzen, statt still zu bleiben.
