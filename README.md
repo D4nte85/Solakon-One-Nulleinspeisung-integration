@@ -448,6 +448,8 @@ Jede Zone (Zone 1, Zone 2, Zone AC) hat einen eigenen Parameterblock:
 | Volatilitäts-Faktor | Verstärkung oberhalb der Rausch-Schwelle | 1,0–2,0 |
 | Negativer Offset | Offset negieren (Regelziel < 0 W) | Aus |
 
+**Mehrere Instanzen am selben Netzsensor:** Der StdDev-Ringpuffer wird nur von einer Instanz (dem Gruppen-Leader, kleinste entry_id unter den aktiv regelnden Instanzen der Netzgruppe) gepflegt — alle anderen übernehmen ihren Wert. Verhindert, dass mehrere unabhängig berechnete, leicht phasenversetzte StdDev-Historien sich gegenseitig hochschaukeln (siehe Troubleshooting). Bei Einzelbetrieb ist die Instanz immer ihr eigener Leader — kein Unterschied zum bisherigen Verhalten.
+
 ---
 
 ### 🌙 Nacht
@@ -516,7 +518,7 @@ Typischer Arbeitsbereich: **0.03–0.08**. Für AC Laden separat tunen — P bes
 6. **at_max_limit-Guard.** Greift am zonenabhängigen `dynamic_max` (Zone 0: AC-Limit, Zone 1: Hard Limit Z1, Zone 2: `min(Hard-Limit-Z1, PV−Reserve)`). Liegt `current_power` über `dynamic_max` (z.B. weil PV abgefallen ist), läuft der PI trotz positivem Netzfehler und reduziert den Befehl auf die neue Decke — kein Deadlock wenn das dynamic ceiling sinkt.
 7. **at_max/at_min-Guards im AC-Lade-Modus.** Beide Guards sind während AC Laden deaktiviert — Fall I übernimmt die Safety-Funktion für unlegitimierte `'3'`-Zustände.
 8. **Tarif-Discharge-Lock.** Der Lock gilt für mittlere UND günstige Preiszonen (alles unterhalb der Teuer-Schwelle) und sperrt sowohl Zone 1 als auch Zone 2 (Output 0 W, Modus Disabled). Solange Überschuss-Einspeisung aktiv ist, wird kein Lock ausgelöst. Die Sperre hebt sich automatisch wenn der Preis die Teuer-Schwelle überschreitet — Recovery (Fall D) stellt dann den vorherigen Modus wieder her.
-9. **Dynamischer Offset.** Jede Zone wird einzeln aktiviert. Die Netz-Standardabweichung wird intern berechnet — kein externer Statistik-Sensor erforderlich. Nach dem ersten Start einige Minuten warten bis genug Samples gesammelt sind.
+9. **Dynamischer Offset.** Jede Zone wird einzeln aktiviert. Die Netz-Standardabweichung wird intern berechnet — kein externer Statistik-Sensor erforderlich. Nach dem ersten Start einige Minuten warten bis genug Samples gesammelt sind. Bei mehreren Instanzen am selben Netzsensor pflegt nur der Gruppen-Leader den Ringpuffer, alle anderen übernehmen seinen Wert.
 10. **Self-Adjusting Wait.** Polls die tatsächliche Ausgangsleistung nach einem Setpoint-Befehl statt einer festen Wartezeit zu schlafen. Die konfigurierte Wartezeit wird zum maximalen Timeout als Sicherheitsnetz.
 11. **Export-Limit-Sync.** Ist die optionale Netz-Ausgangsleistungsgrenze-Entität konfiguriert, schreibt jeder Regelzyklus `max(Hard-Limit-Z0, Hard-Limit-Z1)` in diese Entität — sofern er abweicht. Das verhindert, dass externe Eingriffe (App, andere Automation) das Hardware-Limit dauerhaft ändern.
 12. **Entladestrom-Abgleich.** Der maximale Entladestrom wird in jedem Zyklus zentral aus dem Regelzustand abgeleitet (Surplus → 2 A, AC-/Tarif-Laden → 0 A, Zone 1 → Max-Entladestrom, sonst 0 A) und mit dem Ist-Wert abgeglichen — vor dem PI-Gate, also auch im Disabled-Leerlauf. Das garantiert, dass ein Klemmwert (insb. die 2 A aus dem Surplus-Trick) nie über einen Zustandswechsel hinaus stehen bleibt und die Batterie drosselt; die einzelnen Falls setzen den Strom nicht mehr selbst.
@@ -583,6 +585,9 @@ Preis muss unterhalb der Teuer-Schwelle liegen (gilt für günstig UND mittel). 
 
 **Dynamischer Offset bleibt auf Minimum**
 Stabw.-Sensor im Status-Tab prüfen. Nach dem ersten Start einige Minuten warten bis genug Samples gesammelt sind. Volatilitäts-Faktor erhöhen oder Rausch-Schwelle senken.
+
+**Dynamischer Offset kehrt nachts/in Ruhephasen nicht auf das Minimum zurück (Multi-Instanz)**
+Bei mehreren Instanzen am selben Netzsensor: vor dem gruppengemeinsamen StdDev-Ringpuffer (siehe CHANGELOG) konnte jede Instanz unabhängig eine leicht phasenversetzte StdDev-Historie berechnen — die Korrekturen der einen Instanz sahen für die andere wie externe Netzunruhe aus und hielten den Offset gegenseitig oben, ohne dass eine reale Störung mehr nötig war. Mit dem gruppengemeinsamen Ringpuffer sollte das nicht mehr auftreten; falls doch: Volatilitäts-Faktor senken (Empfehlung 1.0 statt 1.5) und Rausch-Schwelle deutlich unter Min. Offset setzen.
 
 **Recovery (Fall D) greift zu oft**
 Der Modus-Reset-Timer läuft ab bevor der Regler ihn zurücksetzen kann. Solakon-Integration auf Polling-Intervall prüfen.

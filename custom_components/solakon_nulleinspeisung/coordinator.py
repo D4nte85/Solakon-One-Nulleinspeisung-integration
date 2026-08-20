@@ -671,7 +671,15 @@ class SolakonCoordinator:
         timer_val = self._flt(cfg[CONF_TIMEOUT_COUNTDOWN])
 
         # ── 1b. StdDev aktualisieren + dynamische Offsets berechnen ──────────
-        self._update_stddev(grid)
+        # StdDev ist eine Eigenschaft der Netzgruppe (des physischen Messpunkts),
+        # nicht der einzelnen Instanz — nur der Gruppen-Leader pflegt den
+        # Ringpuffer, alle Instanzen übernehmen seinen Wert. Verhindert, dass
+        # mehrere Instanzen am selben Sensor unabhängige, leicht phasenversetzte
+        # StdDev-Historien berechnen und sich darüber gegenseitig hochschaukeln.
+        leader = self._group_leader()
+        if leader is self:
+            self._update_stddev(grid)
+        self.grid_stddev = leader.grid_stddev
         if any(s.get(k, False) for k in (S_DYN_Z1_ENABLED, S_DYN_Z2_ENABLED, S_DYN_AC_ENABLED)):
             self._update_dynamic_offsets()
 
@@ -1359,6 +1367,21 @@ class SolakonCoordinator:
             eid: c for eid, c in self.hass.data.get(DOMAIN, {}).items()
             if c.entry.data.get(CONF_GRID_SENSOR, "") == my_grid
         }
+
+    def _group_leader(self) -> "SolakonCoordinator":
+        """Deterministisch bestimmte Instanz der Netzgruppe, die den geteilten
+        StdDev-Ringpuffer pflegt — kleinste entry_id unter den Instanzen mit
+        aktiver Regelung (Fallback: kleinste entry_id der Gesamtgruppe, falls
+        gerade keine aktiv ist). Kein persistenter Zustand: fällt die aktuelle
+        Leader-Instanz aus (deaktiviert/entfernt), übernimmt automatisch die
+        nächste, ohne Übergabelogik. Einzelinstanz: Leader ist immer sich selbst.
+        """
+        group = self._group_coords()
+        active = {
+            eid: c for eid, c in group.items()
+            if c.settings.get(S_REGULATION_ENABLED, False)
+        } or group
+        return active[min(active)]
 
     def _dist_cfg(self) -> dict:
         """Verteilungs-Config nur der eigenen Netzgruppe, mit Defaults aufgefüllt."""

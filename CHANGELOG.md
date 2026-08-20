@@ -5,6 +5,11 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+## [2.2.3] – 2026-08-20
+
+### Behoben
+- Dynamischer Offset: bei mehreren Instanzen am selben Netzsensor berechnete jede Instanz unabhängig ihre eigene StdDev aus einem eigenen Ringpuffer — leicht phasenversetzt zueinander, da nicht synchronisiert. Die Korrekturen einer Instanz sahen dadurch für die andere wie externe Netzunruhe aus und hielten den Offset gegenseitig oben, auch ohne reale Störung (Issue #24, gemeldet von `dbatosc`). `_update_stddev()` läuft jetzt nur noch beim deterministisch bestimmten Gruppen-Leader (kleinste entry_id unter den aktiv regelnden Instanzen der Netzgruppe, neue Methode `_group_leader()`), alle anderen Instanzen der Gruppe übernehmen dessen `grid_stddev`. Einzelbetrieb unverändert (Instanz ist immer ihr eigener Leader). Feldverifikation durch den Reporter steht aus
+
 ## [2.2.2] – 2026-08-20
 
 ### Behoben

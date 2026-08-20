@@ -56,7 +56,7 @@
     },
     "dynoff": {
       "summary": "Dynamic Offset — automatically calculated from grid volatility",
-      "text": "Calculates the zero-point offset from the standard deviation of grid power over the configured time window.\n\nFormula: offset = clamp(min + max(0, (StdDev − noise) × factor), min, max)\n\nExample (min=30, noise=15, factor=1.5):\n• StdDev 5 W → 30 W (minimum)\n• StdDev 30 W → 53 W\n• StdDev 80 W → 128 W\n• StdDev 160 W → 228 W\n• StdDev 250 W+ → 250 W (maximum)\n\nEach zone (Zone 1, Zone 2, Zone AC) can be enabled individually and overrides the static offset of that zone.\n\nThe StdDev sensor is calculated internally — no external statistics sensor required."
+      "text": "Calculates the zero-point offset from the standard deviation of grid power over the configured time window.\n\nFormula: offset = clamp(min + max(0, (StdDev − noise) × factor), min, max)\n\nExample (min=30, noise=15, factor=1.5):\n• StdDev 5 W → 30 W (minimum)\n• StdDev 30 W → 53 W\n• StdDev 80 W → 128 W\n• StdDev 160 W → 228 W\n• StdDev 250 W+ → 250 W (maximum)\n\nEach zone (Zone 1, Zone 2, Zone AC) can be enabled individually and overrides the static offset of that zone.\n\nThe StdDev sensor is calculated internally — no external statistics sensor required.\n\nMultiple instances on the same grid sensor: one instance (the group leader) maintains the StdDev ring buffer, all others adopt its value — prevents independent, slightly phase-shifted StdDev calculations per instance."
     },
     "night": {
       "summary": "Night Shutdown — disable Zone 2 when PV < PV reserve",
