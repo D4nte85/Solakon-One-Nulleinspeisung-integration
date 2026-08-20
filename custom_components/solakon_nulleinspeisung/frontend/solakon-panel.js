@@ -662,8 +662,16 @@ class SolakonPanel extends HTMLElement {
   // ── Config / Status Laden ─────────────────────────────────────────────────
 
   async _loadConfig() {
-    try { this._settings = await this._ws("get_config"); this._renderActiveTab(); }
-    catch (e) { console.error("Solakon: config load failed", e); }
+    // entry_id vor dem await festhalten — schaltet der Nutzer während der
+    // Anfrage auf ein anderes Gerät, darf die (dann veraltete) Antwort nicht
+    // mehr dessen Einstellungen überschreiben.
+    const targetId = this._entryId;
+    try {
+      const settings = await this._ws("get_config");
+      if (this._entryId !== targetId) return;
+      this._settings = settings;
+      this._renderActiveTab();
+    } catch (e) { console.error("Solakon: config load failed", e); }
   }
 
   async _loadStatus() {
@@ -686,8 +694,14 @@ class SolakonPanel extends HTMLElement {
       }
       return;
     }
+    // Dieselbe Race wie im Übersichts-Zweig oben: entry_id vor dem await
+    // festhalten, sonst kann eine verspätete Antwort eines Geräts die
+    // Statuswerte eines inzwischen aktiven anderen Geräts überschreiben.
+    const targetId = this._entryId;
     try {
-      this._status = await this._ws("get_status");
+      const status = await this._ws("get_status");
+      if (this._entryId !== targetId) return;
+      this._status = status;
       if (this._activeTab === "status") this._updateStatusView();
       if (this._activeTab === "debug") {
         const el = this.shadowRoot.getElementById("dbg-zone-state");
@@ -1310,23 +1324,32 @@ class SolakonPanel extends HTMLElement {
 
   async _saveSettings() {
     if (!Object.keys(this._dirty).length) return;
+    // entry_id vor dem await festhalten — schaltet der Nutzer während des
+    // Speicherns auf ein anderes Gerät, dürfen dessen Settings/Dirty-State
+    // nicht mit der (dann fremden) Antwort dieses Aufrufs verändert werden.
+    const targetId = this._entryId;
     const toast = this._t.toast || {};
     try {
       await this._ws("save_config", { changes: this._dirty });
-      this._settings = { ...this._settings, ...this._dirty };
-      this._dirty = {};
+      if (this._entryId === targetId) {
+        this._settings = { ...this._settings, ...this._dirty };
+        this._dirty = {};
+        this._renderActiveTab();
+      }
       this._showToast(toast.settings_saved || "✅");
-      this._renderActiveTab();
     } catch (e) { this._showToast("❌ " + e.message, true); }
   }
 
   async _toggleRegulation() {
+    const targetId = this._entryId;
     const on    = !this._settings.regulation_enabled;
     const toast = this._t.toast || {};
     try {
       await this._ws("save_config", { changes: { regulation_enabled: on } });
-      this._settings.regulation_enabled = on;
-      this._updateRegBanner();
+      if (this._entryId === targetId) {
+        this._settings.regulation_enabled = on;
+        this._updateRegBanner();
+      }
       this._showToast(on ? (toast.regulation_on || "✅") : (toast.regulation_off || "⏸️"));
     } catch (e) { this._showToast("❌ " + e.message, true); }
   }
@@ -1340,12 +1363,15 @@ class SolakonPanel extends HTMLElement {
   }
 
   async _toggleCycle(activate) {
+    const targetId = this._entryId;
     const toast = this._t.toast || {};
     const d     = this._t.debug || {};
     try {
       await this._ws("set_cycle", { active: activate });
       this._showToast(activate ? (toast.zone1_activated || "⚡") : (toast.zone2_activated || "🔋"));
-      this._status = await this._ws("get_status");
+      const status = await this._ws("get_status");
+      if (this._entryId !== targetId) return;
+      this._status = status;
       const el = this.shadowRoot.getElementById("dbg-zone-state");
       if (el) el.textContent = this._status.cycle_active
         ? (d.zone1_state || "Zone 1")
