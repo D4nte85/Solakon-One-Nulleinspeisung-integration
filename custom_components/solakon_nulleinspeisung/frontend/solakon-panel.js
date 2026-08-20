@@ -548,6 +548,10 @@ class SolakonPanel extends HTMLElement {
     this._dirty     = {};
     this._status    = null;
     this._activeTab = "status";
+    // _activeTab wird hier programmatisch gesetzt statt per Tab-Klick — die
+    // .active-Klasse im Tab-Balken muss deshalb manuell nachgezogen werden,
+    // sonst bleibt der zuletzt angeklickte Tab eines vorherigen Geräts markiert.
+    if (tabBar) tabBar.querySelectorAll(".tab").forEach(x => x.classList.toggle("active", x.dataset.id === "status"));
     this._loadConfig();
   }
 
@@ -671,6 +675,10 @@ class SolakonPanel extends HTMLElement {
           );
         } catch (_) {}
       }
+      // Die await-Schleife oben braucht bei mehreren Instanzen messbare Zeit —
+      // wechselt der Nutzer währenddessen auf ein Gerät, darf die Übersicht
+      // #content nicht mehr überschreiben (analog zum Guard in _rerenderDist()).
+      if (this._activeInstance !== "__overview__") return;
       const c = this.shadowRoot.getElementById("content");
       if (c) {
         if (c.querySelector(".ov-grid")) this._updateOverviewCards();
