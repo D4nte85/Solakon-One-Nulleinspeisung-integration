@@ -5,6 +5,9 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+### Behoben
+- Live-Vorschau (`index.html`): fehlendes `<meta charset="utf-8">` — Umlaute, Gedankenstriche und Emoji (z. B. in der neuen Verteilungs-Modus-Zeile) konnten je nach Browser-/Locale-Fallback als Mojibake dargestellt werden, da weder der HTTP-Header noch die HTML-Datei eine Zeichenkodierung deklarierten. Betrifft nur die Vorschau, nicht die echte Integration — deren Panel läuft im bereits UTF-8-deklarierten Home-Assistant-Frontend-Dokument
+
 ## [2.2.4] – 2026-08-20
 
 ### Hinzugefügt
