@@ -450,7 +450,7 @@ class SolakonPanel extends HTMLElement {
       gridVal: Number.isFinite(gridNum) ? gridNum : null,
       socAvg:  socCount === 0 ? null : (socWeighted ? capWeightedSum / capSum : socSum / socCount),
       socWeighted,
-      distModeConfigured: this._distValFor(g.key, "distribution_mode") || "equal",
+      distModeConfigured: (this._distConfig[g.key] || {}).distribution_mode || "equal",
       distModeEffective,
     };
   }
