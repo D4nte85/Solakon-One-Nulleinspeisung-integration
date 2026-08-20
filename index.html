@@ -25,15 +25,24 @@
 }
 *{box-sizing:border-box}
 html,body{margin:0;padding:0;background:var(--primary-background-color);min-height:100vh}
+#scenario-switcher{position:fixed;bottom:12px;right:12px;z-index:1000;display:flex;gap:4px;
+  background:var(--card-background-color);border:1px solid var(--divider-color);
+  border-radius:8px;padding:4px;box-shadow:0 2px 10px rgba(0,0,0,.25);font-family:sans-serif}
+#scenario-switcher button{border:none;border-radius:6px;padding:6px 10px;font-size:.78em;
+  cursor:pointer;background:transparent;color:var(--secondary-text-color)}
+#scenario-switcher button.active{background:var(--primary-color);color:#fff}
+#scenario-switcher button:hover:not(.active){background:var(--secondary-background-color)}
 </style>
 
 <!--
   Live-Vorschau: lädt das echte solakon-panel.js unverändert und speist es mit
   Demo-Daten über ein Mock-hass-Objekt. Keine hartkodierte Nachbildung mehr —
   jede Änderung am echten Panel erscheint hier automatisch. Optional ?lang=en
-  für die englische Übersetzung (real genutzte panel.en.json).
+  für die englische Übersetzung (real genutzte panel.en.json), ?scenario=
+  wählt eine der drei Instanz-Konfigurationen (siehe Schalter unten rechts).
 -->
 <solakon-panel id="panel"></solakon-panel>
+<div id="scenario-switcher"></div>
 
 <script src="custom_components/solakon_nulleinspeisung/frontend/solakon-panel.js"></script>
 <script>
@@ -77,12 +86,21 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
     dyn_ac_enabled: false, dyn_ac_min: 30, dyn_ac_max: 250, dyn_ac_noise: 15, dyn_ac_factor: 1.5, dyn_ac_negative: false,
   };
 
-  // ?multigroup=1 fügt eine dritte Instanz an einem zweiten Netzsensor hinzu —
-  // einzige Möglichkeit, die Mehr-Gruppen-Navigation ohne zweiten physischen
-  // Smartmeter zu sehen. Ohne den Parameter bleiben zwei Instanzen in einer Gruppe.
-  const MULTI_GROUP = new URLSearchParams(location.search).get("multigroup") === "1";
+  // Szenario-Auswahl für die Live-Vorschau — deckt die drei strukturell
+  // unterschiedlichen Panel-Zustände ab: "single" (1 Instanz, keine Instanz-
+  // Leiste, kein Übersicht-/Verteilungs-Tab), "single-group" (Standard, 2
+  // Instanzen an einem gemeinsamen Netzsensor) und "multi-group" (zusätzlich
+  // eine dritte Instanz an einem zweiten Netzsensor — einzige Möglichkeit,
+  // die Mehr-Gruppen-Navigation ohne zweiten physischen Smartmeter zu sehen).
+  // ?multigroup=1 bleibt als Alias für ältere Links auf multi-group erhalten.
+  const params = new URLSearchParams(location.search);
+  const SCENARIOS = ["single", "single-group", "multi-group"];
+  let SCENARIO = params.get("scenario");
+  if (!SCENARIOS.includes(SCENARIO)) {
+    SCENARIO = params.get("multigroup") === "1" ? "multi-group" : "single-group";
+  }
 
-  // Zwei Demo-Instanzen — zeigt Verteilung/Übersicht-Tab (nur bei >1 Instanz sichtbar).
+  // Demo-Instanzen — Verteilung/Übersicht-Tab erscheint nur bei >1 Instanz.
   // SOC-Werte bewusst so gewählt, dass ein Kapazitätssensor-Tippfehler zu SOC-Divergenz führt.
   const INSTANCES = {
     demo_a: {
@@ -91,13 +109,15 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
       settings: { ...DEFAULT_SETTINGS, tariff_enabled: true, tariff_price_sensor: "sensor.tibber_price_current" },
       status: mkStatus({ zone: 1, soc: 58, actual_power: 110, grid: -5, active_fall: "A", cycle_active: true }),
     },
-    demo_b: {
-      name: "Solakon B",
-      grid_sensor: "sensor.shelly_3em_leistung",
-      settings: { ...DEFAULT_SETTINGS, surplus_enabled: true, surplus_forecast_enabled: true, pv_forecast_sensor: "sensor.solcast_prognose", surplus_lock_enabled: true, surplus_lock_sensor: "sensor.solcast_leistung_jetzt" },
-      status: mkStatus({ zone: 1, soc: 81, actual_power: 140, grid: 8, active_fall: "A", cycle_active: true }),
-    },
-    ...(MULTI_GROUP ? {
+    ...(SCENARIO !== "single" ? {
+      demo_b: {
+        name: "Solakon B",
+        grid_sensor: "sensor.shelly_3em_leistung",
+        settings: { ...DEFAULT_SETTINGS, surplus_enabled: true, surplus_forecast_enabled: true, pv_forecast_sensor: "sensor.solcast_prognose", surplus_lock_enabled: true, surplus_lock_sensor: "sensor.solcast_leistung_jetzt" },
+        status: mkStatus({ zone: 1, soc: 81, actual_power: 140, grid: 8, active_fall: "A", cycle_active: true }),
+      },
+    } : {}),
+    ...(SCENARIO === "multi-group" ? {
       demo_c: {
         name: "Solakon C (Netz West)",
         grid_sensor: "sensor.shelly_west_leistung",
@@ -137,8 +157,9 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
 
   // Verteilungs-Config nach grid_power_sensor-Gruppe verschachtelt ({groupKey: {...}}).
   // Gruppe "sensor.shelly_3em_leistung": Kapazitätsausgleich aktiv, ein Sensor
-  // korrekt (Instanz A), einer vertippt (Instanz B).
-  let distConfig = {
+  // korrekt (Instanz A), einer vertippt (Instanz B). Bei "single" keine
+  // Verteilungs-Config nötig — der Verteilungs-Tab existiert dann gar nicht.
+  let distConfig = SCENARIO === "single" ? {} : {
     "sensor.shelly_3em_leistung": {
       global_max_power: 800,
       distribution_mode: "weighted",
@@ -152,7 +173,7 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
       global_tariff_cheap_entity: "",
       global_tariff_exp_entity: "",
     },
-    ...(MULTI_GROUP ? {
+    ...(SCENARIO === "multi-group" ? {
       "sensor.shelly_west_leistung": {
         global_max_power: 800,
         distribution_mode: "equal",
@@ -194,5 +215,24 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
   };
 
   document.getElementById("panel").hass = hass;
+
+  // Szenario-Schalter unten rechts — navigiert per URL-Parameter (statt Live-
+  // Hotswap), damit das Panel jedes Mal sauber mit neuem Startzustand lädt.
+  const SCENARIO_LABELS = {
+    single: "1 Instanz", "single-group": "2 Instanzen, 1 Gruppe", "multi-group": "3 Instanzen, 2 Gruppen",
+  };
+  const switcher = document.getElementById("scenario-switcher");
+  for (const s of SCENARIOS) {
+    const btn = document.createElement("button");
+    btn.textContent = SCENARIO_LABELS[s];
+    if (s === SCENARIO) btn.className = "active";
+    btn.addEventListener("click", () => {
+      const p = new URLSearchParams(location.search);
+      p.set("scenario", s);
+      p.delete("multigroup");
+      location.search = p.toString();
+    });
+    switcher.appendChild(btn);
+  }
 })();
 </script>

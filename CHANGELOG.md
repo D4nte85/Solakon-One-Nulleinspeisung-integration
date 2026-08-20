@@ -12,6 +12,7 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ### Geändert
 - Übersichtsseite: die Gesamtwerte je Netzgruppe (Ausgangsleistung, Netzleistung) erscheinen jetzt als eigene Karte im selben Zeilen-Layout wie die Einzelgeräte-Karten (Bezeichnung, Wert je eigener Zeile) statt als eine zusammengedrängte Kopfzeile (Discussion #21)
+- Live-Vorschau (`index.html`): Szenario-Schalter unten rechts, um zwischen den drei strukturell unterschiedlichen Panel-Zuständen zu wechseln — 1 Instanz, 2 Instanzen/1 Netzgruppe, 3 Instanzen/2 Netzgruppen. Auch per `?scenario=single|single-group|multi-group` direkt verlinkbar; `?multigroup=1` bleibt als Alias auf `multi-group` erhalten
 
 ## [2.2.3] – 2026-08-20
 
