@@ -95,6 +95,9 @@ class SolakonCoordinator:
         # capacity → soc, soc/soc_switch → equal) — wird im selben Zyklus sofort
         # nach dem jeweiligen Aufruf in soft_errors übernommen, siehe _run_regulation_cycle.
         self._dist_warning: str = ""
+        # Tatsächlich angewandter Verteilungs-Modus des letzten _all_shares()-Aufrufs
+        # — kann vom konfigurierten distribution_mode abweichen (Degradation, siehe oben).
+        self.dist_mode_effective: str = ""
 
         # Vorheriger actual-Wert (für Surplus-Einstiegs-Entprellung)
         self._prev_actual: float = 0.0
@@ -1417,11 +1420,12 @@ class SolakonCoordinator:
         if n == 0:
             return {}
         eq = 1.0 / n
-        if n <= 1:
-            return {eid: 1.0 for eid in active}
-
         dist = self._dist_cfg()
         mode = dist.get("distribution_mode", "equal")
+        self.dist_mode_effective = mode
+
+        if n <= 1:
+            return {eid: 1.0 for eid in active}
 
         if mode == "equal":
             return {eid: eq for eid in active}
@@ -1433,6 +1437,7 @@ class SolakonCoordinator:
                     "Verteilung (SOC-Switch): SOC-Sensor einer Instanz nicht "
                     "verfügbar — auf Gleichverteilung zurückgefallen"
                 )
+                self.dist_mode_effective = "equal"
                 return {eid: eq for eid in active}
             return shares
 
@@ -1460,6 +1465,7 @@ class SolakonCoordinator:
                     "Verteilung: Kapazitätssensor einer Instanz nicht verfügbar "
                     "— auf SOC-Gewichtung zurückgefallen"
                 )
+                self.dist_mode_effective = "soc"
                 caps = {eid: 1.0 for eid in caps}
         else:
             # mode == "soc": reine SOC-Prozentpunkt-Gewichtung, keine
@@ -1477,6 +1483,7 @@ class SolakonCoordinator:
                     "Verteilung: SOC-Sensor einer anderen Instanz nicht verfügbar "
                     "— auf Gleichverteilung zurückgefallen"
                 )
+                self.dist_mode_effective = "equal"
                 return {eid: eq for eid in active}
             soc   = c._flt(soc_eid, 0)
             zone3 = float(c.settings.get(S_ZONE3_LIMIT, 20))
@@ -1484,6 +1491,7 @@ class SolakonCoordinator:
 
         total_soc = sum(soc_weights.values())
         if total_soc <= 0:
+            self.dist_mode_effective = "equal"
             return {eid: eq for eid in active}
         return {eid: w / total_soc for eid, w in soc_weights.items()}
 

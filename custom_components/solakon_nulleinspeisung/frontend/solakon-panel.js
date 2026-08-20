@@ -369,7 +369,13 @@ class SolakonPanel extends HTMLElement {
       if (g) this._activeGroup = g.key;
     }
     this._renderInstBar();
-    await this._loadConfig();
+    // Verteilungs-Config aller Gruppen vorab laden (nicht erst beim Öffnen des
+    // Verteilungs-Tabs) — die Übersicht braucht sie für SOC-Mittelwert und
+    // angezeigten Verteilungs-Modus je Gruppe.
+    const distPreload = this._instances.length > 1
+      ? Promise.all(this._groups.map(g => this._loadDistConfig(g.key)))
+      : Promise.resolve();
+    await Promise.all([this._loadConfig(), distPreload]);
   }
 
   // Gruppiert Instanzen nach grid_power_sensor. Instanzen ohne gesetzten Sensor
@@ -389,6 +395,64 @@ class SolakonPanel extends HTMLElement {
       instances,
     }));
     this._groups.sort((a, b) => a.label.localeCompare(b.label));
+  }
+
+  _modeLabel(mode) {
+    const dt = this._t.dist || {};
+    return {
+      equal: dt.mode_equal, soc: dt.mode_soc,
+      capacity: dt.mode_capacity, soc_switch: dt.mode_soc_switch,
+    }[mode] || mode;
+  }
+
+  // Zeigt den konfigurierten Modus, ergänzt um den tatsächlich angewandten,
+  // wenn der Coordinator diesen Zyklus mangels gültigem Fremdinstanz-Sensor
+  // degradiert hat (z. B. Kapazitätsgewichtet → SOC-gewichtet).
+  _modeText(t) {
+    const configured = this._modeLabel(t.distModeConfigured);
+    if (!t.distModeEffective || t.distModeEffective === t.distModeConfigured) return configured;
+    return `${configured} → ${this._modeLabel(t.distModeEffective)} ⚠️`;
+  }
+
+  // Aggregierte Kennzahlen einer Netzgruppe (Output-Summe, Netzwert, SOC-Mittel,
+  // Verteilungs-Modus) für die Übersichtskarte — von _renderOverview() und
+  // _updateOverviewCards() gemeinsam genutzt. SOC-Mittel ist kapazitätsgewichtet
+  // (Σ SOC_i × Kapazität_i / Σ Kapazität_i), fällt bei fehlendem/ungültigem
+  // Kapazitätssensor irgendeiner Instanz auf den ungewichteten Mittelwert
+  // zurück — dieselbe Degradationslogik wie beim Verteilungs-Modus "capacity".
+  _groupTotals(g) {
+    let totalOutput = 0, socSum = 0, socCount = 0, capWeightedSum = 0, capSum = 0;
+    let distModeEffective = null;
+    for (const inst of g.instances) {
+      const st = this._allStatuses[inst.entry_id] || {};
+      if (st.actual_power != null) totalOutput += st.actual_power;
+      if (distModeEffective == null && st.dist_mode_effective) distModeEffective = st.dist_mode_effective;
+      if (st.soc != null) {
+        socSum += st.soc;
+        socCount++;
+        const capSensor = this._distValFor(g.key, `inst_${inst.entry_id}_capacity_sensor`);
+        const capState  = capSensor ? this._hass?.states?.[capSensor] : null;
+        const capRaw    = capState ? parseFloat(capState.state) : NaN;
+        // Wh→kWh normalisieren, analog zur Backend-Gewichtung in coordinator.py
+        // (_all_shares, Modus "capacity") — sonst verzerrt eine Instanz mit
+        // Wh-Sensor die Gewichtung um Faktor 1000 gegenüber kWh-Instanzen.
+        const capUnit   = (capState?.attributes?.unit_of_measurement || "").trim().toLowerCase();
+        const capNum    = capUnit === "wh" ? capRaw / 1000 : capRaw;
+        capWeightedSum += st.soc * capNum;
+        capSum += (Number.isFinite(capNum) && capNum > 0) ? capNum : NaN;
+      }
+    }
+    const gridState  = this._hass?.states?.[g.key];
+    const gridNum    = gridState ? parseFloat(gridState.state) : NaN;
+    const socWeighted = Number.isFinite(capSum) && capSum > 0;
+    return {
+      totalOutput,
+      gridVal: Number.isFinite(gridNum) ? gridNum : null,
+      socAvg:  socCount === 0 ? null : (socWeighted ? capWeightedSum / capSum : socSum / socCount),
+      socWeighted,
+      distModeConfigured: this._distValFor(g.key, "distribution_mode") || "equal",
+      distModeEffective,
+    };
   }
 
   _renderInstBar() {
@@ -488,26 +552,16 @@ class SolakonPanel extends HTMLElement {
   }
 
   // Immer von der Verteilung getrennt (auch im Ein-Gruppen-Fall) — Instanzen
-  // untereinander nach Netzgruppe sortiert, mit Gesamt-Leistungsanzeige je
-  // Gruppe (nur ab 2 Gruppen sichtbar, sonst eine einzige unbeschriftete Sektion).
+  // untereinander nach Netzgruppe sortiert, mit Gesamt-Karte je Gruppe mit
+  // >1 Instanz. Gruppen-Kopfzeile (Label) nur ab 2 Gruppen sichtbar, sonst
+  // eine einzige unbeschriftete Sektion.
   _renderOverview(c) {
     const ov = this._t.ov || {};
     const showGroupHdr = this._groups.length > 1;
 
     const groupsHtml = this._groups.map(g => {
-      let totalOutput = 0;
-      for (const inst of g.instances) {
-        const st = this._allStatuses[inst.entry_id] || {};
-        if (st.actual_power != null) totalOutput += st.actual_power;
-      }
-      // Direkt aus dem HA-State lesen statt aus einer beliebigen Instanz-
-      // Momentaufnahme — der Netzsensor ist derselbe physische Sensor für die
-      // ganze Gruppe, unabhängig pollende Coordinator-Zyklen würden sonst je
-      // nach Render-Zeitpunkt unterschiedlich alte Werte einer zufälligen
-      // Instanz zeigen.
-      const gridState = this._hass?.states?.[g.key];
-      const gridNum   = gridState ? parseFloat(gridState.state) : NaN;
-      const gridVal   = Number.isFinite(gridNum) ? gridNum : null;
+      const t = this._groupTotals(g);
+      const showTotal = g.instances.length > 1;
       const cardsHtml = g.instances.map(inst => {
         const st = this._allStatuses[inst.entry_id] || {};
         const zs = ZONE_STYLE[st.zone] ?? ZONE_STYLE[2];
@@ -533,11 +587,15 @@ class SolakonPanel extends HTMLElement {
       // Gesamtwerte in derselben Karten-/Zeilenform wie die Einzelgeräte
       // (gleiche Bezeichnungen, untereinander) statt in einer separaten
       // Kopfzeile — dadurch auch über _updateOverviewCards() live haltbar.
-      const totalCardHtml = showGroupHdr ? `<div class="ov-card ov-card-total">
+      // Pro Gruppe sichtbar sobald sie >1 Instanz hat — unabhängig von der
+      // Gruppenanzahl, deckt damit auch den häufigeren Ein-Gruppen-Fall ab.
+      const totalCardHtml = showTotal ? `<div class="ov-card ov-card-total">
           <div class="ov-hdr" style="background:#0891b2">${ov.total_output || "Total"}</div>
           <div class="ov-body">
-            <div class="ov-row"><span>${ov.output || "Output"}</span><strong id="ov-total-output-${g.key}">${totalOutput.toFixed(0)} W</strong></div>
-            <div class="ov-row"><span>${ov.grid   || "Grid"}</span><strong id="ov-total-grid-${g.key}">${gridVal != null ? gridVal.toFixed(0) + " W" : "—"}</strong></div>
+            <div class="ov-row"><span id="ov-total-soc-label-${g.key}">${ov.soc || "SOC"}${t.socWeighted ? " ⌀" : ""}</span><strong id="ov-total-soc-${g.key}">${t.socAvg != null ? t.socAvg.toFixed(0) + " %" : "—"}</strong></div>
+            <div class="ov-row"><span>${ov.output || "Output"}</span><strong id="ov-total-output-${g.key}">${t.totalOutput.toFixed(0)} W</strong></div>
+            <div class="ov-row"><span>${ov.grid   || "Grid"}</span><strong id="ov-total-grid-${g.key}">${t.gridVal != null ? t.gridVal.toFixed(0) + " W" : "—"}</strong></div>
+            <div class="ov-row"><span>${ov.dist_mode || "Distribution"}</span><strong id="ov-total-mode-${g.key}">${this._modeText(t)}</strong></div>
           </div>
         </div>` : "";
 
@@ -555,6 +613,7 @@ class SolakonPanel extends HTMLElement {
   // bei jedem 1s-Poll komplett neu zu rendern (sonst verliert ein gerade
   // fokussiertes Eingabefeld im Verteilungsblock jede Sekunde den Fokus).
   _updateOverviewCards() {
+    const ov = this._t.ov || {};
     for (const inst of this._instances) {
       const st = this._allStatuses[inst.entry_id] || {};
       const zs = ZONE_STYLE[st.zone] ?? ZONE_STYLE[2];
@@ -581,19 +640,18 @@ class SolakonPanel extends HTMLElement {
     }
 
     for (const g of this._groups) {
-      let totalOutput = 0;
-      for (const inst of g.instances) {
-        const st = this._allStatuses[inst.entry_id] || {};
-        if (st.actual_power != null) totalOutput += st.actual_power;
-      }
-      const gridState = this._hass?.states?.[g.key];
-      const gridNum   = gridState ? parseFloat(gridState.state) : NaN;
-      const gridVal   = Number.isFinite(gridNum) ? gridNum : null;
+      const t = this._groupTotals(g);
 
+      const socLabel = this.shadowRoot.getElementById(`ov-total-soc-label-${g.key}`);
+      if (socLabel) socLabel.textContent = `${ov.soc || "SOC"}${t.socWeighted ? " ⌀" : ""}`;
+      const soc = this.shadowRoot.getElementById(`ov-total-soc-${g.key}`);
+      if (soc) soc.textContent = t.socAvg != null ? `${t.socAvg.toFixed(0)} %` : "—";
       const out = this.shadowRoot.getElementById(`ov-total-output-${g.key}`);
-      if (out) out.textContent = `${totalOutput.toFixed(0)} W`;
+      if (out) out.textContent = `${t.totalOutput.toFixed(0)} W`;
       const grid = this.shadowRoot.getElementById(`ov-total-grid-${g.key}`);
-      if (grid) grid.textContent = gridVal != null ? `${gridVal.toFixed(0)} W` : "—";
+      if (grid) grid.textContent = t.gridVal != null ? `${t.gridVal.toFixed(0)} W` : "—";
+      const mode = this.shadowRoot.getElementById(`ov-total-mode-${g.key}`);
+      if (mode) mode.textContent = this._modeText(t);
     }
   }
 
@@ -1305,8 +1363,7 @@ class SolakonPanel extends HTMLElement {
     if (c) { c.innerHTML = ""; this._renderVerteilung(c); }
   }
 
-  async _loadDistConfig() {
-    const gk = this._distGroupKey();
+  async _loadDistConfig(gk = this._distGroupKey()) {
     try {
       const res = await this._hass.callWS({ type: `${DOMAIN}/get_distribution_config`, grid_sensor: gk });
       this._distConfig[gk] = res.distribution || {};
@@ -1327,12 +1384,13 @@ class SolakonPanel extends HTMLElement {
     } catch (e) { this._showToast("❌ " + e.message, true); }
   }
 
-  _distVal(key) {
-    const gk    = this._distGroupKey();
+  _distValFor(gk, key) {
     const dirty = this._distDirty[gk] || {};
     const cfg   = this._distConfig[gk] || {};
     return key in dirty ? dirty[key] : cfg[key];
   }
+
+  _distVal(key) { return this._distValFor(this._distGroupKey(), key); }
 
   _setDistVal(key, value) {
     const gk = this._distGroupKey();

@@ -5,14 +5,19 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
-### Behoben
-- Übersichtsseite: beim Wechsel zu „Übersicht" blieb bei mehreren Netzgruppen der zuletzt aktive Gruppen-Tab weiterhin optisch markiert und die zugehörige Verteilungs-/Instanzen-Unterleiste sichtbar (Discussion #21). `_switchInstance()` setzt die aktive Gruppe jetzt beim Wechsel zur Übersicht zurück
-- Übersichtsseite: der Netzleistungswert im Gruppen-Gesamtwert stammte von einer beliebigen Instanz der Gruppe statt vom gemeinsamen Netzsensor selbst — je nach Render-Zeitpunkt der unabhängig pollenden Instanzen zeigte er dadurch inkonsistente, unterschiedlich alte Werte (Discussion #21). Wird jetzt direkt aus dem HA-State des Netzsensors gelesen
-- Verteilungs-Tab: die Speicherleiste bei den globalen Sensoren zeigte dauerhaft „ungespeicherte Änderungen", auch direkt nach dem Speichern (Discussion #21). Die Sichtbarkeitsprüfung zählte fälschlich alle jemals geladenen Gruppen statt der tatsächlich geänderten Felder der aktiven Gruppe
+### Hinzugefügt
+- Übersichtsseite: Gesamt-Karte je Netzgruppe zeigt jetzt zusätzlich den SOC-Mittelwert (kapazitätsgewichtet, mit Fallback auf ungewichteten Mittelwert bei fehlendem/ungültigem Kapazitätssensor — Kennzeichnung „⌀") und den aktuell angewandten Verteilungs-Modus, inkl. Anzeige einer Degradation wenn dieser vom konfigurierten Modus abweicht (`Kapazitätsgewichtet → SOC-gewichtet ⚠️`). Neues Coordinator-Attribut `dist_mode_effective`, im `get_status`-WS-Payload exponiert. Gesamt-Karte erscheint jetzt außerdem bereits ab zwei Instanzen **innerhalb einer** Netzgruppe, nicht mehr erst ab zwei Netzgruppen (Discussion #21)
 
 ### Geändert
 - Übersichtsseite: die Gesamtwerte je Netzgruppe (Ausgangsleistung, Netzleistung) erscheinen jetzt als eigene Karte im selben Zeilen-Layout wie die Einzelgeräte-Karten (Bezeichnung, Wert je eigener Zeile) statt als eine zusammengedrängte Kopfzeile (Discussion #21)
 - Live-Vorschau (`index.html`): Szenario-Schalter unten rechts, um zwischen den drei strukturell unterschiedlichen Panel-Zuständen zu wechseln — 1 Instanz, 2 Instanzen/1 Netzgruppe, 3 Instanzen/2 Netzgruppen. Auch per `?scenario=single|single-group|multi-group` direkt verlinkbar; `?multigroup=1` bleibt als Alias auf `multi-group` erhalten
+- Live-Vorschau: Verteilungs-Config aller Netzgruppen wird jetzt beim Verbinden vorab geladen statt erst beim Öffnen des Verteilungs-Tabs — Voraussetzung für den SOC-Mittelwert/Verteilungs-Modus auf der Übersicht
+
+### Behoben
+- Übersichtsseite: beim Wechsel zu „Übersicht" blieb bei mehreren Netzgruppen der zuletzt aktive Gruppen-Tab weiterhin optisch markiert und die zugehörige Verteilungs-/Instanzen-Unterleiste sichtbar (Discussion #21). `_switchInstance()` setzt die aktive Gruppe jetzt beim Wechsel zur Übersicht zurück
+- Übersichtsseite: der Netzleistungswert im Gruppen-Gesamtwert stammte von einer beliebigen Instanz der Gruppe statt vom gemeinsamen Netzsensor selbst — je nach Render-Zeitpunkt der unabhängig pollenden Instanzen zeigte er dadurch inkonsistente, unterschiedlich alte Werte (Discussion #21). Wird jetzt direkt aus dem HA-State des Netzsensors gelesen
+- Verteilungs-Tab: die Speicherleiste bei den globalen Sensoren zeigte dauerhaft „ungespeicherte Änderungen", auch direkt nach dem Speichern (Discussion #21). Die Sichtbarkeitsprüfung zählte fälschlich alle jemals geladenen Gruppen statt der tatsächlich geänderten Felder der aktiven Gruppe
+- Live-Vorschau (`index.html`): Demo-Verteilungs-Config nutzte den ungültigen Wert `distribution_mode: "weighted"` mit einer nicht existierenden `capacity_weighting`-Eigenschaft — entsprach nicht dem echten Schema (`equal`/`soc`/`capacity`/`soc_switch`). Korrigiert auf `"capacity"`
 
 ## [2.2.3] – 2026-08-20
 

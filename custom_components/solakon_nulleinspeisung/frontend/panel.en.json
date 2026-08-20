@@ -403,7 +403,8 @@
     "grid":         "Grid",
     "fall":         "Case",
     "group_prefix": "Group",
-    "total_output": "Total"
+    "total_output": "Total",
+    "dist_mode":    "Distribution"
   },
   "debug": {
     "pi_hdr":     "🔄 PI Integral",

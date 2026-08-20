@@ -107,14 +107,16 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
       name: "Solakon A",
       grid_sensor: "sensor.shelly_3em_leistung",
       settings: { ...DEFAULT_SETTINGS, tariff_enabled: true, tariff_price_sensor: "sensor.tibber_price_current" },
-      status: mkStatus({ zone: 1, soc: 58, actual_power: 110, grid: -5, active_fall: "A", cycle_active: true }),
+      // dist_mode_effective "soc" statt "capacity" — Gruppe degradiert wegen des
+      // absichtlich vertippten Kapazitätssensors von Instanz B (siehe STATES unten).
+      status: mkStatus({ zone: 1, soc: 58, actual_power: 110, grid: -5, active_fall: "A", cycle_active: true, dist_mode_effective: "soc" }),
     },
     ...(SCENARIO !== "single" ? {
       demo_b: {
         name: "Solakon B",
         grid_sensor: "sensor.shelly_3em_leistung",
         settings: { ...DEFAULT_SETTINGS, surplus_enabled: true, surplus_forecast_enabled: true, pv_forecast_sensor: "sensor.solcast_prognose", surplus_lock_enabled: true, surplus_lock_sensor: "sensor.solcast_leistung_jetzt" },
-        status: mkStatus({ zone: 1, soc: 81, actual_power: 140, grid: 8, active_fall: "A", cycle_active: true }),
+        status: mkStatus({ zone: 1, soc: 81, actual_power: 140, grid: 8, active_fall: "A", cycle_active: true, dist_mode_effective: "soc" }),
       },
     } : {}),
     ...(SCENARIO === "multi-group" ? {
@@ -122,7 +124,7 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
         name: "Solakon C (Netz West)",
         grid_sensor: "sensor.shelly_west_leistung",
         settings: { ...DEFAULT_SETTINGS },
-        status: mkStatus({ zone: 0, soc: 97, actual_power: 300, grid: -3, active_fall: "0A", cycle_active: false }),
+        status: mkStatus({ zone: 0, soc: 97, actual_power: 300, grid: -3, active_fall: "0A", cycle_active: false, dist_mode_effective: "equal" }),
       },
     } : {}),
   };
@@ -138,6 +140,7 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
       dyn_z1_enabled: false, dyn_z2_enabled: false, dyn_ac_enabled: false,
       dyn_z1: 0, dyn_z2: 0, dyn_ac: 0, active_fall: o.active_fall, is_night: false,
       forecast_tariff_suppressed: false, forecast_surplus_forced: false, forecast_exit_lock: false, allocated_power: 400,
+      dist_mode_effective: o.dist_mode_effective || "equal",
     };
   }
 
@@ -162,8 +165,7 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
   let distConfig = SCENARIO === "single" ? {} : {
     "sensor.shelly_3em_leistung": {
       global_max_power: 800,
-      distribution_mode: "weighted",
-      capacity_weighting: true,
+      distribution_mode: "capacity",
       inst_demo_a_capacity_sensor: "sensor.solakon_one_batteriekapazitat",
       inst_demo_b_capacity_sensor: "sensor.solakon_one_batteriekapzitat",
       global_pv_forecast_today_sensor: "",

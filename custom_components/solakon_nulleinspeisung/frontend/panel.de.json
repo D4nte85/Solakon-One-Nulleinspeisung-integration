@@ -403,7 +403,8 @@
     "grid":         "Netz",
     "fall":         "Fall",
     "group_prefix": "Gruppe",
-    "total_output": "Gesamt"
+    "total_output": "Gesamt",
+    "dist_mode":    "Verteilung"
   },
   "debug": {
     "pi_hdr":     "🔄 PI-Integral",

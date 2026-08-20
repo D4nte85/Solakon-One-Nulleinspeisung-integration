@@ -123,6 +123,7 @@ async def _ws_get_status(
         "dyn_z2":            coord.dyn_offset_z2,
         "dyn_ac":            coord.dyn_offset_ac,
         "active_fall":       coord.active_fall,
+        "dist_mode_effective": coord.dist_mode_effective,
         "is_night":          coord.is_night,
         "forecast_tariff_suppressed": coord.forecast_tariff_suppressed,
         "forecast_surplus_forced": coord.forecast_surplus_forced,
