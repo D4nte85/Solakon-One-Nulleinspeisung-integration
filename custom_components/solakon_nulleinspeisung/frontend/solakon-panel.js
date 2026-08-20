@@ -548,9 +548,7 @@ class SolakonPanel extends HTMLElement {
     this._dirty     = {};
     this._status    = null;
     this._activeTab = "status";
-    // _activeTab wird hier programmatisch gesetzt statt per Tab-Klick — die
-    // .active-Klasse im Tab-Balken muss deshalb manuell nachgezogen werden,
-    // sonst bleibt der zuletzt angeklickte Tab eines vorherigen Geräts markiert.
+    // Aktiven Tab im Balken markieren.
     if (tabBar) tabBar.querySelectorAll(".tab").forEach(x => x.classList.toggle("active", x.dataset.id === "status"));
     this._loadConfig();
   }
@@ -662,9 +660,6 @@ class SolakonPanel extends HTMLElement {
   // ── Config / Status Laden ─────────────────────────────────────────────────
 
   async _loadConfig() {
-    // entry_id vor dem await festhalten — schaltet der Nutzer während der
-    // Anfrage auf ein anderes Gerät, darf die (dann veraltete) Antwort nicht
-    // mehr dessen Einstellungen überschreiben.
     const targetId = this._entryId;
     try {
       const settings = await this._ws("get_config");
@@ -683,9 +678,6 @@ class SolakonPanel extends HTMLElement {
           );
         } catch (_) {}
       }
-      // Die await-Schleife oben braucht bei mehreren Instanzen messbare Zeit —
-      // wechselt der Nutzer währenddessen auf ein Gerät, darf die Übersicht
-      // #content nicht mehr überschreiben (analog zum Guard in _rerenderDist()).
       if (this._activeInstance !== "__overview__") return;
       const c = this.shadowRoot.getElementById("content");
       if (c) {
@@ -694,9 +686,6 @@ class SolakonPanel extends HTMLElement {
       }
       return;
     }
-    // Dieselbe Race wie im Übersichts-Zweig oben: entry_id vor dem await
-    // festhalten, sonst kann eine verspätete Antwort eines Geräts die
-    // Statuswerte eines inzwischen aktiven anderen Geräts überschreiben.
     const targetId = this._entryId;
     try {
       const status = await this._ws("get_status");
@@ -1324,9 +1313,6 @@ class SolakonPanel extends HTMLElement {
 
   async _saveSettings() {
     if (!Object.keys(this._dirty).length) return;
-    // entry_id vor dem await festhalten — schaltet der Nutzer während des
-    // Speicherns auf ein anderes Gerät, dürfen dessen Settings/Dirty-State
-    // nicht mit der (dann fremden) Antwort dieses Aufrufs verändert werden.
     const targetId = this._entryId;
     const toast = this._t.toast || {};
     try {
