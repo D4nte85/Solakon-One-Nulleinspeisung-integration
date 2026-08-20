@@ -16,7 +16,7 @@ from .const import (
     DOMAIN, PLATFORMS, S_REGULATION_ENABLED,
     CONF_INSTANCE_NAME,
     CONF_GRID_SENSOR, CONF_ACTUAL_SENSOR, CONF_SOLAR_SENSOR, CONF_SOC_SENSOR,
-    STORAGE_VERSION, DIST_DEFAULTS,
+    STORAGE_VERSION, DIST_DEFAULTS, VERSION,
 )
 
 STORAGE_VERSION_DIST = 1
@@ -260,7 +260,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             sidebar_title="Solakon ONE",
             sidebar_icon="mdi:solar-power",
             frontend_url_path=DOMAIN,
-            module_url=PANEL_JS_URL,
+            # Versions-Query erzwingt Neu-Laden im Browser bei jedem Update — ohne
+            # sie behält der Browser die zuletzt geladene panel.js unabhängig von
+            # Integration-Reload/HA-Neustart (Discussion #21, gleiche URL jede Version).
+            module_url=f"{PANEL_JS_URL}?v={VERSION}",
             config={},
             require_admin=False,
         )

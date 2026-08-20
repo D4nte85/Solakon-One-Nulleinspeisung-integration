@@ -7,6 +7,7 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ### Behoben
 - Übersicht/Verteilungsseite konnte durch verzögerte Config-/Save-Antworten (`_loadConfig`, `_saveSettings`, `_saveDistConfig`, `_loadDistConfig`) mit der zuletzt aktiven Instanz-Detailansicht überschrieben werden, wenn der Nutzer währenddessen zur Übersicht oder Verteilung wechselte — Tab-Leiste zeigte weiterhin „Übersicht"/„Verteilung" als aktiv, der Inhalt aber die alte Instanzansicht (Discussion #21, gemeldet von `githubalf`). `_renderActiveTab()` und `_rerenderDist()` prüfen jetzt vor dem Schreiben in `#content`, ob die jeweilige View noch aktiv ist
+- Panel-JavaScript wurde nach einem Update im Browser nicht zuverlässig neu geladen — `module_url` zeigte immer auf dieselbe URL (`/solakon_nulleinspeisung/panel.js`), unabhängig von der installierten Version, sodass Browser sie über Neuladen und HA-Neustart hinweg als unverändert behandeln konnten (mutmaßliche Hauptursache für „keine Änderung sichtbar" trotz Update in Discussion #21 — Tab-Leiste des Reporters entsprach exakt der v2.2.0-Struktur ohne Verteilungs-Tab). `module_url` trägt jetzt die Integrationsversion als Query-Parameter (`?v={VERSION}`), erzwingt damit bei jedem Versions-Sprung eine neue URL und garantiert einen frischen Fetch
 
 ## [2.2.1] – 2026-08-19
 
