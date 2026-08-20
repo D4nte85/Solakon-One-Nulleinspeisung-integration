@@ -5,6 +5,8 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+## [2.2.4] – 2026-08-20
+
 ### Hinzugefügt
 - Übersichtsseite: Gesamt-Karte je Netzgruppe zeigt jetzt zusätzlich den SOC-Mittelwert (kapazitätsgewichtet, mit Fallback auf ungewichteten Mittelwert bei fehlendem/ungültigem Kapazitätssensor — Kennzeichnung „⌀") und den aktuell angewandten Verteilungs-Modus, inkl. Anzeige einer Degradation wenn dieser vom konfigurierten Modus abweicht (`Kapazitätsgewichtet → SOC-gewichtet ⚠️`). Neues Coordinator-Attribut `dist_mode_effective`, im `get_status`-WS-Payload exponiert. Gesamt-Karte erscheint jetzt außerdem bereits ab zwei Instanzen **innerhalb einer** Netzgruppe, nicht mehr erst ab zwei Netzgruppen (Discussion #21)
 
