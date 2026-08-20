@@ -528,14 +528,24 @@ class SolakonPanel extends HTMLElement {
       const headerHtml = showGroupHdr ? `
         <div class="ov-group-hdr">
           <span>${ov.group_prefix || "Group"}: ${g.label}</span>
-          <span class="ov-group-total">${ov.total_output || "Total"}: ${totalOutput.toFixed(0)} W · ${ov.grid || "Grid"}: ${gridVal != null ? gridVal.toFixed(0) + " W" : "—"}</span>
         </div>` : "";
 
-      return `<div class="ov-group">${headerHtml}<div class="ov-grid">${cardsHtml}</div></div>`;
+      // Gesamtwerte in derselben Karten-/Zeilenform wie die Einzelgeräte
+      // (gleiche Bezeichnungen, untereinander) statt in einer separaten
+      // Kopfzeile — dadurch auch über _updateOverviewCards() live haltbar.
+      const totalCardHtml = showGroupHdr ? `<div class="ov-card ov-card-total">
+          <div class="ov-hdr" style="background:#0891b2">${ov.total_output || "Total"}</div>
+          <div class="ov-body">
+            <div class="ov-row"><span>${ov.output || "Output"}</span><strong id="ov-total-output-${g.key}">${totalOutput.toFixed(0)} W</strong></div>
+            <div class="ov-row"><span>${ov.grid   || "Grid"}</span><strong id="ov-total-grid-${g.key}">${gridVal != null ? gridVal.toFixed(0) + " W" : "—"}</strong></div>
+          </div>
+        </div>` : "";
+
+      return `<div class="ov-group">${headerHtml}<div class="ov-grid">${totalCardHtml}${cardsHtml}</div></div>`;
     }).join("");
 
     c.innerHTML = groupsHtml;
-    c.querySelectorAll(".ov-card").forEach(card => {
+    c.querySelectorAll(".ov-card:not(.ov-card-total)").forEach(card => {
       card.addEventListener("click", () => this._switchInstance(card.dataset.eid));
     });
   }
@@ -568,6 +578,22 @@ class SolakonPanel extends HTMLElement {
       const dot = this.shadowRoot.getElementById(`cap-dot-${inst.entry_id}`);
       const inp = this.shadowRoot.getElementById(`cap-input-${inst.entry_id}`);
       if (dot && inp) dot.className = `entity-dot ${this._entityDotClass(inp.value)}`;
+    }
+
+    for (const g of this._groups) {
+      let totalOutput = 0;
+      for (const inst of g.instances) {
+        const st = this._allStatuses[inst.entry_id] || {};
+        if (st.actual_power != null) totalOutput += st.actual_power;
+      }
+      const gridState = this._hass?.states?.[g.key];
+      const gridNum   = gridState ? parseFloat(gridState.state) : NaN;
+      const gridVal   = Number.isFinite(gridNum) ? gridNum : null;
+
+      const out = this.shadowRoot.getElementById(`ov-total-output-${g.key}`);
+      if (out) out.textContent = `${totalOutput.toFixed(0)} W`;
+      const grid = this.shadowRoot.getElementById(`ov-total-grid-${g.key}`);
+      if (grid) grid.textContent = gridVal != null ? `${gridVal.toFixed(0)} W` : "—";
     }
   }
 
@@ -658,12 +684,13 @@ class SolakonPanel extends HTMLElement {
         /* ── Übersichts-Karten ───────────────────────────────────────────── */
         .ov-group { margin-bottom: 16px; }
         .ov-group:last-child { margin-bottom: 0; }
-        .ov-group-hdr { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px; padding: 6px 2px; font-size: .85em; font-weight: 600; color: var(--secondary-text-color, #666); }
-        .ov-group-total { font-weight: 500; color: var(--primary-text-color, #333); }
+        .ov-group-hdr { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 2px; font-size: .85em; font-weight: 600; color: var(--secondary-text-color, #666); }
         .ov-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
         .ov-card { border: 1px solid var(--divider-color, #ddd); border-radius: 10px;
           overflow: hidden; cursor: pointer; transition: box-shadow .15s; }
         .ov-card:hover { box-shadow: 0 2px 10px rgba(0,0,0,.12); }
+        .ov-card-total { cursor: default; }
+        .ov-card-total:hover { box-shadow: none; }
         .ov-hdr  { padding: 10px 14px; color: #fff; font-weight: 600; font-size: .92em; }
         .ov-body { padding: 10px 14px; background: var(--card-background-color, #fff);
           display: flex; flex-direction: column; gap: 6px; }
