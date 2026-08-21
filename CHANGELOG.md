@@ -5,6 +5,9 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+### Behoben
+- Fall H (AC Laden Ende): Vergleich `eigener Output = 0 W` auf `eigener Output ≤ 0 W` geändert — robuster gegen isolierte Ein-Sekunden-Nullwerte durch Modbus-Rauschen in Leistungssensoren (`coordinator.py`, analog zum entsprechenden Blueprint-Fix)
+
 ## [2.2.6] – 2026-08-21
 
 ### Behoben

@@ -1291,7 +1291,7 @@ class SolakonCoordinator:
             and not self.tariff_charge_active
             and (
                 soc >= v["ac_soc_target"]
-                or (grid >= (v["ac_offset"] + v["ac_hysteresis"]) and actual == 0)
+                or (grid >= (v["ac_offset"] + v["ac_hysteresis"]) and actual <= 0)
             )
         ):
             self.integral = 0.0
