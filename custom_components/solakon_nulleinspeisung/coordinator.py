@@ -629,6 +629,7 @@ class SolakonCoordinator:
             self.hass, self._on_periodic, timedelta(seconds=interval)
         )
 
+    @callback
     def _on_periodic(self, _now: object) -> None:
         # Periodischer Fallback-Trigger der Regelschleife.
         self.hass.async_create_task(self._async_regulate())

@@ -5,6 +5,9 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+### Behoben
+- Coordinator: `_on_periodic()` (periodischer Fallback-Trigger) rief `hass.async_create_task()` ohne `@callback`-Decorator auf — Home Assistant führt undekorierte Trigger-Callbacks im Executor-Thread aus, von dort ist `async_create_task` nicht thread-safe. Betraf ausschließlich Installationen mit aktiviertem periodischen Trigger (ab Werk deaktiviert). `@callback` ergänzt, analog zur bereits korrekten Schwester-Methode `_on_state_change()`
+
 ## [2.2.5] – 2026-08-20
 
 ### Behoben
