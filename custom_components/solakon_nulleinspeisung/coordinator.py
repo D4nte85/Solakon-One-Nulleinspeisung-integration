@@ -489,7 +489,7 @@ class SolakonCoordinator:
         return value
 
     def _flt_kilo_normalized(self, entity_id: str, default: float = 0.0) -> float:
-        """Float-Wert lesen; k-Präfix-Einheiten (kW, kWh, …) ×1000 normalisieren.
+        """Float-Wert lesen; Einheiten kW/kWh ×1000 normalisieren.
         Nur für Vergleiche gegen einen Watt-Referenzwert (z. B. hard_limit_z0).
         Für kWh-Schwellenfelder (im Panel als kWh beschriftet) stattdessen
         _flt_kwh_normalized() verwenden — sonst vergleicht der ×1000-normalisierte
@@ -502,7 +502,7 @@ class SolakonCoordinator:
         except (ValueError, TypeError):
             return default
         unit = state.attributes.get("unit_of_measurement", "")
-        if unit.startswith("k") or unit.startswith("K"):
+        if unit in ("kW", "kWh"):
             value *= 1000.0
         return value
 
