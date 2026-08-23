@@ -267,7 +267,7 @@
     },
     "pv_forecast_sensor": {
       "l": "PV-Vorhersage heute (optional lokal)",
-      "d": "input_number- oder sensor-Entität mit dem erwarteten kWh-Ertrag heute (z. B. Wetter-Integration oder Solcast-Account). Speist die Tarif-Lock-Unterdrückung (Tarif-Tab), die Surplus-Forecast-Erzwingung (Überschuss-Tab) und, zwischen 0–12 Uhr, die Zone-1-Nacht-Forcierung (Zonen-Tab)."
+      "d": "input_number- oder sensor-Entität mit dem erwarteten kWh-Ertrag heute (z. B. Wetter-Integration oder Solcast-Account; Wh/MWh werden automatisch auf kWh normalisiert). Speist die Tarif-Lock-Unterdrückung (Tarif-Tab), die Surplus-Forecast-Erzwingung (Überschuss-Tab) und, zwischen 0–12 Uhr, die Zone-1-Nacht-Forcierung (Zonen-Tab)."
     },
     "pv_forecast_sensor_note": {
       "d": "🔌 Ohne Entität „PV-Vorhersage heute“ (Entitäten-Tab) bleibt diese Funktion inaktiv."
@@ -282,7 +282,7 @@
     },
     "zone1_force_sensor": {
       "l": "PV-Vorhersage morgen (optional lokal)",
-      "d": "input_number- oder sensor-Entität mit dem erwarteten kWh-Ertrag für morgen. Speist die Zone-1-Nacht-Forcierung (Zonen-Tab), gelesen vor Mitternacht — danach automatisch „PV-Vorhersage heute“ oben (derselbe Zieltag, nur der Sensor wechselt)."
+      "d": "input_number- oder sensor-Entität mit dem erwarteten kWh-Ertrag für morgen (Wh/MWh werden automatisch auf kWh normalisiert). Speist die Zone-1-Nacht-Forcierung (Zonen-Tab), gelesen vor Mitternacht — danach automatisch „PV-Vorhersage heute“ oben (derselbe Zieltag, nur der Sensor wechselt)."
     },
     "zone1_force_sensor_note": {
       "d": "🔌 Ohne Entität „PV-Vorhersage morgen“ (Entitäten-Tab) bleibt diese Funktion inaktiv."

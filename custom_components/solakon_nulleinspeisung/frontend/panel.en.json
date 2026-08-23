@@ -267,7 +267,7 @@
     },
     "pv_forecast_sensor": {
       "l": "PV Forecast Today (optional local)",
-      "d": "input_number or sensor entity with the expected kWh yield today (e.g. weather integration or Solcast account). Feeds tariff-lock suppression (Tariff tab), Surplus Forecast Override (Surplus tab) and, between 0–12h, Zone-1 Night Forcing (Zones tab)."
+      "d": "input_number or sensor entity with the expected kWh yield today (e.g. weather integration or Solcast account; Wh/MWh normalized to kWh automatically). Feeds tariff-lock suppression (Tariff tab), Surplus Forecast Override (Surplus tab) and, between 0–12h, Zone-1 Night Forcing (Zones tab)."
     },
     "pv_forecast_sensor_note": {
       "d": "🔌 Without the \"PV Forecast Today\" entity (Entities tab) this function stays inactive."
@@ -282,7 +282,7 @@
     },
     "zone1_force_sensor": {
       "l": "PV Forecast Tomorrow (optional local)",
-      "d": "input_number or sensor entity with the expected kWh yield for tomorrow. Feeds Zone-1 Night Forcing (Zones tab), read before midnight — after midnight \"PV Forecast Today\" above is used automatically instead (same target day, only the sensor changes)."
+      "d": "input_number or sensor entity with the expected kWh yield for tomorrow (Wh/MWh normalized to kWh automatically). Feeds Zone-1 Night Forcing (Zones tab), read before midnight — after midnight \"PV Forecast Today\" above is used automatically instead (same target day, only the sensor changes)."
     },
     "zone1_force_sensor_note": {
       "d": "🔌 Without the \"PV Forecast Tomorrow\" entity (Entities tab) this function stays inactive."

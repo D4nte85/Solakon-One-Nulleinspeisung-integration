@@ -163,8 +163,8 @@ Im Panel wird bei mehreren Instanzen ein zusätzlicher **Verteilungs-Tab** einge
 
 | Globaler Sensor | Speist |
 |---|---|
-| PV-Vorhersage heute (kWh) | Surplus-Forecast-Erzwingung (Überschuss-Tab), Tarif-Lock-Unterdrückung (Tarif-Tab), 0–12 Uhr zusätzlich Zone-1-Nacht-Forcierung (Zonen-Tab) |
-| PV-Vorhersage morgen (kWh) | Zone-1-Nacht-Forcierung (Zonen-Tab) |
+| PV-Vorhersage heute (kWh, Wh/MWh automatisch normalisiert) | Surplus-Forecast-Erzwingung (Überschuss-Tab), Tarif-Lock-Unterdrückung (Tarif-Tab), 0–12 Uhr zusätzlich Zone-1-Nacht-Forcierung (Zonen-Tab) |
+| PV-Vorhersage morgen (kWh, Wh/MWh automatisch normalisiert) | Zone-1-Nacht-Forcierung (Zonen-Tab) |
 | Leistungs-Vorhersage jetzt (W) | Austritts-Sperre (Überschuss-Tab) |
 | Strompreis-Sensor | Tarif-Arbitrage (Tarif-Tab) |
 | Günstig-/Teuer-Schwelle dynamisch | Tarif-Arbitrage (Tarif-Tab) |
