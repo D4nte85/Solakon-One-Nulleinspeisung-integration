@@ -6,6 +6,7 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 ## [Unreleased]
 
 ### Behoben
+- Surplus-Forecast-Erzwingung, Tarif-Lock-PV-Vorhersage und Zone-1-Nacht-Forcierung verglichen den PV-Ertrag-Sensor (dokumentiert in kWh) über `_flt_kilo_normalized()` gegen ihre jeweilige Schwelle — bei einem Sensor mit Einheit `kWh` normalisiert diese Funktion den Wert automatisch ×1000 auf Wh, während die drei Schwellenfelder unverändert in kWh eingegeben werden. Die Schwelle griff dadurch praktisch nie (jeder reale kWh-Ertrag lag nach der ×1000-Normalisierung weit über jedem im Panel sinnvoll einstellbaren Wert). Alle drei Vergleiche lesen den Sensor jetzt über `_flt()` (Rohwert, keine Normalisierung) — konsistent mit der bereits vorher korrekten Panel-/README-Dokumentation dieser Felder. `surplus_lock_sensor` (Leistungs-Vorhersage in W) bleibt unverändert bei `_flt_kilo_normalized()`, da dort tatsächlich in Watt verglichen wird (`coordinator.py`)
 - Fall H (AC Laden Ende): Vergleich `eigener Output = 0 W` auf `eigener Output ≤ 0 W` geändert — robuster gegen isolierte Ein-Sekunden-Nullwerte durch Modbus-Rauschen in Leistungssensoren (`coordinator.py`, analog zum entsprechenden Blueprint-Fix)
 
 ## [2.2.6] – 2026-08-21

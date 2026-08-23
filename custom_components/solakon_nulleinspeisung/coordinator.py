@@ -489,7 +489,11 @@ class SolakonCoordinator:
         return value
 
     def _flt_kilo_normalized(self, entity_id: str, default: float = 0.0) -> float:
-        """Float-Wert lesen; k-Präfix-Einheiten (kW, kWh, …) ×1000 normalisieren."""
+        """Float-Wert lesen; k-Präfix-Einheiten (kW, kWh, …) ×1000 normalisieren.
+        Nur für Vergleiche gegen einen Watt-Referenzwert (z. B. hard_limit_z0).
+        Für kWh-Schwellenfelder (im Panel als kWh beschriftet) stattdessen
+        _flt() verwenden — sonst vergleicht der ×1000-normalisierte Wert
+        gegen eine kWh-Zahl und die Schwelle greift praktisch nie."""
         state = self.hass.states.get(entity_id)
         if state is None or state.state in ("unknown", "unavailable"):
             return default
@@ -791,7 +795,7 @@ class SolakonCoordinator:
                 # und der SOC über der Zone-3-Schutzgrenze liegt; sonst greift wieder die
                 # normale SOC-/Verbrauchslogik.
                 self.forecast_surplus_forced = (
-                    self._flt_kilo_normalized(pv_forecast_today_sensor) >= surplus_forecast_threshold
+                    self._flt(pv_forecast_today_sensor) >= surplus_forecast_threshold
                     and solar > hard_limit_z0
                     and soc > zone3_limit
                 )
@@ -830,7 +834,7 @@ class SolakonCoordinator:
         elif pv_forecast_enabled and pv_forecast_today_sensor:
             if self._entity_ok(pv_forecast_today_sensor):
                 self.forecast_tariff_suppressed = (
-                    self._flt_kilo_normalized(pv_forecast_today_sensor) >= pv_forecast_threshold
+                    self._flt(pv_forecast_today_sensor) >= pv_forecast_threshold
                 )
             else:
                 soft_errors.append(f"PV-Vorhersage: Sensor {pv_forecast_today_sensor!r} nicht verfügbar")
@@ -853,7 +857,7 @@ class SolakonCoordinator:
         elif zone1_force_enabled and zone1_force_sensor:
             if self._entity_ok(zone1_force_sensor):
                 self.zone1_forced = (
-                    self._flt_kilo_normalized(zone1_force_sensor) >= zone1_force_threshold
+                    self._flt(zone1_force_sensor) >= zone1_force_threshold
                     and solar < pv_reserve         # "gerade dunkel", gleiche Bedingung wie is_night
                     and soc > zone1_force_min_soc  # eigener Floor, unabhängig von zone3_limit (Exit-Schwelle)
                 )
