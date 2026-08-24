@@ -436,7 +436,7 @@ class SolakonCoordinator:
         # Trimmen und bewegt den Offset weiterhin wie vorgesehen.
         trim = int(self.settings.get(S_STDDEV_TRIM_COUNT, 0))
         if trim > 0 and n - 2 * trim >= 2:  # Fallback: mind. 2 Kernwerte nötig, sonst ungetrimmt
-            core = sorted(values)[trim: n - trim]  # oberste/unterste `trim` Werte kappen
+            core = sorted(values)[trim: n - trim]
             self.grid_stddev = self._stddev_of(core)
         else:
             self.grid_stddev = self.grid_stddev_raw
