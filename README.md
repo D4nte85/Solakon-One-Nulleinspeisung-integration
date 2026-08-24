@@ -448,6 +448,12 @@ Jede Zone (Zone 1, Zone 2, Zone AC) hat einen eigenen Parameterblock:
 | Volatilitäts-Faktor | Verstärkung oberhalb der Rausch-Schwelle | 1,0–2,0 |
 | Negativer Offset | Offset negieren (Regelziel < 0 W) | Aus |
 
+Gilt für alle Zonen gemeinsam (Zeitfenster-Ebene, nicht pro Zone):
+
+| Parameter | Beschreibung | Empfehlung |
+|-----------|-------------|------------|
+| Trim (Anzahl Werte pro Seite) | Schließt die N höchsten UND N niedrigsten Einzelmesswerte im Stabw.-Fenster vor der Berechnung aus — pro Seite, nicht insgesamt (N=5 → 10 Samples ausgeschlossen). Trennt kurze, seltene Lastspitzen (Kompressor-/Pumpen-Anlaufstrom) von echter Dauerunruhe anhand des betroffenen Fensteranteils, nicht der Ereignisdauer. Wert als Anzahl Samples, nicht Prozent, da die Sample-Zahl im Fenster von der Update-Rate des Netzsensors abhängt. Wirkung live vergleichbar über den ungetrimmten Rohwert (`stddev_raw`). | 0 (Standard, kein Trimmen); vorsichtig erhöhen |
+
 **Mehrere Instanzen am selben Netzsensor:** Der StdDev-Ringpuffer wird nur von einer Instanz (dem Gruppen-Leader, kleinste entry_id unter den aktiv regelnden Instanzen der Netzgruppe) gepflegt — alle anderen übernehmen ihren Wert. Verhindert, dass mehrere unabhängig berechnete, leicht phasenversetzte StdDev-Historien sich gegenseitig hochschaukeln (siehe Troubleshooting). Bei Einzelbetrieb ist die Instanz immer ihr eigener Leader — kein Unterschied zum bisherigen Verhalten.
 
 ---
