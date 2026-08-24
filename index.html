@@ -66,7 +66,7 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
   // Deckt sich mit SETTINGS_DEFAULTS in const.py.
   const DEFAULT_SETTINGS = {
     regulation_enabled: true,
-    p_factor: 1.3, i_factor: 0.05, tolerance: 15, wait_time: 3, stddev_window: 60,
+    p_factor: 1.3, i_factor: 0.05, tolerance: 15, wait_time: 3, stddev_window: 60, stddev_trim_count: 0,
     zone1_limit: 50, zone3_limit: 20, discharge_max: 40,
     hard_limit_z0: 800, hard_limit_z1: 800,
     offset_1: 30, offset_2: 10, pv_reserve: 50,
@@ -135,7 +135,7 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
       last_output_ts: now() - 12, mode_label_ts: now() - 340,
       last_error: null, integral: 4.2, grid: o.grid, actual_power: o.actual_power,
       solar: 850, soc: o.soc, cycle_active: o.cycle_active, surplus_active: false,
-      ac_charge: false, tariff_charge: false, regulation_enabled: true, stddev: 8.4,
+      ac_charge: false, tariff_charge: false, regulation_enabled: true, stddev: 8.4, stddev_raw: 8.4,
       dyn_z1_enabled: false, dyn_z2_enabled: false, dyn_ac_enabled: false,
       dyn_z1: 0, dyn_z2: 0, dyn_ac: 0, active_fall: o.active_fall, is_night: false,
       forecast_tariff_suppressed: false, forecast_surplus_forced: false, forecast_exit_lock: false, allocated_power: 400,
