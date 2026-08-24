@@ -299,6 +299,10 @@
       "l": "StdDev Window (s)",
       "d": "Time window for the standard deviation calculation. Applies to all zones."
     },
+    "stddev_trim_count": {
+      "l": "Trim (sample count)",
+      "d": "Number of the highest and lowest individual readings in the StdDev window that get excluded before the calculation — expressed as a sample count, not a percentage, since the number of samples in the window varies with the grid sensor's update rate. Separates short, rare load spikes (e.g. a compressor or pump inrush lasting a few seconds) from genuine sustained volatility: a spike that fills only a minority of the window's samples falls entirely into the excluded range; a fluctuation affecting most of the window survives trimming unchanged and still moves the offset. 0 = no trimming (default, previous behavior). Effect visible live via \"StdDev (raw)\" below."
+    },
     "dyn_z1_enabled":  { "l": "Enable", "d": "Calculates the offset dynamically from the grid StdDev instead of the static value. Overrides the static Zone-1 offset." },
     "dyn_z1_min":      { "l": "Min. Offset (W)", "d": "Base buffer with a calm grid (StdDev ≤ noise threshold). Offset never falls below this value." },
     "dyn_z1_max":      { "l": "Max. Offset (W)", "d": "Upper ceiling of the offset. Offset never exceeds this value, even at very high StdDev." },
@@ -372,6 +376,7 @@
     "alloc_lbl":        "Zone-1 Limit (alloc.)",
     "alloc_single":     "Single",
     "stddev_lbl":        "Grid StdDev",
+    "stddev_raw_lbl":    "StdDev (raw)",
     "offset_lbl":        "Active Offset",
     "elapsed_lbl":       "Since last output",
     "mode_elapsed_lbl":  "Since mode change",

@@ -116,6 +116,7 @@ async def _ws_get_status(
         "tariff_charge":     coord.tariff_charge_active,
         "regulation_enabled": coord.settings.get(S_REGULATION_ENABLED, False),
         "stddev":            coord.grid_stddev,
+        "stddev_raw":        coord.grid_stddev_raw,
         "dyn_z1_enabled":    coord.settings.get("dyn_z1_enabled", False),
         "dyn_z2_enabled":    coord.settings.get("dyn_z2_enabled", False),
         "dyn_ac_enabled":    coord.settings.get("dyn_ac_enabled", False),

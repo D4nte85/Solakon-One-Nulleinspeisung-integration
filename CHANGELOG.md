@@ -5,6 +5,10 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+### Hinzugefügt
+- Dynamischer Offset: neue Einstellung `stddev_trim_count` (Dyn.-Offset-Tab, Standard 0) — schließt die N höchsten und N niedrigsten Einzelmesswerte im Stabw.-Fenster vor der Berechnung aus. Trennt kurze, seltene Lastspitzen (z. B. Kompressor-/Pumpen-Anlaufstrom) von echter Dauerunruhe anhand des betroffenen Fensteranteils statt der Ereignisdauer — ein Puls, der nur eine Minderheit der Samples füllt, fällt komplett raus, eine Schwankung über den Großteil des Fensters bewegt den Offset weiterhin. Als Anzahl Samples konfigurierbar, nicht als Prozent (`coordinator.py`, `const.py`)
+- Netz-Stabw.-Sensor: neues Attribut `stddev_raw` (ungetrimmter Wert) und `trim_count`, Panel zeigt getrimmten und rohen Wert direkt nebeneinander zum Vergleich beim Tunen (`sensor.py`, `__init__.py`, `panel.*.json`, `solakon-panel.js`)
+
 ## [2.2.7] – 2026-08-23
 
 ### Behoben

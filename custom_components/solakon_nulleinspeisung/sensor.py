@@ -143,6 +143,8 @@ class GridStdDevSensor(SolakonEntity, SensorEntity):
         attrs = {
             "window_seconds": s.get("stddev_window", 60),
             "sample_count": len(self._coordinator._grid_samples),
+            "trim_count": s.get("stddev_trim_count", 0),
+            "stddev_raw": self._coordinator.grid_stddev_raw,
             "dynamic_offset_active": dyn,
         }
         if dyn:

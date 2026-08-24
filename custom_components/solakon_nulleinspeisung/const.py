@@ -61,6 +61,7 @@ S_I_FACTOR   = "i_factor"
 S_TOLERANCE  = "tolerance"
 S_WAIT_TIME  = "wait_time"
 S_STDDEV_WINDOW = "stddev_window"
+S_STDDEV_TRIM_COUNT = "stddev_trim_count"
 
 S_ZONE1_LIMIT   = "zone1_limit"
 S_ZONE3_LIMIT   = "zone3_limit"
@@ -152,6 +153,7 @@ SETTINGS_DEFAULTS: dict = {
     S_TOLERANCE:  15,
     S_WAIT_TIME:  3,
     S_STDDEV_WINDOW: 60,
+    S_STDDEV_TRIM_COUNT: 0,
 
     S_ZONE1_LIMIT:   50,
     S_ZONE3_LIMIT:   20,

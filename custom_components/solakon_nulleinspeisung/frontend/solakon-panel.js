@@ -220,7 +220,8 @@ const TAB_LAYOUT = {
 
   dynoff: {
     top: [
-      { k: "stddev_window", t: "num", min: 30, max: 300, step: 10 },
+      { k: "stddev_window",     t: "num", min: 30, max: 300, step: 10 },
+      { k: "stddev_trim_count", t: "num", min: 0,  max: 10,  step: 1  },
     ],
     cols: [
       {
@@ -1119,6 +1120,7 @@ class SolakonPanel extends HTMLElement {
               <div class="stat"><div class="val" id="st-stddev">—</div><div class="lbl">${s.stddev_lbl   || "StdDev"}</div></div>
             </div>
             <div class="stat-row">
+              <div class="stat"><div class="val" id="st-stddev-raw">—</div><div class="lbl">${s.stddev_raw_lbl || "StdDev (raw)"}</div></div>
               <div class="stat"><div class="val" id="st-alloc">—</div><div class="lbl">${s.alloc_lbl || "Alloc."}</div></div>
             </div>
             <div class="stat-full">
@@ -1202,6 +1204,7 @@ class SolakonPanel extends HTMLElement {
     set("st-soc",          `${st.soc ?? "—"} %`);
     set("st-int",          `${(st.integral ?? 0).toFixed(2)}`);
     set("st-stddev",       `${(st.stddev ?? 0).toFixed(1)} W`);
+    set("st-stddev-raw",   `${(st.stddev_raw ?? 0).toFixed(1)} W`);
     set("st-alloc",        st.allocated_power != null ? `${st.allocated_power} W` : (s.alloc_single || "—"));
     set("st-elapsed",      this._fmt_elapsed(st.last_output_ts));
     set("st-mode-elapsed", this._fmt_elapsed(st.mode_label_ts));

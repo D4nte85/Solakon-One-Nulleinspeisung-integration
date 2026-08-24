@@ -22,7 +22,7 @@ from .const import (
     CONF_DISCHARGE_CURRENT, CONF_TIMEOUT_SET, CONF_MODE_SELECT, CONF_EXPORT_LIMIT,
     MODE_DISABLED, MODE_DISCHARGE, MODE_AC_CHARGE,
     S_REGULATION_ENABLED,
-    S_P_FACTOR, S_I_FACTOR, S_TOLERANCE, S_WAIT_TIME, S_STDDEV_WINDOW,
+    S_P_FACTOR, S_I_FACTOR, S_TOLERANCE, S_WAIT_TIME, S_STDDEV_WINDOW, S_STDDEV_TRIM_COUNT,
     S_ZONE1_LIMIT, S_ZONE3_LIMIT, S_DISCHARGE_MAX, S_HARD_LIMIT, S_HARD_LIMIT_Z0, S_HARD_LIMIT_Z1,
     S_OFFSET_1, S_OFFSET_2, S_PV_RESERVE,
     S_SURPLUS_ENABLED, S_SURPLUS_SOC_THRESHOLD, S_SURPLUS_SOC_HYST, S_SURPLUS_PV_HYST,
@@ -79,6 +79,7 @@ class SolakonCoordinator:
         # StdDev-Ringpuffer für Netz-Standardabweichung
         self._grid_samples: deque[tuple[float, float]] = deque()  # (timestamp, value)
         self.grid_stddev: float = 0.0
+        self.grid_stddev_raw: float = 0.0
 
         # Dynamischer Offset (berechnete Werte pro Zone)
         self.dyn_offset_z1: float = 0.0
@@ -419,12 +420,34 @@ class SolakonCoordinator:
         n = len(self._grid_samples)
         if n < 2:
             self.grid_stddev = 0.0
+            self.grid_stddev_raw = 0.0
             return
 
         values = [s[1] for s in self._grid_samples]
+        self.grid_stddev_raw = self._stddev_of(values)
+
+        # Getrimmte StdDev: die `trim` größten und kleinsten Samples im Fenster
+        # ausschließen, bevor die Streuung berechnet wird. Trennt kurze, seltene
+        # Lastspitzen (z. B. Kompressor-Anlaufstrom für wenige Sekunden) von
+        # echter Dauerunruhe anhand des betroffenen Fensteranteils, nicht der
+        # Dauer eines Einzelereignisses — ein Puls, der nur eine Minderheit der
+        # Samples füllt, fällt komplett in den getrimmten Bereich; eine
+        # Schwankung, die den Großteil des Fensters betrifft, übersteht das
+        # Trimmen und bewegt den Offset weiterhin wie vorgesehen.
+        trim = int(self.settings.get(S_STDDEV_TRIM_COUNT, 0))
+        if trim > 0 and n - 2 * trim >= 2:
+            core = sorted(values)[trim: n - trim]
+            self.grid_stddev = self._stddev_of(core)
+        else:
+            self.grid_stddev = self.grid_stddev_raw
+
+    @staticmethod
+    def _stddev_of(values: list[float]) -> float:
+        """Populations-Standardabweichung einer Werteliste."""
+        n = len(values)
         mean = sum(values) / n
         variance = sum((v - mean) ** 2 for v in values) / n
-        self.grid_stddev = round(variance ** 0.5, 1)
+        return round(variance ** 0.5, 1)
 
     # ── Dynamic Offset-Berechnung ────────────────────────────────────────────
 
@@ -709,6 +732,7 @@ class SolakonCoordinator:
         if leader is self:
             self._update_stddev(grid)
         self.grid_stddev = leader.grid_stddev
+        self.grid_stddev_raw = leader.grid_stddev_raw
         if any(s.get(k, False) for k in (S_DYN_Z1_ENABLED, S_DYN_Z2_ENABLED, S_DYN_AC_ENABLED)):
             self._update_dynamic_offsets()
 
