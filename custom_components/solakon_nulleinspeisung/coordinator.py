@@ -802,7 +802,7 @@ class SolakonCoordinator:
         # Degradation (Sensor einer Fremdinstanz fehlt) ebenfalls sichtbar wird.
         soft_errors: list[str] = []
 
-        error_share, allocated_power = self._compute_distribution()
+        error_share, allocated_power = self._compute_distribution(soc)
         self.allocated_power = allocated_power
         if self._dist_warning:
             soft_errors.append(self._dist_warning)
@@ -1071,7 +1071,7 @@ class SolakonCoordinator:
 
         # Eigener Pool für AC-Laden — erst nach den Falls berechnet, damit ein in
         # diesem Zyklus per Fall G neu gesetztes ac_charge_active bereits zählt.
-        ac_error_share = self._compute_ac_distribution()
+        ac_error_share = self._compute_ac_distribution(soc)
         if self._dist_warning:
             soft_errors.append(self._dist_warning)
             self.last_error = " • ".join(soft_errors)
@@ -1445,7 +1445,7 @@ class SolakonCoordinator:
         group_key = self.entry.data.get(CONF_GRID_SENSOR, "")
         return {**DIST_DEFAULTS, **all_groups.get(group_key, {})}
 
-    def _weighted_share(self, active: dict[str, "SolakonCoordinator"]) -> float:
+    def _weighted_share(self, active: dict[str, "SolakonCoordinator"], own_soc: float) -> float:
         """SOC-/kapazitätsgewichteter oder gleichverteilter Fehler-Anteil dieser Instanz.
 
         `active` ist die Menge der aktuell gleichrangig teilnehmenden Instanzen
@@ -1453,17 +1453,23 @@ class SolakonCoordinator:
         Ist diese Instanz nicht Teil von `active`, bekommt sie keinen Anteil (0.0).
         Dünner Wrapper um _all_shares() für den (häufigeren) Fall, dass nur der
         eigene Anteil gebraucht wird (z. B. AC-Lade-Pool ohne Hard-Limit-Verteilung).
+        `own_soc` siehe `_all_shares`.
         """
         if self.entry.entry_id not in active:
             return 0.0
-        return self._all_shares(active).get(self.entry.entry_id, 0.0)
+        return self._all_shares(active, own_soc).get(self.entry.entry_id, 0.0)
 
-    def _all_shares(self, active: dict[str, "SolakonCoordinator"]) -> dict[str, float]:
+    def _all_shares(self, active: dict[str, "SolakonCoordinator"], own_soc: float) -> dict[str, float]:
         """SOC-/kapazitätsgewichteter oder gleichverteilter Fehler-Anteil für ALLE
         Instanzen in `active` — Grundlage sowohl für _weighted_share() (eigener
         Anteil) als auch für die Wasserfüll-Verteilung in _compute_distribution()
         (dort werden alle Anteile gleichzeitig gebraucht, um kapp-limitierten
         Instanzen ungenutzten Spielraum an andere weiterzureichen).
+
+        `own_soc` ist der im laufenden Zyklus bereits gelesene eigene
+        CONF_SOC_SENSOR-Wert — vermeidet eine zweite, ggf. abweichende Lesung.
+        Fremdinstanzen werden weiterhin live gelesen (keine eigene Snapshot-Quelle
+        für sie verfügbar).
 
         Degradiert ein Modus mangels gültigem Fremdinstanz-Sensor (SOC oder
         Kapazität), wird das in self._dist_warning vermerkt statt still zu
@@ -1484,7 +1490,7 @@ class SolakonCoordinator:
             return {eid: eq for eid in active}
 
         if mode == "soc_switch":
-            shares = self._soc_switch_shares(active)
+            shares = self._soc_switch_shares(active, own_soc)
             if shares is None:
                 self._dist_warning = (
                     "Verteilung (SOC-Switch): SOC-Sensor einer Instanz nicht "
@@ -1528,17 +1534,20 @@ class SolakonCoordinator:
         # SOC-Gewichte: nutzbare kWh (mode "capacity") bzw. nutzbare SOC-% (mode "soc")
         soc_weights: dict[str, float] = {}
         for eid, c in active.items():
-            soc_eid = c.entry.data.get(CONF_SOC_SENSOR, "")
-            if not c._entity_ok(soc_eid):
-                # SOC-Read einer Fremdinstanz unsicher — auf Gleichverteilung ausweichen
-                # statt eine falsche 0 in die Gewichtung einfließen zu lassen.
-                self._dist_warning = (
-                    "Verteilung: SOC-Sensor einer anderen Instanz nicht verfügbar "
-                    "— auf Gleichverteilung zurückgefallen"
-                )
-                self.dist_mode_effective = "equal"
-                return {eid: eq for eid in active}
-            soc   = c._flt(soc_eid, 0)
+            if c is self:
+                soc = own_soc
+            else:
+                soc_eid = c.entry.data.get(CONF_SOC_SENSOR, "")
+                if not c._entity_ok(soc_eid):
+                    # SOC-Read einer Fremdinstanz unsicher — auf Gleichverteilung ausweichen
+                    # statt eine falsche 0 in die Gewichtung einfließen zu lassen.
+                    self._dist_warning = (
+                        "Verteilung: SOC-Sensor einer anderen Instanz nicht verfügbar "
+                        "— auf Gleichverteilung zurückgefallen"
+                    )
+                    self.dist_mode_effective = "equal"
+                    return {eid: eq for eid in active}
+                soc = c._flt(soc_eid, 0)
             zone3 = float(c.settings.get(S_ZONE3_LIMIT, 20))
             soc_weights[eid] = max(0.0, (soc - zone3) / 100.0 * caps[eid])
 
@@ -1548,8 +1557,9 @@ class SolakonCoordinator:
             return {eid: eq for eid in active}
         return {eid: w / total_soc for eid, w in soc_weights.items()}
 
-    def _soc_switch_shares(self, active: dict[str, "SolakonCoordinator"]) -> dict[str, float] | None:
+    def _soc_switch_shares(self, active: dict[str, "SolakonCoordinator"], own_soc: float) -> dict[str, float] | None:
         """Anteile für Modus `soc_switch`, ein Eintrag je Instanz in `active`.
+        `own_soc` siehe `_all_shares`.
 
         Regulärer Fall (keine oder eine Zone-0-Instanz im Pool): exakt eine Instanz
         erhält vollen Anteil, alle anderen 0 — bis ihr SOC seit Übernahme um
@@ -1582,6 +1592,9 @@ class SolakonCoordinator:
         """
         socs: dict[str, float] = {}
         for eid, c in active.items():
+            if c is self:
+                socs[eid] = own_soc
+                continue
             soc_eid = c.entry.data.get(CONF_SOC_SENSOR, "")
             if not c._entity_ok(soc_eid):
                 return None
@@ -1643,12 +1656,12 @@ class SolakonCoordinator:
 
         return result
 
-    def _compute_distribution(self) -> tuple[float, float | None]:
+    def _compute_distribution(self, own_soc: float) -> tuple[float, float | None]:
         """Fehler-Anteil + zugeteilte Leistung für Nulleinspeisung-Instanzen (Modus '1').
 
         Gibt (error_share, allocated_power) zurück.
         Im Einzelbetrieb oder wenn diese Instanz gerade nicht in Modus '1' steht:
-        (1.0 bzw. 0.0, None) — kein Einfluss auf hard_limit.
+        (1.0 bzw. 0.0, None) — kein Einfluss auf hard_limit. `own_soc` siehe `_all_shares`.
 
         allocated_power kommt aus einer Wasserfüll-Verteilung (_waterfill_allocate):
         eine rein proportionale Aufteilung von global_max_power nach Anteil würde bei
@@ -1667,7 +1680,7 @@ class SolakonCoordinator:
         if self.entry.entry_id not in active or len(active) <= 1:
             return (1.0, None) if self.entry.entry_id in active else (0.0, None)
 
-        shares = self._all_shares(active)
+        shares = self._all_shares(active, own_soc)
         dist = self._dist_cfg()
         global_max = float(dist.get("global_max_power", 800))
         allocations = self._waterfill_allocate(active, shares, global_max)
@@ -1721,19 +1734,20 @@ class SolakonCoordinator:
 
         return {eid: round(v) for eid, v in allocations.items()}
 
-    def _compute_ac_distribution(self) -> float:
+    def _compute_ac_distribution(self, own_soc: float) -> float:
         """Fehler-Anteil unter gleichzeitig AC-ladenden Instanzen (Modus '3', `ac_charge_active`).
 
         Eigener Pool, unabhängig von der Nulleinspeisungs-Verteilung (Modus '1') —
         verhindert, dass mehrere AC-Lader denselben Netzüberschuss doppelt beanspruchen.
         Kein `allocated_power`: das AC-Leistungslimit bleibt unabhängig vom hard_limit.
+        `own_soc` siehe `_all_shares`.
         """
         all_coords = self._group_coords()
         active = {
             eid: c for eid, c in all_coords.items()
             if c.settings.get(S_REGULATION_ENABLED, False) and c.ac_charge_active
         }
-        return self._weighted_share(active)
+        return self._weighted_share(active, own_soc)
 
     def _total_actual_power(self, own_actual: float) -> float:
         """Summe der Wechselrichter-Ist-Leistung über alle Nulleinspeisung-Instanzen (Modus '1').
