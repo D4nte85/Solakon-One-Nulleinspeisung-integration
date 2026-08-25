@@ -96,6 +96,11 @@ class SolakonCoordinator:
         # capacity → soc, soc/soc_switch → equal) — wird im selben Zyklus sofort
         # nach dem jeweiligen Aufruf in soft_errors übernommen, siehe _run_regulation_cycle.
         self._dist_warning: str = ""
+        # Analog zu _dist_warning: von _confirm_zero_output() gesetzt wenn eine
+        # sicherheitskritische Output-Nullung (Fall-Übergänge, PI-Ziel 0) trotz
+        # Retries nicht bestätigt werden konnte — sofort im selben Zyklus nach dem
+        # jeweiligen Aufruf in soft_errors übernommen, siehe _run_regulation_cycle.
+        self._output_warning: str = ""
         # Tatsächlich angewandter Verteilungs-Modus des letzten _all_shares()-Aufrufs
         # — kann vom konfigurierten distribution_mode abweichen (Degradation, siehe oben).
         self.dist_mode_effective: str = ""
@@ -625,9 +630,45 @@ class SolakonCoordinator:
         unmittelbar folgender CONF_ACTIVE_POWER-Reread (PI-Gate nach einem Fall)
         noch den alten Wert sehen (siehe Issue #27). Bisher nur in den regulären
         PI-Pfaden genutzt, jetzt auch für die Fall-eigenen Output-Writes.
+
+        Nullung (`value == 0`) ist sicherheitskritisch (Fall-Übergänge — Zone-3-Stopp,
+        AC-/Tarif-Laden-Ende, Nachtabschaltung) und wird zusätzlich über
+        `_confirm_zero_output()` verifiziert und bei Bedarf erneut geschrieben.
         """
         await self._set_output(value)
         await self._wait_for_target(value, ac_charge_mode=ac_charge_mode)
+        if value == 0:
+            await self._confirm_zero_output(ac_charge_mode)
+
+    async def _confirm_zero_output(self, ac_charge_mode: bool, max_retries: int = 2) -> None:
+        """Bestätigt, dass die Ausgangsleistung wirklich auf 0 gefallen ist — unabhängig
+        von S_SELF_ADJUST (`_wait_for_target()` prüft ohne diese Einstellung gar nicht
+        nach), da ein verlorener/abgelehnter Nullungs-Schreibbefehl (`number.set_value`
+        läuft ohne `blocking=True`, siehe Issue #27) sonst unbemerkt bliebe — der Zyklus
+        würde mit dem alten, tatsächlich weiterhin anliegenden Output fortfahren. Schreibt
+        bei fehlender Konvergenz bis zu `max_retries`-mal erneut, meldet nach Ausschöpfung
+        über `_output_warning` einen sichtbaren Fehler statt stillschweigend weiterzulaufen.
+        """
+        actual_eid = self.entry.data.get(CONF_ACTUAL_SENSOR, "")
+        if not self._entity_ok(actual_eid):
+            return  # kein Sensor zur Verifikation verfügbar — nichts zu prüfen
+
+        tolerance = float(self.settings.get(S_SELF_ADJUST_TOL, 2))
+
+        for attempt in range(max_retries):
+            if abs(self._flt_power(actual_eid)) <= tolerance:
+                return
+            _LOGGER.warning(
+                "Solakon: Output-Nullung nicht bestätigt (Ist: %.0f W) — erneuter Schreibversuch %d/%d",
+                self._flt_power(actual_eid), attempt + 1, max_retries,
+            )
+            await self._set_output(0)
+            await self._wait_for_target(0, ac_charge_mode=ac_charge_mode)
+
+        actual = self._flt_power(actual_eid)
+        if abs(actual) > tolerance:
+            self._output_warning = f"Output-Nullung nach {max_retries} Versuchen nicht bestätigt (Ist: {actual:.0f} W)"
+            _LOGGER.error("Solakon: %s", self._output_warning)
 
     async def _set_discharge(self, amps: float) -> None:
         """Entladestrom setzen — nur wenn aktueller Wert abweicht."""
@@ -716,6 +757,7 @@ class SolakonCoordinator:
             return
 
         self._timer_toggled_in_cycle = False
+        self._output_warning = ""
 
         _prev_flags = (self.cycle_active, self.surplus_active, self.ac_charge_active, self.tariff_charge_active, self._solar_zero_entry_armed)
 
@@ -1062,6 +1104,9 @@ class SolakonCoordinator:
 
         # ── 7. PI-Gate ───────────────────────────────────────────────────────
         if mode not in (MODE_DISCHARGE, MODE_AC_CHARGE):
+            if self._output_warning:
+                soft_errors.append(self._output_warning)
+                self.last_error = " • ".join(soft_errors)
             self._update_zone_display(soc, zone1_limit, zone3_limit, mode)
             if (self.cycle_active, self.surplus_active, self.ac_charge_active, self.tariff_charge_active, self._solar_zero_entry_armed) != _prev_flags:
                 self._store.async_delay_save(self._store_data, 5)
@@ -1133,6 +1178,9 @@ class SolakonCoordinator:
                     self.integral *= 0.95
 
         # ── 10. Display + Flag-Persistenz ────────────────────────────────────
+        if self._output_warning:
+            soft_errors.append(self._output_warning)
+            self.last_error = " • ".join(soft_errors)
         self._update_zone_display(soc, zone1_limit, zone3_limit, mode)
         if (self.cycle_active, self.surplus_active, self.ac_charge_active, self.tariff_charge_active, self._solar_zero_entry_armed) != _prev_flags:
             self._store.async_delay_save(self._store_data, 5)
