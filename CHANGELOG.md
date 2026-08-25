@@ -5,6 +5,9 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+### Behoben
+- Regelzyklus (`_run_regulation_cycle`): `CONF_ACTIVE_POWER` wurde bis zu dreimal pro Zyklus gelesen (Zyklusstart, nach den Falls, unmittelbar vor der PI-Entscheidung), dazwischen liegen `await`s (u. a. Timer-Toggle) — Gate-Prüfung (`at_max_limit`/`at_min_limit`/`above_dynamic_max`), PI-Basisberechnung und die angezeigte Statuszeile ("PI: … → … W") konnten dadurch je nach Zykluszeitpunkt auf unterschiedlichen Momentaufnahmen des Ausgangswerts stehen. Jetzt genau eine Lesung nach dem letzten Await vor der PI-Entscheidung, von Gate, PI-Basis und Statusanzeige gemeinsam verwendet (`coordinator.py`)
+
 ## [2.2.8] – 2026-08-24
 
 ### Hinzugefügt

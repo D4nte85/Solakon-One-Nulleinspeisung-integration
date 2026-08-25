@@ -718,7 +718,6 @@ class SolakonCoordinator:
         grid = self._flt_power(cfg[CONF_GRID_SENSOR])
         solar = self._flt_power(cfg[CONF_SOLAR_SENSOR])
         actual = self._flt_power(cfg[CONF_ACTUAL_SENSOR])
-        current_power = self._flt(cfg[CONF_ACTIVE_POWER])
         mode = self._str(cfg[CONF_MODE_SELECT])
         timer_val = self._flt(cfg[CONF_TIMEOUT_COUNTDOWN])
 
@@ -1037,7 +1036,6 @@ class SolakonCoordinator:
         # ── 6b. Frische Werte nach Falls ─────────────────────────────────────
         grid = self._flt_power(cfg[CONF_GRID_SENSOR])
         solar = self._flt_power(cfg[CONF_SOLAR_SENSOR])
-        current_power = self._flt(cfg[CONF_ACTIVE_POWER])
         mode = self._str(cfg[CONF_MODE_SELECT])
 
         if mode == MODE_AC_CHARGE:
@@ -1048,10 +1046,6 @@ class SolakonCoordinator:
             dynamic_max = min(effective_hard_z1, max(0, solar - pv_reserve))
 
         target_offset = offset_1 if self.cycle_active else offset_2
-
-        at_max_limit = current_power >= dynamic_max
-        at_min_limit = current_power <= 0
-        above_dynamic_max = current_power > dynamic_max
 
         # ── 7. PI-Gate ───────────────────────────────────────────────────────
         if mode not in (MODE_DISCHARGE, MODE_AC_CHARGE):
@@ -1065,6 +1059,15 @@ class SolakonCoordinator:
         # Entfällt wenn ein Fall in diesem Zyklus bereits getoggelt hat (timer_val wäre stale)
         if timer_val < 120 and not self._timer_toggled_in_cycle and self._entity_ok(cfg[CONF_TIMEOUT_COUNTDOWN]):
             await self._timer_toggle()
+
+        # Einzige Lesung für Gate + PI-Basis + Log dieses Zyklus — nach dem letzten
+        # Await vor der PI-Entscheidung, damit Gate (at_max_limit etc.), Log-Zeile
+        # und _total_commanded_power() auf demselben Snapshot von CONF_ACTIVE_POWER
+        # stehen. Vor dem Timer-Toggle-Await berechnete Gate-Werte wären hier stale.
+        current_power = self._flt(cfg[CONF_ACTIVE_POWER])
+        at_max_limit = current_power >= dynamic_max
+        at_min_limit = current_power <= 0
+        above_dynamic_max = current_power > dynamic_max
 
         # Eigener Pool für AC-Laden — erst nach den Falls berechnet, damit ein in
         # diesem Zyklus per Fall G neu gesetztes ac_charge_active bereits zählt.
@@ -1084,7 +1087,7 @@ class SolakonCoordinator:
         elif self.ac_charge_active:
             ac_grid_err = grid - ac_offset
             if abs(ac_grid_err) > tolerance:
-                ac_power_base = self._total_commanded_ac_power() * ac_error_share
+                ac_power_base = self._total_commanded_ac_power(current_power) * ac_error_share
                 new_pw = self._pi_calculate(
                     grid, ac_power_base, ac_offset, ac_power_limit,
                     tolerance, ac_p, ac_i, ac_charge_mode=True,
@@ -1106,7 +1109,7 @@ class SolakonCoordinator:
             grid_error_abs = abs(grid_error)
 
             if grid_error_abs > tolerance and not (at_max_limit and not above_dynamic_max and grid_error > 0) and not (at_min_limit and grid_error < 0):
-                power_base = self._total_commanded_power() * error_share
+                power_base = self._total_commanded_power(current_power) * error_share
                 new_pw = self._pi_calculate(
                     grid, power_base, target_offset, dynamic_max,
                     tolerance, p_factor, i_factor, ac_charge_mode=False,
@@ -1750,10 +1753,12 @@ class SolakonCoordinator:
             for c in active
         )
 
-    def _total_commanded_power(self) -> float:
+    def _total_commanded_power(self, own_current_power: float) -> float:
         """Summe der von allen Nulleinspeisung-Instanzen kommandierten Sollleistung (Modus '1').
 
         Einzelbetrieb bzw. kein Modus-'1'-Teilnehmer: eigener kommandierter Wert.
+        `own_current_power` ist die im laufenden Zyklus bereits gelesene eigene
+        CONF_ACTIVE_POWER — vermeidet eine zweite, ggf. abweichende Lesung.
         """
         all_coords = self._group_coords()
         active = [
@@ -1762,16 +1767,17 @@ class SolakonCoordinator:
             and c._str(c.entry.data.get(CONF_MODE_SELECT, "")) == MODE_DISCHARGE
         ]
         if len(active) <= 1:
-            return self._flt(self.entry.data.get(CONF_ACTIVE_POWER, ""))
+            return own_current_power
         return sum(
-            c._flt(c.entry.data.get(CONF_ACTIVE_POWER, ""))
+            own_current_power if c is self else c._flt(c.entry.data.get(CONF_ACTIVE_POWER, ""))
             for c in active
         )
 
-    def _total_commanded_ac_power(self) -> float:
+    def _total_commanded_ac_power(self, own_current_power: float) -> float:
         """Summe der von allen gleichzeitig AC-ladenden Instanzen kommandierten Leistung.
 
         Einzelbetrieb bzw. keine weitere ladende Instanz: eigener kommandierter Wert.
+        `own_current_power` siehe `_total_commanded_power`.
         """
         all_coords = self._group_coords()
         active = [
@@ -1779,9 +1785,9 @@ class SolakonCoordinator:
             if c.settings.get(S_REGULATION_ENABLED, False) and c.ac_charge_active
         ]
         if len(active) <= 1:
-            return self._flt(self.entry.data.get(CONF_ACTIVE_POWER, ""))
+            return own_current_power
         return sum(
-            c._flt(c.entry.data.get(CONF_ACTIVE_POWER, ""))
+            own_current_power if c is self else c._flt(c.entry.data.get(CONF_ACTIVE_POWER, ""))
             for c in active
         )
 
