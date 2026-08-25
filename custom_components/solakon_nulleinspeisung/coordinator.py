@@ -959,7 +959,7 @@ class SolakonCoordinator:
         prev_actual = self._prev_actual
         self._prev_actual = actual
 
-        total_actual = self._total_actual_power()
+        total_actual = self._total_actual_power(actual)
 
         if surplus_enabled:
             if solar > 0:
@@ -1735,10 +1735,12 @@ class SolakonCoordinator:
         }
         return self._weighted_share(active)
 
-    def _total_actual_power(self) -> float:
+    def _total_actual_power(self, own_actual: float) -> float:
         """Summe der Wechselrichter-Ist-Leistung über alle Nulleinspeisung-Instanzen (Modus '1').
 
         Einzelbetrieb bzw. kein Modus-'1'-Teilnehmer: eigener actual-Wert.
+        `own_actual` ist der im laufenden Zyklus bereits gelesene eigene
+        CONF_ACTUAL_SENSOR-Wert — vermeidet eine zweite, ggf. abweichende Lesung.
         """
         all_coords = self._group_coords()
         active = [
@@ -1747,9 +1749,9 @@ class SolakonCoordinator:
             and c._str(c.entry.data.get(CONF_MODE_SELECT, "")) == MODE_DISCHARGE
         ]
         if len(active) <= 1:
-            return self._flt_power(self.entry.data.get(CONF_ACTUAL_SENSOR, ""))
+            return own_actual
         return sum(
-            c._flt_power(c.entry.data.get(CONF_ACTUAL_SENSOR, ""))
+            own_actual if c is self else c._flt_power(c.entry.data.get(CONF_ACTUAL_SENSOR, ""))
             for c in active
         )
 

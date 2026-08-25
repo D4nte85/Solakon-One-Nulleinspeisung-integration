@@ -7,6 +7,7 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ### Behoben
 - Regelzyklus (`_run_regulation_cycle`): `CONF_ACTIVE_POWER` wurde bis zu dreimal pro Zyklus gelesen (Zyklusstart, nach den Falls, unmittelbar vor der PI-Entscheidung), dazwischen liegen `await`s (u. a. Timer-Toggle) — Gate-Prüfung (`at_max_limit`/`at_min_limit`/`above_dynamic_max`), PI-Basisberechnung und die angezeigte Statuszeile ("PI: … → … W") konnten dadurch je nach Zykluszeitpunkt auf unterschiedlichen Momentaufnahmen des Ausgangswerts stehen. Jetzt genau eine Lesung nach dem letzten Await vor der PI-Entscheidung, von Gate, PI-Basis und Statusanzeige gemeinsam verwendet (`coordinator.py`)
+- `_total_actual_power()` (Grundlage für Überschuss-Ein-/Austritt und Fall G) las im Einzelbetrieb `CONF_ACTUAL_SENSOR` unabhängig von der bereits am Zyklusanfang erfassten `actual`-Variable ein zweites Mal — mit einem `await` (Exportlimit-Sync) dazwischen. Beide potenziell abweichenden Lesungen desselben Sensors flossen in dieselbe Überschuss-Bedingung ein (`total_actual` aus der zweiten Lesung neben direkten `actual`-Vergleichen aus der ersten). Übernimmt jetzt die bereits gelesene eigene `actual`-Snapshot statt erneut zu lesen (`coordinator.py`)
 
 ## [2.2.8] – 2026-08-24
 
