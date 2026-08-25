@@ -1157,8 +1157,12 @@ class SolakonCoordinator:
                     self.integral *= 0.95
 
         elif self.tariff_charge_active:
-            self._set_last_action(f"Tarif-Laden: {tariff_power} W")
-            await self._set_output_and_wait(tariff_power, ac_charge_mode=True)
+            # Nur schreiben wenn der Ist-Sollwert abweicht — sonst würde jeder Zyklus
+            # der laufenden Tarif-Ladung unnötig um wait_time verzögert (tariff_power
+            # ist über die gesamte Ladedauer konstant), analog zum Zone-0-Guard oben.
+            if abs(current_power - tariff_power) > 0.5:
+                self._set_last_action(f"Tarif-Laden: {tariff_power} W")
+                await self._set_output_and_wait(tariff_power, ac_charge_mode=True)
 
         else:
             grid_error = grid - target_offset
