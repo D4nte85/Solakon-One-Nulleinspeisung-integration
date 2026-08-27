@@ -5,6 +5,9 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+### Behoben
+- `_confirm_zero_output()` loggte WARNING/ERROR ("Output-Nullung nicht bestätigt") auch dann, wenn `CONF_ACTUAL_SENSOR` seit unserem letzten Schreibbefehl schlicht noch nicht neu gepollt hatte — dieser Sensor stammt aus einer fremden Integration mit eigenem, deutlich langsamerem Poll-Intervall (1–300 s, Standard 30 s) als unser Warte-/Retry-Fenster. Ein solcher Read sagt nichts über Erfolg oder Fehlschlag aus, wurde aber als Fehlschlag gewertet (Feldbeleg: Kreuzbefund aus Batterie-Register + Hardware-Shelly in Issue #27 zeigte, dass das Gerät real bereits genullt hatte, während unser Read noch einen alten Spike-Wert zeigte). Schreib-/Retry-Verhalten unverändert — WARNING/ERROR werden jetzt nur noch geloggt, wenn der zugrundeliegende Read nachweislich (`state.last_updated` ≥ letzter eigener Schreibzeitpunkt) aussagekräftig ist (`coordinator.py`)
+
 ## [2.3.0] – 2026-08-26
 
 ### Behoben

@@ -648,6 +648,16 @@ class SolakonCoordinator:
         würde mit dem alten, tatsächlich weiterhin anliegenden Output fortfahren. Schreibt
         bei fehlender Konvergenz bis zu `max_retries`-mal erneut, meldet nach Ausschöpfung
         über `_output_warning` einen sichtbaren Fehler statt stillschweigend weiterzulaufen.
+
+        `CONF_ACTUAL_SENSOR` stammt aus einer fremden Integration mit eigenem, vom
+        Nutzer konfigurierbarem Poll-Intervall (1–300 s, Standard 30 s laut deren
+        Dokumentation) — deutlich langsamer als unser Warte-/Retry-Fenster hier. Ein
+        Read, der älter ist als unser letzter eigener Schreibbefehl, sagt daher nichts
+        über Erfolg oder Fehlschlag aus (siehe Issue #27, Kreuzbefund 27.08.: Gerät
+        hatte real bereits genullt, unser Read traf nur einen noch nicht nachgepollten
+        alten Spike-Wert). Schreib-/Retry-Verhalten bleibt unverändert — es wird nur
+        die Log-/Warnmeldung unterdrückt, wenn sie auf einem solchen unbrauchbaren Read
+        basieren würde.
         """
         actual_eid = self.entry.data.get(CONF_ACTUAL_SENSOR, "")
         if not self._entity_ok(actual_eid):
@@ -655,18 +665,25 @@ class SolakonCoordinator:
 
         tolerance = float(self.settings.get(S_SELF_ADJUST_TOL, 2))
 
+        def _confirmable() -> bool:
+            """True nur wenn der Sensor seit unserem letzten Schreibbefehl neu
+            gepollt hat — sonst ist der gelesene Wert kein Beleg für irgendetwas."""
+            state = self.hass.states.get(actual_eid)
+            return state is not None and state.last_updated.timestamp() >= self.last_output_ts
+
         for attempt in range(max_retries):
             if abs(self._flt_power(actual_eid)) <= tolerance:
                 return
-            _LOGGER.warning(
-                "Solakon: Output-Nullung nicht bestätigt (Ist: %.0f W) — erneuter Schreibversuch %d/%d",
-                self._flt_power(actual_eid), attempt + 1, max_retries,
-            )
+            if _confirmable():
+                _LOGGER.warning(
+                    "Solakon: Output-Nullung nicht bestätigt (Ist: %.0f W) — erneuter Schreibversuch %d/%d",
+                    self._flt_power(actual_eid), attempt + 1, max_retries,
+                )
             await self._set_output(0)
             await self._wait_for_target(0, ac_charge_mode=ac_charge_mode)
 
         actual = self._flt_power(actual_eid)
-        if abs(actual) > tolerance:
+        if abs(actual) > tolerance and _confirmable():
             self._output_warning = f"Output-Nullung nach {max_retries} Versuchen nicht bestätigt (Ist: {actual:.0f} W)"
             _LOGGER.error("Solakon: %s", self._output_warning)
 
