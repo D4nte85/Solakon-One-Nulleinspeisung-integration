@@ -365,7 +365,7 @@ Optionales Laden bei erkanntem externem Überschuss. Aktiv in Zone 1 und Zone 2.
 
 **Abbruch-Bedingung:** Modus = `'3'` UND `ac_charge_active` UND kein Tarif-Laden UND (SOC ≥ Ladeziel ODER (Grid ≥ ac_offset + Hysterese UND |eigener Output| ≤ Toleranz))
 
-> Der `|Output| ≤ Toleranz`-Guard verhindert Fehlauslösung während der PI noch aktiv regelt. Symmetrisches Toleranzband (Einstellung „Selbstjustierung", Standard 2 W, dieselbe wie bei der PI-Konvergenzprüfung) statt einseitigem `≤ 0`-Vergleich — fängt Modbus-Rauschen in beide Richtungen ab, ohne bei jedem winzigen negativen Ausreißer während echtem Weiterladen auszulösen.
+> Der `|Output| ≤ Toleranz`-Guard verhindert Fehlauslösung während der PI noch aktiv regelt. `actual_power_sensor` folgt derselben Vorzeichenkonvention wie der Netzsensor (positiv = Bezug, negativ = Einspeisung) — während aktivem AC-Laden ist er durchgehend deutlich negativ (Größenordnung der tatsächlichen Ladeleistung, nicht nur Rauschen nahe 0). Der frühere einseitige `≤ 0`-Vergleich war dadurch praktisch die gesamte Ladedauer erfüllt, unabhängig von der Ladeleistung. Das symmetrische Toleranzband (Einstellung „Selbstjustierung", Standard 2 W, dieselbe wie bei der PI-Konvergenzprüfung) verlangt stattdessen, dass die Ladeleistung tatsächlich auf nahe null heruntergeregelt ist, bevor der Grid-Zweig greift.
 
 Der Lademodus verwendet einen **eigenen invertierten PI-Regler**: `raw_error = (ac_offset − grid) × Fehler-Anteil`. Ein positiver Fehler (Grid zu negativ → zu viel Einspeisung) erhöht die Ladeleistung.
 
