@@ -90,60 +90,23 @@ Bei nur einer Gruppe (Normalfall) ist diese Zuordnung unsichtbar — es gibt gen
 Laufen mehrere Instanzen gleichzeitig, berechnet jeder Coordinator seinen **Gewichts-Anteil** `w_i` und verwendet ihn sowohl für den PI-Regelungsfehler als auch für das zugeteilte Leistungslimit in Zone 1. Das läuft in **zwei vollständig getrennten Pools**, je nachdem welche Rolle eine Instanz gerade einnimmt:
 
 ```
-# Pool 1 — Nulleinspeisung (nur Instanzen aktuell in Modus '1'):
-# Gleichverteilung:
-w_i = 1 / Anzahl_Instanzen_in_Modus_1
+# Gewicht w_i je Instanz — abhängig vom Verteilungs-Modus:
+Gleichverteilung     w_i = 1 / Anzahl aktiver Instanzen
+SOC-gewichtet        w_i = nutzbar_i / Σ nutzbar_j
+                     nutzbar_i = (SOC_i − Zone-3-Schwelle_i) / 100
+Kapazitätsgewichtet  wie SOC-gewichtet, zusätzlich × Kapazität_kWh_i
+SOC-Umschaltung      genau eine Instanz aktiv (w_i = 1), alle anderen 0
 
-# SOC-gewichtet:
-nutzbar_i = (SOC_i − Zone-3-Schwelle_i) / 100
-w_i       = nutzbar_i / Σ nutzbar_j
-
-# Kapazitätsgewichtet:
-nutzbar_i = (SOC_i − Zone-3-Schwelle_i) / 100 × Kapazität_kWh_i
-w_i       = nutzbar_i / Σ nutzbar_j
-
-# SOC-Umschaltung: genau eine Instanz aktiv (w_i = 1), alle anderen w_i = 0.
-# Aktive Instanz bleibt aktiv, bis ihr SOC seit Übernahme um die
-# Divergenz-Schwelle gefallen ist — dann übernimmt die Instanz mit dem
-# höchsten verbleibenden SOC (Rotation, nie zweimal in Folge dieselbe).
-# Zustand (aktive Instanz + Start-SOC) ist Pool-weit persistiert, übersteht
-# HA-Neustarts.
-# Ausnahme Zone 0 (Überschuss-Einspeisung): hat absoluten Vorrang vor der
-# regulären Entladung anderer Instanzen (analog zum bestehenden Zone-0-
-# Vorrang gegenüber AC-/Tarif-Laden derselben Instanz) — eine einzelne
-# Zone-0-Instanz übernimmt sofort und bedingungslos die Führung. Sind
-# mehrere Instanzen gleichzeitig in Zone 0, teilen sie sich w_i = 1/n
-# gleichmäßig statt exklusiv — der Wechselrichterverlust ist bei diesen
-# kleinen Leistungen vernachlässigbar, eine 0-W-Zwangslage wird vermieden.
-# Verlässt die aktive Instanz Zone 0 wieder und geht in die reguläre
-# Rotation über, wird die Divergenz-Baseline (Start-SOC) auf den aktuellen
-# SOC neu verankert — sonst zählt der während Zone 0 bereits verbrauchte
-# SOC-Abstand gegen das Rotationsbudget und löst den nächsten Wechsel
-# vorzeitig aus. Das gemeinsame Leistungslimit bleibt dabei über dieselbe
-# Formel unten gewahrt (kein Sonderpfad für Zone 0).
-
-# Ergebnis pro Instanz — Wasserfüllverfahren statt reiner Proportionalrechnung:
-# 1. roh_i = total_power × w_i
-# 2. Übersteigt roh_i das lokale Hard-Limit einer Instanz (Zone 0: Hard-Limit-Z0,
-#    sonst Hard-Limit-Z1), wird sie auf ihr Hard-Limit gekappt und aus der Runde
-#    genommen; der ungenutzte Rest von total_power wird unter den verbleibenden
-#    Instanzen erneut proportional zu ihrem w_i aufgeteilt (iterativ, bis kein
-#    Rest mehr verteilbar ist oder alle am Limit sind).
-# Ohne Kappung (gleich dimensionierte Instanzen) identisch zu roh_i. Mit
-# heterogenen Hard-Limits verhindert das, dass eine schwächere Instanz
-# ungenutzten Spielraum verfallen lässt statt ihn an Instanzen mit Reserve
-# weiterzureichen — sonst würde der Pool total_power strukturell nie erreichen.
-allocated_power_i = wasserfill(total_power, {w_1, w_2, …}, {hard_limit_1, hard_limit_2, …})
-error_share_i     = w_i                 → Anteil am Netzfehler im normalen PI-Regler
-
-# Pool 2 — AC Laden (nur Instanzen aktuell mit ac_charge_active):
-# gleiche Gleichverteilungs-/Gewichtungs-Logik, aber ausschließlich unter
-# gleichzeitig ladenden Instanzen — kein allocated_power (AC-Ladeleistung
-# bleibt unabhängig vom Hard-Limit), nur ein eigener error_share für den
-# AC-Lade-PI (siehe „AC Laden" unten).
+# Daraus je Instanz:
+allocated_power_i = wasserfüll(total_power, {w_i}, {hard_limit_i})
+error_share_i     = w_i        → Anteil am Netzfehler im PI-Regler
 ```
 
-Eine Instanz, die gerade in Modus `'0'` (idle) steht, trägt zu keinem der beiden Pools bei und bekommt `error_share = 0` sowie `allocated_power = None` (statisches Hard-Limit gilt unverändert). Eine Instanz, die aktuell AC lädt, verwässert **nicht** den Nulleinspeisungs-Pool der anderen — und umgekehrt beeinflusst eine nulleinspeisende Instanz nicht den AC-Lade-Pool. Bei nur einer aktiven Instanz je Pool bleibt `w_i = 1,0`.
+**Wasserfüllverfahren:** `roh_i = total_power × w_i`. Übersteigt `roh_i` das Hard-Limit einer Instanz, wird sie darauf gekappt und der ungenutzte Rest unter den übrigen erneut nach `w_i` verteilt — iterativ, bis nichts mehr verteilbar ist. Bei gleich dimensionierten Instanzen ohne Wirkung; bei unterschiedlichen verhindert es, dass Spielraum verfällt.
+
+**SOC-Umschaltung:** Die aktive Instanz entlädt exklusiv, bis ihr SOC seit Übernahme um die Divergenz-Schwelle gefallen ist — dann übernimmt die Instanz mit dem höchsten verbleibenden SOC (nie zweimal in Folge dieselbe). Der Zustand übersteht HA-Neustarts. Zone 0 hat Vorrang: eine Instanz in Überschuss-Einspeisung übernimmt sofort die Führung, mehrere teilen sich gleichmäßig. Beim Verlassen von Zone 0 wird die Rotations-Baseline auf den aktuellen SOC neu verankert.
+
+**Zwei getrennte Pools:** Pool 1 sind die Instanzen in Modus `'1'` (Nulleinspeisung), Pool 2 die mit aktivem AC Laden. Pool 2 bekommt nur einen eigenen `error_share`, kein `allocated_power` — die AC-Ladeleistung bleibt unabhängig vom Hard-Limit. Eine Instanz in Modus `'0'` trägt zu keinem Pool bei (`error_share = 0`, `allocated_power = None`, statisches Hard-Limit gilt). Bei nur einer aktiven Instanz je Pool ist `w_i = 1,0`.
 
 > **Batteriekapazität (kWh):** Nur bei Verteilungs-Modus „Kapazitätsgewichtet" relevant. Fehlt der Sensor bei irgendeiner aktiven Instanz, wird die Kapazität für alle neutral (1.0) gewertet — die Gewichtung entspricht dann „SOC-gewichtet". Sinnvoll wenn die Instanzen Batterien unterschiedlicher Kapazität steuern.
 
@@ -247,7 +210,7 @@ Alle Eingabefelder für Entity-IDs (z. B. Kapazitäts-, Vorhersage- und Preis-Se
 
 ### 📊 Status
 
-Echtzeit-Übersicht aller Regelzustände: aktive Zone mit farblichem Banner (Zone 0–3), Netzleistung, Solarleistung, Ausgangsleistung, SOC, Netz-Standardabweichung (Stabilitätsindikator), PI-Integral-Wert, aktiver Offset (Zone 1 / Zone 2 / Zone AC) mit Quelle (dynamisch / statisch), Zeitabstand seit letzter Regelaktion und seit letztem Moduswechsel, letzte Aktion und etwaige Fehlermeldungen, Status-Flags: Zyklus, Surplus, AC Laden, Tarif-Laden, Nacht, PV→Tarif, PV→Surplus, Austritts-Sperre, Schaltfläche zum manuellen Zurücksetzen des PI-Integrals.
+Echtzeit-Übersicht aller Regelzustände: aktive Zone mit farblichem Banner (Zone 0–3), Netzleistung, Solarleistung, Ausgangsleistung, SOC, Netz-Standardabweichung (Stabilitätsindikator), PI-Integral-Wert, aktiver Offset (Zone 1 / Zone 2 / Zone AC) mit Quelle (dynamisch / statisch), Zeitabstand seit letzter Regelaktion und seit letztem Moduswechsel, letzte Aktion und etwaige Fehlermeldungen, Status-Flags: Zyklus, Surplus, AC Laden, Tarif-Laden, Nacht, PV→Tarif, PV→Surplus, Austritts-Sperre. Rein lesend — manuelle Eingriffe liegen im **Debug**-Tab.
 
 ---
 
@@ -474,6 +437,20 @@ Optionale Nachtabschaltung. Deaktiviert **nur Zone 2** wenn PV < PV-Ladereserve 
 
 ---
 
+### 🔧 Debug
+
+Manuelle Eingriffe in den laufenden Regelzustand. Jede Aktion wird im Status-Tab unter **Letzte Aktion** protokolliert.
+
+| Aktion | Wirkung |
+|--------|---------|
+| Integral zurücksetzen | Setzt den I-Anteil des PI-Reglers auf 0. Sinnvoll nach einem manuellen Eingriff am Wechselrichter. |
+| Zone 1 aktivieren | Setzt `cycle_active = true` → aggressiver Entladebetrieb mit vollem Entladestrom. Integral wird zurückgesetzt. |
+| Zone 2 aktivieren | Setzt `cycle_active = false` → batterieschonender Betrieb, 0 A Entladestrom, dynamisches Output-Limit. Integral wird zurückgesetzt. |
+
+Der Zonenwechsel ist ein Eingriff in den internen Zustand, kein dauerhafter Modus — der nächste Regelzyklus bewertet die Zonenbedingungen normal weiter und kann ihn sofort wieder überschreiben.
+
+---
+
 ## SOC-Zonen und Steuerlogik (Falls)
 
 Die Regellogik arbeitet mit einer geordneten Liste von Falls. Die Reihenfolge ist entscheidend — der erste zutreffende Fall wird ausgeführt.
@@ -538,7 +515,7 @@ Typischer Arbeitsbereich: **0.03–0.08**. Für AC Laden separat tunen — P bes
 10. **Self-Adjusting Wait.** Polls die tatsächliche Ausgangsleistung nach einem Setpoint-Befehl statt einer festen Wartezeit zu schlafen. Die konfigurierte Wartezeit wird zum maximalen Timeout als Sicherheitsnetz.
 11. **Export-Limit-Sync.** Ist die optionale Netz-Ausgangsleistungsgrenze-Entität konfiguriert, schreibt jeder Regelzyklus `max(Hard-Limit-Z0, Hard-Limit-Z1)` in diese Entität — sofern er abweicht. Das verhindert, dass externe Eingriffe (App, andere Automation) das Hardware-Limit dauerhaft ändern.
 12. **Entladestrom-Abgleich.** Der maximale Entladestrom wird in jedem Zyklus zentral aus dem Regelzustand abgeleitet (Surplus → 2 A, AC-/Tarif-Laden → 0 A, Zone 1 → Max-Entladestrom, sonst 0 A) und mit dem Ist-Wert abgeglichen — vor dem PI-Gate, also auch im Disabled-Leerlauf. Das garantiert, dass ein Klemmwert (insb. die 2 A aus dem Surplus-Trick) nie über einen Zustandswechsel hinaus stehen bleibt und die Batterie drosselt; die einzelnen Falls setzen den Strom nicht mehr selbst.
-13. **`Regelung aktiv = Aus`.** Bevor der Schreibteil deaktiviert wird, erzwingt die Integration Ausgang → 0 W, Entladestrom → Max-Entladestrom, Timer-Toggle + Modus → `'0'` — vollständig innerhalb desselben Locks wie der Regelzyklus, damit kein parallel laufender Zyklus den Disabled-Befehl überschreiben kann, bevor das Flag gesetzt ist. Der explizite Entladestrom-Reset verhindert, dass ein während AC-/Tarif-Laden auf 0 A geklemmter Wert nach dem Deaktivieren dauerhaft stehen bleibt — danach blockt der Guard jeden weiteren Schreibbefehl, auch für den regulären Zyklus-Abgleich aus Punkt 12. Die Sequenz läuft zentral im Settings-Update und greift daher auf beiden Ausschaltwegen identisch: Switch-Entität `Regelung aktiv` und Panel-Button. Der Regelzyklus selbst prüft `Regelung aktiv` als Erstes und bricht bei deaktivierter Regelung sofort ab, ohne weitere Berechnungen oder Schreibversuche. Der Sensor „Betriebsmodus" wird beim Deaktivieren explizit auf „Disabled (Regelung inaktiv)" gesetzt — sonst würde er auf dem zuletzt aktiven Modus (z. B. „AC Charge") stehen bleiben, da der Regelzyklus ihn bei inaktiver Regelung nicht mehr aktualisiert. Die internen Zustands-Flags `cycle_active` und `tariff_charge_active` werden dabei bewusst nicht zurückgesetzt — sie bilden den operativen Kontext für den nächsten Regelzyklus ab und sollen einen Deaktivieren/Aktivieren-Wechsel unverändert überstehen.
+13. **`Regelung aktiv = Aus`.** Beim Ausschalten erzwingt die Integration Ausgang → 0 W, Entladestrom → Max-Entladestrom und Modus → `'0'` — innerhalb desselben Locks wie der Regelzyklus, damit kein laufender Zyklus den Disabled-Befehl überschreibt. Danach blockt der Guard jeden weiteren Schreibbefehl, auch den Entladestrom-Abgleich aus Punkt 12. Der Sensor „Betriebsmodus“ wird explizit auf „Disabled (Regelung inaktiv)“ gesetzt. Die Flags `cycle_active` und `tariff_charge_active` bleiben bewusst erhalten, damit ein Aus/Ein-Wechsel den Regelkontext nicht verliert. Gilt identisch für Switch-Entität und Panel-Button.
 
 ---
 
@@ -570,6 +547,40 @@ Die Diagnose-Binärsensoren sind read-only — sie spiegeln interne Coordinator-
 
 ---
 
+## FAQ
+
+**Integration oder Blueprint — was soll ich nehmen?**
+Die Integration, wenn du neu anfängst: gleicher Funktionsumfang, aber ohne Helfer-Entitäten und Scripts, mit Panel statt YAML. Die Blueprints bleiben gepflegt und sind die bessere Wahl, wenn du bereits eine laufende Blueprint-Installation hast, die du nicht anfassen willst. Parallelbetrieb auf demselben Wechselrichter geht nicht — beide schreiben auf dieselbe Fernsteuerungs-Entität.
+
+**Die Anlage zieht dauerhaft Strom aus dem Netz, obwohl geregelt wird.**
+Häufigste Ursache ist die Solakon-App: Läuft sie parallel, kann sie ihre eigene Standard-Ausgangsleistung zurückschreiben und den Regler überschreiben. Symptom im Verlauf ist ein Sägezahn — der Ausgang läuft sauber herunter und springt periodisch wieder hoch. Abhilfe: **Standard-Ausgangsleistung in der App auf 0 W** oder einen 0-W-Zeitplan über 24 h setzen (siehe [Voraussetzungen](#voraussetzungen)).
+
+**Nulleinspeisung funktioniert nicht, sobald der Akku voll ist.**
+Ist der Akku voll, kann der Solakon die PV-Leistung nur regeln, solange Batteriestrom fließt. Genau dafür ist die Überschuss-Einspeisung (Zone 0, **Überschuss**-Tab) da — ohne sie fällt das Gerät bei vollem Speicher in einen ungeregelten Zustand.
+
+**Warum fließen in Zone 0 dauerhaft 2 A, auch bei PV > 0?**
+Das ist eine Entladefreigabe, kein Sollwert. Bei 0 A schaltet das Gerät komplett ab, die 2 A sind die kleinstmögliche Obergrenze, bei der es noch regelt. Tatsächlich entnommen wird nur, was die PV gerade nicht deckt.
+
+**Der Akku entlädt nachts, obwohl keine Sonne scheint — ist das ein Fehler?**
+Nein. Zone 1 läuft bewusst auch nachts (siehe [Zonentabelle](#soc-zonenverwaltung)). Die Nachtabschaltung (**Nacht**-Tab) wirkt ausschließlich auf Zone 2. Soll auch Zone 1 nachts stoppen, die Zone-1-Schwelle höher setzen.
+
+**Die Batterie entleert sich zu stark.**
+Die Zone-3-Schwelle ist der harte Boden — sie bestimmt, wann komplett gestoppt wird. Wer früher schonen will, hebt die Zone-1-Schwelle an: darunter läuft Zone 2 mit 0 A Entladestrom und regelt nur noch aus dem PV-Überschuss.
+
+**Geht das mit einem Ferraris-Zähler?**
+Nur mit einem zusätzlichen Sensor, der eine vorzeichenbehaftete Momentanleistung liefert (Bezug positiv, Einspeisung negativ) — etwa ein Shelly 3EM im Zählerkasten. Eine reine Drehscheiben-Erfassung genügt nicht: der Regler braucht die Richtung, nicht nur den Verbrauch.
+
+**Wie schalte ich bei Überschuss einen Verbraucher zu?**
+Über `sensor.solakon_one_uberschussleistung`. Der zeigt die PV-Leistung, die über das aktuelle Hard-Limit hinaus nicht mehr sinnvoll ausgegeben werden kann — als Auslöser für eine eigene Automation gedacht (Smart Plug, Boiler, Wallbox).
+
+**Kann ich das Laden verzögern, wenn morgen gutes Wetter vorhergesagt ist?**
+Ja, über die **Zone-1-Nacht-Forcierung** im **Zonen**-Tab: Reicht die PV-Vorhersage für den Zieltag, wird der Entladezyklus auch unter der normalen Zone-1-Schwelle erlaubt — die Kapazität wird nachts genutzt statt ungenutzt liegen zu bleiben.
+
+**Ich habe mehrere Smartmeter für getrennte Stromkreise.**
+Instanzen werden automatisch nach ihrem Netz-Leistungssensor in [Netzgruppen](#netzgruppen-mehrere-smartmeter) sortiert. Jede Gruppe hat ihre eigene, unabhängige Leistungsverteilung; Instanzen an verschiedenen Zählern beeinflussen sich nicht.
+
+---
+
 ## Fehlerbehebung
 
 **Panel öffnet sich, zeigt aber keine Werte an**
@@ -588,7 +599,7 @@ P-Faktor reduzieren oder Wartezeit erhöhen. Der Standardabweichungs-Sensor im S
 Zone-3-Schwelle im Zonen-Tab prüfen. Wert muss kleiner als Zone-1-Schwelle sein.
 
 **AC Laden startet nicht trotz Überschuss**
-Prüfen ob Überschuss-Einspeisung (Zone 0) aktiv ist — AC Laden wird durch Zone 0 blockiert. Sonst: AC Laden im Tab aktiviert? (Grid + ΣOutput_entladend) muss unter −Hysterese liegen — im Multi-Instanz-Betrieb zählt die Summe aller Instanzen im Entlademodus, nicht nur der eigene Output. SOC muss unter Ladeziel sein. Status-Flag „AC Laden aktiv" im Status-Tab beobachten.
+Der Reihe nach prüfen: Ist Zone 0 (Überschuss-Einspeisung) aktiv? Die blockiert AC Laden. Ist AC Laden im Tab aktiviert? Liegt `(Grid + ΣOutput_entladend)` unter −Hysterese — im Multi-Instanz-Betrieb zählt die Summe aller entladenden Instanzen, nicht der eigene Output? Ist der SOC unter dem Ladeziel? Das Status-Flag „AC Laden aktiv“ zeigt das Ergebnis.
 
 **AC Laden bricht sofort wieder ab**
 Eintritts-Hysterese zu klein — Grid-Wert schwankt bereits über der Abbruch-Schwelle. Hysterese erhöhen oder P/I kleiner setzen.
@@ -603,10 +614,10 @@ Preis muss unterhalb der Teuer-Schwelle liegen (gilt für günstig UND mittel). 
 Stabw.-Sensor im Status-Tab prüfen. Nach dem ersten Start einige Minuten warten bis genug Samples gesammelt sind. Volatilitäts-Faktor erhöhen oder Rausch-Schwelle senken.
 
 **Dynamischer Offset kehrt nachts/in Ruhephasen nicht auf das Minimum zurück (Multi-Instanz)**
-Bei mehreren Instanzen am selben Netzsensor gleicht der gruppengemeinsame StdDev-Ringpuffer die Historie zwischen den Instanzen ab. Tritt der Effekt trotzdem auf: Volatilitäts-Faktor senken (Empfehlung 1.0 statt 1.5) und Rausch-Schwelle deutlich unter Min. Offset setzen.
+Volatilitäts-Faktor senken (1.0 statt 1.5) und Rausch-Schwelle deutlich unter den Min. Offset setzen. Der Ringpuffer ist bei mehreren Instanzen am selben Netzsensor gruppengemeinsam, die Historie also bereits abgeglichen.
 
 **Dynamischer Offset kehrt trotz Einzelbetrieb nicht auf das Minimum zurück (periodische Haushaltslast)**
-Kühlgeräte, Pumpen oder ähnliche Verbraucher mit wiederkehrendem Anlaufstrom (typisch alle paar Minuten) füllen jedes Stabw.-Fenster mit kurzen Ausschlägen — die Netz-Stabw. bleibt dann strukturell erhöht, auch wenn zwischen den Pulsen echte Ruhe herrscht. Das ist kein Fehlverhalten: Ist der PI-Regler bereits schnell genug, diese Sekunden-Transienten selbst auszuregeln (im Status-Tab beobachten, ob dabei je Einspeisung auftritt), kann `stddev_trim_count` (Dyn.-Offset-Tab) gezielt die seltenen Extremwerte im Fenster ausschließen, ohne die Reaktion auf echte Dauerunruhe zu schwächen — Wirkung direkt vergleichbar über den ungetrimmten Rohwert daneben. Vorsicht: Ein zu hoher Wert filtert irgendwann auch echte, anhaltende Schwankungen mit — mit kleinen Schritten erhöhen und den Rohwert-Vergleich als Kontrolle nutzen.
+Kühlgeräte oder Pumpen mit wiederkehrendem Anlaufstrom füllen jedes Stabw.-Fenster mit kurzen Ausschlägen — die Netz-Stabw. bleibt strukturell erhöht, obwohl zwischen den Pulsen Ruhe herrscht. Kein Fehlverhalten. Abhilfe: `stddev_trim_count` im Dyn.-Offset-Tab in kleinen Schritten erhöhen und die Wirkung gegen den Rohwert („StdDev (roh)“) vergleichen. Zu hohe Werte filtern auch echte Dauerunruhe weg.
 
 **Recovery (Fall D) greift zu oft**
 Der Modus-Reset-Timer läuft ab bevor der Regler ihn zurücksetzen kann. Solakon-Integration auf Polling-Intervall prüfen.
@@ -615,16 +626,16 @@ Der Modus-Reset-Timer läuft ab bevor der Regler ihn zurücksetzen kann. Solakon
 Home Assistant vollständig neu starten (nicht nur neu laden). HACS-Download-Status überprüfen.
 
 **Eine Instanz zeigt „setup_error" nach HA-Neustart oder Stromausfall (nur bei mehreren Instanzen)**
-Seltene Race Condition beim parallelen Setup mehrerer Config-Entries. Tückisch: die betroffene Instanz friert dabei auf ihrem letzten Wert ein, statt einen sichtbaren Fehlerzustand zu zeigen — im Dashboard wirkt sie gesund, ist aber ungeregelt. Workaround: den fehlgeschlagenen Config-Entry manuell neu laden (Einstellungen → Geräte & Dienste → Solakon-Instanz → drei Punkte → Neu laden).
+Seltene Race Condition beim parallelen Setup mehrerer Config-Entries. Die betroffene Instanz friert auf ihrem letzten Wert ein statt sichtbar zu scheitern — sie wirkt gesund, ist aber ungeregelt. Abhilfe: Config-Entry neu laden (Einstellungen → Geräte & Dienste → Instanz → drei Punkte → Neu laden).
 
 **SOC der Instanzen läuft bei mehreren Solakons auseinander**
-Bei unterschiedlich großen Batterien im Verteilungs-Tab prüfen, dass der Verteilungs-Modus wirklich auf **„Kapazitätsgewichtet"** steht (nicht „SOC-gewichtet" — das gewichtet bewusst rein nach Prozentpunkten, ohne Kapazität, und lässt unterschiedlich große Batterien dauerhaft auseinanderlaufen). Danach die Kapazitätssensoren prüfen — ein **roter Validierungspunkt** neben dem Feld bedeutet, dass die eingetragene Entity nicht existiert (häufig ein Tippfehler in der Entity-ID). Ohne gültigen Kapazitätswert bei allen Instanzen degradiert „Kapazitätsgewichtet" automatisch zu reiner SOC-%-Gewichtung — das erscheint jetzt als Meldung im Status-/Fehlerfeld der betroffenen Instanzen, statt still zu bleiben.
+Bei unterschiedlich großen Batterien muss der Verteilungs-Modus auf **Kapazitätsgewichtet** stehen — „SOC-gewichtet“ rechnet bewusst ohne Kapazität und lässt ungleiche Batterien auseinanderlaufen. Danach die Kapazitätssensoren prüfen: ein **roter Validierungspunkt** heißt, die Entity existiert nicht (meist ein Tippfehler). Ohne gültige Kapazität bei allen Instanzen degradiert der Modus automatisch, mit Meldung im Status-Feld.
 
 **Pool erreicht „Gesamte Max. Ausgangsleistung" nicht, obwohl der Verbrauch das rechtfertigen würde**
-Prüfen ob die Instanzen unterschiedliche Hard-Limits (Zonen-Tab, Zone 0/1) haben — eine Instanz mit niedrigerem Hard-Limit als ihr rechnerischer Verteilungs-Anteil wird auf ihr Hard-Limit gekappt. Der ungenutzte Rest wird per Wasserfüllverfahren automatisch an Instanzen mit Reserve weitergereicht (siehe [Automatische Fehleraufteilung](#automatische-fehleraufteilung-und-leistungsverteilung)) — bleibt der Pool trotzdem unter dem Ziel, reicht die *Summe* der Hard-Limits selbst nicht aus, unabhängig vom Verteilungs-Modus.
+Prüfen, ob die Instanzen unterschiedliche Hard-Limits haben (Zonen-Tab) — eine Instanz unter ihrem rechnerischen Anteil wird gekappt, der Rest per Wasserfüllverfahren weitergereicht. Bleibt der Pool trotzdem darunter, reicht die Summe der Hard-Limits selbst nicht aus.
 
 **SOC-Umschaltung rotiert häufiger als die eingestellte Divergenz-Schwelle erwarten lässt**
-Normal, wenn eine Instanz zwischendurch in Zone 0 (Überschuss-Einspeisung) war: die Rotations-Baseline wird beim Verlassen von Zone 0 auf den aktuellen SOC neu verankert, der während Zone 0 verbrauchte SOC-Abstand zählt also nicht doppelt gegen das Budget. Rotiert es trotzdem spürbar häufiger als erwartet, Divergenz-Schwelle im Verteilungs-Tab erhöhen.
+Normal, wenn eine Instanz zwischendurch in Zone 0 war — die Rotations-Baseline wird beim Verlassen neu verankert. Rotiert es darüber hinaus zu häufig, Divergenz-Schwelle im Verteilungs-Tab erhöhen.
 
 ---
 
