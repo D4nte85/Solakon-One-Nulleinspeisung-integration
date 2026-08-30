@@ -567,13 +567,13 @@ Erwartetes Hardware-Verhalten. Der Ausgabepfad des Solakon ONE ist batteriegebun
 So ist es gedacht. Die SOC-Schwellen sind keine Zustandsgrenzen, sondern Eintritts- bzw. Austrittsbedingungen mit einem breiten Hystereseband dazwischen: Die **Zone-1-Schwelle startet** den Entladezyklus (Fall A), beendet wird er ausschließlich von der **Zone-3-Schwelle** (Fall B). Ohne diesen Abstand würde der Zyklus an der Zone-1-Schwelle dauernd ein- und ausschalten. Zone 2 ist entsprechend kein Zustand, in den man beim Unterschreiten der Zone-1-Schwelle fällt, sondern das Verhalten, solange **kein** Zyklus läuft.
 
 **Der Akku entlädt nachts, obwohl keine Sonne scheint — ist das ein Fehler?**
-Nein, gleiche Ursache: Ein einmal gestarteter Zone-1-Zyklus läuft unabhängig von der Tageszeit bis zur Zone-3-Schwelle weiter. Die Nachtabschaltung (**Nacht**-Tab) wirkt ausschließlich auf Zone 2, also auf den zyklusfreien Betrieb.
+Nein, gleiche Ursache: Ein einmal gestarteter Zone-1-Zyklus läuft unabhängig von der Tageszeit bis zur Zone-3-Schwelle weiter. Die Nachtabschaltung (**Nacht**-Tab) wirkt ausschließlich auf Zone 2, also auf den zyklusfreien Betrieb. Davon zu unterscheiden ist eine dauerhafte Restentladung von rund 10 W: Der Wechselrichter kann nicht vollständig abschalten — Firmware-Eigenschaft, über die Regelung nicht beeinflussbar.
 
 **Die Batterie entleert sich zu stark.**
 Der Hebel ist die **Zone-3-Schwelle** — sie beendet den Zyklus. Die Zone-1-Schwelle anzuheben hilft nicht: sie verzögert nur den Start des nächsten Zyklus und stoppt keinen laufenden.
 
-**Warum fließen in Zone 0 dauerhaft 2 A, auch bei PV > 0?**
-Das ist eine Entladefreigabe, kein Sollwert. Bei 0 A schaltet das Gerät ab, weil der Solakon die PV nur regeln kann solange Batteriestrom fließt; 2 A ist die kleinstmögliche Obergrenze, bei der er noch regelt. Wie viel davon tatsächlich fließt, hängt von der PV ab.
+**Warum steht der Entladestrom in Zone 0 dauerhaft auf 2 A, auch bei PV > 0?**
+Weil der Ausgabepfad sonst gesperrt ist: Bei 0 A gibt das Gerät nichts aus, und bei vollem Akku drosselt der MPPT die PV auf 0 W, sobald kein Batteriestrom fließt. Es braucht also irgendeine Freigabe größer null — **2 A ist dabei ein gesetzter Wert, keine Hardware-Untergrenze**: bewusst niedrig gewählt, um die Batterie so wenig wie möglich zu belasten. Es ist eine Obergrenze, kein Sollwert; solange Solar die Ausgangsleistung deckt, fließt daraus praktisch nichts.
 
 **Kann ich bei guter Wettervorhersage bevorzugt einspeisen, statt die Batterie mittags vollzuladen?**
 Ja — **Surplus-Forecast-Erzwingung** im **Überschuss**-Tab: Liegt die PV-Vorhersage über der eingestellten Schwelle, wird der Zone-0-Eintritt erzwungen und der Überschuss geht ins Netz statt in die Batterie. Bei schlechter Vorhersage bleibt es beim normalen Laden.
