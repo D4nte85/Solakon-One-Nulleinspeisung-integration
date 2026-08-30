@@ -8,7 +8,15 @@ Vollautomatische **Nulleinspeisung** für den **Solakon ONE** Wechselrichter als
 
 Die Integration regelt die Ausgangsleistung des Wechselrichters über einen **PI-Regler** so, dass der Netzbezug möglichst bei 0 W gehalten wird. Alle Parameter werden über ein **Sidebar-Panel** direkt in der HA-Oberfläche konfiguriert und persistent gespeichert.
 
-> **Unterschied zur Blueprint-Variante:** Diese Integration ersetzt Automation-Blueprint, PI-Script-Blueprint und alle manuell zu erstellenden Helfer durch eine einzige, nativ installierbare Komponente. Keine `input_boolean`-, `input_number`- oder Script-Helper erforderlich — der gesamte Regelzustand wird intern im Coordinator gehalten.
+> [!IMPORTANT]
+> **Voraussetzung: die offizielle Solakon-ONE-Integration.**
+> Sie liefert per Modbus TCP alle Geräteentitäten — SOC, PV-Leistung, tatsächliche Ausgangsleistung, Betriebsmodus, Entladestrom —, die diese Integration regelt. Ohne sie funktioniert hier nichts.
+>
+> **Repository:** https://github.com/solakon-de/solakon-one-homeassistant
+>
+> Sie ist **nicht im HACS-Standardstore** enthalten und muss als benutzerdefiniertes Repository hinzugefügt werden: HACS → Integrationen → ⋮ → *Benutzerdefiniertes Repository hinzufügen* → obige URL, Kategorie **Integration**.
+>
+> **Danach zwingend:** Die Entität `number.solakon_one_maximaler_entladestrom` ist dort **standardmäßig deaktiviert** und muss von Hand aktiviert werden (Gerät → Entität → Zahnrad → *Aktivieren*). Ohne sie kann der Entladestrom nicht gesteuert werden; im Einrichtungsformular erscheint sie sonst als „unbekannte Entität“.
 
 ---
 
@@ -171,11 +179,15 @@ Im Panel wird bei mehreren Instanzen ein zusätzlicher **Verteilungs-Tab** einge
 
 ---
 
+> **Unterschied zur Blueprint-Variante:** Diese Integration ersetzt Automation-Blueprint, PI-Script-Blueprint und alle manuell zu erstellenden Helfer durch eine einzige, nativ installierbare Komponente. Keine `input_boolean`-, `input_number`- oder Script-Helper erforderlich — der gesamte Regelzustand wird intern im Coordinator gehalten.
+
+---
+
 ## Voraussetzungen
 
 - Home Assistant 2024.1 oder neuer
 - [HACS](https://hacs.xyz) installiert
-- Solakon ONE Wechselrichter mit Modbus-Integration in HA
+- Solakon ONE Wechselrichter mit der offiziellen [Solakon-ONE-Integration](https://github.com/solakon-de/solakon-one-homeassistant) in HA (siehe Hinweis ganz oben)
 - Sensor für die Netzleistung (z. B. Shelly 3EM, Shelly PM) — **positiv = Bezug, negativ = Einspeisung**
 
 **Wichtig:** Die Implementierung der Fernsteuerung in der Solakon-Integration kennt kein echtes „Disabled" als Fernsteuerbefehl — `'0'` schaltet die Fernsteuerung ab und die App-Standardeinstellungen greifen. Damit die Nulleinspeisung wie gewünscht funktioniert, sollte entweder ein **0-W-Zeitplan für 24 Stunden** aktiv sein oder die **Standard-Ausgangsleistung auf 0 W** gestellt werden.
@@ -196,8 +208,6 @@ Die folgenden Solakon-Entitäten müssen in HA vorhanden sein und werden beim Ei
 | `number` *(optional)* | Netz-Ausgangsleistungsgrenze — für Export-Limit-Feature |
 
 > **Hinweis zu Timeout-Countdown & Modus-Reset-Timer:** Die Solakon-Fernsteuerung läuft ab, wenn der Countdown-Sensor abläuft. Die Integration hält sie aktiv, indem sie den Modus-Reset-Timer rechtzeitig togglet (Countdown < 120 s). Derselbe Toggle-Mechanismus erzwingt zusätzlich bei jedem Moduswechsel die sichere Übernahme durch den Solakon (siehe Stichwort „Timer-Toggle" in der Falls-Tabelle weiter unten).
-
-> **Hinweis zum „Maximalen Entladestrom":** In der offiziellen Solakon Home-Assistant-Integration ist die Entität `number.solakon_one_maximaler_entladestrom` **standardmäßig deaktiviert**. Wird sie im Einrichtungsformular als „unbekannte Entität" angezeigt, muss sie zunächst in HA unter dem Solakon-Gerät bei den **Konfigurations-Entitäten** aktiviert werden (Gerät → Entität → Zahnrad → „Aktivieren"). Ohne diese Entität kann die Integration den Entladestrom nicht steuern.
 
 ---
 
