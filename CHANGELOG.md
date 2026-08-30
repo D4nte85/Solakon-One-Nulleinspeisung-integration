@@ -5,6 +5,12 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+### Geändert
+- **README für die bevorstehende Aufnahme in den HACS-Standardstore überarbeitet** ([hacs/default#9184](https://github.com/hacs/default/pull/9184)). Neu am Anfang: ein Hinweisblock, dass die offizielle Solakon-ONE-Integration Voraussetzung ist, selbst **nicht** im Standardstore liegt und als benutzerdefiniertes Repository hinzugefügt werden muss — der Hinweis auf die dort standardmäßig deaktivierte Entität `number.solakon_one_maximaler_entladestrom` ist mit hineingezogen. Dazu ein FAQ-Abschnitt mit neun wiederkehrenden Fragen aus Issues und Discussions (Integration vs. Blueprint, dauerhafter Netzbezug durch die parallel laufende Solakon-App, Zonen-Hysterese, nächtliche Entladung inklusive der ~10 W Restentladung, Zone-3-Schwelle als Entleerungs-Hebel, 2-A-Freigabe in Zone 0, Einspeisen statt Laden bei guter Vorhersage, Verbraucher-Zuschaltung über `sensor.solakon_one_uberschussleistung`, Netzgruppen) sowie der bisher undokumentierte Debug-Tab, der neben dem Integral-Reset auch das manuelle Setzen von `cycle_active` erlaubt. Beim vollständigen Abgleich der Doku gegen den Code korrigiert: Fall A prüft `(soc > zone1 or zone1_forced)`, nicht nur die Zone-1-Schwelle; Fall E verlangt zusätzlich einen gültigen Preis; „Tarif-Lock" bezeichnete zwei verschiedene Sperren (Discharge-Lock und Eintrittsblockade greifen unter der Teuer-Schwelle, der Fall D blockierende Lock nur im Mittelband) — jetzt getrennt benannt; Fall TM setzt `cycle_active` zurück, weshalb entgegen Hinweis 8 nicht Fall D den Zyklus wiederherstellt, sondern Fall A bzw. E ihn neu starten; die Falls A, B und C setzen alle Session-Flags zurück; der Parameter „Stabw.-Fenster" liegt im Dyn.-Offset- statt im PI-Tab, „Mindest-SOC" der Nacht-Forcierung fehlte ganz; der Integral-Reset-Button sitzt im Debug- statt im Status-Tab; und die SOC-Schwellen sind Eintritts- bzw. Austrittsbedingungen mit Hystereseband, keine Zustandsgrenzen. Gestrafft ohne Informationsverlust: Multi-Instancing-Formelblock von 53 auf 12 Zeilen, Hinweis 13 von 12 auf 5, sechs Einträge der Fehlerbehebung auf Handlungsanweisungen
+
+### Behoben
+- `sensor.py`: Docstring von `SurplusPowerSensor` beschrieb den Wert als „Maximum aus Hard-Limit und aktueller PV-Leistung"; berechnet wird das Minimum (`max(0, min(hard_limit, solar) - actual)`, `coordinator.py`)
+
 ## [2.3.1] – 2026-08-27
 
 ### Behoben
