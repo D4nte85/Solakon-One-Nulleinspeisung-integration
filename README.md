@@ -560,9 +560,6 @@ Die Integration, wenn du neu anfängst: kein Helfer-Entitäten- und Script-Gerü
 **Die Anlage zieht dauerhaft Strom aus dem Netz, obwohl geregelt wird.**
 Eine bekannte Ursache ist die Solakon-App: Läuft sie parallel, kann sie ihre eigene Standard-Ausgangsleistung zurückschreiben und den Regler überschreiben. Im Verlauf sieht das nach Sägezahn aus — der Ausgang läuft sauber herunter und springt periodisch wieder hoch. Abhilfe: **Standard-Ausgangsleistung in der App auf 0 W** oder einen 0-W-Zeitplan über 24 h setzen (siehe [Voraussetzungen](#voraussetzungen)).
 
-**Es wird Leistung ausgegeben, der SOC bleibt aber stehen — die Batterie entlädt nicht.**
-Erwartetes Hardware-Verhalten. Der Ausgabepfad des Solakon ONE ist batteriegebunden, aber sobald Solarleistung anliegt, deckt das Gerät die Ausgangsleistung zuerst daraus. Solange die Sonne reicht, fließt aus der Batterie praktisch nichts und der SOC bleibt gepinnt, obwohl Leistung herauskommt. Der maximale Entladestrom ist dabei kein Sollwert, sondern eine Freigabe: Steht er auf 0 A, gibt das Gerät **gar nichts** aus — auch nicht aus verfügbarem Solar. Mehr Ausgangsleistung als die aktuelle PV-Leistung gibt es deshalb nur, wenn ein Entladezyklus läuft und damit der Entladestrom freigegeben ist (`binary_sensor.solakon_one_entladezyklus_aktiv`).
-
 **Der SOC ist unter die Zone-1-Schwelle gefallen, der Akku entlädt aber weiter.**
 So ist es gedacht. Die SOC-Schwellen sind keine Zustandsgrenzen, sondern Eintritts- bzw. Austrittsbedingungen mit einem breiten Hystereseband dazwischen: Die **Zone-1-Schwelle startet** den Entladezyklus (Fall A), beendet wird er ausschließlich von der **Zone-3-Schwelle** (Fall B). Ohne diesen Abstand würde der Zyklus an der Zone-1-Schwelle dauernd ein- und ausschalten. Zone 2 ist entsprechend kein Zustand, in den man beim Unterschreiten der Zone-1-Schwelle fällt, sondern das Verhalten, solange **kein** Zyklus läuft.
 
