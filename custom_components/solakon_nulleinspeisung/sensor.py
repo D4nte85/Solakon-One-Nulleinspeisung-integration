@@ -172,7 +172,7 @@ class IntegralSensor(SolakonEntity, SensorEntity):
 
 class SurplusPowerSensor(SolakonEntity, SensorEntity):
     """Verwertbarer PV-Überschuss — Luft zwischen aktuellem Output und dem
-    Maximum aus Hard-Limit und aktueller PV-Leistung. Für Automationen gedacht
+    Minimum aus Hard-Limit und aktueller PV-Leistung. Für Automationen gedacht
     (z. B. Zusatzverbraucher schalten), daher bewusst keine Diagnose-Entität."""
     _attr_name = "Überschussleistung"
     _attr_icon = "mdi:transmission-tower-export"

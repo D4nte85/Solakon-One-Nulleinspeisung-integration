@@ -550,36 +550,37 @@ Die Diagnose-Binärsensoren sind read-only — sie spiegeln interne Coordinator-
 ## FAQ
 
 **Integration oder Blueprint — was soll ich nehmen?**
-Die Integration, wenn du neu anfängst: gleicher Funktionsumfang, aber ohne Helfer-Entitäten und Scripts, mit Panel statt YAML. Die Blueprints bleiben gepflegt und sind die bessere Wahl, wenn du bereits eine laufende Blueprint-Installation hast, die du nicht anfassen willst. Parallelbetrieb auf demselben Wechselrichter geht nicht — beide schreiben auf dieselbe Fernsteuerungs-Entität.
+Die Integration, wenn du neu anfängst: kein Helfer-Entitäten- und Script-Gerüst, Konfiguration im Panel statt in YAML, Multi-Instanz und dynamischer Offset schon eingebaut. Die Blueprints bleiben gepflegt und sind die bessere Wahl, wenn du eine laufende Installation hast, die du nicht anfassen willst. Parallelbetrieb auf demselben Wechselrichter geht nicht — beide schreiben auf dieselbe Fernsteuerungs-Entität.
 
 **Die Anlage zieht dauerhaft Strom aus dem Netz, obwohl geregelt wird.**
-Häufigste Ursache ist die Solakon-App: Läuft sie parallel, kann sie ihre eigene Standard-Ausgangsleistung zurückschreiben und den Regler überschreiben. Symptom im Verlauf ist ein Sägezahn — der Ausgang läuft sauber herunter und springt periodisch wieder hoch. Abhilfe: **Standard-Ausgangsleistung in der App auf 0 W** oder einen 0-W-Zeitplan über 24 h setzen (siehe [Voraussetzungen](#voraussetzungen)).
+Eine bekannte Ursache ist die Solakon-App: Läuft sie parallel, kann sie ihre eigene Standard-Ausgangsleistung zurückschreiben und den Regler überschreiben. Im Verlauf sieht das nach Sägezahn aus — der Ausgang läuft sauber herunter und springt periodisch wieder hoch. Abhilfe: **Standard-Ausgangsleistung in der App auf 0 W** oder einen 0-W-Zeitplan über 24 h setzen (siehe [Voraussetzungen](#voraussetzungen)).
 
-**Nulleinspeisung funktioniert nicht, sobald der Akku voll ist.**
-Ist der Akku voll, kann der Solakon die PV-Leistung nur regeln, solange Batteriestrom fließt. Genau dafür ist die Überschuss-Einspeisung (Zone 0, **Überschuss**-Tab) da — ohne sie fällt das Gerät bei vollem Speicher in einen ungeregelten Zustand.
+**Der Akku ist voll, entlädt aber nicht — die PV-Leistung wird nur durchgereicht.**
+Dann läuft kein Entladezyklus. Ohne aktiven Zyklus steht der Entladestrom auf 0 A und der Ausgang ist auf den PV-Überschuss gedeckelt (`min(Hard-Limit Z1, max(0, PV − Reserve))`) — die Batterie ist bewusst außen vor. Batteriestrom gibt es nur im Zone-1-Zyklus. Ob er läuft, zeigt `binary_sensor.solakon_one_entladezyklus_aktiv`; startet er nicht, sind Tarif-Lock oder Nachtabschaltung die üblichen Blockierer (siehe [Falls-Tabelle](#soc-zonen-und-steuerlogik-falls)).
 
-**Warum fließen in Zone 0 dauerhaft 2 A, auch bei PV > 0?**
-Das ist eine Entladefreigabe, kein Sollwert. Bei 0 A schaltet das Gerät komplett ab, die 2 A sind die kleinstmögliche Obergrenze, bei der es noch regelt. Tatsächlich entnommen wird nur, was die PV gerade nicht deckt.
+**Der SOC ist unter die Zone-1-Schwelle gefallen, der Akku entlädt aber weiter.**
+So ist es gedacht. Die SOC-Schwellen sind keine Zustandsgrenzen, sondern Eintritts- bzw. Austrittsbedingungen mit einem breiten Hystereseband dazwischen: Die **Zone-1-Schwelle startet** den Entladezyklus (Fall A), beendet wird er ausschließlich von der **Zone-3-Schwelle** (Fall B). Ohne diesen Abstand würde der Zyklus an der Zone-1-Schwelle dauernd ein- und ausschalten. Zone 2 ist entsprechend kein Zustand, in den man beim Unterschreiten der Zone-1-Schwelle fällt, sondern das Verhalten, solange **kein** Zyklus läuft.
 
 **Der Akku entlädt nachts, obwohl keine Sonne scheint — ist das ein Fehler?**
-Nein. Zone 1 läuft bewusst auch nachts (siehe [Zonentabelle](#soc-zonenverwaltung)). Die Nachtabschaltung (**Nacht**-Tab) wirkt ausschließlich auf Zone 2. Soll auch Zone 1 nachts stoppen, die Zone-1-Schwelle höher setzen.
+Nein, gleiche Ursache: Ein einmal gestarteter Zone-1-Zyklus läuft unabhängig von der Tageszeit bis zur Zone-3-Schwelle weiter. Die Nachtabschaltung (**Nacht**-Tab) wirkt ausschließlich auf Zone 2, also auf den zyklusfreien Betrieb.
 
 **Die Batterie entleert sich zu stark.**
-Die Zone-3-Schwelle ist der harte Boden — sie bestimmt, wann komplett gestoppt wird. Wer früher schonen will, hebt die Zone-1-Schwelle an: darunter läuft Zone 2 mit 0 A Entladestrom und regelt nur noch aus dem PV-Überschuss.
+Der Hebel ist die **Zone-3-Schwelle** — sie beendet den Zyklus. Die Zone-1-Schwelle anzuheben hilft nicht: sie verzögert nur den Start des nächsten Zyklus und stoppt keinen laufenden.
 
-**Geht das mit einem Ferraris-Zähler?**
-Nur mit einem zusätzlichen Sensor, der eine vorzeichenbehaftete Momentanleistung liefert (Bezug positiv, Einspeisung negativ) — etwa ein Shelly 3EM im Zählerkasten. Eine reine Drehscheiben-Erfassung genügt nicht: der Regler braucht die Richtung, nicht nur den Verbrauch.
+**Warum fließen in Zone 0 dauerhaft 2 A, auch bei PV > 0?**
+Das ist eine Entladefreigabe, kein Sollwert. Bei 0 A schaltet das Gerät ab, weil der Solakon die PV nur regeln kann solange Batteriestrom fließt; 2 A ist die kleinstmögliche Obergrenze, bei der er noch regelt. Wie viel davon tatsächlich fließt, hängt von der PV ab.
+
+**Kann ich bei guter Wettervorhersage bevorzugt einspeisen, statt die Batterie mittags vollzuladen?**
+Ja — **Surplus-Forecast-Erzwingung** im **Überschuss**-Tab: Liegt die PV-Vorhersage über der eingestellten Schwelle, wird der Zone-0-Eintritt erzwungen und der Überschuss geht ins Netz statt in die Batterie. Bei schlechter Vorhersage bleibt es beim normalen Laden.
 
 **Wie schalte ich bei Überschuss einen Verbraucher zu?**
-Über `sensor.solakon_one_uberschussleistung`. Der zeigt die PV-Leistung, die über das aktuelle Hard-Limit hinaus nicht mehr sinnvoll ausgegeben werden kann — als Auslöser für eine eigene Automation gedacht (Smart Plug, Boiler, Wallbox).
-
-**Kann ich das Laden verzögern, wenn morgen gutes Wetter vorhergesagt ist?**
-Ja, über die **Zone-1-Nacht-Forcierung** im **Zonen**-Tab: Reicht die PV-Vorhersage für den Zieltag, wird der Entladezyklus auch unter der normalen Zone-1-Schwelle erlaubt — die Kapazität wird nachts genutzt statt ungenutzt liegen zu bleiben.
+Über `sensor.solakon_one_uberschussleistung`. Er zeigt `max(0, min(Hard-Limit, PV) − Ausgangsleistung)`, also den Spielraum zwischen dem, was gerade ausgegeben werden könnte, und dem, was tatsächlich ausgegeben wird — gedacht als Auslöser für eine eigene Automation (Smart Plug, Boiler, Wallbox).
 
 **Ich habe mehrere Smartmeter für getrennte Stromkreise.**
 Instanzen werden automatisch nach ihrem Netz-Leistungssensor in [Netzgruppen](#netzgruppen-mehrere-smartmeter) sortiert. Jede Gruppe hat ihre eigene, unabhängige Leistungsverteilung; Instanzen an verschiedenen Zählern beeinflussen sich nicht.
 
 ---
+
 
 ## Fehlerbehebung
 
