@@ -21,6 +21,7 @@ from .const import (
     CONF_SOC_SENSOR, CONF_TIMEOUT_COUNTDOWN, CONF_ACTIVE_POWER,
     CONF_DISCHARGE_CURRENT, CONF_TIMEOUT_SET, CONF_MODE_SELECT, CONF_EXPORT_LIMIT,
     MODE_DISABLED, MODE_DISCHARGE, MODE_AC_CHARGE,
+    OUTPUT_STALL_SECONDS, OUTPUT_STALL_DEVIATION,
     S_REGULATION_ENABLED,
     S_P_FACTOR, S_I_FACTOR, S_TOLERANCE, S_WAIT_TIME, S_STDDEV_WINDOW, S_STDDEV_TRIM_COUNT,
     S_ZONE1_LIMIT, S_ZONE3_LIMIT, S_DISCHARGE_MAX, S_HARD_LIMIT, S_HARD_LIMIT_Z0, S_HARD_LIMIT_Z1,
@@ -101,6 +102,8 @@ class SolakonCoordinator:
         # Retries nicht bestätigt werden konnte — sofort im selben Zyklus nach dem
         # jeweiligen Aufruf in soft_errors übernommen, siehe _run_regulation_cycle.
         self._output_warning: str = ""
+        self._output_stall_actions: int = 0
+        self._output_stall_last_ts: float = 0.0
         # Tatsächlich angewandter Verteilungs-Modus des letzten _all_shares()-Aufrufs
         # — kann vom konfigurierten distribution_mode abweichen (Degradation, siehe oben).
         self.dist_mode_effective: str = ""
@@ -687,6 +690,86 @@ class SolakonCoordinator:
             self._output_warning = f"Output-Nullung nach {max_retries} Versuchen nicht bestätigt (Ist: {actual:.0f} W)"
             _LOGGER.error("Solakon: %s", self._output_warning)
 
+    def _reset_output_stall_state(self) -> None:
+        """Stillstandszähler zurücksetzen — Ausgang folgt dem Limit wieder oder ist
+        nicht prüfbar."""
+        self._output_stall_actions = 0
+        self._output_stall_last_ts = 0.0
+
+    async def _check_output_stall(self, limit: float) -> None:
+        """Erkennt einen Wechselrichter, der dem Limit nicht folgt, und stößt ihn an.
+
+        Aufgerufen ausschließlich aus dem gesättigten Zweig des Standard-PI: dort steht
+        der Sollwert auf `dynamic_max` und der Regler schreibt von sich aus nicht mehr,
+        weil er nicht weiter hochregeln kann. Ein in diesem Zustand stehengebliebener
+        Wechselrichter erhält damit keinen Befehl mehr; Fall D deckt ihn nicht ab, da er
+        einen Modus außerhalb `'1'`/`'3'` voraussetzt. Die übrigen PI-Pfade sind hiervon
+        ausgenommen — Zone 0, Tarif-Laden und die Totbänder haben eigene Guards und
+        halten den Ausgang bewusst unterhalb ihres jeweiligen Limits.
+
+        Kriterium ist die Abweichung der tatsächlichen Ausgabe vom Limit, gemessen über
+        `OUTPUT_STALL_DEVIATION`. Die Dauer kommt aus `last_updated` des Ist-Sensors: der
+        Zeitstempel rückt nur bei einer Wertänderung vor, steht also genau für „Wert
+        seit dann unverändert". Ein Ausgang, der weder das Limit erreicht noch sich
+        bewegt, ist damit ohne eigene Uhr erkennbar. Ein Ist-Sensor, der um den
+        abweichenden Wert rauscht, setzt den Zeitstempel dagegen laufend zurück und
+        löst nicht aus.
+
+        Eskalation: der erste Treffer schreibt den Sollwert neu. Bleibt die Abweichung,
+        wird der Wechselrichter aus dem Regelmodus genommen — Output 0, Timer-Toggle,
+        Modus `'0'` — statt den Modus `'1'` auf sich selbst zu schreiben. Damit ist im
+        nächsten Zyklus die Bedingung von Fall D erfüllt (`cycle_active` bei einem Modus
+        außerhalb `'1'`/`'3'`), der das Gerät über Timer-Toggle + Modus `'1'` zurückholt
+        und den PI wieder hochlaufen lässt. Das ist derselbe Weg, der den Feldfall nach
+        dem Hardware-Neustart beendet hat, mit einer echten Modus-Flanke statt einer
+        Wiederholung des bestehenden Werts. Das Integral wird dabei zurückgesetzt, da
+        der Sollwert auf 0 geht — analog zu den Fällen H und I. Zwischen zwei Aktionen
+        liegt mindestens `OUTPUT_STALL_SECONDS`, damit das Gerät antworten kann.
+        """
+        actual_eid = self.entry.data.get(CONF_ACTUAL_SENSOR, "")
+        if limit <= 0 or not self._entity_ok(actual_eid):
+            self._reset_output_stall_state()
+            return
+
+        actual = self._flt_power(actual_eid)
+        if abs(actual - limit) <= limit * OUTPUT_STALL_DEVIATION:
+            self._reset_output_stall_state()
+            return
+
+        state = self.hass.states.get(actual_eid)
+        if state is None:
+            self._reset_output_stall_state()
+            return
+
+        now = time.time()
+        if now - state.last_updated.timestamp() < OUTPUT_STALL_SECONDS:
+            return
+        if self._output_stall_last_ts and now - self._output_stall_last_ts < OUTPUT_STALL_SECONDS:
+            return
+
+        self._output_stall_last_ts = now
+        self._output_stall_actions += 1
+
+        if self._output_stall_actions == 1:
+            _LOGGER.warning(
+                "Solakon: Ausgang %.0f W folgt Limit %.0f W nicht (unverändert seit %.0f s) "
+                "— Sollwert wird neu geschrieben",
+                actual, limit, now - state.last_updated.timestamp(),
+            )
+            await self._set_output(limit)
+            self._set_last_action(f"Ausgang {actual:.0f} W statt {limit:.0f} W — neu geschrieben")
+            return
+
+        self._output_warning = (
+            f"Ausgang bleibt bei {actual:.0f} W statt {limit:.0f} W — Recovery ausgelöst"
+        )
+        _LOGGER.error("Solakon: %s (Versuch %d)", self._output_warning, self._output_stall_actions)
+        self.integral = 0.0
+        await self._set_output_and_wait(0)
+        await self._timer_toggle()
+        await self._set_mode(MODE_DISABLED)
+        self._set_last_action(f"Ausgang {actual:.0f} W statt {limit:.0f} W — Recovery über Modus 0")
+
     async def _set_discharge(self, amps: float) -> None:
         """Entladestrom setzen — nur wenn aktueller Wert abweicht."""
         current = self._flt(self.entry.data[CONF_DISCHARGE_CURRENT], -1)
@@ -1153,7 +1236,8 @@ class SolakonCoordinator:
 
         # ── PI-Pfade ─────────────────────────────────────────────────────────
         if self.surplus_active:
-            # Nur schreiben wenn der Ist-Sollwert abweicht — kein Modbus-Traffic im eingeschwungenen Zustand
+            # Nur schreiben wenn der Ist-Sollwert abweicht — kein Modbus-Traffic im
+            # eingeschwungenen Zustand
             if abs(current_power - effective_hard) > 0.5:
                 self._set_last_action(f"Zone 0: Output → {effective_hard} W")
                 await self._set_output_and_wait(effective_hard)
@@ -1184,8 +1268,12 @@ class SolakonCoordinator:
         else:
             grid_error = grid - target_offset
             grid_error_abs = abs(grid_error)
+            # Sättigung nach oben: der PI könnte hochregeln, darf aber nicht — einziger
+            # Zustand, in dem der Regler dauerhaft stumm bleibt und ein stehengebliebener
+            # Wechselrichter keinen Befehl mehr erhält (_check_output_stall).
+            saturated_high = at_max_limit and not above_dynamic_max and grid_error > 0
 
-            if grid_error_abs > tolerance and not (at_max_limit and not above_dynamic_max and grid_error > 0) and not (at_min_limit and grid_error < 0):
+            if grid_error_abs > tolerance and not saturated_high and not (at_min_limit and grid_error < 0):
                 power_base = self._total_commanded_power(current_power) * error_share
                 new_pw = self._pi_calculate(
                     grid, power_base, target_offset, dynamic_max,
@@ -1197,6 +1285,10 @@ class SolakonCoordinator:
             else:
                 if abs(self.integral) > 10:
                     self.integral *= 0.95
+                if saturated_high:
+                    await self._check_output_stall(dynamic_max)
+                else:
+                    self._reset_output_stall_state()
 
         # ── 10. Display + Flag-Persistenz ────────────────────────────────────
         if self._output_warning:

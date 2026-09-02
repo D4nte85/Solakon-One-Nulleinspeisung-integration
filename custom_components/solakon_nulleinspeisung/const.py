@@ -48,6 +48,14 @@ REQUIRED_ENTITY_DEFAULTS_EN = {
 
 PLATFORMS = ["sensor", "switch", "binary_sensor"]
 
+# -- Ausgangs-Stillstandserkennung --------------------------------------------
+# Greift nur im gesaettigten Standard-PI-Zweig (at_max_limit). Weicht die tatsaechliche
+# Wechselrichter-Ausgabe um mehr als OUTPUT_STALL_DEVIATION vom Limit ab und steht der
+# Messwert dabei laenger als OUTPUT_STALL_SECONDS unveraendert, wird der Sollwert neu
+# geschrieben und bei Fortbestand die Recovery aus Fall D gefahren.
+OUTPUT_STALL_SECONDS = 300
+OUTPUT_STALL_DEVIATION = 0.05
+
 # -- Inverter Mode Values -----------------------------------------------------
 MODE_DISABLED  = "0"
 MODE_DISCHARGE = "1"
