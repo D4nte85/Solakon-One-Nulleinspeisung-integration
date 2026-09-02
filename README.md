@@ -226,7 +226,7 @@ Kern des Regelkreises. Vollständige Einstellhilfe → [PI-Regler Einstellung](#
 | Wartezeit (s) | Feste Pause (ohne Self-Adjust) oder maximales Timeout als Sicherheitsnetz (mit Self-Adjust) | 1–5 |
 | Self-Adjusting Wait | Wartet auf die tatsächliche WR-Ausgangsleistung statt fester Wartezeit | Empfohlen |
 | Zielwert-Toleranz (W) | Abweichung, ab der der Zielwert als erreicht gilt (nur bei Self-Adjust) | 2–5 |
-| Periodischer Trigger | Startet die Regelschleife im konfigurierten Intervall neu — auch ohne Sensor-Änderung. Sinnvoll bei stabilen Haushalten, in denen der Netzbezug selten springt. | Aus |
+| Periodischer Trigger | Startet die Regelschleife im konfigurierten Intervall neu — auch ohne Sensor-Änderung. Sinnvoll bei stabilen Haushalten, in denen der Netzbezug selten springt, und in Aufbauten ohne eigene PV am Gerät, in denen der Solar-Sensor als Trigger-Quelle ausfällt. | Aus |
 | Trigger-Intervall (s) | Abstand zwischen zwei periodischen Regelläufen. Bereich: 5–300 s. | 10–60 |
 
 ---
@@ -557,6 +557,16 @@ Die Diagnose-Binärsensoren sind read-only — sie spiegeln interne Coordinator-
 **Integration oder Blueprint — was soll ich nehmen?**
 Die Integration, wenn du neu anfängst: kein Helfer-Entitäten- und Script-Gerüst, Konfiguration im Panel statt in YAML, Multi-Instanz und dynamischer Offset schon eingebaut. Die Blueprints bleiben gepflegt und sind die bessere Wahl, wenn du eine laufende Installation hast, die du nicht anfassen willst. Parallelbetrieb auf demselben Wechselrichter geht nicht — beide schreiben auf dieselbe Fernsteuerungs-Entität.
 
+**Ich habe keine PV-Panels am Solakon angeschlossen — worauf muss ich achten?**
+Der Betrieb als reiner AC-Speicher (eigene PV-Anlage am Hausnetz, nichts am DC-Eingang des Geräts) funktioniert, aber vier Funktionen hängen am geräteeigenen Solar-Sensor und verhalten sich dann anders:
+
+- **Überschuss (Zone 0) aus lassen.** Zone 0 rechnet ausschließlich mit der PV-Leistung des Geräts gegen den Hausverbrauch; ohne eigene Panels kann sie nicht eintreten. Sie hat aber Vorrang vor AC Laden — solange der Überschuss-Modus aktiv ist, startet AC Laden nicht.
+- **Surplus-Forecast-Erzwingung und Austritts-Sperre** hängen ebenfalls an Zone 0 und bleiben wirkungslos.
+- **Nachtabschaltung aus lassen.** Sie prüft `PV < PV-Ladereserve` — bei dauerhaft 0 W ist die Bedingung immer erfüllt und Zone 2 dauerhaft gesperrt.
+- **Periodischen Trigger einschalten.** Die Regelschleife läuft sonst nur auf Sensor-Änderungen, und von den schnell wechselnden Quellen bleibt ohne eigene PV nur der Netzsensor. Ohne periodischen Trigger reagiert die Regelung auf Lastsprünge entsprechend träge.
+
+Zone 2 gibt in diesem Aufbau folgerichtig 0 W aus — ihr Ausgang ist auf `PV − PV-Ladereserve` gedeckelt. Geladen wird über **AC Laden** oder **Tarif-Laden**.
+
 **Die Anlage zieht dauerhaft Strom aus dem Netz, obwohl geregelt wird.**
 Eine bekannte Ursache ist die Solakon-App: Läuft sie parallel, kann sie ihre eigene Standard-Ausgangsleistung zurückschreiben und den Regler überschreiben. Im Verlauf sieht das nach Sägezahn aus — der Ausgang läuft sauber herunter und springt periodisch wieder hoch. Abhilfe: **Standard-Ausgangsleistung in der App auf 0 W** oder einen 0-W-Zeitplan über 24 h setzen (siehe [Voraussetzungen](#voraussetzungen)).
 
@@ -568,6 +578,15 @@ Nein, gleiche Ursache: Ein einmal gestarteter Zone-1-Zyklus läuft unabhängig v
 
 **Die Batterie entleert sich zu stark.**
 Der Hebel ist die **Zone-3-Schwelle** — sie beendet den Zyklus. Die Zone-1-Schwelle anzuheben hilft nicht: sie verzögert nur den Start des nächsten Zyklus und stoppt keinen laufenden.
+
+**Was bedeutet das Vorzeichen beim Offset?**
+Der Offset ist der Zielwert am **Netzzähler**, nicht am Wechselrichter: `0` regelt auf die Nulllinie, `+20` hält 20 W Bezug, `−20` hält 20 W Einspeisung als Sicherheitsabstand. Beim AC Laden verhindert ein negativer Offset entsprechend, dass aus dem Netz mitgeladen wird.
+
+**Warum haben AC Laden und die Entladezonen getrennte Offsets und PI-Faktoren?**
+Weil es zwei verschiedene Regelstrecken sind: Beim Entladen regelt der Wechselrichter, beim AC Laden das Ladenetzteil mit einer deutlich längeren Flanke (~25 s). AC Laden hat deshalb einen eigenen Offset, eigene P/I-Faktoren und ein eigenes Leistungslimit; die Zonen-Offsets greifen währenddessen nicht. Die Werte sollten **nicht** gleichgesetzt werden — für AC Laden gilt die Einstellempfehlung aus [Wichtige Hinweise](#wichtige-hinweise) (P klein, I auf 0).
+
+**„Max. Entladestrom Zone 1" in A und „Hard-Limit Z1" in W — was von beidem gilt?**
+Beides, an verschiedenen Stellen: Die Ampere begrenzen den Strom auf der Batterieseite, die Watt den AC-Ausgang, gegen den der PI regelt. Sie schließen sich nicht aus. Bei einem niedrigen Watt-Limit wird die Stromgrenze in der Regel nie erreicht — dann wirkt praktisch nur das Watt-Limit.
 
 **Warum steht der Entladestrom in Zone 0 dauerhaft auf 2 A, auch bei PV > 0?**
 Weil der Ausgabepfad sonst gesperrt ist: Bei 0 A gibt das Gerät nichts aus, und bei vollem Akku drosselt der MPPT die PV auf 0 W, sobald kein Batteriestrom fließt. Es braucht also irgendeine Freigabe größer null — **2 A ist dabei ein gesetzter Wert, keine Hardware-Untergrenze**: bewusst niedrig gewählt, um die Batterie so wenig wie möglich zu belasten. Es ist eine Obergrenze, kein Sollwert; solange Solar die Ausgangsleistung deckt, fließt daraus praktisch nichts.
@@ -585,6 +604,9 @@ Instanzen werden automatisch nach ihrem Netz-Leistungssensor in [Netzgruppen](#n
 
 
 ## Fehlerbehebung
+
+**Mein Netz-Leistungssensor lässt sich bei der Einrichtung nicht auswählen**
+Die Auswahl filtert auf `device_class: power`. Template- und Hilfssensoren, die erst eine Summe bilden (z. B. die drei Phasen eines Shelly 3EM), tragen diese Geräteklasse häufig nicht und erscheinen deshalb nicht in der Liste. Im Template-Sensor `device_class: power` und `unit_of_measurement: W` ergänzen, danach ist er auswählbar.
 
 **Panel öffnet sich, zeigt aber keine Werte an**
 Integration neu laden (Einstellungen → Geräte & Dienste → Solakon → drei Punkte → Neu laden). Falls das Problem bleibt, HA-Protokoll auf Fehler der Domain `solakon_nulleinspeisung` prüfen.

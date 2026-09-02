@@ -327,7 +327,7 @@
     },
     "periodic_enabled": {
       "l": "Periodischen Trigger aktivieren",
-      "d": "Startet die Regelschleife im konfigurierten Intervall neu — auch ohne Sensor-Änderung. Sinnvoll bei stabilen Haushalten, in denen der Netzbezug selten springt."
+      "d": "Startet die Regelschleife im konfigurierten Intervall neu — auch ohne Sensor-Änderung. Sinnvoll bei stabilen Haushalten, in denen der Netzbezug selten springt, und in Aufbauten ohne eigene PV am Gerät, in denen der Solar-Sensor als Trigger-Quelle ausfällt."
     },
     "periodic_interval": {
       "l": "Trigger-Intervall (s)",

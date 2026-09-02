@@ -327,7 +327,7 @@
     },
     "periodic_enabled": {
       "l": "Enable Periodic Trigger",
-      "d": "Runs the regulation loop at a fixed interval — even without sensor changes. Useful for stable households where grid power rarely fluctuates."
+      "d": "Runs the regulation loop at a fixed interval — even without sensor changes. Useful for stable households where grid power rarely fluctuates, and for setups without PV panels on the device, where the solar sensor never fires."
     },
     "periodic_interval": {
       "l": "Trigger Interval (s)",
