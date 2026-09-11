@@ -378,8 +378,19 @@ class SolakonPanel extends HTMLElement {
     await Promise.all([this._loadConfig(), distPreload]);
   }
 
+  // Bereichsname einer Entität: direkt zugewiesener Bereich, sonst der Bereich
+  // ihres Geräts. Gibt null zurück, wenn keiner von beiden gesetzt ist.
+  _areaNameFor(entityId) {
+    const ent = this._hass?.entities?.[entityId];
+    if (!ent) return null;
+    const areaId = ent.area_id || this._hass?.devices?.[ent.device_id]?.area_id;
+    return areaId ? (this._hass?.areas?.[areaId]?.name || null) : null;
+  }
+
   // Gruppiert Instanzen nach grid_power_sensor. Instanzen ohne gesetzten Sensor
   // fallen einzeln auf ihre eigene entry_id als Gruppenschlüssel zurück.
+  // Anzeigename ist der Bereich des Netzsensors, sonst sein Anzeigename, sonst
+  // die Entity-ID — der Gruppenschlüssel bleibt immer die Entity-ID.
   _computeGroups() {
     const map = new Map();
     for (const inst of this._instances) {
@@ -389,7 +400,9 @@ class SolakonPanel extends HTMLElement {
     }
     this._groups = [...map.entries()].map(([key, instances]) => ({
       key,
-      label: this._hass?.states?.[key]?.attributes?.friendly_name || key,
+      label: this._areaNameFor(key)
+             || this._hass?.states?.[key]?.attributes?.friendly_name
+             || key,
       instances,
     }));
     this._groups.sort((a, b) => a.label.localeCompare(b.label));
@@ -548,6 +561,17 @@ class SolakonPanel extends HTMLElement {
     this._loadConfig();
   }
 
+  // Zustandsklassen der Übersichtskarte: inaktive Regelung und anliegender
+  // Fehler, beide unabhängig von der Zonenfarbe im Kartenkopf.
+  _ovStateClass(st) {
+    return (st.regulation_enabled === false ? " ov-card-off" : "")
+         + (st.last_error ? " ov-card-err" : "");
+  }
+
+  _esc(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+  }
+
   // Immer von der Verteilung getrennt (auch im Ein-Gruppen-Fall) — Instanzen
   // untereinander nach Netzgruppe sortiert, mit Gesamt-Karte je Gruppe mit
   // >1 Instanz. Gruppen-Kopfzeile (Label) nur ab 2 Gruppen sichtbar, sonst
@@ -563,9 +587,10 @@ class SolakonPanel extends HTMLElement {
         const st = this._allStatuses[inst.entry_id] || {};
         const zs = ZONE_STYLE[st.zone] ?? ZONE_STYLE[2];
         const fl = this._t.fall_labels?.[st.active_fall] || st.active_fall || "—";
-        return `<div class="ov-card" data-eid="${inst.entry_id}">
+        const cls = this._ovStateClass(st);
+        return `<div class="ov-card${cls}" id="ov-card-${inst.entry_id}" data-eid="${inst.entry_id}" title="${this._esc(st.last_error || "")}">
           <div class="ov-hdr" id="ov-hdr-${inst.entry_id}" style="background:${zs.color}">
-            <span id="ov-icon-${inst.entry_id}">${zs.icon}</span> ${inst.instance_name}
+            <span id="ov-icon-${inst.entry_id}">${zs.icon}</span> ${inst.instance_name}<span id="ov-err-${inst.entry_id}">${st.last_error ? " ⚠️" : ""}</span>
           </div>
           <div class="ov-body">
             <div class="ov-row"><span>${ov.soc    || "SOC"}</span><strong id="ov-soc-${inst.entry_id}">${st.soc ?? "—"} %</strong></div>
@@ -623,6 +648,14 @@ class SolakonPanel extends HTMLElement {
       if (grid) grid.textContent = st.grid != null ? `${st.grid.toFixed(0)} W` : "—";
       const fallEl = this.shadowRoot.getElementById(`ov-fall-${inst.entry_id}`);
       if (fallEl) fallEl.textContent = fl;
+
+      const card = this.shadowRoot.getElementById(`ov-card-${inst.entry_id}`);
+      if (card) {
+        card.className = `ov-card${this._ovStateClass(st)}`;
+        card.title     = st.last_error || "";
+      }
+      const errEl = this.shadowRoot.getElementById(`ov-err-${inst.entry_id}`);
+      if (errEl) errEl.textContent = st.last_error ? " ⚠️" : "";
 
       // Kapazitäts-Sensor-Dot im Verteilungsblock live mitziehen, ohne den
       // Input selbst anzufassen.
@@ -748,6 +781,10 @@ class SolakonPanel extends HTMLElement {
         .ov-card { border: 1px solid var(--divider-color, #ddd); border-radius: 10px;
           overflow: hidden; cursor: pointer; transition: box-shadow .15s; }
         .ov-card:hover { box-shadow: 0 2px 10px rgba(0,0,0,.12); }
+        .ov-card-off { opacity: .55; }
+        .ov-card-off .ov-hdr { filter: grayscale(1); }
+        .ov-card-err { border-color: #dc2626; box-shadow: 0 0 0 1px #dc2626; }
+        .ov-card-err:hover { box-shadow: 0 0 0 1px #dc2626, 0 2px 10px rgba(0,0,0,.12); }
         .ov-card-total { cursor: default; }
         .ov-card-total:hover { box-shadow: none; }
         .ov-hdr  { padding: 10px 14px; color: #fff; font-weight: 600; font-size: .92em; }

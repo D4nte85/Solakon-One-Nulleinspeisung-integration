@@ -6,6 +6,8 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 ## [Unreleased]
 
 ### Geändert
+- Netzgruppen werden in Panel und Übersicht jetzt nach dem Home-Assistant-Bereich ihres Netzsensors benannt (direkt zugewiesen oder über das Gerät geerbt), mit Rückfall auf den Anzeigenamen des Sensors und dessen Entity-ID. Bei der von Home Assistant empfohlenen Entitätsbenennung (Bereich, Gerät, Entität) trugen alle Gruppen denselben Namen, etwa „Netz Leistung". Die Beschriftung heißt entsprechend „Bereich" statt „Gruppe"; die Gruppenzuordnung selbst bleibt an der Sensor-Entität (Discussion [#21](https://github.com/D4nte85/Solakon-One-Nulleinspeisung-integration/discussions/21), `solakon-panel.js`, `panel.de.json`, `panel.en.json`, `README.md`)
+- Instanz-Karten der Übersicht kennzeichnen zwei Zustände zusätzlich zur Zonenfarbe: inaktive Regelung als ausgegraute Karte, anliegende Fehlermeldung als roter Rahmen mit ⚠️ und der Meldung als Tooltip (Discussion [#21](https://github.com/D4nte85/Solakon-One-Nulleinspeisung-integration/discussions/21), `solakon-panel.js`, `README.md`)
 - Die vier schreibenden WebSocket-Commands (`save_config`, `set_cycle`, `reset_integral`, `save_distribution_config`) verlangen jetzt `@websocket_api.require_admin` — zuvor konnte jeder angemeldete Home-Assistant-Benutzer die Reglerkonfiguration ändern, da keiner der acht Commands eine Rechteprüfung trug. Die vier lesenden Commands bleiben offen, damit das Panel für alle Benutzer sichtbar bleibt; README um einen Hinweis ergänzt (Issue [#35](https://github.com/D4nte85/Solakon-One-Nulleinspeisung-integration/issues/35), `__init__.py`, `README.md`)
 
 ## [2.3.2] – 2026-09-02

@@ -407,7 +407,7 @@
     "output":       "Output",
     "grid":         "Grid",
     "fall":         "Case",
-    "group_prefix": "Group",
+    "group_prefix": "Area",
     "total_output": "Total",
     "dist_mode":    "Distribution"
   },
@@ -435,8 +435,8 @@
   "dist": {
     "single_instance_note": "Power distribution is only needed with multiple instances.",
     "tab_lbl":            "⚖️ Distribution",
-    "group_prefix":       "Group",
-    "groups_note":        "Instances are grouped automatically by their configured grid power sensor — each grid group (e.g. multiple smart meters for separate circuits) gets its own, independent power distribution. With only one group this grouping is invisible, there's just a single shared pool.",
+    "group_prefix":       "Area",
+    "groups_note":        "Instances are grouped automatically by their configured grid power sensor — each grid group (e.g. multiple smart meters for separate circuits) gets its own, independent power distribution. With only one group this grouping is invisible, there's just a single shared pool. The displayed name is the Home Assistant area of the grid sensor, otherwise its display name.",
     "loading":            "Loading…",
     "global_hdr":         "🌐 Global Settings",
     "global_max_lbl":     "Total Max. Output Power (W)",
