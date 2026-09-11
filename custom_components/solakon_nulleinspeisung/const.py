@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 
 DOMAIN = "solakon_nulleinspeisung"
-STORAGE_VERSION = 1
+STORAGE_VERSION = 2
 VERSION = json.loads((Path(__file__).parent / "manifest.json").read_text())["version"]
 
 # -- Config-Entry Keys --------------------------------------------------------
@@ -102,7 +102,6 @@ S_STDDEV_TRIM_COUNT = "stddev_trim_count"
 S_ZONE1_LIMIT   = "zone1_limit"
 S_ZONE3_LIMIT   = "zone3_limit"
 S_DISCHARGE_MAX  = "discharge_max"
-S_HARD_LIMIT     = "hard_limit"
 S_HARD_LIMIT_Z0  = "hard_limit_z0"
 S_HARD_LIMIT_Z1  = "hard_limit_z1"
 S_OFFSET_1      = "offset_1"
@@ -114,8 +113,6 @@ S_SURPLUS_SOC_THRESHOLD = "surplus_soc_threshold"
 S_SURPLUS_SOC_HYST      = "surplus_soc_hyst"
 S_SURPLUS_PV_HYST       = "surplus_pv_hyst"
 S_SURPLUS_FORECAST_ENABLED   = "surplus_forecast_enabled"
-# Migrationsquelle; wirksamer Sensor über _effective_pv_forecast_today_sensor().
-S_SURPLUS_FORECAST_SENSOR    = "surplus_forecast_sensor"
 S_SURPLUS_FORECAST_THRESHOLD = "surplus_forecast_threshold"
 S_SURPLUS_LOCK_ENABLED = "surplus_lock_enabled"
 S_SURPLUS_LOCK_SENSOR  = "surplus_lock_sensor"
@@ -192,7 +189,6 @@ SETTINGS_DEFAULTS: dict = {
     S_ZONE1_LIMIT:   50,
     S_ZONE3_LIMIT:   20,
     S_DISCHARGE_MAX:  40,
-    S_HARD_LIMIT:     800,
     S_HARD_LIMIT_Z0:  800,
     S_HARD_LIMIT_Z1:  800,
     S_OFFSET_1:      30,

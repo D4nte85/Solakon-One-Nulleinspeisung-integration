@@ -11,6 +11,7 @@ from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.helpers.storage import Store
 
 from .const import (
     DOMAIN, PLATFORMS, S_REGULATION_ENABLED,
@@ -19,7 +20,7 @@ from .const import (
     STORAGE_VERSION, DIST_DEFAULTS, VERSION,
 )
 
-STORAGE_VERSION_DIST = 1
+STORAGE_VERSION_DIST = 2
 STORAGE_KEY_DIST     = f"{DOMAIN}_distribution"
 
 STORAGE_VERSION_SOC_SWITCH = 1
@@ -27,6 +28,38 @@ STORAGE_KEY_SOC_SWITCH     = f"{DOMAIN}_soc_switch_state"
 
 _LOGGER = logging.getLogger(__name__)
 PANEL_JS_URL = f"/{DOMAIN}/panel.js"
+
+
+class SolakonDistStore(Store):
+    """Verteilungs-Store mit Schemamigration."""
+
+    async def _async_migrate_func(
+        self, old_major_version: int, old_minor_version: int, old_data: dict
+    ) -> dict:
+        """Hebt Version 1 auf 2: flache Form verschachteln, Zwei-Feld-Modus auflösen."""
+        if old_major_version >= 2 or not old_data:
+            return old_data
+
+        if "distribution_mode" in old_data or "global_max_power" in old_data:
+            flat = _migrate_dist_mode(old_data)
+            group_keys = {
+                e.data.get(CONF_GRID_SENSOR, "")
+                for e in self.hass.config_entries.async_entries(DOMAIN)
+            }
+            return {gk: dict(flat) for gk in group_keys}
+        return {gk: _migrate_dist_mode(cfg) for gk, cfg in old_data.items()}
+
+
+def _migrate_dist_mode(cfg: dict) -> dict:
+    """Bildet das alte `capacity_weighting`-Bool auf den Drei-Wert-`distribution_mode` ab."""
+    if "capacity_weighting" not in cfg:
+        return cfg
+    migrated = dict(cfg)
+    if migrated.pop("capacity_weighting", False):
+        migrated["distribution_mode"] = "capacity"
+    elif migrated.get("distribution_mode") == "weighted":
+        migrated["distribution_mode"] = "soc"
+    return migrated
 
 
 # ── WebSocket Commands ───────────────────────────────────────────────────────
@@ -209,25 +242,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Cache ist nach grid_power_sensor verschachtelt ({gruppe: {...DIST_DEFAULTS...}})
     # — jede Netzgruppe hat unabhängige Verteilungs-Einstellungen.
     if not hass.data.get(f"{DOMAIN}_dist_store"):
-        from homeassistant.helpers.storage import Store
-        store = Store(hass, STORAGE_VERSION_DIST, STORAGE_KEY_DIST)
+        store = SolakonDistStore(hass, STORAGE_VERSION_DIST, STORAGE_KEY_DIST)
         hass.data[f"{DOMAIN}_dist_store"] = store
         # Leerer Cache synchron gesetzt, bevor async_load() an den Event-Loop yieldet
         hass.data[f"{DOMAIN}_dist_config"] = {}
-        stored = await store.async_load() or {}
-        # Gruppen aus allen registrierten Config-Entries ableiten
-        group_keys = {
-            e.data.get(CONF_GRID_SENSOR, "") for e in hass.config_entries.async_entries(DOMAIN)
-        }
-        migrated = _migrate_dist_store(stored, group_keys)
-        hass.data[f"{DOMAIN}_dist_config"] = migrated
-        if migrated != stored:
-            await store.async_save(migrated)
+        hass.data[f"{DOMAIN}_dist_config"] = await store.async_load() or {}
 
     # SOC-Switch-Laufzeitzustand (Modus `soc_switch`) — eigener Store, getrennt
     # von _dist_store
     if not hass.data.get(f"{DOMAIN}_soc_switch_store"):
-        from homeassistant.helpers.storage import Store
         soc_switch_store = Store(hass, STORAGE_VERSION_SOC_SWITCH, STORAGE_KEY_SOC_SWITCH)
         hass.data[f"{DOMAIN}_soc_switch_store"] = soc_switch_store
         hass.data[f"{DOMAIN}_soc_switch_state"] = {"active_id": None, "start_soc": None}
@@ -307,41 +330,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    from homeassistant.helpers.storage import Store
     store = Store(hass, STORAGE_VERSION, f"{DOMAIN}_{entry.entry_id}")
     await store.async_remove()
-
-
-def _migrate_dist_config(cfg: dict) -> dict:
-    """Alte Zwei-Feld-Form (`distribution_mode` equal/weighted + separates
-    `capacity_weighting`-Bool) auf den neuen Drei-Wert-`distribution_mode`
-    (equal/soc/capacity) abbilden. Nur relevant für vor der UI-Vereinfachung
-    gespeicherte Configs — neue Speicherungen enthalten `capacity_weighting` nicht mehr.
-    Arbeitet auf einem einzelnen Gruppen-Dict (nicht dem verschachtelten Store).
-    """
-    if "capacity_weighting" not in cfg:
-        return cfg
-    migrated = dict(cfg)
-    if migrated.pop("capacity_weighting", False):
-        migrated["distribution_mode"] = "capacity"
-    elif migrated.get("distribution_mode") == "weighted":
-        migrated["distribution_mode"] = "soc"
-    return migrated
-
-
-def _migrate_dist_store(stored: dict, group_keys: set[str]) -> dict:
-    """Bringt den Verteilungs-Store in die nach grid_power_sensor verschachtelte Form.
-
-    Erkennt eine flache Form (`distribution_mode`/`global_max_power` direkt auf
-    oberster Ebene) und kopiert sie auf jede Gruppe in `group_keys`. Bereits
-    verschachtelte Stores laufen nur noch durch die Feld-Migration je Gruppen-Dict.
-    """
-    if not stored:
-        return {}
-    if "distribution_mode" in stored or "global_max_power" in stored:
-        legacy = _migrate_dist_config(stored)
-        return {gk: dict(legacy) for gk in group_keys}
-    return {gk: _migrate_dist_config(cfg) for gk, cfg in stored.items()}
 
 
 @websocket_api.websocket_command({
@@ -357,9 +347,7 @@ async def _ws_get_distribution_config(
         connection.send_result(msg["id"], {"distribution": DIST_DEFAULTS.copy()})
         return
     stored = await store.async_load() or {}
-    group_keys = {e.data.get(CONF_GRID_SENSOR, "") for e in hass.config_entries.async_entries(DOMAIN)}
-    all_groups = _migrate_dist_store(stored, group_keys)
-    data = {**DIST_DEFAULTS, **all_groups.get(msg["grid_sensor"], {})}
+    data = {**DIST_DEFAULTS, **stored.get(msg["grid_sensor"], {})}
     connection.send_result(msg["id"], {"distribution": data})
 
 
@@ -379,10 +367,8 @@ async def _ws_save_distribution_config(
         return
 
     group_key = msg["grid_sensor"]
-    stored = await store.async_load() or {}
-    group_keys = {e.data.get(CONF_GRID_SENSOR, "") for e in hass.config_entries.async_entries(DOMAIN)}
-    all_groups = _migrate_dist_store(stored, group_keys)
-    all_groups[group_key] = _migrate_dist_config(msg["distribution"])
+    all_groups = await store.async_load() or {}
+    all_groups[group_key] = msg["distribution"]
 
     await store.async_save(all_groups)
     hass.data[f"{DOMAIN}_dist_config"] = all_groups

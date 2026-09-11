@@ -25,10 +25,10 @@ from .const import (
     TARIFF_UNIT_SUSPECT_PRICE, TARIFF_UNIT_SUSPECT_THRESHOLD, TARIFF_UNIT_SUSPECT_SECONDS,
     S_REGULATION_ENABLED,
     S_P_FACTOR, S_I_FACTOR, S_TOLERANCE, S_WAIT_TIME, S_STDDEV_WINDOW, S_STDDEV_TRIM_COUNT,
-    S_ZONE1_LIMIT, S_ZONE3_LIMIT, S_DISCHARGE_MAX, S_HARD_LIMIT, S_HARD_LIMIT_Z0, S_HARD_LIMIT_Z1,
+    S_ZONE1_LIMIT, S_ZONE3_LIMIT, S_DISCHARGE_MAX, S_HARD_LIMIT_Z0, S_HARD_LIMIT_Z1,
     S_OFFSET_1, S_OFFSET_2, S_PV_RESERVE,
     S_SURPLUS_ENABLED, S_SURPLUS_SOC_THRESHOLD, S_SURPLUS_SOC_HYST, S_SURPLUS_PV_HYST,
-    S_SURPLUS_FORECAST_ENABLED, S_SURPLUS_FORECAST_SENSOR, S_SURPLUS_FORECAST_THRESHOLD,
+    S_SURPLUS_FORECAST_ENABLED, S_SURPLUS_FORECAST_THRESHOLD,
     S_SURPLUS_LOCK_ENABLED, S_SURPLUS_LOCK_SENSOR, S_SURPLUS_LOCK_FACTOR,
     S_AC_ENABLED, S_AC_SOC_TARGET, S_AC_POWER_LIMIT, S_AC_HYSTERESIS,
     S_AC_OFFSET, S_AC_P_FACTOR, S_AC_I_FACTOR,
@@ -48,6 +48,24 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 
+class SolakonSettingsStore(Store):
+    """Settings-Store mit Schemamigration."""
+
+    async def _async_migrate_func(
+        self, old_major_version: int, old_minor_version: int, old_data: dict
+    ) -> dict:
+        """Hebt Version 1 auf 2: Hard-Limit aufgespalten, Forecast-Sensor umbenannt."""
+        if old_major_version < 2:
+            old_limit = old_data.pop("hard_limit", 800)
+            old_data.setdefault(S_HARD_LIMIT_Z0, old_limit)
+            old_data.setdefault(S_HARD_LIMIT_Z1, old_limit)
+
+            old_forecast = old_data.pop("surplus_forecast_sensor", "")
+            if old_forecast and not old_data.get(S_PV_FORECAST_SENSOR):
+                old_data[S_PV_FORECAST_SENSOR] = old_forecast
+        return old_data
+
+
 class SolakonCoordinator:
     """Zentrale Logik-Klasse — PI-Regler, SOC-Zonen, Modbus-Steuerung."""
 
@@ -55,7 +73,7 @@ class SolakonCoordinator:
         self.hass = hass
         self.entry = entry
         self.settings: dict[str, Any] = SETTINGS_DEFAULTS.copy()
-        self._store = Store(hass, STORAGE_VERSION, f"{DOMAIN}_{entry.entry_id}")
+        self._store = SolakonSettingsStore(hass, STORAGE_VERSION, f"{DOMAIN}_{entry.entry_id}")
 
         # Laufzeit-Zustände
         self.current_zone: int = 2
@@ -152,17 +170,6 @@ class SolakonCoordinator:
         """Einstellungen laden, State-Listener starten."""
         stored = await self._store.async_load()
         if stored:
-            if S_HARD_LIMIT_Z0 not in stored and S_HARD_LIMIT_Z1 not in stored:
-                old = stored.get(S_HARD_LIMIT, SETTINGS_DEFAULTS[S_HARD_LIMIT])
-                stored[S_HARD_LIMIT_Z0] = old
-                stored[S_HARD_LIMIT_Z1] = old
-                await self._store.async_save({**SETTINGS_DEFAULTS, **stored})
-            # Einmalige Migration surplus_forecast_sensor → pv_forecast_sensor,
-            # nur wenn pv_forecast_sensor noch leer ist.
-            old_surplus_forecast_sensor = stored.get(S_SURPLUS_FORECAST_SENSOR, "")
-            if old_surplus_forecast_sensor and not stored.get(S_PV_FORECAST_SENSOR):
-                stored[S_PV_FORECAST_SENSOR] = old_surplus_forecast_sensor
-                await self._store.async_save({**SETTINGS_DEFAULTS, **stored})
             self.settings = {**SETTINGS_DEFAULTS, **stored}
             self.cycle_active = bool(stored.get("cycle_active", False))
             self.surplus_active = bool(stored.get("surplus_active", False))
@@ -907,8 +914,8 @@ class SolakonCoordinator:
         # ── 2. Settings auslesen ─────────────────────────────────────────────
         zone1_limit = int(s[S_ZONE1_LIMIT])
         zone3_limit = int(s[S_ZONE3_LIMIT])
-        hard_limit_z0 = int(s.get(S_HARD_LIMIT_Z0, s.get(S_HARD_LIMIT, 800)))
-        hard_limit_z1 = int(s.get(S_HARD_LIMIT_Z1, s.get(S_HARD_LIMIT, 800)))
+        hard_limit_z0 = int(s[S_HARD_LIMIT_Z0])
+        hard_limit_z1 = int(s[S_HARD_LIMIT_Z1])
         await self._sync_export_limit(max(hard_limit_z0, hard_limit_z1))
         tolerance = int(s[S_TOLERANCE])
         wait_time = int(s[S_WAIT_TIME])
@@ -1870,9 +1877,9 @@ class SolakonCoordinator:
         caps: dict[str, float] = {}
         for eid, c in active.items():
             if c.surplus_active:
-                caps[eid] = float(c.settings.get(S_HARD_LIMIT_Z0, c.settings.get(S_HARD_LIMIT, 800)))
+                caps[eid] = float(c.settings[S_HARD_LIMIT_Z0])
             else:
-                caps[eid] = float(c.settings.get(S_HARD_LIMIT_Z1, c.settings.get(S_HARD_LIMIT, 800)))
+                caps[eid] = float(c.settings[S_HARD_LIMIT_Z1])
 
         remaining_ids = set(shares.keys())
         allocations: dict[str, float] = {}
