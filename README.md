@@ -539,6 +539,7 @@ Die Integration erzeugt automatisch folgende Entitäten unter dem Gerät **Solak
 
 | Entität | Typ | Beschreibung |
 |---------|-----|-------------|
+| `sensor.solakon_one_betriebszustand` | Sensor | **Was die Instanz gerade tut** — ein Zustand aus zehn (siehe unten). Übersetzter Enum-Sensor: der Zustandswert ist ein sprachneutraler Schlüssel, Automationen brechen damit nicht, wenn ein Anzeigetext sich ändert. Attribute: Zone, Gerätemodus, letzter Fall, letzte Aktion, anliegender Fehler, Zeitpunkt des letzten Wechsels |
 | `sensor.solakon_one_aktuelle_zone` | Sensor | Aktive Zone (0–3) mit Zusatzattributen |
 | `sensor.solakon_one_betriebsmodus` | Sensor | Lesbarer Modustext |
 | `sensor.solakon_one_letzte_aktion` | Sensor | Letzter Logeintrag der Steuerlogik |
@@ -558,6 +559,25 @@ Die Integration erzeugt automatisch folgende Entitäten unter dem Gerät **Solak
 | `binary_sensor.solakon_one_pv_vorhersage_zone_1_nacht_forcierung_aktiv` | Binary Sensor | Zone-1-Nacht-Forcierung aktiv |
 
 Die Diagnose-Binärsensoren sind read-only — sie spiegeln interne Coordinator-Zustände wider.
+
+### Betriebszustand
+
+Der Zustand wird aus den Zustandsflags abgeleitet, nicht aus dem zuletzt ausgeführten Fall. Der erste zutreffende gewinnt:
+
+| # | Schlüssel | Anzeige | Gilt wenn |
+|---|-----------|---------|-----------|
+| 1 | `disabled` | Regelung inaktiv | Hauptschalter aus |
+| 2 | `blocked` | Gestört | Zyklus bricht ab — Kernsensor fehlt oder SOC-Grenzen unplausibel |
+| 3 | `exporting` | Überschuss-Einspeisung | Zone 0 aktiv |
+| 4 | `tariff_charging` | Tarif-Laden | Lade-Session bei günstigem Preis |
+| 5 | `ac_charging` | AC Laden | Lade-Session Zone 1 |
+| 6 | `discharge_locked` | Entladung gesperrt (Tarif) | Preis unter Teuer-Schwelle, keine Lade-Session, kein Überschuss |
+| 7 | `night_off` | Nachtabschaltung | Nachtabschaltung greift |
+| 8 | `discharging` | Entladen | Entladezyklus aktiv |
+| 9 | `safety_stop` | Sicherheitsstopp | Zone 3 |
+| 10 | `idle` | Bereitschaft | sonst |
+
+**Abgrenzung zu „Aktiver Fall":** Der Fall-Sensor hält den zuletzt *ausgeführten Übergang* — er ist Diagnose-Historie und wird nicht zurückgesetzt, wenn der Zustand endet. Der Betriebszustand beschreibt, was *gerade gilt*. Für Automationen ist der Betriebszustand die richtige Quelle; die Übersicht des Panels zeigt seit dieser Version ihn statt des Falls, der Status-Tab führt den Fall weiterhin.
 
 ---
 

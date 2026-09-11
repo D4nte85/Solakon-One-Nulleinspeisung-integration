@@ -66,6 +66,24 @@ TARIFF_UNIT_SUSPECT_PRICE = 1.0
 TARIFF_UNIT_SUSPECT_THRESHOLD = 3.0
 TARIFF_UNIT_SUSPECT_SECONDS = 21600
 
+# -- Betriebszustaende --------------------------------------------------------
+# Zusammengefasster Zustand der Instanz, ausgewertet in dieser Reihenfolge: der
+# erste zutreffende gewinnt. Abgeleitet aus den Zustandsflags, nicht aus dem
+# zuletzt ausgefuehrten Fall. Reihenfolge und Schluessel muessen mit den
+# Uebersetzungen (translations, panel.*.json) uebereinstimmen.
+OPERATING_STATES = [
+    "disabled",
+    "blocked",
+    "exporting",
+    "tariff_charging",
+    "ac_charging",
+    "discharge_locked",
+    "night_off",
+    "discharging",
+    "safety_stop",
+    "idle",
+]
+
 # -- Inverter Mode Values -----------------------------------------------------
 MODE_DISABLED  = "0"
 MODE_DISCHARGE = "1"

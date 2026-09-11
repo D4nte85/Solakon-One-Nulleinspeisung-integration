@@ -69,5 +69,24 @@
     "abort": {
       "already_configured": "This entity combination is already used by another instance."
     }
+  },
+  "entity": {
+    "sensor": {
+      "operating_state": {
+        "name": "Operating state",
+        "state": {
+          "disabled": "Control inactive",
+          "blocked": "Fault",
+          "exporting": "Surplus export",
+          "tariff_charging": "Tariff charging",
+          "ac_charging": "AC charging",
+          "discharge_locked": "Discharge locked (tariff)",
+          "night_off": "Night shutdown",
+          "discharging": "Discharging",
+          "safety_stop": "Safety stop",
+          "idle": "Standby"
+        }
+      }
+    }
   }
 }

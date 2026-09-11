@@ -1,13 +1,14 @@
-"""Sensor platform — zone, mode label, last action, StdDev (diagnostisch)."""
+"""Sensor platform — Betriebszustand, zone, mode label, last action, StdDev."""
 from __future__ import annotations
 
-from homeassistant.components.sensor import SensorEntity, SensorStateClass
+from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory, UnitOfPower
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.util import dt as dt_util
 
-from .const import DOMAIN
+from .const import DOMAIN, OPERATING_STATES
 from .coordinator import SolakonCoordinator
 from .entity_base import SolakonEntity
 
@@ -24,6 +25,7 @@ async def async_setup_entry(
 ) -> None:
     coord: SolakonCoordinator = hass.data[DOMAIN][entry.entry_id]
     add([
+        OperatingStateSensor(coord),
         ZoneSensor(coord),
         ModeTextSensor(coord),
         LastActionSensor(coord),
@@ -32,6 +34,56 @@ async def async_setup_entry(
         IntegralSensor(coord),
         SurplusPowerSensor(coord),
     ])
+
+
+_STATE_ICONS = {
+    "disabled":         "mdi:power-off",
+    "blocked":          "mdi:alert-circle-outline",
+    "exporting":        "mdi:transmission-tower-export",
+    "tariff_charging":  "mdi:currency-eur",
+    "ac_charging":      "mdi:lightning-bolt",
+    "discharge_locked": "mdi:lock-clock",
+    "night_off":        "mdi:weather-night",
+    "discharging":      "mdi:battery-arrow-up",
+    "safety_stop":      "mdi:battery-off-outline",
+    "idle":             "mdi:sleep",
+}
+
+
+class OperatingStateSensor(SolakonEntity, SensorEntity):
+    """Was die Instanz gerade tut — ein Zustand aus OPERATING_STATES.
+
+    Abgegrenzt zu `ActiveFallSensor`: der haelt den zuletzt ausgefuehrten
+    Uebergang, dieser den aktuell geltenden Zustand.
+    """
+
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = OPERATING_STATES
+    _attr_translation_key = "operating_state"
+
+    def __init__(self, coord: SolakonCoordinator) -> None:
+        super().__init__(coord, "operating_state")
+
+    @property
+    def native_value(self) -> str | None:
+        return self._coordinator.operating_state or None
+
+    @property
+    def icon(self) -> str:
+        return _STATE_ICONS.get(self._coordinator.operating_state, "mdi:state-machine")
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        coord = self._coordinator
+        return {
+            "zone": coord.current_zone,
+            "zone_label": coord.zone_label,
+            "device_mode": coord.mode_label,
+            "last_fall": coord.active_fall,
+            "last_action": coord.last_action,
+            "last_error": coord.last_error,
+            "changed_at": dt_util.utc_from_timestamp(coord.operating_state_ts).isoformat(),
+        }
 
 
 class ZoneSensor(SolakonEntity, SensorEntity):

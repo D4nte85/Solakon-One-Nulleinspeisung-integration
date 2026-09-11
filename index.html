@@ -130,6 +130,21 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
     } : {}),
   };
 
+  // Bildet die Zustandsableitung aus coordinator.py::_update_operating_state()
+  // nach, statt operating_state statisch zu hinterlegen — sonst zeigt die
+  // Vorschau Zustände, die nicht zu den übrigen Flags der Karte passen.
+  function mkOperatingState(o) {
+    if (o.regulation_enabled === false) return "disabled";
+    if (o.surplus_active)               return "exporting";
+    if (o.tariff_charge)                return "tariff_charging";
+    if (o.ac_charge)                    return "ac_charging";
+    if (o.discharge_locked)             return "discharge_locked";
+    if (o.is_night)                     return "night_off";
+    if (o.cycle_active)                 return "discharging";
+    if (o.zone === 3)                   return "safety_stop";
+    return "idle";
+  }
+
   function mkStatus(o) {
     return {
       zone: o.zone, zone_label: `Zone ${o.zone}`, mode_label: "INV Discharge PV Priority",
@@ -140,6 +155,7 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
       ac_charge: false, tariff_charge: false, regulation_enabled: o.regulation_enabled ?? true, stddev: 8.4, stddev_raw: 8.4,
       dyn_z1_enabled: false, dyn_z2_enabled: false, dyn_ac_enabled: false,
       dyn_z1: 0, dyn_z2: 0, dyn_ac: 0, active_fall: o.active_fall, is_night: false,
+      operating_state: mkOperatingState(o), discharge_locked: o.discharge_locked ?? false,
       forecast_tariff_suppressed: false, forecast_surplus_forced: false, forecast_exit_lock: false, allocated_power: 400,
     };
   }

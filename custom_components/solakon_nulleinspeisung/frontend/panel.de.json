@@ -5,6 +5,18 @@
     "2": "Zone 2 — Schonend",
     "3": "Zone 3 — Stopp"
   },
+  "state_labels": {
+    "disabled":         "Regelung inaktiv",
+    "blocked":          "Gestört",
+    "exporting":        "Überschuss-Einspeisung",
+    "tariff_charging":  "Tarif-Laden",
+    "ac_charging":      "AC Laden",
+    "discharge_locked": "Entladung gesperrt (Tarif)",
+    "night_off":        "Nachtabschaltung",
+    "discharging":      "Entladen",
+    "safety_stop":      "Sicherheitsstopp",
+    "idle":             "Bereitschaft"
+  },
   "fall_labels": {
     "0A": "Zone 0: Überschuss Start",
     "0B": "Zone 0: Überschuss Ende",
@@ -407,6 +419,7 @@
     "output":       "Ausgang",
     "grid":         "Netz",
     "fall":         "Fall",
+    "state":         "Zustand",
     "group_prefix": "Bereich",
     "total_output": "Gesamt",
     "dist_mode":    "Verteilung"

@@ -72,6 +72,15 @@ class SolakonCoordinator:
         self.ac_charge_active: bool = False
         self.tariff_charge_active: bool = False
         self.is_night: bool = False
+        # Entladung durch den Tarif gesperrt (Preis unter Teuer-Schwelle, keine
+        # Lade-Session, kein Ueberschuss) — der Zustand hinter Fall TM.
+        self.discharge_locked: bool = False
+        # Zusammengefasster Betriebszustand fuer Panel und Sensor; "" bis zum
+        # ersten Zyklus. Schluessel aus OPERATING_STATES.
+        self.operating_state: str = ""
+        self.operating_state_ts: float = time.time()
+        # Zyklus an einem Guard abgebrochen (Kernsensor fehlt, SOC-Limits ungueltig)
+        self._cycle_blocked: bool = False
 
         # Zeitstempel
         self.last_action_ts: float = time.time()
@@ -855,10 +864,13 @@ class SolakonCoordinator:
 
         # ── 0. Regelung aktiv? ───────────────────────────────────────────────
         if not s.get(S_REGULATION_ENABLED, False):
+            if self._update_operating_state():
+                self.notify_listeners()
             return
 
         self._timer_toggled_in_cycle = False
         self._output_warning = ""
+        self._cycle_blocked = False
 
         _prev_flags = (self.cycle_active, self.surplus_active, self.ac_charge_active, self.tariff_charge_active, self._solar_zero_entry_armed)
 
@@ -868,6 +880,9 @@ class SolakonCoordinator:
             CONF_GRID_SENSOR, CONF_SOLAR_SENSOR, CONF_ACTUAL_SENSOR, CONF_SOC_SENSOR
         )):
             _LOGGER.debug("Solakon: Kernsensoren nicht verfügbar, Zyklus übersprungen")
+            self._cycle_blocked = True
+            if self._update_operating_state():
+                self.notify_listeners()
             return
 
         soc = self._flt(cfg[CONF_SOC_SENSOR])
@@ -1068,26 +1083,36 @@ class SolakonCoordinator:
         # ── 3. Validierung ───────────────────────────────────────────────────
         if zone1_limit <= zone3_limit:
             self.last_error = "SOC-Limits ungültig (Zone1 muss > Zone3)"
+            self._cycle_blocked = True
+            self._update_operating_state()
             self.notify_listeners()
             return
 
         if surplus_enabled and surplus_threshold <= zone1_limit:
             self.last_error = "SOC-Limits ungültig (Überschuss-Schwelle muss > Zone1)"
+            self._cycle_blocked = True
+            self._update_operating_state()
             self.notify_listeners()
             return
 
         if zone1_force_enabled and not (zone3_limit < zone1_force_min_soc < zone1_limit):
             self.last_error = "SOC-Limits ungültig (Zone-1-Forcierung-Mindest-SOC muss zwischen Zone3 und Zone1 liegen)"
+            self._cycle_blocked = True
+            self._update_operating_state()
             self.notify_listeners()
             return
 
         if not self._entity_ok(cfg[CONF_SOC_SENSOR]):
             self.last_error = "SOC-Sensor nicht verfügbar"
+            self._cycle_blocked = True
+            self._update_operating_state()
             self.notify_listeners()
             return
 
         if not self._entity_ok(cfg[CONF_MODE_SELECT]):
             self.last_error = "Modus-Selektor nicht verfügbar"
+            self._cycle_blocked = True
+            self._update_operating_state()
             self.notify_listeners()
             return
 
@@ -1181,6 +1206,18 @@ class SolakonCoordinator:
         )
         if fall_executed:
             self.active_fall = fall_executed
+
+        # Zustand hinter Fall TM: die Sperrbedingung selbst, nicht ihr Auslöser.
+        # TM feuert nur beim Übergang aus Modus '1' heraus; die Sperre gilt aber
+        # weiter, solange der Preis unter der Teuer-Schwelle liegt und keine
+        # Lade-Session oder Zone 0 läuft — dieselbe Bedingung, die in den Fällen
+        # A und E den Wiedereintritt blockiert.
+        self.discharge_locked = (
+            effective_tariff_enabled
+            and tariff_price_valid
+            and tariff_price < tariff_exp
+            and not (self.tariff_charge_active or self.ac_charge_active or self.surplus_active)
+        )
 
         # ── 6. Entladestrom mit Regelzustand abgleichen (vor dem PI-Gate) ────
         await self._set_discharge(self._required_discharge(discharge_max))
@@ -2004,3 +2041,38 @@ class SolakonCoordinator:
         if new_mode_label != self.mode_label:
             self.mode_label_ts = time.time()
         self.mode_label = new_mode_label
+        self._update_operating_state()
+
+    def _update_operating_state(self) -> bool:
+        """Betriebszustand aus den Zustandsflags ableiten; True bei Wechsel.
+
+        Erster zutreffender Zustand gewinnt, Reihenfolge wie in OPERATING_STATES.
+        Anders als `active_fall`, das den zuletzt ausgefuehrten Uebergang haelt,
+        beschreibt der Zustand, was gerade gilt.
+        """
+        if not self.settings.get(S_REGULATION_ENABLED, False):
+            state = "disabled"
+        elif self._cycle_blocked:
+            state = "blocked"
+        elif self.surplus_active:
+            state = "exporting"
+        elif self.tariff_charge_active:
+            state = "tariff_charging"
+        elif self.ac_charge_active:
+            state = "ac_charging"
+        elif self.discharge_locked:
+            state = "discharge_locked"
+        elif self.is_night:
+            state = "night_off"
+        elif self.cycle_active:
+            state = "discharging"
+        elif self.current_zone == 3:
+            state = "safety_stop"
+        else:
+            state = "idle"
+
+        if state == self.operating_state:
+            return False
+        self.operating_state = state
+        self.operating_state_ts = time.time()
+        return True

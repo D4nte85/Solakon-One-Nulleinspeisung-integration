@@ -5,6 +5,18 @@
     "2": "Zone 2 — Conservative",
     "3": "Zone 3 — Stop"
   },
+  "state_labels": {
+    "disabled":         "Control inactive",
+    "blocked":          "Fault",
+    "exporting":        "Surplus export",
+    "tariff_charging":  "Tariff charging",
+    "ac_charging":      "AC charging",
+    "discharge_locked": "Discharge locked (tariff)",
+    "night_off":        "Night shutdown",
+    "discharging":      "Discharging",
+    "safety_stop":      "Safety stop",
+    "idle":             "Standby"
+  },
   "fall_labels": {
     "0A": "Zone 0: Surplus Start",
     "0B": "Zone 0: Surplus End",
@@ -407,6 +419,7 @@
     "output":       "Output",
     "grid":         "Grid",
     "fall":         "Case",
+    "state":         "State",
     "group_prefix": "Area",
     "total_output": "Total",
     "dist_mode":    "Distribution"

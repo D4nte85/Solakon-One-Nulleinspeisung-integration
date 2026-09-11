@@ -586,7 +586,7 @@ class SolakonPanel extends HTMLElement {
       const cardsHtml = g.instances.map(inst => {
         const st = this._allStatuses[inst.entry_id] || {};
         const zs = ZONE_STYLE[st.zone] ?? ZONE_STYLE[2];
-        const fl = this._t.fall_labels?.[st.active_fall] || st.active_fall || "—";
+        const sl = this._t.state_labels?.[st.operating_state] || st.operating_state || "—";
         const cls = this._ovStateClass(st);
         return `<div class="ov-card${cls}" id="ov-card-${inst.entry_id}" data-eid="${inst.entry_id}" title="${this._esc(st.last_error || "")}">
           <div class="ov-hdr" id="ov-hdr-${inst.entry_id}" style="background:${zs.color}">
@@ -596,7 +596,7 @@ class SolakonPanel extends HTMLElement {
             <div class="ov-row"><span>${ov.soc    || "SOC"}</span><strong id="ov-soc-${inst.entry_id}">${st.soc ?? "—"} %</strong></div>
             <div class="ov-row"><span>${ov.output || "Output"}</span><strong id="ov-output-${inst.entry_id}">${st.actual_power != null ? st.actual_power + " W" : "—"}</strong></div>
             <div class="ov-row"><span>${ov.grid   || "Grid"}</span><strong id="ov-grid-${inst.entry_id}">${st.grid != null ? st.grid.toFixed(0) + " W" : "—"}</strong></div>
-            <div class="ov-row"><span>${ov.fall   || "Case"}</span><strong id="ov-fall-${inst.entry_id}">${fl}</strong></div>
+            <div class="ov-row"><span>${ov.state  || "State"}</span><strong id="ov-state-${inst.entry_id}">${sl}</strong></div>
           </div>
         </div>`;
       }).join("");
@@ -634,7 +634,7 @@ class SolakonPanel extends HTMLElement {
     for (const inst of this._instances) {
       const st = this._allStatuses[inst.entry_id] || {};
       const zs = ZONE_STYLE[st.zone] ?? ZONE_STYLE[2];
-      const fl = this._t.fall_labels?.[st.active_fall] || st.active_fall || "—";
+      const sl = this._t.state_labels?.[st.operating_state] || st.operating_state || "—";
 
       const hdr = this.shadowRoot.getElementById(`ov-hdr-${inst.entry_id}`);
       if (hdr) hdr.style.background = zs.color;
@@ -646,8 +646,8 @@ class SolakonPanel extends HTMLElement {
       if (out) out.textContent = st.actual_power != null ? `${st.actual_power} W` : "—";
       const grid = this.shadowRoot.getElementById(`ov-grid-${inst.entry_id}`);
       if (grid) grid.textContent = st.grid != null ? `${st.grid.toFixed(0)} W` : "—";
-      const fallEl = this.shadowRoot.getElementById(`ov-fall-${inst.entry_id}`);
-      if (fallEl) fallEl.textContent = fl;
+      const stateEl = this.shadowRoot.getElementById(`ov-state-${inst.entry_id}`);
+      if (stateEl) stateEl.textContent = sl;
 
       const card = this.shadowRoot.getElementById(`ov-card-${inst.entry_id}`);
       if (card) {
