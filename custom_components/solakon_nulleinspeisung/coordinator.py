@@ -288,7 +288,7 @@ class SolakonCoordinator:
     def _update_pv_forecast_tracker(self) -> None:
         """PV-Vorhersage-heute-Listener dynamisch (de-)registrieren — gemergtes
         Feld, gemeinsam genutzt von Surplus-Forecast-Erzwingung, Tarif-Lock-
-        Unterdrückung (vorher zwei separate Sensoren/Tracker) und zwischen
+        Unterdrückung und zwischen
         0–12 Uhr zusätzlich von der Zone-1-Nacht-Forcierung (_effective_zone1_force_sensor
         fällt in diesem Fenster auf denselben Sensor zurück, eigener Tracker
         bleibt trotzdem aktiv — zwei Listener auf derselben Entity in dem Fenster)."""
@@ -619,16 +619,13 @@ class SolakonCoordinator:
     async def _set_output_and_wait(self, value: float, ac_charge_mode: bool = False) -> None:
         """Ausgangsleistung setzen und auf reale Konvergenz warten (_wait_for_target).
 
-        `number.set_value` läuft ohne `blocking=True` — der Aufruf kehrt zurück,
+        `number.set_value` läuft ohne `blocking=True`: der Aufruf kehrt zurück,
         sobald der Service-Call eingereiht ist, nicht wenn CONF_ACTIVE_POWER den
-        neuen Wert widerspiegelt. Ohne diesen Wait würde ein im selben Zyklus
-        unmittelbar folgender CONF_ACTIVE_POWER-Reread (PI-Gate nach einem Fall)
-        noch den alten Wert sehen (siehe Issue #27). Bisher nur in den regulären
-        PI-Pfaden genutzt, jetzt auch für die Fall-eigenen Output-Writes.
+        neuen Wert zeigt. Ein unmittelbar folgender Reread im selben Zyklus sieht
+        ohne diesen Wait noch den alten Wert.
 
-        Nullung (`value == 0`) ist sicherheitskritisch (Fall-Übergänge — Zone-3-Stopp,
-        AC-/Tarif-Laden-Ende, Nachtabschaltung) und wird zusätzlich über
-        `_confirm_zero_output()` verifiziert und bei Bedarf erneut geschrieben.
+        Nullung (`value == 0`) gilt als sicherheitskritisch und wird zusätzlich
+        über `_confirm_zero_output()` verifiziert und bei Bedarf erneut geschrieben.
         """
         await self._set_output(value)
         await self._wait_for_target(value, ac_charge_mode=ac_charge_mode)
@@ -636,23 +633,15 @@ class SolakonCoordinator:
             await self._confirm_zero_output(ac_charge_mode)
 
     async def _confirm_zero_output(self, ac_charge_mode: bool, max_retries: int = 2) -> None:
-        """Bestätigt, dass die Ausgangsleistung wirklich auf 0 gefallen ist — unabhängig
-        von S_SELF_ADJUST (`_wait_for_target()` prüft ohne diese Einstellung gar nicht
-        nach), da ein verlorener/abgelehnter Nullungs-Schreibbefehl (`number.set_value`
-        läuft ohne `blocking=True`, siehe Issue #27) sonst unbemerkt bliebe — der Zyklus
-        würde mit dem alten, tatsächlich weiterhin anliegenden Output fortfahren. Schreibt
-        bei fehlender Konvergenz bis zu `max_retries`-mal erneut, meldet nach Ausschöpfung
-        über `_output_warning` einen sichtbaren Fehler statt stillschweigend weiterzulaufen.
+        """Bestätigt, dass die Ausgangsleistung real auf 0 gefallen ist — unabhängig
+        von S_SELF_ADJUST, das `_wait_for_target()` sonst gar nicht nachprüfen lässt.
+        Schreibt bei fehlender Konvergenz bis zu `max_retries`-mal erneut und meldet
+        nach Ausschöpfung über `_output_warning` einen sichtbaren Fehler.
 
-        `CONF_ACTUAL_SENSOR` stammt aus einer fremden Integration mit eigenem, vom
-        Nutzer konfigurierbarem Poll-Intervall (1–300 s, Standard 30 s laut deren
-        Dokumentation) — deutlich langsamer als unser Warte-/Retry-Fenster hier. Ein
-        Read, der älter ist als unser letzter eigener Schreibbefehl, sagt daher nichts
-        über Erfolg oder Fehlschlag aus (siehe Issue #27, Kreuzbefund 27.08.: Gerät
-        hatte real bereits genullt, unser Read traf nur einen noch nicht nachgepollten
-        alten Spike-Wert). Schreib-/Retry-Verhalten bleibt unverändert — es wird nur
-        die Log-/Warnmeldung unterdrückt, wenn sie auf einem solchen unbrauchbaren Read
-        basieren würde.
+        CONF_ACTUAL_SENSOR stammt aus einer fremden Integration mit eigenem
+        Poll-Intervall (1–300 s). Ein Read, der älter ist als unser letzter
+        Schreibbefehl, belegt weder Erfolg noch Fehlschlag; dann unterbleibt nur
+        die Warnung, Schreib- und Retry-Verhalten bleibt gleich.
         """
         actual_eid = self.entry.data.get(CONF_ACTUAL_SENSOR, "")
         if not self._entity_ok(actual_eid):
@@ -691,32 +680,14 @@ class SolakonCoordinator:
     async def _check_output_stall(self, limit: float) -> None:
         """Erkennt einen Wechselrichter, der dem Limit nicht folgt, und stößt ihn an.
 
-        Aufgerufen ausschließlich aus dem gesättigten Zweig des Standard-PI: dort steht
-        der Sollwert auf `dynamic_max` und der Regler schreibt von sich aus nicht mehr,
-        weil er nicht weiter hochregeln kann. Ein in diesem Zustand stehengebliebener
-        Wechselrichter erhält damit keinen Befehl mehr; Fall D deckt ihn nicht ab, da er
-        einen Modus außerhalb `'1'`/`'3'` voraussetzt. Die übrigen PI-Pfade sind hiervon
-        ausgenommen — Zone 0, Tarif-Laden und die Totbänder haben eigene Guards und
-        halten den Ausgang bewusst unterhalb ihres jeweiligen Limits.
+        Nur aus dem gesättigten Zweig des Standard-PI aufgerufen; die übrigen
+        PI-Pfade halten den Ausgang durch eigene Guards bewusst unterhalb ihres
+        Limits. Kriterium: Abweichung über `OUTPUT_STALL_DEVIATION` bei einem
+        Ist-Wert, dessen `last_updated` seit `OUTPUT_STALL_SECONDS` nicht vorrückt.
 
-        Kriterium ist die Abweichung der tatsächlichen Ausgabe vom Limit, gemessen über
-        `OUTPUT_STALL_DEVIATION`. Die Dauer kommt aus `last_updated` des Ist-Sensors: der
-        Zeitstempel rückt nur bei einer Wertänderung vor, steht also genau für „Wert
-        seit dann unverändert". Ein Ausgang, der weder das Limit erreicht noch sich
-        bewegt, ist damit ohne eigene Uhr erkennbar. Ein Ist-Sensor, der um den
-        abweichenden Wert rauscht, setzt den Zeitstempel dagegen laufend zurück und
-        löst nicht aus.
-
-        Eskalation: der erste Treffer schreibt den Sollwert neu. Bleibt die Abweichung,
-        wird der Wechselrichter aus dem Regelmodus genommen — Output 0, Timer-Toggle,
-        Modus `'0'` — statt den Modus `'1'` auf sich selbst zu schreiben. Damit ist im
-        nächsten Zyklus die Bedingung von Fall D erfüllt (`cycle_active` bei einem Modus
-        außerhalb `'1'`/`'3'`), der das Gerät über Timer-Toggle + Modus `'1'` zurückholt
-        und den PI wieder hochlaufen lässt. Das ist derselbe Weg, der den Feldfall nach
-        dem Hardware-Neustart beendet hat, mit einer echten Modus-Flanke statt einer
-        Wiederholung des bestehenden Werts. Das Integral wird dabei zurückgesetzt, da
-        der Sollwert auf 0 geht — analog zu den Fällen H und I. Zwischen zwei Aktionen
-        liegt mindestens `OUTPUT_STALL_SECONDS`, damit das Gerät antworten kann.
+        Erster Treffer schreibt den Sollwert neu. Bleibt die Abweichung:
+        Integral-Reset, Output 0, Timer-Toggle, Modus `'0'` — Fall D holt im
+        Folgezyklus zurück. Mindestabstand zweier Aktionen: `OUTPUT_STALL_SECONDS`.
         """
         actual_eid = self.entry.data.get(CONF_ACTUAL_SENSOR, "")
         if limit <= 0 or not self._entity_ok(actual_eid):
@@ -1609,19 +1580,15 @@ class SolakonCoordinator:
 
     def _all_shares(self, active: dict[str, "SolakonCoordinator"], own_soc: float) -> dict[str, float]:
         """SOC-/kapazitätsgewichteter oder gleichverteilter Fehler-Anteil für ALLE
-        Instanzen in `active` — Grundlage sowohl für _weighted_share() (eigener
-        Anteil) als auch für die Wasserfüll-Verteilung in _compute_distribution()
-        (dort werden alle Anteile gleichzeitig gebraucht, um kapp-limitierten
-        Instanzen ungenutzten Spielraum an andere weiterzureichen).
+        Instanzen in `active`. Grundlage für _weighted_share() (eigener Anteil)
+        und für die Wasserfüll-Verteilung in _compute_distribution().
 
         `own_soc` ist der im laufenden Zyklus bereits gelesene eigene
-        CONF_SOC_SENSOR-Wert — vermeidet eine zweite, ggf. abweichende Lesung.
-        Fremdinstanzen werden weiterhin live gelesen (keine eigene Snapshot-Quelle
-        für sie verfügbar).
+        CONF_SOC_SENSOR-Wert; Fremdinstanzen werden live gelesen.
 
         Degradiert ein Modus mangels gültigem Fremdinstanz-Sensor (SOC oder
-        Kapazität), wird das in self._dist_warning vermerkt statt still zu
-        bleiben — siehe _run_regulation_cycle, das den Kanal in soft_errors überführt.
+        Kapazität), wird das in self._dist_warning vermerkt und von
+        _run_regulation_cycle in soft_errors überführt.
         """
         n = len(active)
         if n == 0:
@@ -1706,36 +1673,14 @@ class SolakonCoordinator:
 
     def _soc_switch_shares(self, active: dict[str, "SolakonCoordinator"], own_soc: float) -> dict[str, float] | None:
         """Anteile für Modus `soc_switch`, ein Eintrag je Instanz in `active`.
-        `own_soc` siehe `_all_shares`.
+        `own_soc` siehe `_all_shares`. `None`: eine Fremdinstanz-SOC ist unsicher,
+        der Aufrufer weicht dann auf Gleichverteilung aus.
 
-        Regulärer Fall (keine oder eine Zone-0-Instanz im Pool): exakt eine Instanz
-        erhält vollen Anteil, alle anderen 0 — bis ihr SOC seit Übernahme um
-        `soc_switch_divergence` Prozentpunkte gefallen ist, dann übernimmt die Instanz
-        mit dem höchsten SOC unter den übrigen (Rotation, nie zweimal in Folge dieselbe).
-        Zustand ist Pool-weit über einen eigenen Store persistiert (`_soc_switch_state`)
-        — getrennt von `_dist_config`, damit ein Speichern der Nutzereinstellungen im
-        Verteilungs-Tab diesen Laufzeitzustand nicht überschreibt.
-
-        Zone 0 (Überschuss-Einspeisung) hat absoluten Vorrang vor der regulären
-        Entladung anderer Instanzen — konsistent mit dem bestehenden Zone-0-Vorrang
-        gegenüber AC-/Tarif-Laden derselben Instanz. Eine einzelne Zone-0-Instanz
-        übernimmt bedingungslos und sofort die Führung, ohne Divergenz-Wartezeit (das
-        gemeinsame Leistungslimit bleibt dabei unverändert über die reguläre
-        `_compute_distribution`-Formel gewahrt, kein Bypass). Sind mehrere Instanzen
-        gleichzeitig in Zone 0 (z. B. beide Akkus voll bei gemeinsamem PV-Überschuss),
-        teilen sie sich den Anteil gleichmäßig statt exklusiv — bei den kleinen Zone-0-
-        Leistungen ist der zusätzliche Wechselrichterverlust vernachlässigbar, und eine
-        0-W-Zwangslage mit Abschaltrisiko für eine der beiden wird so vermieden.
-
-        Verlässt die zuletzt aktive Instanz Zone 0 (oder war Zone 0 zuvor mehrfach
-        besetzt) und geht in die reguläre Rotation über, wird `start_soc` auf den
-        aktuellen SOC neu verankert (`was_zone0`-Flag) — sonst zählt der während
-        Zone 0 bereits verbrauchte SOC-Abstand gegen das Divergenz-Budget der
-        Rotation und löst den nächsten Wechsel vorzeitig aus, da Zone 0 selbst
-        (Ausgabe auf effective_hard, nicht nur den 2-A-Puffer) den SOC spürbar senken kann.
-
-        `None`: eine Fremdinstanz-SOC ist unsicher (unknown/unavailable) — Aufrufer
-        weicht dann auf Gleichverteilung aus statt mit einem falschen Wert weiterzurechnen.
+        Regulär erhält genau eine Instanz vollen Anteil, alle anderen 0 — bis ihr
+        SOC seit Übernahme um `soc_switch_divergence` Prozentpunkte gefallen ist,
+        dann übernimmt die Instanz mit dem höchsten SOC. Zustand liegt Pool-weit in
+        `_soc_switch_state`. Zone 0 übernimmt bedingungslos, mehrere Zone-0-Instanzen
+        gleichmäßig; beim Rückgang in die Rotation wird `start_soc` neu verankert.
         """
         socs: dict[str, float] = {}
         for eid, c in active.items():
@@ -1808,12 +1753,9 @@ class SolakonCoordinator:
         Im Einzelbetrieb oder wenn diese Instanz gerade nicht in Modus '1' steht:
         (1.0 bzw. 0.0, None) — kein Einfluss auf hard_limit. `own_soc` siehe `_all_shares`.
 
-        allocated_power kommt aus einer Wasserfüll-Verteilung (_waterfill_allocate):
-        eine rein proportionale Aufteilung von global_max_power nach Anteil würde bei
-        heterogenen Hard-Limits (unterschiedlich starke Wechselrichter/Instanzen)
-        ungenutzten Spielraum kapp-limitierter Instanzen verschenken statt ihn an
-        Instanzen mit Reserve weiterzureichen — der Pool würde global_max_power dann
-        strukturell nie erreichen, selbst wenn andere Instanzen noch Kapazität hätten.
+        allocated_power kommt aus _waterfill_allocate(): proportionale Aufteilung
+        von global_max_power, gekappt am lokalen Hard-Limit jeder Instanz,
+        ungenutzter Spielraum wird an Instanzen mit Reserve weitergereicht.
         """
         all_coords = self._group_coords()
         active = {
