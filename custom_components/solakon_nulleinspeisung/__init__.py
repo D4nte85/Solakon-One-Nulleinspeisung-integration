@@ -333,6 +333,13 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     store = Store(hass, STORAGE_VERSION, f"{DOMAIN}_{entry.entry_id}")
     await store.async_remove()
 
+    # Home Assistant traegt den Entry vor diesem Aufruf aus der Registrierung aus.
+    # Ist danach keiner mehr uebrig, werden auch die instanzuebergreifenden Stores
+    # entfernt; bei weiteren Instanzen bleiben sie bestehen.
+    if not hass.config_entries.async_entries(DOMAIN):
+        await SolakonDistStore(hass, STORAGE_VERSION_DIST, STORAGE_KEY_DIST).async_remove()
+        await Store(hass, STORAGE_VERSION_SOC_SWITCH, STORAGE_KEY_SOC_SWITCH).async_remove()
+
 
 @websocket_api.websocket_command({
     vol.Required("type"):        f"{DOMAIN}/get_distribution_config",

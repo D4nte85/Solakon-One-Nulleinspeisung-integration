@@ -3,6 +3,11 @@
 Alle nennenswerten Änderungen an der Solakon-ONE-Nulleinspeisung-Integration.
 Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [Unreleased]
+
+### Behoben
+- Beim Entfernen der **letzten** Instanz blieben die beiden instanzübergreifenden Stores `solakon_nulleinspeisung_distribution` und `solakon_nulleinspeisung_soc_switch_state` in `.storage` liegen: `async_remove_entry` räumte nur die Einstellungsdatei der jeweiligen Instanz weg. Sie werden jetzt mitgelöscht, sobald kein Config-Entry der Integration mehr vorhanden ist — bei weiteren Instanzen bleiben sie unangetastet, da sie dort weiterhin gebraucht werden. Home Assistant trägt den Entry vor dem Aufruf aus der Registrierung aus (`config_entries.py:2280` vor `:2281`), die Prüfung auf verbleibende Entries ist damit ohne Sonderfall korrekt (`__init__.py`)
+
 ## [2.4.0-beta.1] – 2026-09-11
 
 > **Beta.** Enthält zwei Breaking Changes und die erste echte Store-Migration. Beide Stores steigen dabei von Version 1 auf 2; ein Rückschritt auf 2.3.2 ist danach nicht vorgesehen — die alte Codebasis kennt das neue Format nicht. Vor der Installation ein Backup der Konfiguration anlegen.
