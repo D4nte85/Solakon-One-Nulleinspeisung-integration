@@ -86,6 +86,85 @@
           "safety_stop": "Safety stop",
           "idle": "Standby"
         }
+      },
+      "zone": {
+        "name": "Current zone"
+      },
+      "active_fall": {
+        "name": "Active case",
+        "state": {
+          "0A": "Zone 0: surplus start",
+          "0B": "Zone 0: surplus end",
+          "A": "Zone 1: discharge cycle start",
+          "B": "Zone 3: stop (cycle active)",
+          "C": "Zone 3: stop",
+          "D": "Recovery: mode restored",
+          "E": "Zone 2: control active",
+          "F": "Night: shutdown",
+          "G": "AC charging: start",
+          "H": "AC charging: end",
+          "I": "Safety: mode correction",
+          "GT": "Tariff charging: start",
+          "HT": "Tariff charging: end",
+          "TM": "Discharge lock: price too high"
+        }
+      },
+      "mode_label": {
+        "name": "Operating mode",
+        "state": {
+          "waiting": "Waiting for data",
+          "disabled": "Disabled",
+          "discharge": "INV Discharge PV Priority",
+          "ac_charge": "AC Charge (grid charging)",
+          "disabled_regulation_off": "Disabled (control inactive)",
+          "unknown": "Unknown mode"
+        }
+      },
+      "last_action": {
+        "name": "Last action"
+      },
+      "grid_stddev": {
+        "name": "Grid standard deviation"
+      },
+      "integral": {
+        "name": "PI integral"
+      },
+      "surplus_power": {
+        "name": "Surplus power"
+      }
+    },
+    "binary_sensor": {
+      "cycle_active": {
+        "name": "Discharge cycle active"
+      },
+      "surplus_active": {
+        "name": "Surplus mode"
+      },
+      "ac_charge_active": {
+        "name": "AC charging active"
+      },
+      "tariff_charge_active": {
+        "name": "Tariff charging active"
+      },
+      "is_night": {
+        "name": "Night shutdown"
+      },
+      "forecast_tariff_suppressed": {
+        "name": "PV forecast: tariff blocked"
+      },
+      "forecast_surplus_forced": {
+        "name": "PV forecast: surplus forced"
+      },
+      "forecast_exit_lock": {
+        "name": "PV forecast: surplus exit locked"
+      },
+      "zone1_forced": {
+        "name": "PV forecast: Zone 1 night forcing active"
+      }
+    },
+    "switch": {
+      "regulation_enabled": {
+        "name": "Control active"
       }
     }
   }

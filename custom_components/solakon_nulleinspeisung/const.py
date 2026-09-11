@@ -84,6 +84,24 @@ OPERATING_STATES = [
     "idle",
 ]
 
+# Fall-Schlüssel des Regelzyklus, Reihenfolge wie im Zyklus durchlaufen.
+FALL_KEYS = [
+    "0A", "0B",
+    "A", "B", "C", "D", "E", "F",
+    "G", "H", "I",
+    "GT", "HT", "TM",
+]
+
+# Modus-Schlüssel des Betriebsmodus-Sensors.
+MODE_KEYS = [
+    "waiting",
+    "disabled",
+    "discharge",
+    "ac_charge",
+    "disabled_regulation_off",
+    "unknown",
+]
+
 # -- Inverter Mode Values -----------------------------------------------------
 MODE_DISABLED  = "0"
 MODE_DISCHARGE = "1"

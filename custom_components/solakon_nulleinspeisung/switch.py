@@ -20,7 +20,7 @@ async def async_setup_entry(
 
 class RegulationSwitch(SolakonEntity, SwitchEntity):
     """Hauptschalter — aktiviert/deaktiviert den Schreibteil der Regelung."""
-    _attr_name = "Regelung aktiv"
+    _attr_translation_key = "regulation_enabled"
     _attr_icon = "mdi:power"
 
     def __init__(self, coord: SolakonCoordinator) -> None:

@@ -15,6 +15,7 @@ from homeassistant.helpers.state import state_as_number
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
+from .i18n import translate
 from .const import (
     DOMAIN, STORAGE_VERSION, SETTINGS_DEFAULTS, DIST_DEFAULTS,
     CONF_GRID_SENSOR, CONF_ACTUAL_SENSOR, CONF_SOLAR_SENSOR,
@@ -77,12 +78,15 @@ class SolakonCoordinator:
 
         # Laufzeit-Zustände
         self.current_zone: int = 2
-        self.zone_label: str = "Initialisierung…"
-        self.mode_label: str = "Warten auf Daten"
-        self.last_action: str = "Keine"
+        self.zone_label: str = translate(hass.config.language, "zone_init")
+        self.mode_key: str = "waiting"
+        self.mode_label: str = translate(hass.config.language, "mode_waiting")
+        self.last_action: str = ""
+        self.last_action_key: str = ""
+        self.last_action_params: dict = {}
         self.last_error: str = ""
         self.integral: float = 0.0
-        self.active_fall: str = "—"
+        self.active_fall: str = ""
 
         # Boolsche Status-Flags
         self.cycle_active: bool = False
@@ -239,9 +243,10 @@ class SolakonCoordinator:
                 await self._set_discharge(float(self.settings.get(S_DISCHARGE_MAX, 40)))
                 await self._timer_toggle()
                 await self._set_mode(MODE_DISABLED)
-                if self.mode_label != "Disabled (Regelung inaktiv)":
+                if self.mode_key != "disabled_regulation_off":
                     self.mode_label_ts = time.time()
-                self.mode_label = "Disabled (Regelung inaktiv)"
+                self.mode_key = "disabled_regulation_off"
+                self.mode_label = self._tr("mode_disabled_regulation_off")
 
         old_tariff = self._effective_tariff_price_sensor()
         old_tariff_enabled = self.settings.get(S_TARIFF_ENABLED, False)
@@ -383,14 +388,20 @@ class SolakonCoordinator:
 
     def reset_integral(self) -> None:
         self.integral = 0.0
-        self._set_last_action("Integral manuell zurückgesetzt")
+        self._set_last_action("act_integral_reset")
         self.notify_listeners()
 
     # ── Last-Action Setter ───────────────────────────────────────────────────
 
-    def _set_last_action(self, text: str) -> None:
-        """Setzt last_action und aktualisiert den Zeitstempel."""
-        self.last_action = text
+    def _tr(self, key: str, **params: object) -> str:
+        """Textbaustein in der Sprache der Home-Assistant-Instanz."""
+        return translate(self.hass.config.language, key, **params)
+
+    def _set_last_action(self, key: str, **params: object) -> None:
+        """Setzt Schlüssel, Parameter und gerenderten Text der letzten Aktion."""
+        self.last_action_key = key
+        self.last_action_params = params
+        self.last_action = self._tr(key, **params)
         self.last_action_ts = time.time()
 
     # ── Self-Adjusting Wait ──────────────────────────────────────────────────
@@ -640,10 +651,7 @@ class SolakonCoordinator:
         if not euro_unit and now - self._tariff_unit_suspect_since < TARIFF_UNIT_SUSPECT_SECONDS:
             return ""
 
-        return (
-            f"Tarif: Preis {price:g} passt nicht zur Günstig-Schwelle {cheap:g} ct/kWh "
-            "— Sensor liefert vermutlich €/kWh"
-        )
+        return self._tr("warn_tariff_unit", price=price, cheap=cheap)
 
     # ── Modbus-Schreibbefehle (nur wenn regulation_enabled) ──────────────────
 
@@ -722,7 +730,7 @@ class SolakonCoordinator:
 
         actual = self._flt_power(actual_eid)
         if abs(actual) > tolerance and _confirmable():
-            self._output_warning = f"Output-Nullung nach {max_retries} Versuchen nicht bestätigt (Ist: {actual:.0f} W)"
+            self._output_warning = self._tr("warn_output_zero_unconfirmed", attempts=max_retries, actual=actual)
             _LOGGER.error("Solakon: %s", self._output_warning)
 
     def _reset_output_stall_state(self) -> None:
@@ -774,18 +782,16 @@ class SolakonCoordinator:
                 actual, limit, now - state.last_updated.timestamp(),
             )
             await self._set_output(limit)
-            self._set_last_action(f"Ausgang {actual:.0f} W statt {limit:.0f} W — neu geschrieben")
+            self._set_last_action("act_output_rewritten", actual=actual, limit=limit)
             return
 
-        self._output_warning = (
-            f"Ausgang bleibt bei {actual:.0f} W statt {limit:.0f} W — Recovery ausgelöst"
-        )
+        self._output_warning = self._tr("warn_output_stuck", actual=actual, limit=limit)
         _LOGGER.error("Solakon: %s (Versuch %d)", self._output_warning, self._output_stall_actions)
         self.integral = 0.0
         await self._set_output_and_wait(0)
         await self._timer_toggle()
         await self._set_mode(MODE_DISABLED)
-        self._set_last_action(f"Ausgang {actual:.0f} W statt {limit:.0f} W — Recovery über Modus 0")
+        self._set_last_action("act_output_recovery", actual=actual, limit=limit)
 
     async def _set_discharge(self, amps: float) -> None:
         """Entladestrom setzen — nur wenn aktueller Wert abweicht."""
@@ -1003,7 +1009,7 @@ class SolakonCoordinator:
         pv_forecast_today_sensor = self._effective_pv_forecast_today_sensor()
 
         if surplus_forecast_enabled and not pv_forecast_today_sensor:
-            soft_errors.append("Surplus-Forecast: Kein Vorhersage-Sensor konfiguriert — Funktion inaktiv")
+            soft_errors.append(self._tr("err_surplus_forecast_no_sensor"))
             self.forecast_surplus_forced = False
         elif surplus_forecast_enabled and pv_forecast_today_sensor:
             if self._entity_ok(pv_forecast_today_sensor):
@@ -1015,7 +1021,7 @@ class SolakonCoordinator:
                     and soc > zone3_limit
                 )
             else:
-                soft_errors.append(f"Surplus-Forecast: Sensor {pv_forecast_today_sensor!r} nicht verfügbar")
+                soft_errors.append(self._tr("err_surplus_forecast_sensor_unavailable", sensor=pv_forecast_today_sensor))
                 self.forecast_surplus_forced = False
         else:
             self.forecast_surplus_forced = False
@@ -1025,7 +1031,7 @@ class SolakonCoordinator:
         surplus_lock_factor  = float(s.get(S_SURPLUS_LOCK_FACTOR, 1.5))
 
         if surplus_lock_enabled and not surplus_lock_sensor:
-            soft_errors.append("Austritts-Sperre: Kein Leistungs-Vorhersage-Sensor konfiguriert — Funktion inaktiv")
+            soft_errors.append(self._tr("err_exit_lock_no_sensor"))
             self.forecast_exit_lock = False
         elif surplus_lock_enabled and surplus_lock_sensor:
             if self._entity_ok(surplus_lock_sensor):
@@ -1036,13 +1042,13 @@ class SolakonCoordinator:
                     and soc > zone3_limit
                 )
             else:
-                soft_errors.append(f"Austritts-Sperre: Sensor {surplus_lock_sensor!r} nicht verfügbar")
+                soft_errors.append(self._tr("err_exit_lock_sensor_unavailable", sensor=surplus_lock_sensor))
                 self.forecast_exit_lock = False
         else:
             self.forecast_exit_lock = False
 
         if pv_forecast_enabled and not pv_forecast_today_sensor:
-            soft_errors.append("PV-Vorhersage: Kein Sensor konfiguriert — Funktion inaktiv")
+            soft_errors.append(self._tr("err_pv_forecast_no_sensor"))
             self.forecast_tariff_suppressed = False
         elif pv_forecast_enabled and pv_forecast_today_sensor:
             if self._entity_ok(pv_forecast_today_sensor):
@@ -1050,7 +1056,7 @@ class SolakonCoordinator:
                     self._flt_kwh_normalized(pv_forecast_today_sensor) >= pv_forecast_threshold
                 )
             else:
-                soft_errors.append(f"PV-Vorhersage: Sensor {pv_forecast_today_sensor!r} nicht verfügbar")
+                soft_errors.append(self._tr("err_pv_forecast_sensor_unavailable", sensor=pv_forecast_today_sensor))
                 self.forecast_tariff_suppressed = False
         else:
             self.forecast_tariff_suppressed = False
@@ -1065,7 +1071,7 @@ class SolakonCoordinator:
         zone1_force_sensor = self._effective_zone1_force_sensor()
 
         if zone1_force_enabled and not zone1_force_sensor:
-            soft_errors.append("Zone-1-Forcierung: Kein PV-Vorhersage-Sensor konfiguriert — Funktion inaktiv")
+            soft_errors.append(self._tr("err_zone1_force_no_sensor"))
             self.zone1_forced = False
         elif zone1_force_enabled and zone1_force_sensor:
             if self._entity_ok(zone1_force_sensor):
@@ -1075,7 +1081,7 @@ class SolakonCoordinator:
                     and soc > zone1_force_min_soc  # eigener Floor, unabhängig von zone3_limit (Exit-Schwelle)
                 )
             else:
-                soft_errors.append(f"Zone-1-Forcierung: Sensor {zone1_force_sensor!r} nicht verfügbar")
+                soft_errors.append(self._tr("err_zone1_force_sensor_unavailable", sensor=zone1_force_sensor))
                 self.zone1_forced = False
         else:
             self.zone1_forced = False
@@ -1089,35 +1095,35 @@ class SolakonCoordinator:
 
         # ── 3. Validierung ───────────────────────────────────────────────────
         if zone1_limit <= zone3_limit:
-            self.last_error = "SOC-Limits ungültig (Zone1 muss > Zone3)"
+            self.last_error = self._tr("err_soc_zone1_zone3")
             self._cycle_blocked = True
             self._update_operating_state()
             self.notify_listeners()
             return
 
         if surplus_enabled and surplus_threshold <= zone1_limit:
-            self.last_error = "SOC-Limits ungültig (Überschuss-Schwelle muss > Zone1)"
+            self.last_error = self._tr("err_soc_surplus_zone1")
             self._cycle_blocked = True
             self._update_operating_state()
             self.notify_listeners()
             return
 
         if zone1_force_enabled and not (zone3_limit < zone1_force_min_soc < zone1_limit):
-            self.last_error = "SOC-Limits ungültig (Zone-1-Forcierung-Mindest-SOC muss zwischen Zone3 und Zone1 liegen)"
+            self.last_error = self._tr("err_soc_zone1_force")
             self._cycle_blocked = True
             self._update_operating_state()
             self.notify_listeners()
             return
 
         if not self._entity_ok(cfg[CONF_SOC_SENSOR]):
-            self.last_error = "SOC-Sensor nicht verfügbar"
+            self.last_error = self._tr("err_soc_sensor")
             self._cycle_blocked = True
             self._update_operating_state()
             self.notify_listeners()
             return
 
         if not self._entity_ok(cfg[CONF_MODE_SELECT]):
-            self.last_error = "Modus-Selektor nicht verfügbar"
+            self.last_error = self._tr("err_mode_select")
             self._cycle_blocked = True
             self._update_operating_state()
             self.notify_listeners()
@@ -1137,9 +1143,9 @@ class SolakonCoordinator:
                     pass
 
         if tariff_enabled and not tariff_sensor:
-            soft_errors.append("Tarif: Kein Preis-Sensor konfiguriert — Tarif-Funktion inaktiv")
+            soft_errors.append(self._tr("err_tariff_no_sensor"))
         elif tariff_enabled and tariff_sensor and not self._entity_ok(tariff_sensor):
-            soft_errors.append(f"Tarif: Preis-Sensor {tariff_sensor!r} nicht verfügbar")
+            soft_errors.append(self._tr("err_tariff_sensor_unavailable", sensor=tariff_sensor))
         elif tariff_price_valid:
             unit_warning = self._tariff_unit_warning(tariff_sensor, tariff_price, tariff_cheap)
             if unit_warning:
@@ -1276,7 +1282,7 @@ class SolakonCoordinator:
         if self.surplus_active:
             # Nur schreiben wenn der Ist-Sollwert abweicht
             if abs(current_power - effective_hard) > 0.5:
-                self._set_last_action(f"Zone 0: Output → {effective_hard} W")
+                self._set_last_action("act_zone0_output", power=effective_hard)
                 await self._set_output_and_wait(effective_hard)
 
         elif self.ac_charge_active:
@@ -1288,7 +1294,7 @@ class SolakonCoordinator:
                     tolerance, ac_p, ac_i, ac_charge_mode=True,
                     error_share=ac_error_share,
                 )
-                self._set_last_action(f"AC-PI: {current_power:.0f} → {new_pw:.0f} W")
+                self._set_last_action("act_ac_pi", frm=current_power, to=new_pw)
                 await self._set_output_and_wait(new_pw, ac_charge_mode=True)
             else:
                 if abs(self.integral) > 10:
@@ -1297,7 +1303,7 @@ class SolakonCoordinator:
         elif self.tariff_charge_active:
             # Nur schreiben wenn der Ist-Sollwert abweicht
             if abs(current_power - tariff_power) > 0.5:
-                self._set_last_action(f"Tarif-Laden: {tariff_power} W")
+                self._set_last_action("act_tariff_power", power=tariff_power)
                 await self._set_output_and_wait(tariff_power, ac_charge_mode=True)
 
         else:
@@ -1313,7 +1319,7 @@ class SolakonCoordinator:
                     tolerance, p_factor, i_factor, ac_charge_mode=False,
                     error_share=error_share,
                 )
-                self._set_last_action(f"PI: {current_power:.0f} → {new_pw:.0f} W")
+                self._set_last_action("act_pi", frm=current_power, to=new_pw)
                 await self._set_output_and_wait(new_pw)
             else:
                 if abs(self.integral) > 10:
@@ -1359,7 +1365,7 @@ class SolakonCoordinator:
             if mode != MODE_DISCHARGE:
                 await self._timer_toggle()
                 await self._set_mode(MODE_DISCHARGE)
-            self._set_last_action("Zone 0: Surplus aktiviert")
+            self._set_last_action("act_surplus_on")
             return "0A"
 
         # ── Fall 0B: Surplus Exit ────────────────────────────────────────────
@@ -1370,7 +1376,7 @@ class SolakonCoordinator:
             self.cycle_active = soc > zone1
             self.integral = 0.0
             await self._set_output_and_wait(0)
-            self._set_last_action("Zone 0: Surplus beendet")
+            self._set_last_action("act_surplus_off")
             return "0B"
 
         # ── Fall A: Zone 1 Start ─────────────────────────────────────────────
@@ -1395,9 +1401,9 @@ class SolakonCoordinator:
             await self._timer_toggle()
             await self._set_mode(MODE_DISCHARGE)
             if zone1_forced and soc <= zone1:
-                self._set_last_action(f"Fall A: Zone 1 Start forciert (SOC {soc:.0f}%, Vorhersage morgen gut)")
+                self._set_last_action("act_fall_a_forced", soc=soc)
             else:
-                self._set_last_action(f"Fall A: Zone 1 Start (SOC {soc:.0f}%)")
+                self._set_last_action("act_fall_a", soc=soc)
             return "A"
 
         # ── Fall B: Zone 3 Stop (Zyklus on) ──────────────────────────────────
@@ -1415,7 +1421,7 @@ class SolakonCoordinator:
             await self._set_output_and_wait(0)
             await self._timer_toggle()
             await self._set_mode(MODE_DISABLED)
-            self._set_last_action(f"Fall B: Zone 3 Stop (SOC {soc:.0f}%)")
+            self._set_last_action("act_fall_b", soc=soc)
             return "B"
 
         # ── Fall C: Zone 3 Absicherung ───────────────────────────────────────
@@ -1432,7 +1438,7 @@ class SolakonCoordinator:
             await self._set_output_and_wait(0)
             await self._timer_toggle()
             await self._set_mode(MODE_DISABLED)
-            self._set_last_action("Fall C: Zone 3 Absicherung")
+            self._set_last_action("act_fall_c")
             return "C"
 
         # ── Fall D: Recovery ─────────────────────────────────────────────────
@@ -1459,7 +1465,7 @@ class SolakonCoordinator:
                 await self._set_mode(MODE_AC_CHARGE)
             else:
                 await self._set_mode(MODE_DISCHARGE)
-            self._set_last_action("Fall D: Recovery")
+            self._set_last_action("act_fall_d")
             return "D"
 
         # ── Fall GT: Tarif-Laden Start ───────────────────────────────────────
@@ -1477,7 +1483,7 @@ class SolakonCoordinator:
             await self._timer_toggle()
             await self._set_output_and_wait(v["tariff_power"], ac_charge_mode=True)
             await self._set_mode(MODE_AC_CHARGE)
-            self._set_last_action(f"Fall GT: Tarif-Laden (Preis {v['tariff_price']:.1f})")
+            self._set_last_action("act_fall_gt", price=v["tariff_price"])
             return "GT"
 
         # ── Fall HT: Tarif-Laden Ende ────────────────────────────────────────
@@ -1498,7 +1504,7 @@ class SolakonCoordinator:
                 await self._set_output_and_wait(0)
                 await self._timer_toggle()
                 await self._set_mode(MODE_DISABLED)
-            self._set_last_action("Fall HT: Tarif-Laden beendet")
+            self._set_last_action("act_fall_ht")
             return "HT"
 
         # ── Discharge-Lock (Preis < Teuer-Schwelle) ──────────────────────────
@@ -1518,7 +1524,7 @@ class SolakonCoordinator:
             await self._set_output_and_wait(0)
             await self._timer_toggle()
             await self._set_mode(MODE_DISABLED)
-            self._set_last_action(f"Tarif: Discharge-Lock (Preis {v['tariff_price']:.1f})")
+            self._set_last_action("act_fall_tm", price=v["tariff_price"])
             return "TM"
 
         # ── Fall G: AC Laden Start ───────────────────────────────────────────
@@ -1537,7 +1543,7 @@ class SolakonCoordinator:
             await self._timer_toggle()
             await self._set_output_and_wait(0, ac_charge_mode=True)
             await self._set_mode(MODE_AC_CHARGE)
-            self._set_last_action("Fall G: AC Laden Start")
+            self._set_last_action("act_fall_g")
             return "G"
 
         # ── Fall H: AC Laden Ende ────────────────────────────────────────────
@@ -1563,7 +1569,7 @@ class SolakonCoordinator:
                 await self._set_output_and_wait(0)
                 await self._timer_toggle()
                 await self._set_mode(MODE_DISABLED)
-            self._set_last_action("Fall H: AC Laden Ende")
+            self._set_last_action("act_fall_h")
             return "H"
 
         # ── Fall I: Safety — Modus '3' ohne aktive Lade-Session ──────────────
@@ -1581,7 +1587,7 @@ class SolakonCoordinator:
                 await self._set_output_and_wait(0)
                 await self._timer_toggle()
                 await self._set_mode(MODE_DISABLED)
-            self._set_last_action("Fall I: Safety-Korrektur (Modus 3 ohne Session)")
+            self._set_last_action("act_fall_i")
             return "I"
 
         # ── Fall E: Zone 2 Start ─────────────────────────────────────────────
@@ -1598,7 +1604,7 @@ class SolakonCoordinator:
             self.integral = 0.0
             await self._timer_toggle()
             await self._set_mode(MODE_DISCHARGE)
-            self._set_last_action("Fall E: Zone 2 Start")
+            self._set_last_action("act_fall_e")
             return "E"
 
         # ── Fall F: Nachtabschaltung ─────────────────────────────────────────
@@ -1613,7 +1619,7 @@ class SolakonCoordinator:
             await self._set_output_and_wait(0)
             await self._timer_toggle()
             await self._set_mode(MODE_DISABLED)
-            self._set_last_action("Fall F: Nachtabschaltung")
+            self._set_last_action("act_fall_f")
             return "F"
 
         return None
@@ -1695,10 +1701,7 @@ class SolakonCoordinator:
         if mode == "soc_switch":
             shares = self._soc_switch_shares(active, own_soc)
             if shares is None:
-                self._dist_warning = (
-                    "Verteilung (SOC-Switch): SOC-Sensor einer Instanz nicht "
-                    "verfügbar — auf Gleichverteilung zurückgefallen"
-                )
+                self._dist_warning = self._tr("warn_dist_soc_switch_sensor")
                 self.dist_mode_effective = "equal"
                 return {eid: eq for eid in active}
             return shares
@@ -1723,10 +1726,7 @@ class SolakonCoordinator:
             # zählen alle neutral 1.0 (degradiert zu reiner SOC-Gewichtung)
             caps = {eid: _cap_kwh(eid, c) for eid, c in active.items()}
             if any(cap is None for cap in caps.values()):
-                self._dist_warning = (
-                    "Verteilung: Kapazitätssensor einer Instanz nicht verfügbar "
-                    "— auf SOC-Gewichtung zurückgefallen"
-                )
+                self._dist_warning = self._tr("warn_dist_capacity_sensor")
                 self.dist_mode_effective = "soc"
                 caps = {eid: 1.0 for eid in caps}
         else:
@@ -1743,10 +1743,7 @@ class SolakonCoordinator:
                 soc_eid = c.entry.data.get(CONF_SOC_SENSOR, "")
                 if not c._entity_ok(soc_eid):
                     # SOC-Read einer Fremdinstanz unsicher — auf Gleichverteilung ausweichen
-                    self._dist_warning = (
-                        "Verteilung: SOC-Sensor einer anderen Instanz nicht verfügbar "
-                        "— auf Gleichverteilung zurückgefallen"
-                    )
+                    self._dist_warning = self._tr("warn_dist_soc_sensor")
                     self.dist_mode_effective = "equal"
                     return {eid: eq for eid in active}
                 soc = c._flt(soc_eid, 0)
@@ -2028,26 +2025,27 @@ class SolakonCoordinator:
         """Zone-Label und Modus-Label für Panel-Anzeige aktualisieren."""
         if self.surplus_active:
             self.current_zone = 0
-            self.zone_label = "Zone 0 — Überschuss-Einspeisung"
+            self.zone_label = self._tr("zone_0")
         elif self.cycle_active:
             self.current_zone = 1
-            self.zone_label = "Zone 1 — Aggressive Entladung"
+            self.zone_label = self._tr("zone_1")
         elif soc <= zone3:
             self.current_zone = 3
-            self.zone_label = "Zone 3 — Sicherheitsstopp"
+            self.zone_label = self._tr("zone_3")
         else:
             self.current_zone = 2
-            self.zone_label = "Zone 2 — Batterieschonend"
+            self.zone_label = self._tr("zone_2")
 
         mode_map = {
-            MODE_DISABLED: "Disabled",
-            MODE_DISCHARGE: "INV Discharge PV Priority",
-            MODE_AC_CHARGE: "AC Charge (Netzladung)",
+            MODE_DISABLED: "disabled",
+            MODE_DISCHARGE: "discharge",
+            MODE_AC_CHARGE: "ac_charge",
         }
-        new_mode_label = mode_map.get(mode, f"Modus: {mode}")
-        if new_mode_label != self.mode_label:
+        new_mode_key = mode_map.get(mode, "unknown")
+        if new_mode_key != self.mode_key:
             self.mode_label_ts = time.time()
-        self.mode_label = new_mode_label
+        self.mode_key = new_mode_key
+        self.mode_label = self._tr(f"mode_{new_mode_key}", mode=mode)
         self._update_operating_state()
 
     def _update_operating_state(self) -> bool:

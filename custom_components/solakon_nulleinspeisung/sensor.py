@@ -8,7 +8,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util import dt as dt_util
 
-from .const import DOMAIN, OPERATING_STATES
+from .const import DOMAIN, FALL_KEYS, MODE_KEYS, OPERATING_STATES
 from .coordinator import SolakonCoordinator
 from .entity_base import SolakonEntity
 
@@ -87,7 +87,7 @@ class OperatingStateSensor(SolakonEntity, SensorEntity):
 
 
 class ZoneSensor(SolakonEntity, SensorEntity):
-    _attr_name = "Aktuelle Zone"
+    _attr_translation_key = "zone"
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
@@ -111,26 +111,12 @@ class ZoneSensor(SolakonEntity, SensorEntity):
             "integral": round(self._coordinator.integral, 2),
             "regulation_enabled": self._coordinator.settings.get("regulation_enabled", False),
         }
-_FALL_LABELS: dict[str, str] = {
-    "0A": "Zone 0: Überschuss Start",
-    "0B": "Zone 0: Überschuss Ende",
-    "A":  "Zone 1: Entladezyklus Start",
-    "B":  "Zone 3: Stopp (Zyklus aktiv)",
-    "C":  "Zone 3: Stopp",
-    "D":  "Recovery: Modus wiederhergestellt",
-    "E":  "Zone 2: Regelung aktiv",
-    "F":  "Nacht: Abschaltung",
-    "G":  "AC Laden: Start",
-    "H":  "AC Laden: Ende",
-    "I":  "Safety: Modus-Korrektur",
-    "GT": "Tarif-Laden: Start",
-    "HT": "Tarif-Laden: Ende",
-    "TM": "Discharge-Lock: Preis zu hoch",
-}
-
-
 class ActiveFallSensor(SolakonEntity, SensorEntity):
-    _attr_name = "Aktiver Fall"
+    """Zuletzt ausgefuehrter Fall des Regelzyklus."""
+
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = FALL_KEYS
+    _attr_translation_key = "active_fall"
     _attr_icon = "mdi:state-machine"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
@@ -138,16 +124,16 @@ class ActiveFallSensor(SolakonEntity, SensorEntity):
         super().__init__(coord, "active_fall")
 
     @property
-    def native_value(self) -> str:
-        return _FALL_LABELS.get(self._coordinator.active_fall, self._coordinator.active_fall)
-
-    @property
-    def extra_state_attributes(self) -> dict:
-        return {"fall_id": self._coordinator.active_fall}
+    def native_value(self) -> str | None:
+        return self._coordinator.active_fall or None
 
 
 class ModeTextSensor(SolakonEntity, SensorEntity):
-    _attr_name = "Betriebsmodus"
+    """Betriebsmodus des Wechselrichters als Schluessel aus MODE_KEYS."""
+
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = MODE_KEYS
+    _attr_translation_key = "mode_label"
     _attr_icon = "mdi:information-outline"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
@@ -156,11 +142,11 @@ class ModeTextSensor(SolakonEntity, SensorEntity):
 
     @property
     def native_value(self) -> str:
-        return self._coordinator.mode_label
+        return self._coordinator.mode_key
 
 
 class LastActionSensor(SolakonEntity, SensorEntity):
-    _attr_name = "Letzte Aktion"
+    _attr_translation_key = "last_action"
     _attr_icon = "mdi:history"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
@@ -171,10 +157,17 @@ class LastActionSensor(SolakonEntity, SensorEntity):
     def native_value(self) -> str:
         return self._coordinator.last_action
 
+    @property
+    def extra_state_attributes(self) -> dict:
+        return {
+            "action_key": self._coordinator.last_action_key,
+            **self._coordinator.last_action_params,
+        }
+
 
 class GridStdDevSensor(SolakonEntity, SensorEntity):
     """Netz-Standardabweichung — intern berechnet aus Grid-Messwert-Stream."""
-    _attr_name = "Netz-Standardabweichung"
+    _attr_translation_key = "grid_stddev"
     _attr_icon = "mdi:chart-bell-curve-cumulative"
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfPower.WATT
@@ -207,7 +200,7 @@ class GridStdDevSensor(SolakonEntity, SensorEntity):
 
 
 class IntegralSensor(SolakonEntity, SensorEntity):
-    _attr_name = "PI Integral"
+    _attr_translation_key = "integral"
     _attr_icon = "mdi:chart-bell-curve"
     _attr_native_unit_of_measurement = UnitOfPower.WATT
     _attr_state_class = SensorStateClass.MEASUREMENT
@@ -226,7 +219,7 @@ class SurplusPowerSensor(SolakonEntity, SensorEntity):
     """Verwertbarer PV-Überschuss — Luft zwischen aktuellem Output und dem
     Minimum aus Hard-Limit und aktueller PV-Leistung. Für Automationen gedacht
     (z. B. Zusatzverbraucher schalten), daher bewusst keine Diagnose-Entität."""
-    _attr_name = "Überschussleistung"
+    _attr_translation_key = "surplus_power"
     _attr_icon = "mdi:transmission-tower-export"
     _attr_native_unit_of_measurement = UnitOfPower.WATT
     _attr_state_class = SensorStateClass.MEASUREMENT

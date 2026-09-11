@@ -17,26 +17,24 @@ async def async_setup_entry(
 ) -> None:
     coord: SolakonCoordinator = hass.data[DOMAIN][entry.entry_id]
     add([
-        DiagBoolSensor(coord, "cycle_active",         "Entladezyklus aktiv", "mdi:battery-arrow-up"),
-        DiagBoolSensor(coord, "surplus_active",       "Überschuss-Modus",    "mdi:solar-power"),
-        DiagBoolSensor(coord, "ac_charge_active",     "AC Laden aktiv",      "mdi:lightning-bolt"),
-        DiagBoolSensor(coord, "tariff_charge_active", "Tarif-Laden aktiv",   "mdi:currency-eur"),
-        DiagBoolSensor(coord, "is_night",             "Nachtabschaltung",    "mdi:weather-night"),
-        DiagBoolSensor(coord, "forecast_tariff_suppressed", "PV-Vorhersage: Tarif gesperrt", "mdi:weather-sunny"),
-        DiagBoolSensor(coord, "forecast_surplus_forced", "PV-Vorhersage: Surplus erzwungen", "mdi:weather-sunny-alert"),
-        DiagBoolSensor(coord, "forecast_exit_lock", "PV-Vorhersage: Surplus-Austritt gesperrt", "mdi:weather-cloudy-clock"),
-        DiagBoolSensor(coord, "zone1_forced", "PV-Vorhersage: Zone-1-Nacht-Forcierung aktiv", "mdi:weather-night-partly-cloudy"),
+        DiagBoolSensor(coord, "cycle_active",               "mdi:battery-arrow-up"),
+        DiagBoolSensor(coord, "surplus_active",             "mdi:solar-power"),
+        DiagBoolSensor(coord, "ac_charge_active",           "mdi:lightning-bolt"),
+        DiagBoolSensor(coord, "tariff_charge_active",       "mdi:currency-eur"),
+        DiagBoolSensor(coord, "is_night",                   "mdi:weather-night"),
+        DiagBoolSensor(coord, "forecast_tariff_suppressed", "mdi:weather-sunny"),
+        DiagBoolSensor(coord, "forecast_surplus_forced",    "mdi:weather-sunny-alert"),
+        DiagBoolSensor(coord, "forecast_exit_lock",         "mdi:weather-cloudy-clock"),
+        DiagBoolSensor(coord, "zone1_forced",               "mdi:weather-night-partly-cloudy"),
     ])
 
 
 class DiagBoolSensor(SolakonEntity, BinarySensorEntity):
     """Zeigt internen Coordinator-Zustand als read-only Binärsensor an."""
 
-    def __init__(
-        self, coord: SolakonCoordinator, attr: str, name: str, icon: str
-    ) -> None:
+    def __init__(self, coord: SolakonCoordinator, attr: str, icon: str) -> None:
         super().__init__(coord, attr)
-        self._attr_name = name
+        self._attr_translation_key = attr
         self._attr_icon = icon
         self._attr = attr
 

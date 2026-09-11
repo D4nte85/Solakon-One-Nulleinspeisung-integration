@@ -86,6 +86,85 @@
           "safety_stop": "Sicherheitsstopp",
           "idle": "Bereitschaft"
         }
+      },
+      "zone": {
+        "name": "Aktuelle Zone"
+      },
+      "active_fall": {
+        "name": "Aktiver Fall",
+        "state": {
+          "0A": "Zone 0: Überschuss Start",
+          "0B": "Zone 0: Überschuss Ende",
+          "A": "Zone 1: Entladezyklus Start",
+          "B": "Zone 3: Stopp (Zyklus aktiv)",
+          "C": "Zone 3: Stopp",
+          "D": "Recovery: Modus wiederhergestellt",
+          "E": "Zone 2: Regelung aktiv",
+          "F": "Nacht: Abschaltung",
+          "G": "AC Laden: Start",
+          "H": "AC Laden: Ende",
+          "I": "Safety: Modus-Korrektur",
+          "GT": "Tarif-Laden: Start",
+          "HT": "Tarif-Laden: Ende",
+          "TM": "Discharge-Lock: Preis zu hoch"
+        }
+      },
+      "mode_label": {
+        "name": "Betriebsmodus",
+        "state": {
+          "waiting": "Warten auf Daten",
+          "disabled": "Disabled",
+          "discharge": "INV Discharge PV Priority",
+          "ac_charge": "AC Charge (Netzladung)",
+          "disabled_regulation_off": "Disabled (Regelung inaktiv)",
+          "unknown": "Unbekannter Modus"
+        }
+      },
+      "last_action": {
+        "name": "Letzte Aktion"
+      },
+      "grid_stddev": {
+        "name": "Netz-Standardabweichung"
+      },
+      "integral": {
+        "name": "PI Integral"
+      },
+      "surplus_power": {
+        "name": "Überschussleistung"
+      }
+    },
+    "binary_sensor": {
+      "cycle_active": {
+        "name": "Entladezyklus aktiv"
+      },
+      "surplus_active": {
+        "name": "Überschuss-Modus"
+      },
+      "ac_charge_active": {
+        "name": "AC Laden aktiv"
+      },
+      "tariff_charge_active": {
+        "name": "Tarif-Laden aktiv"
+      },
+      "is_night": {
+        "name": "Nachtabschaltung"
+      },
+      "forecast_tariff_suppressed": {
+        "name": "PV-Vorhersage: Tarif gesperrt"
+      },
+      "forecast_surplus_forced": {
+        "name": "PV-Vorhersage: Surplus erzwungen"
+      },
+      "forecast_exit_lock": {
+        "name": "PV-Vorhersage: Surplus-Austritt gesperrt"
+      },
+      "zone1_forced": {
+        "name": "PV-Vorhersage: Zone-1-Nacht-Forcierung aktiv"
+      }
+    },
+    "switch": {
+      "regulation_enabled": {
+        "name": "Regelung aktiv"
       }
     }
   }
