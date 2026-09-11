@@ -65,6 +65,7 @@ async def _ws_get_config(
         connection.send_error(msg["id"], "not_found", "Coordinator not found")
 
 
+@websocket_api.require_admin
 @websocket_api.websocket_command({
     vol.Required("type"):     f"{DOMAIN}/save_config",
     vol.Required("entry_id"): str,
@@ -133,6 +134,7 @@ async def _ws_get_status(
     })
 
 
+@websocket_api.require_admin
 @websocket_api.websocket_command({
     vol.Required("type"):     f"{DOMAIN}/reset_integral",
     vol.Required("entry_id"): str,
@@ -150,6 +152,7 @@ async def _ws_reset_integral(
         connection.send_error(msg["id"], "not_found", "Coordinator not found")
 
 
+@websocket_api.require_admin
 @websocket_api.websocket_command({
     vol.Required("type"):     f"{DOMAIN}/set_cycle",
     vol.Required("entry_id"): str,
@@ -358,6 +361,7 @@ async def _ws_get_distribution_config(
     connection.send_result(msg["id"], {"distribution": data})
 
 
+@websocket_api.require_admin
 @websocket_api.websocket_command({
     vol.Required("type"):         f"{DOMAIN}/save_distribution_config",
     vol.Required("grid_sensor"):  str,

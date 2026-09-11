@@ -3,6 +3,11 @@
 Alle nennenswerten Änderungen an der Solakon-ONE-Nulleinspeisung-Integration.
 Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [Unreleased]
+
+### Geändert
+- Die vier schreibenden WebSocket-Commands (`save_config`, `set_cycle`, `reset_integral`, `save_distribution_config`) verlangen jetzt `@websocket_api.require_admin` — zuvor konnte jeder angemeldete Home-Assistant-Benutzer die Reglerkonfiguration ändern, da keiner der acht Commands eine Rechteprüfung trug. Die vier lesenden Commands bleiben offen, damit das Panel für alle Benutzer sichtbar bleibt; README um einen Hinweis ergänzt (Issue [#35](https://github.com/D4nte85/Solakon-One-Nulleinspeisung-integration/issues/35), `__init__.py`, `README.md`)
+
 ## [2.3.2] – 2026-09-02
 
 ### Geändert

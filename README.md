@@ -204,6 +204,8 @@ Im Einrichtungsformular werden zunächst ein **Instanzname** (z. B. „Speicher 
 
 Nach der Einrichtung erscheint in der HA-Seitenleiste der Eintrag **Solakon ONE**. Jede Instanz ist in zehn Tabs gegliedert. Änderungen werden erst nach Klick auf **💾 Speichern** übernommen — die Speicherleiste erscheint automatisch sobald ein Wert geändert wurde. Bei mehr als einer Instanz kommen zusätzlich eine **Übersichtsseite** und ein **Verteilungs-Tab** hinzu, siehe [Multi-Instancing](#multi-instancing).
 
+**Adminrechte:** Das Panel ist für jeden angemeldeten Home-Assistant-Benutzer sichtbar, alle Anzeigen sind frei lesbar. Schreibende Aktionen — Speichern der Einstellungen, Regelung ein/aus, Zyklus umschalten, Integral zurücksetzen und Speichern der Leistungsverteilung — erfordern dagegen ein Administratorkonto. Ohne Adminrechte quittiert das Panel diese Aktionen mit einer Fehlermeldung.
+
 Alle Eingabefelder für Entity-IDs (z. B. Kapazitäts-, Vorhersage- und Preis-Sensoren) zeigen rechts einen **Validierungspunkt**, der die eingetragene Entity live gegen Home Assistant prüft: **grün** = Entity liefert einen Wert, **gelb** = Entity existiert, ist aber `unknown`/`unavailable`, **rot** = Entity existiert nicht (Tippfehler prüfen). Der Punkt aktualisiert sich beim Tippen und im laufenden Betrieb.
 
 ---
