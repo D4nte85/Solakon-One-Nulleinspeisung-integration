@@ -3,7 +3,9 @@
 Alle nennenswerten Änderungen an der Solakon-ONE-Nulleinspeisung-Integration.
 Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
-## [Unreleased]
+## [2.4.0-beta.1] – 2026-09-11
+
+> **Beta.** Enthält zwei Breaking Changes und die erste echte Store-Migration. Beide Stores steigen dabei von Version 1 auf 2; ein Rückschritt auf 2.3.2 ist danach nicht vorgesehen — die alte Codebasis kennt das neue Format nicht. Vor der Installation ein Backup der Konfiguration anlegen.
 
 ### Hinzugefügt
 - Neuer Sensor „Betriebszustand" fasst zusammen, was eine Instanz gerade tut — bisher war das nur aus neun Binärsensoren, Zone und Betriebsmodus in der richtigen Rangfolge zu erschließen. Zehn Zustände, abgeleitet aus den Zustandsflags statt aus dem zuletzt ausgeführten Fall, mit Zone, Gerätemodus, letztem Fall, letzter Aktion, Fehler und Zeitpunkt des letzten Wechsels als Attribute. Als übersetzter Enum-Sensor angelegt (Schlüssel sprachneutral, Anzeige in Deutsch und Englisch), damit Automationen unabhängig von Anzeigetexten bleiben. Dazu neu das Flag `discharge_locked`: die Tarifsperre war bisher von außen nicht von Bereitschaft zu unterscheiden, weil Fall TM nur beim Übergang feuert und kein Flag setzt. Die Panel-Übersicht zeigt den Zustand anstelle des aktiven Falls; der Status-Tab führt den Fall weiterhin (Discussion [#34](https://github.com/D4nte85/Solakon-One-Nulleinspeisung-integration/discussions/34), `coordinator.py`, `sensor.py`, `const.py`, `__init__.py`, `strings.json`, `translations/`, `solakon-panel.js`, `panel.de.json`, `panel.en.json`, `README.md`)
