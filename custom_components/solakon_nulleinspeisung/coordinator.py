@@ -90,7 +90,7 @@ class SolakonCoordinator:
         # Multi-Instanz: zugeteiltes Leistungslimit (None = Einzelbetrieb)
         self.allocated_power: float | None = None
         # Verwertbarer PV-Überschuss: Luft zwischen aktuellem Output und dem
-        # Maximum aus Hard-Limit UND aktueller PV-Leistung.
+        # Minimum aus Hard-Limit und aktueller PV-Leistung.
         self.surplus_power: float = 0.0
         # Transienter Warnkanal: von _all_shares() gesetzt wenn der Verteilungsmodus
         # wegen eines fehlenden/ungültigen Fremdinstanz-Sensors degradiert (z. B.
@@ -144,10 +144,8 @@ class SolakonCoordinator:
                 stored[S_HARD_LIMIT_Z0] = old
                 stored[S_HARD_LIMIT_Z1] = old
                 await self._store.async_save({**SETTINGS_DEFAULTS, **stored})
-            # Einmalige Migration: surplus_forecast_sensor und pv_forecast_sensor
-            # sind zum gemeinsamen PV-Vorhersage-heute-Feld gemergt — alter Wert
-            # übernimmt nur wenn pv_forecast_sensor noch leer ist, kein
-            # Datenverlust bei bereits gepflegtem Feld.
+            # Einmalige Migration surplus_forecast_sensor → pv_forecast_sensor,
+            # nur wenn pv_forecast_sensor noch leer ist.
             old_surplus_forecast_sensor = stored.get(S_SURPLUS_FORECAST_SENSOR, "")
             if old_surplus_forecast_sensor and not stored.get(S_PV_FORECAST_SENSOR):
                 stored[S_PV_FORECAST_SENSOR] = old_surplus_forecast_sensor
@@ -269,7 +267,7 @@ class SolakonCoordinator:
 
         self.notify_listeners()
 
-        # Neuen Zustand sofort anwenden statt erst beim nächsten Sensor-Event.
+        # Neuen Zustand sofort anwenden
         if self.settings.get(S_REGULATION_ENABLED, False):
             self.hass.async_create_task(self._async_regulate())
 
@@ -435,13 +433,7 @@ class SolakonCoordinator:
         self.grid_stddev_raw = self._stddev_of(values)
 
         # Getrimmte StdDev: die `trim` größten und kleinsten Samples im Fenster
-        # ausschließen, bevor die Streuung berechnet wird. Trennt kurze, seltene
-        # Lastspitzen (z. B. Kompressor-Anlaufstrom für wenige Sekunden) von
-        # echter Dauerunruhe anhand des betroffenen Fensteranteils, nicht der
-        # Dauer eines Einzelereignisses — ein Puls, der nur eine Minderheit der
-        # Samples füllt, fällt komplett in den getrimmten Bereich; eine
-        # Schwankung, die den Großteil des Fensters betrifft, übersteht das
-        # Trimmen und bewegt den Offset weiterhin wie vorgesehen.
+        # ausschließen, bevor die Streuung berechnet wird.
         trim = int(self.settings.get(S_STDDEV_TRIM_COUNT, 0))
         if trim > 0 and n - 2 * trim >= 2:  # Fallback: mind. 2 Kernwerte nötig, sonst ungetrimmt
             core = sorted(values)[trim: n - trim]
@@ -862,7 +854,7 @@ class SolakonCoordinator:
         _prev_flags = (self.cycle_active, self.surplus_active, self.ac_charge_active, self.tariff_charge_active, self._solar_zero_entry_armed)
 
         # ── 1. Sensor-Werte lesen ────────────────────────────────────────────
-        # Kernsensoren müssen verfügbar sein — 0.0-Fallback würde Regler fehlleiten
+        # Kernsensoren müssen verfügbar sein
         if not all(self._entity_ok(cfg[k]) for k in (
             CONF_GRID_SENSOR, CONF_SOLAR_SENSOR, CONF_ACTUAL_SENSOR, CONF_SOC_SENSOR
         )):
@@ -877,11 +869,9 @@ class SolakonCoordinator:
         timer_val = self._flt(cfg[CONF_TIMEOUT_COUNTDOWN])
 
         # ── 1b. StdDev aktualisieren + dynamische Offsets berechnen ──────────
-        # StdDev ist eine Eigenschaft der Netzgruppe (des physischen Messpunkts),
-        # nicht der einzelnen Instanz — nur der Gruppen-Leader pflegt den
-        # Ringpuffer, alle Instanzen übernehmen seinen Wert. Verhindert, dass
-        # mehrere Instanzen am selben Sensor unabhängige, leicht phasenversetzte
-        # StdDev-Historien berechnen und sich darüber gegenseitig hochschaukeln.
+        # StdDev ist eine Eigenschaft der Netzgruppe, nicht der einzelnen Instanz:
+        # nur der Gruppen-Leader pflegt den Ringpuffer, alle Instanzen übernehmen
+        # seinen Wert.
         leader = self._group_leader()
         if leader is self:
             self._update_stddev(grid)
@@ -951,10 +941,9 @@ class SolakonCoordinator:
                     pass
 
         # Sammelt Meldungen zu Sensor-gated Features, die trotz aktivem Enable-Flag
-        # wegen fehlendem/ungültigem Sensor wirkungslos bleiben — sonst scheitern sie
-        # still, ohne dass der Nutzer einen Hinweis bekommt (siehe last_error unten).
-        # Vor _compute_distribution() angelegt, damit eine dort erkannte Verteilungs-
-        # Degradation (Sensor einer Fremdinstanz fehlt) ebenfalls sichtbar wird.
+        # wegen fehlendem/ungültigem Sensor wirkungslos bleiben; wird als last_error
+        # ins Panel gespiegelt. Angelegt vor _compute_distribution(), dessen
+        # Modus-Degradation ebenfalls hier einfließt.
         soft_errors: list[str] = []
 
         error_share, allocated_power = self._compute_distribution(soc)
@@ -964,12 +953,10 @@ class SolakonCoordinator:
         effective_hard    = min(int(allocated_power), hard_limit_z0) if allocated_power is not None else hard_limit_z0
         effective_hard_z1 = min(int(allocated_power), hard_limit_z1) if allocated_power is not None else hard_limit_z1
 
-        # Verwertbarer PV-Überschuss: Luft zwischen dem, was diese Instanz gerade
-        # ausgibt, und dem Maximum aus aktuell geltendem Hard-Limit UND aktueller
-        # PV-Leistung (mehr als die Sonne liefert, ginge nur zulasten des Akkus —
-        # kein "verwertbarer" Überschuss). Geklemmt auf ≥0. Nutzt die Zone des
-        # *vorherigen* Zyklus (self.surplus_active ist hier noch nicht aktualisiert)
-        # — konsistent, weil `actual` ebenfalls aus dieser Zone stammt.
+        # Verwertbarer PV-Überschuss: Luft zwischen dem aktuellen Output und dem
+        # Minimum aus geltendem Hard-Limit und aktueller PV-Leistung, geklemmt auf ≥0.
+        # Nutzt die Zone des vorherigen Zyklus — self.surplus_active ist hier noch
+        # nicht aktualisiert.
         self.surplus_power = max(0.0, min(
             effective_hard if self.surplus_active else effective_hard_z1, solar
         ) - actual)
@@ -980,9 +967,8 @@ class SolakonCoordinator:
         surplus_forecast_enabled   = bool(s.get(S_SURPLUS_FORECAST_ENABLED, False))
         surplus_forecast_threshold = float(s.get(S_SURPLUS_FORECAST_THRESHOLD, 0.0))
 
-        # Gemergtes Feld: beide Features lesen denselben "PV-Ertrag
-        # heute"-Sensor (lokaler Override oder globaler Verteilungs-Tab-Wert),
-        # vorher zwei unabhängig konfigurierbare Sensoren für denselben Werttyp.
+        # Gemergtes Feld: beide Features lesen denselben "PV-Ertrag heute"-Sensor
+        # (lokaler Override oder globaler Verteilungs-Tab-Wert).
         pv_forecast_today_sensor = self._effective_pv_forecast_today_sensor()
 
         if surplus_forecast_enabled and not pv_forecast_today_sensor:
@@ -990,9 +976,8 @@ class SolakonCoordinator:
             self.forecast_surplus_forced = False
         elif surplus_forecast_enabled and pv_forecast_today_sensor:
             if self._entity_ok(pv_forecast_today_sensor):
-                # Forcierung nur solange die PV das Ausgangslimit übersteigt (Abregel-Risiko)
-                # und der SOC über der Zone-3-Schutzgrenze liegt; sonst greift wieder die
-                # normale SOC-/Verbrauchslogik.
+                # Forcierung nur solange die PV das Ausgangslimit übersteigt und der
+                # SOC über der Zone-3-Schutzgrenze liegt.
                 self.forecast_surplus_forced = (
                     self._flt_kwh_normalized(pv_forecast_today_sensor) >= surplus_forecast_threshold
                     and solar > hard_limit_z0
@@ -1013,10 +998,8 @@ class SolakonCoordinator:
             self.forecast_exit_lock = False
         elif surplus_lock_enabled and surplus_lock_sensor:
             if self._entity_ok(surplus_lock_sensor):
-                # Sperrt nur den PV-Austritt aus Zone 0: liegt die Vorhersage deutlich über
-                # dem Ausgabelimit, ist ein gemessener PV-Einbruch transient (Wolke) und
-                # Zone 0 wird gehalten. Der SOC-Austritt bleibt ungesperrt; die Zone-3-Grenze
-                # verhindert ein Ankämpfen gegen den Sicherheitsstopp.
+                # Sperrt nur den PV-Austritt aus Zone 0, solange die Vorhersage über
+                # dem Ausgabelimit liegt. Der SOC-Austritt bleibt ungesperrt.
                 self.forecast_exit_lock = (
                     self._flt_kilo_normalized(surplus_lock_sensor) >= surplus_lock_factor * hard_limit_z0
                     and soc > zone3_limit
@@ -1104,8 +1087,7 @@ class SolakonCoordinator:
         elif tariff_enabled and tariff_sensor and not self._entity_ok(tariff_sensor):
             soft_errors.append(f"Tarif: Preis-Sensor {tariff_sensor!r} nicht verfügbar")
 
-        # Verkettet statt überschrieben — mehrere gleichzeitig fehlkonfigurierte
-        # Sensor-Features sollen alle sichtbar sein, nicht nur der zuletzt geprüfte.
+        # Verkettet statt überschrieben
         self.last_error = " • ".join(soft_errors)
 
         # ── 4. Abgeleitete Variablen ─────────────────────────────────────────
@@ -1214,21 +1196,18 @@ class SolakonCoordinator:
             return
 
         # ── 9. Timeout-Reset ─────────────────────────────────────────────────
-        # Entfällt wenn ein Fall in diesem Zyklus bereits getoggelt hat (timer_val wäre stale)
+        # Entfällt wenn ein Fall in diesem Zyklus bereits getoggelt hat
         if timer_val < 120 and not self._timer_toggled_in_cycle and self._entity_ok(cfg[CONF_TIMEOUT_COUNTDOWN]):
             await self._timer_toggle()
 
-        # Einzige Lesung für Gate + PI-Basis + Log dieses Zyklus — nach dem letzten
-        # Await vor der PI-Entscheidung, damit Gate (at_max_limit etc.), Log-Zeile
-        # und _total_commanded_power() auf demselben Snapshot von CONF_ACTIVE_POWER
-        # stehen. Vor dem Timer-Toggle-Await berechnete Gate-Werte wären hier stale.
+        # Einzige CONF_ACTIVE_POWER-Lesung dieses Zyklus, nach dem letzten Await vor
+        # der PI-Entscheidung. Gemeinsam genutzt von Gate, PI-Basis und Log-Zeile.
         current_power = self._flt(cfg[CONF_ACTIVE_POWER])
         at_max_limit = current_power >= dynamic_max
         at_min_limit = current_power <= 0
         above_dynamic_max = current_power > dynamic_max
 
-        # Eigener Pool für AC-Laden — erst nach den Falls berechnet, damit ein in
-        # diesem Zyklus per Fall G neu gesetztes ac_charge_active bereits zählt.
+        # Eigener Pool für AC-Laden, nach den Falls berechnet.
         ac_error_share = self._compute_ac_distribution(soc)
         if self._dist_warning:
             soft_errors.append(self._dist_warning)
@@ -1236,8 +1215,7 @@ class SolakonCoordinator:
 
         # ── PI-Pfade ─────────────────────────────────────────────────────────
         if self.surplus_active:
-            # Nur schreiben wenn der Ist-Sollwert abweicht — kein Modbus-Traffic im
-            # eingeschwungenen Zustand
+            # Nur schreiben wenn der Ist-Sollwert abweicht
             if abs(current_power - effective_hard) > 0.5:
                 self._set_last_action(f"Zone 0: Output → {effective_hard} W")
                 await self._set_output_and_wait(effective_hard)
@@ -1258,9 +1236,7 @@ class SolakonCoordinator:
                     self.integral *= 0.95
 
         elif self.tariff_charge_active:
-            # Nur schreiben wenn der Ist-Sollwert abweicht — sonst würde jeder Zyklus
-            # der laufenden Tarif-Ladung unnötig um wait_time verzögert (tariff_power
-            # ist über die gesamte Ladedauer konstant), analog zum Zone-0-Guard oben.
+            # Nur schreiben wenn der Ist-Sollwert abweicht
             if abs(current_power - tariff_power) > 0.5:
                 self._set_last_action(f"Tarif-Laden: {tariff_power} W")
                 await self._set_output_and_wait(tariff_power, ac_charge_mode=True)
@@ -1268,9 +1244,7 @@ class SolakonCoordinator:
         else:
             grid_error = grid - target_offset
             grid_error_abs = abs(grid_error)
-            # Sättigung nach oben: der PI könnte hochregeln, darf aber nicht — einziger
-            # Zustand, in dem der Regler dauerhaft stumm bleibt und ein stehengebliebener
-            # Wechselrichter keinen Befehl mehr erhält (_check_output_stall).
+            # Sättigung nach oben: der PI könnte hochregeln, darf aber nicht.
             saturated_high = at_max_limit and not above_dynamic_max and grid_error > 0
 
             if grid_error_abs > tolerance and not saturated_high and not (at_min_limit and grid_error < 0):
@@ -1684,7 +1658,7 @@ class SolakonCoordinator:
                     return None
                 try:
                     cv = state_as_number(cap_st)
-                    # Case-insensitiver Vergleich — HA liefert die Unit i. d. R. als "Wh", nicht "wh".
+                    # Case-insensitiver Vergleich der Unit
                     unit = (cap_st.attributes.get("unit_of_measurement") or "").strip().lower()
                     return cv / 1000.0 if unit == "wh" else cv
                 except (ValueError, TypeError):
@@ -1714,7 +1688,6 @@ class SolakonCoordinator:
                 soc_eid = c.entry.data.get(CONF_SOC_SENSOR, "")
                 if not c._entity_ok(soc_eid):
                     # SOC-Read einer Fremdinstanz unsicher — auf Gleichverteilung ausweichen
-                    # statt eine falsche 0 in die Gewichtung einfließen zu lassen.
                     self._dist_warning = (
                         "Verteilung: SOC-Sensor einer anderen Instanz nicht verfügbar "
                         "— auf Gleichverteilung zurückgefallen"
@@ -1797,9 +1770,7 @@ class SolakonCoordinator:
                     active_id, changed = z0_leader, True
                     state["start_soc"] = socs[active_id]
             elif was_zone0 and active_id in socs:
-                # Zone 0 gerade verlassen (einzelne oder mehrere Instanzen) — Baseline
-                # für die Rotation neu setzen statt mit dem alten Zone-0-Eintrittswert
-                # weiterzurechnen.
+                # Zone 0 gerade verlassen — Baseline für die Rotation neu setzen
                 state["start_soc"] = socs[active_id]
                 changed = True
             elif active_id not in socs:

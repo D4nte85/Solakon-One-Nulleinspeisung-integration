@@ -164,11 +164,10 @@ async def _ws_set_cycle(
         async with coord._lock:
             coord.cycle_active = msg["active"]
             coord.integral = 0.0
-            # Flag persistieren (Teil von _store_data), sonst geht der manuelle
-            # Override bei Neustart verloren.
+            # Flag persistieren (Teil von _store_data)
             coord._store.async_delay_save(coord._store_data, 5)
             coord.notify_listeners()
-        # Neuen Zustand sofort anwenden statt erst beim nächsten Sensor-Event.
+        # Neuen Zustand sofort anwenden
         hass.async_create_task(coord._async_regulate())
         connection.send_result(msg["id"], {"success": True})
     else:
@@ -198,9 +197,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
 
-    # Eintrag neu laden wenn die Entitäten-Zuweisung im OptionsFlow geändert wurde —
-    # sonst behält der Coordinator die alten State-Tracker (entry.data wird nur beim
-    # Setup gelesen).
+    # Eintrag neu laden wenn die Entitäten-Zuweisung im OptionsFlow geändert wurde
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
     # Distribution-Store einmalig anlegen + Config in synchron lesbaren Cache laden.
@@ -210,15 +207,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         from homeassistant.helpers.storage import Store
         store = Store(hass, STORAGE_VERSION_DIST, STORAGE_KEY_DIST)
         hass.data[f"{DOMAIN}_dist_store"] = store
-        # Leerer Cache synchron gesetzt, bevor async_load() an den Event-Loop yieldet —
-        # sonst sieht ein parallel setup_entry-Aufruf den Store-Guard bereits gesetzt,
-        # aber _dist_config existiert noch nicht (KeyError). _dist_cfg() im Coordinator
-        # fällt bei fehlendem Gruppen-Eintrag ohnehin sicher auf DIST_DEFAULTS zurück.
+        # Leerer Cache synchron gesetzt, bevor async_load() an den Event-Loop yieldet
         hass.data[f"{DOMAIN}_dist_config"] = {}
         stored = await store.async_load() or {}
-        # Gruppen aus ALLEN registrierten Config-Entries ableiten (nicht nur den
-        # bereits fertig aufgesetzten in hass.data[DOMAIN]) — sonst könnte die
-        # Migration bei parallelem Setup mehrerer Instanzen Gruppen übersehen.
+        # Gruppen aus allen registrierten Config-Entries ableiten
         group_keys = {
             e.data.get(CONF_GRID_SENSOR, "") for e in hass.config_entries.async_entries(DOMAIN)
         }
@@ -227,10 +219,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if migrated != stored:
             await store.async_save(migrated)
 
-    # SOC-Switch-Laufzeitzustand (Modus `soc_switch`) — eigener Store, getrennt von
-    # _dist_store: das sind Nutzereinstellungen, die beim Speichern im Verteilungs-Tab
-    # komplett überschrieben werden; der hier gehaltene Zustand (welche Instanz gerade
-    # exklusiv entlädt) ist Engine-Laufzeitzustand und darf davon nicht betroffen sein.
+    # SOC-Switch-Laufzeitzustand (Modus `soc_switch`) — eigener Store, getrennt
+    # von _dist_store
     if not hass.data.get(f"{DOMAIN}_soc_switch_store"):
         from homeassistant.helpers.storage import Store
         soc_switch_store = Store(hass, STORAGE_VERSION_SOC_SWITCH, STORAGE_KEY_SOC_SWITCH)
@@ -254,7 +244,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         websocket_api.async_register_command(hass, _ws_save_distribution_config)
         hass.data[f"{DOMAIN}_ws_registered"] = True
 
-    # Panel nur einmal registrieren — kein entry_id in config (Panel holt alle Instanzen selbst)
+    # Panel nur einmal registrieren — kein entry_id in config
     if not hass.data.get(f"{DOMAIN}_panel_registered"):
         await panel_custom.async_register_panel(
             hass,
@@ -391,16 +381,11 @@ async def _ws_save_distribution_config(
     await store.async_save(all_groups)
     hass.data[f"{DOMAIN}_dist_config"] = all_groups
 
-    # Neue Verteilung sofort auf die Instanzen DIESER Gruppe anwenden — sonst greift
-    # die geänderte allocated_power erst beim nächsten Sensor-Event. Lock-geschützt
-    # (parallele Läufe werden verworfen), daher rein additiv. Andere Gruppen bleiben
-    # unberührt und werden nicht angestoßen.
-    #
+    # Neue Verteilung sofort auf die Instanzen dieser Gruppe anwenden, andere
+    # Gruppen bleiben unberührt. Lock-geschützt, parallele Läufe werden verworfen.
     # Globale Sensor-Felder (PV-Vorhersage heute/morgen, Austritts-Sperre, Tarif)
-    # ändern ggf. die effektiv wirksame Sensor-Entität einer Instanz, ohne dass
-    # deren eigene Settings sich ändern — Listener müssen deshalb hier explizit
-    # neu registriert werden, sonst reagiert die Instanz erst beim nächsten
-    # ohnehin fälligen Regelzyklus auf State-Changes des neuen Sensors.
+    # ändern die effektiv wirksame Sensor-Entität einer Instanz ohne Änderung ihrer
+    # eigenen Settings — Listener werden deshalb hier neu registriert.
     for coord in hass.data.get(DOMAIN, {}).values():
         if coord.entry.data.get(CONF_GRID_SENSOR, "") != group_key:
             continue

@@ -86,9 +86,7 @@ S_SURPLUS_SOC_THRESHOLD = "surplus_soc_threshold"
 S_SURPLUS_SOC_HYST      = "surplus_soc_hyst"
 S_SURPLUS_PV_HYST       = "surplus_pv_hyst"
 S_SURPLUS_FORECAST_ENABLED   = "surplus_forecast_enabled"
-# Nur noch Migrationsquelle — der Sensor selbst kommt aus dem gemergten
-# PV-Vorhersage-Feld (S_PV_FORECAST_SENSOR + globaler Fallback), siehe
-# _effective_pv_forecast_today_sensor(). Kein eigener Default mehr in SETTINGS_DEFAULTS.
+# Migrationsquelle; wirksamer Sensor über _effective_pv_forecast_today_sensor().
 S_SURPLUS_FORECAST_SENSOR    = "surplus_forecast_sensor"
 S_SURPLUS_FORECAST_THRESHOLD = "surplus_forecast_threshold"
 S_SURPLUS_LOCK_ENABLED = "surplus_lock_enabled"

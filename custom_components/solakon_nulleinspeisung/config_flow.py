@@ -131,10 +131,7 @@ class SolakonOptionsFlow(config_entries.OptionsFlow):
                     and entry.data.get(CONF_MODE_SELECT) == mode_select
                 ):
                     return self.async_abort(reason="already_configured")
-            # Die Entitäten-Zuweisung liegt in entry.data (der Coordinator liest
-            # ausschließlich von dort) — nicht in entry.options. Daher data direkt
-            # aktualisieren statt in options zu schreiben. Der Update-Listener in
-            # __init__ lädt den Eintrag danach neu und re-registriert die Tracker.
+            # Entitäten-Zuweisung liegt in entry.data, nicht in entry.options.
             self.hass.config_entries.async_update_entry(
                 self.config_entry,
                 data={**self.config_entry.data, **user_input},

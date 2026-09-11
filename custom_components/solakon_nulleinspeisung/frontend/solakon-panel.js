@@ -370,9 +370,8 @@ class SolakonPanel extends HTMLElement {
       if (g) this._activeGroup = g.key;
     }
     this._renderInstBar();
-    // Verteilungs-Config aller Gruppen vorab laden (nicht erst beim Öffnen des
-    // Verteilungs-Tabs) — die Übersicht braucht sie für SOC-Mittelwert und
-    // angezeigten Verteilungs-Modus je Gruppe.
+    // Verteilungs-Config aller Gruppen vorab laden — die Übersicht liest daraus
+    // SOC-Mittelwert und Verteilungs-Modus je Gruppe.
     const distPreload = this._instances.length > 1
       ? Promise.all(this._groups.map(g => this._loadDistConfig(g.key)))
       : Promise.resolve();
@@ -380,9 +379,7 @@ class SolakonPanel extends HTMLElement {
   }
 
   // Gruppiert Instanzen nach grid_power_sensor. Instanzen ohne gesetzten Sensor
-  // (sollte praktisch nicht vorkommen, Kernsensor ist Pflicht) fallen einzeln auf
-  // ihre eigene entry_id als Gruppenschlüssel zurück, statt fälschlich in einer
-  // gemeinsamen "leer"-Gruppe zu landen.
+  // fallen einzeln auf ihre eigene entry_id als Gruppenschlüssel zurück.
   _computeGroups() {
     const map = new Map();
     for (const inst of this._instances) {
@@ -435,8 +432,7 @@ class SolakonPanel extends HTMLElement {
         const capState  = capSensor ? this._hass?.states?.[capSensor] : null;
         const capRaw    = capState ? parseFloat(capState.state) : NaN;
         // Wh→kWh normalisieren, analog zur Backend-Gewichtung in coordinator.py
-        // (_all_shares, Modus "capacity") — sonst verzerrt eine Instanz mit
-        // Wh-Sensor die Gewichtung um Faktor 1000 gegenüber kWh-Instanzen.
+        // (_all_shares, Modus "capacity").
         const capUnit   = (capState?.attributes?.unit_of_measurement || "").trim().toLowerCase();
         const capNum    = capUnit === "wh" ? capRaw / 1000 : capRaw;
         capWeightedSum += st.soc * capNum;
@@ -507,13 +503,11 @@ class SolakonPanel extends HTMLElement {
       id = "__dist__"; // Gruppen-Tab selbst hat keinen Inhalt, springt direkt zur Verteilung
     } else if (id === "__overview__") {
       // Übersicht zeigt alle Gruppen gleichzeitig — kein einzelner Gruppen-Tab
-      // darf aktiv bleiben, sonst markiert die Leiste die alte Gruppe doppelt
-      // und die Sub-Leiste (Verteilung/Instanzen) bleibt sichtbar.
+      // bleibt aktiv.
       this._activeGroup = null;
     } else if (this._groups.length > 1 && id !== "__dist__") {
-      // Direktsprung auf eine Instanz (z. B. Klick auf Übersichts-Karte) außerhalb
-      // des aktuellen Gruppen-Kontexts — Gruppen-Tab passend nachziehen, sonst
-      // zeigt die obere Leiste keine aktive Gruppe und die Sub-Leiste fehlt.
+      // Direktsprung auf eine Instanz außerhalb des aktuellen Gruppen-Kontexts —
+      // Gruppen-Tab passend nachziehen.
       const g = this._groups.find(g => g.instances.some(i => i.entry_id === id));
       if (g) this._activeGroup = g.key;
     }
@@ -587,11 +581,8 @@ class SolakonPanel extends HTMLElement {
           <span>${ov.group_prefix || "Group"}: ${g.label}</span>
         </div>` : "";
 
-      // Gesamtwerte in derselben Karten-/Zeilenform wie die Einzelgeräte
-      // (gleiche Bezeichnungen, untereinander) statt in einer separaten
-      // Kopfzeile — dadurch auch über _updateOverviewCards() live haltbar.
-      // Pro Gruppe sichtbar sobald sie >1 Instanz hat — unabhängig von der
-      // Gruppenanzahl, deckt damit auch den häufigeren Ein-Gruppen-Fall ab.
+      // Gesamtwerte in derselben Karten-/Zeilenform wie die Einzelgeräte.
+      // Pro Gruppe sichtbar sobald sie >1 Instanz hat.
       const totalCardHtml = showTotal ? `<div class="ov-card ov-card-total">
           <div class="ov-hdr" style="background:#0891b2">${ov.total_output || "Total"}</div>
           <div class="ov-body">
@@ -611,10 +602,8 @@ class SolakonPanel extends HTMLElement {
     });
   }
 
-  // Leichtgewichtiges Update der Live-Werte auf der Overview-Seite — patcht
-  // nur einzelne Textknoten statt die Overview (inkl. Verteilungs-Inputs)
-  // bei jedem 1s-Poll komplett neu zu rendern (sonst verliert ein gerade
-  // fokussiertes Eingabefeld im Verteilungsblock jede Sekunde den Fokus).
+  // Leichtgewichtiges Update der Live-Werte auf der Overview-Seite: patcht nur
+  // einzelne Textknoten statt die Overview bei jedem 1s-Poll neu zu rendern.
   _updateOverviewCards() {
     const ov = this._t.ov || {};
     for (const inst of this._instances) {
@@ -635,8 +624,8 @@ class SolakonPanel extends HTMLElement {
       const fallEl = this.shadowRoot.getElementById(`ov-fall-${inst.entry_id}`);
       if (fallEl) fallEl.textContent = fl;
 
-      // Kapazitäts-Sensor-Dot im Verteilungsblock live mitziehen (Sensor kann
-      // zwischendurch unavailable werden), ohne den Input selbst anzufassen.
+      // Kapazitäts-Sensor-Dot im Verteilungsblock live mitziehen, ohne den
+      // Input selbst anzufassen.
       const dot = this.shadowRoot.getElementById(`cap-dot-${inst.entry_id}`);
       const inp = this.shadowRoot.getElementById(`cap-input-${inst.entry_id}`);
       if (dot && inp) dot.className = `entity-dot ${this._entityDotClass(inp.value)}`;
@@ -1376,9 +1365,8 @@ class SolakonPanel extends HTMLElement {
     return this._activeGroup || (this._groups[0]?.key ?? "");
   }
 
-  // Rendert die Verteilungsseite neu, direkt in #content. Nicht über
-  // _renderActiveTab() — das würde den per-Instanz-Tab-Inhalt rendern und
-  // die Verteilungsseite überschreiben.
+  // Rendert die Verteilungsseite neu, direkt in #content — nicht über
+  // _renderActiveTab().
   _rerenderDist() {
     // Rendert nur, wenn die Verteilungsseite noch aktiv ist.
     if (this._activeInstance !== "__dist__") return;
