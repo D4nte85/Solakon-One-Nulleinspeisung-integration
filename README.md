@@ -392,6 +392,8 @@ Drei Preisstufen: **Günstig** (Preis < Günstig-Schwelle): Tarif-Laden mit fest
 | PV-Vorhersage heute | 🔌 Sensor wird im **Entitäten**-Tab zugewiesen — gemergtes Feld, speist auch die Surplus-Forecast-Erzwingung (siehe Überschuss oben) | — |
 | Schwellwert (kWh) | Ab diesem Wert wird Tarif-Laden/Discharge-Lock unterdrückt | 5–15 |
 
+**Einheiten-Plausibilität:** Beide Schwellen sind ct/kWh. Liefert der Preis-Sensor €/kWh (0,28 statt 28), liegt der Preis dauerhaft unter der Günstig-Schwelle — die Integration lädt durchgehend aus dem Netz und sperrt zusätzlich die Entladung. Erkannt wird das am Wert, nicht an der Einheit: ein Preis zwischen 0 und 1 bei einer Günstig-Schwelle ab 3 gilt nach sechs Stunden ununterbrochen als Verdacht und erscheint als Fehlermeldung im Panel. Trägt der Sensor eine Einheit mit „€" oder „EUR", erscheint die Meldung sofort; eine Einheit mit „ct", „Cent" oder „öre" unterdrückt sie. Umgerechnet wird nichts — negative Börsenpreise und einzelne Nulltarif-Stunden lösen keine Meldung aus.
+
 **Dynamische Preisschwellen (optional lokal):** Günstig-Schwelle-Entität und Teuer-Schwelle-Entität, siehe **Entitäten**. Können bei Multi-Instanz zusätzlich global im Verteilungs-Tab hinterlegt werden (meist ein gemeinsamer Hausstrom-Tarif) — jede Instanz überschreibt optional lokal.
 
 ---

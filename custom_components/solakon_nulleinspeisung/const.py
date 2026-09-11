@@ -56,6 +56,16 @@ PLATFORMS = ["sensor", "switch", "binary_sensor"]
 OUTPUT_STALL_SECONDS = 300
 OUTPUT_STALL_DEVIATION = 0.05
 
+# -- Tarif-Einheitenplausibilitaet --------------------------------------------
+# Die Preisschwellen sind ct/kWh. Liegt der Preis im Fenster
+# [0, TARIFF_UNIT_SUSPECT_PRICE) bei einer Guenstig-Schwelle ab
+# TARIFF_UNIT_SUSPECT_THRESHOLD und haelt das laenger als
+# TARIFF_UNIT_SUSPECT_SECONDS an, liefert der Sensor vermutlich EUR/kWh.
+# Gemeldet wird nur, umgerechnet nichts.
+TARIFF_UNIT_SUSPECT_PRICE = 1.0
+TARIFF_UNIT_SUSPECT_THRESHOLD = 3.0
+TARIFF_UNIT_SUSPECT_SECONDS = 21600
+
 # -- Inverter Mode Values -----------------------------------------------------
 MODE_DISABLED  = "0"
 MODE_DISCHARGE = "1"

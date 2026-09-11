@@ -22,6 +22,7 @@ from .const import (
     CONF_DISCHARGE_CURRENT, CONF_TIMEOUT_SET, CONF_MODE_SELECT, CONF_EXPORT_LIMIT,
     MODE_DISABLED, MODE_DISCHARGE, MODE_AC_CHARGE,
     OUTPUT_STALL_SECONDS, OUTPUT_STALL_DEVIATION,
+    TARIFF_UNIT_SUSPECT_PRICE, TARIFF_UNIT_SUSPECT_THRESHOLD, TARIFF_UNIT_SUSPECT_SECONDS,
     S_REGULATION_ENABLED,
     S_P_FACTOR, S_I_FACTOR, S_TOLERANCE, S_WAIT_TIME, S_STDDEV_WINDOW, S_STDDEV_TRIM_COUNT,
     S_ZONE1_LIMIT, S_ZONE3_LIMIT, S_DISCHARGE_MAX, S_HARD_LIMIT, S_HARD_LIMIT_Z0, S_HARD_LIMIT_Z1,
@@ -104,6 +105,9 @@ class SolakonCoordinator:
         self._output_warning: str = ""
         self._output_stall_actions: int = 0
         self._output_stall_last_ts: float = 0.0
+        # Beginn der laufenden Verdachtsphase auf eine EUR/kWh-Preiseinheit;
+        # 0.0 solange der Preis zur ct/kWh-Schwelle passt.
+        self._tariff_unit_suspect_since: float = 0.0
         # Tatsächlich angewandter Verteilungs-Modus des letzten _all_shares()-Aufrufs
         # — kann vom konfigurierten distribution_mode abweichen (Degradation, siehe oben).
         self.dist_mode_effective: str = ""
@@ -591,6 +595,40 @@ class SolakonCoordinator:
     def _effective_tariff_exp_entity(self) -> str:
         return str(self.settings.get(S_TARIFF_EXP_ENTITY, "")) or self._global_sensor("global_tariff_exp_entity")
 
+    def _tariff_unit_warning(self, entity_id: str, price: float, cheap: float) -> str:
+        """Meldung, wenn der Preis-Sensor vermutlich €/kWh statt ct/kWh liefert, sonst "".
+
+        Kriterium ist der Wert: ein Preis unter TARIFF_UNIT_SUSPECT_PRICE bei einer
+        Günstig-Schwelle ab TARIFF_UNIT_SUSPECT_THRESHOLD ist in ct/kWh kaum erreichbar.
+        Einzelne Billigstunden und negative Börsenpreise bleiben ausgenommen: gemeldet
+        wird erst nach TARIFF_UNIT_SUSPECT_SECONDS ununterbrochenem Verdacht und nur bei
+        price >= 0. `unit_of_measurement` wirkt nur bestätigend — eine ct-Einheit
+        unterdrückt die Meldung, eine €-Einheit macht sie sofort. Umgerechnet wird nichts.
+        """
+        state = self.hass.states.get(entity_id)
+        unit = str(state.attributes.get("unit_of_measurement", "")).lower() if state else ""
+
+        if any(token in unit for token in ("ct", "cent", "öre", "ore")):
+            self._tariff_unit_suspect_since = 0.0
+            return ""
+
+        if not (cheap >= TARIFF_UNIT_SUSPECT_THRESHOLD and 0.0 <= price < TARIFF_UNIT_SUSPECT_PRICE):
+            self._tariff_unit_suspect_since = 0.0
+            return ""
+
+        now = time.time()
+        if not self._tariff_unit_suspect_since:
+            self._tariff_unit_suspect_since = now
+
+        euro_unit = any(token in unit for token in ("€", "eur"))
+        if not euro_unit and now - self._tariff_unit_suspect_since < TARIFF_UNIT_SUSPECT_SECONDS:
+            return ""
+
+        return (
+            f"Tarif: Preis {price:g} passt nicht zur Günstig-Schwelle {cheap:g} ct/kWh "
+            "— Sensor liefert vermutlich €/kWh"
+        )
+
     # ── Modbus-Schreibbefehle (nur wenn regulation_enabled) ──────────────────
 
     async def _set_number(self, entity_id: str, value: float) -> None:
@@ -1053,10 +1091,27 @@ class SolakonCoordinator:
             self.notify_listeners()
             return
 
+        # Preis vor der Fehlersammlung lesen: die Einheitenplausibilität geht als
+        # soft_error in dieselbe Meldungskette ein.
+        tariff_price = 0.0
+        tariff_price_valid = False
+        if tariff_enabled and tariff_sensor:
+            raw = self.hass.states.get(tariff_sensor)
+            if raw and raw.state not in ("unknown", "unavailable"):
+                try:
+                    tariff_price = float(raw.state)
+                    tariff_price_valid = True
+                except (ValueError, TypeError):
+                    pass
+
         if tariff_enabled and not tariff_sensor:
             soft_errors.append("Tarif: Kein Preis-Sensor konfiguriert — Tarif-Funktion inaktiv")
         elif tariff_enabled and tariff_sensor and not self._entity_ok(tariff_sensor):
             soft_errors.append(f"Tarif: Preis-Sensor {tariff_sensor!r} nicht verfügbar")
+        elif tariff_price_valid:
+            unit_warning = self._tariff_unit_warning(tariff_sensor, tariff_price, tariff_cheap)
+            if unit_warning:
+                soft_errors.append(unit_warning)
 
         # Verkettet statt überschrieben
         self.last_error = " • ".join(soft_errors)
@@ -1109,17 +1164,6 @@ class SolakonCoordinator:
 
         is_night = night_enabled and solar < pv_reserve and not self.cycle_active
         self.is_night = is_night
-
-        tariff_price = 0.0
-        tariff_price_valid = False
-        if tariff_enabled and tariff_sensor:
-            raw = self.hass.states.get(tariff_sensor)
-            if raw and raw.state not in ("unknown", "unavailable"):
-                try:
-                    tariff_price = float(raw.state)
-                    tariff_price_valid = True
-                except (ValueError, TypeError):
-                    pass
 
         # ── 5. Falls / Zonenwechsel ──────────────────────────────────────────
         fall_executed = await self._execute_falls(
