@@ -1410,7 +1410,7 @@ class SolakonCoordinator:
         if (
             not self.ac_charge_active
             and not self.tariff_charge_active
-            and soc < zone3
+            and soc <= zone3
             and self.cycle_active
         ):
             self.integral = 0.0
@@ -1428,7 +1428,7 @@ class SolakonCoordinator:
         if (
             not self.ac_charge_active
             and not self.tariff_charge_active
-            and soc < zone3
+            and soc <= zone3
             and not self.cycle_active
             and mode != MODE_DISABLED
         ):
@@ -2023,15 +2023,15 @@ class SolakonCoordinator:
         self, soc: float, zone1: int, zone3: int, mode: str
     ) -> None:
         """Zone-Label und Modus-Label für Panel-Anzeige aktualisieren."""
-        if self.surplus_active:
+        if soc <= zone3:
+            self.current_zone = 3
+            self.zone_label = self._tr("zone_3")
+        elif self.surplus_active:
             self.current_zone = 0
             self.zone_label = self._tr("zone_0")
         elif self.cycle_active:
             self.current_zone = 1
             self.zone_label = self._tr("zone_1")
-        elif soc <= zone3:
-            self.current_zone = 3
-            self.zone_label = self._tr("zone_3")
         else:
             self.current_zone = 2
             self.zone_label = self._tr("zone_2")

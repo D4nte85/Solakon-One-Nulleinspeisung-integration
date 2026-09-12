@@ -244,7 +244,7 @@ SOC-Zonenlogik mit allen Leistungs- und Offset-Parametern.
 | Parameter | Beschreibung | Empfehlung |
 |-----------|-------------|------------|
 | Zone 1 SOC-Schwelle (%) | SOC über diesem Wert → Zone 1 (aggressiv) | 40–60 |
-| Zone 3 SOC-Schwelle (%) | SOC unter diesem Wert → Zone 3 (Stopp) | 15–25 |
+| Zone 3 SOC-Schwelle (%) | SOC auf oder unter diesem Wert → Zone 3 (Stopp) | 15–25 |
 | Max. Entladestrom (A) | Entladestrom in Zone 1 (Zone 2 = 0 A, Surplus = 2 A) | 25–40 |
 | Hard Limit Z0 — Surplus (W) | Ausgangsleistungs-Obergrenze in Zone 0 (Überschuss-Einspeisung). Typisch: gesetzliches Maximum (z. B. 800 W). | 800 |
 | Hard Limit Z1 — Entladung (W) | Ausgangsleistungs-Obergrenze in Zone 1 und Zone 2. In Zone 2 gilt `min(Z1, max(0, PV − Reserve))`. Wird als `max(Z0, Z1)` in die optionale Export-Limit-Entität geschrieben. | 800 |
@@ -469,8 +469,8 @@ Die Regellogik arbeitet mit einer geordneten Liste von Falls. Die Reihenfolge is
 | **0A** — Surplus Start | `surplus_enabled` UND `new_surplus = True` UND `surplus_active = False` UND kein AC/Tarif-Laden | `surplus_active → True`, `cycle_active → True` (Zone 0 setzt auf Zone 1 auf). Integral eingefroren. Falls Modus ≠ `'1'`: Timer-Toggle + Modus → `'1'`. (Entladestrom 2 A setzt der zentrale Abgleich, siehe Hinweis 12.) |
 | **0B** — Surplus Ende | `surplus_active = True` UND (Überschuss-Option AUS **ODER** Austritts-Bedingung erfüllt) | `surplus_active → False`, `cycle_active → (SOC > Zone-1-Schwelle)` (Zone aus SOC neu abgeleitet). Integral = 0. Output → 0 (analog Fall B/C/F/G/H). Das Ausschalten der Option erzwingt den Austritt, sonst bliebe `surplus_active` hängen und die Batterie auf 2 A gedrosselt. |
 | **A** — Zone 1 Start | (SOC > Zone-1-Schwelle **ODER** Nacht-Forcierung aktiv) UND `cycle_active = False` UND kein AC/Tarif-Laden UND (Tarif deaktiviert ODER Preis gültig) UND kein aktiver Tarif-Block (Preis < Teuer) | `cycle_active → True`. Integral = 0. Timer-Toggle. Modus → `'1'`. |
-| **B** — Zone 3 Stop | SOC < Zone-3-Schwelle UND `cycle_active = True` UND kein AC/Tarif-Laden | `cycle_active → False`. Integral = 0. Output → 0 W. Timer-Toggle. Modus → `'0'`. |
-| **C** — Zone 3 Absicherung | SOC < Zone-3-Schwelle UND `cycle_active = False` UND Modus ≠ `'0'` UND kein AC/Tarif-Laden | Output → 0 W. Timer-Toggle. Modus → `'0'`. Kein Integral-Reset. |
+| **B** — Zone 3 Stop | SOC ≤ Zone-3-Schwelle UND `cycle_active = True` UND kein AC/Tarif-Laden | `cycle_active → False`. Integral = 0. Output → 0 W. Timer-Toggle. Modus → `'0'`. |
+| **C** — Zone 3 Absicherung | SOC ≤ Zone-3-Schwelle UND `cycle_active = False` UND Modus ≠ `'0'` UND kein AC/Tarif-Laden | Output → 0 W. Timer-Toggle. Modus → `'0'`. Kein Integral-Reset. |
 | **D** — Recovery | `(cycle_active = True ODER ac_charge_active = True ODER tariff_charge_active = True)` UND Modus ∉ `{'1','3'}` UND (SOC > Zone-3-Schwelle **ODER** `ac_charge_active`/`tariff_charge_active` aktiv) UND kein aktiver **Mittelpreis-Lock** (Günstig-Schwelle ≤ Preis < Teuer-Schwelle; greift nicht bei `ac_charge_active`, `tariff_charge_active` oder `surplus_active`) | Timer-Toggle. Modus → `'3'` (wenn `ac_charge_active` oder `tariff_charge_active`) sonst `'1'`. Kein Integral-Reset. |
 | **GT** — Tarif-Laden Start | Tarif aktiv UND Preis gültig UND Preis < Günstig-Schwelle UND SOC < Tarif-SOC-Ziel UND kein Tarif-Laden aktiv UND kein Überschuss aktiv UND Modus ≠ `'3'` | `tariff_charge_active → True`. Timer-Toggle. Output → Tarif-Ladeleistung. Modus → `'3'`. |
 | **HT** — Tarif-Laden Ende | `tariff_charge_active = True` UND (Preis gültig UND Preis ≥ Günstig-Schwelle ODER SOC ≥ Tarif-SOC-Ziel) | `tariff_charge_active → False`. Integral = 0. Zone 1 → Timer-Toggle + `'1'` / Zone 2 → Timer-Toggle + `'0'` + 0 W. |
