@@ -7,7 +7,7 @@
   },
   "state_labels": {
     "disabled":         "Control inactive",
-    "blocked":          "Fault",
+    "blocked":          "Control blocked",
     "exporting":        "Surplus export",
     "tariff_charging":  "Tariff charging",
     "ac_charging":      "AC charging",

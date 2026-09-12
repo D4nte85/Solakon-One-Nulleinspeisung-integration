@@ -7,10 +7,10 @@
   },
   "state_labels": {
     "disabled":         "Regelung inaktiv",
-    "blocked":          "Gestört",
+    "blocked":          "Regelung blockiert",
     "exporting":        "Überschuss-Einspeisung",
     "tariff_charging":  "Tarif-Laden",
-    "ac_charging":      "AC Laden",
+    "ac_charging":      "AC-Laden",
     "discharge_locked": "Entladung gesperrt (Tarif)",
     "night_off":        "Nachtabschaltung",
     "discharging":      "Entladen",

@@ -569,10 +569,10 @@ Der Zustand wird aus den Zustandsflags abgeleitet, nicht aus dem zuletzt ausgef�
 | # | Schlüssel | Anzeige | Gilt wenn |
 |---|-----------|---------|-----------|
 | 1 | `disabled` | Regelung inaktiv | Hauptschalter aus |
-| 2 | `blocked` | Gestört | Zyklus bricht ab — Kernsensor fehlt oder SOC-Grenzen unplausibel |
+| 2 | `blocked` | Regelung blockiert | Zyklus bricht ab — Kernsensor fehlt oder SOC-Grenzen unplausibel, Grund in `last_error` |
 | 3 | `exporting` | Überschuss-Einspeisung | Zone 0 aktiv |
 | 4 | `tariff_charging` | Tarif-Laden | Lade-Session bei günstigem Preis |
-| 5 | `ac_charging` | AC Laden | Lade-Session Zone 1 |
+| 5 | `ac_charging` | AC-Laden | Lade-Session Zone 1 |
 | 6 | `discharge_locked` | Entladung gesperrt (Tarif) | Preis unter Teuer-Schwelle, keine Lade-Session, kein Überschuss |
 | 7 | `night_off` | Nachtabschaltung | Nachtabschaltung greift |
 | 8 | `discharging` | Entladen | Entladezyklus aktiv |
