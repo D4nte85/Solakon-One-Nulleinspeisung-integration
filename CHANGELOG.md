@@ -3,7 +3,9 @@
 Alle nennenswerten Änderungen an der Solakon-ONE-Nulleinspeisung-Integration.
 Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
-## [Unreleased]
+## [2.4.1-beta.1] – 2026-09-12
+
+> **Beta-Release.** Fehlerbehebungen und ein interner Umbau der Textquellen; keine Breaking Changes gegenüber `2.4.0`. Erscheint in HACS nur bei aktivierten Beta-Versionen.
 
 ### Behoben
 - Das Panel trug 76 englische Texte ein zweites Mal als Inline-Fallback im JavaScript
