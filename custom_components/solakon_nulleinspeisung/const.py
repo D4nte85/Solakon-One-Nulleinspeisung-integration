@@ -50,8 +50,7 @@ PLATFORMS = ["sensor", "switch", "binary_sensor"]
 
 # -- Geraetegrenze ------------------------------------------------------------
 # Maximale Ein- und Ausgangsleistung des Solakon ONE laut Datenblatt. Deckelt jeden
-# Sollwert. Das max-Attribut der Ausgangs-Entity wird dafuer nicht gelesen: Modbus-
-# Einbindungen deklarieren dort die Registergrenze (gemessen: 100000).
+# Sollwert.
 DEVICE_MAX_POWER = 1200
 
 # -- Ausgangs-Stillstandserkennung --------------------------------------------
@@ -137,7 +136,7 @@ S_SURPLUS_SOC_THRESHOLD = "surplus_soc_threshold"
 S_SURPLUS_SOC_HYST      = "surplus_soc_hyst"
 S_SURPLUS_PV_HYST       = "surplus_pv_hyst"
 S_SURPLUS_FORECAST_ENABLED   = "surplus_forecast_enabled"
-# Schwelle in kWh Tagesertrag, gelesen über _flt_kwh_normalized().
+# Schwelle in kWh Tagesertrag.
 S_SURPLUS_FORECAST_THRESHOLD = "surplus_forecast_threshold"
 S_SURPLUS_LOCK_ENABLED = "surplus_lock_enabled"
 S_SURPLUS_LOCK_SENSOR  = "surplus_lock_sensor"
@@ -162,7 +161,7 @@ S_TARIFF_EXP_ENTITY       = "tariff_exp_entity"
 
 S_PV_FORECAST_ENABLED    = "pv_forecast_enabled"
 S_PV_FORECAST_SENSOR     = "pv_forecast_sensor"
-# Schwelle in kWh Tagesertrag, gelesen über _flt_kwh_normalized().
+# Schwelle in kWh Tagesertrag.
 S_PV_FORECAST_THRESHOLD  = "pv_forecast_threshold"
 
 # Zone-1-Nacht-Forcierung. Sensor ist zeitabhängig "heute" (S_PV_FORECAST_SENSOR

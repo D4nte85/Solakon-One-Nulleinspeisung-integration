@@ -8,8 +8,7 @@ DEFAULT_LANGUAGE = "en"
 
 _TEXTS: dict[str, dict[str, str]] = {
     # ── Zonen-Label ──────────────────────────────────────────────────────────
-    # Langform, geht als Attribut zone_label an die Entitäten. Die Kurzform im
-    # Panel-Kopf (zone_cfg in panel.<lang>.json) ist ein eigener Text, keine Kopie.
+    # Langform, geht als Attribut zone_label an die Entitäten.
     "zone_init": {
         "de": "Initialisierung…",
         "en": "Initialising…",
@@ -30,10 +29,6 @@ _TEXTS: dict[str, dict[str, str]] = {
         "de": "Zone 3 — Sicherheitsstopp",
         "en": "Zone 3 — Safety stop",
     },
-
-    # Modus-Label stehen nicht hier, sondern als Zustandstexte des Sensors
-    # "Betriebsmodus" in translations/<lang>.json und werden daraus geladen
-    # (_load_mode_texts unten).
 
     # ── Letzte Aktion ────────────────────────────────────────────────────────
     "act_integral_reset": {
@@ -220,11 +215,9 @@ _TEXTS: dict[str, dict[str, str]] = {
 def _load_mode_texts() -> None:
     """Modus-Label aus translations/<lang>.json nach _TEXTS übernehmen.
 
-    Die Zustandstexte des Sensors "Betriebsmodus" liegen in den
-    HA-Übersetzungsdateien, weil Home Assistant Entitätszustände nur von dort
-    liest. Sie werden hier unter "mode_<key>" eingehängt, damit translate() sie
-    wie jeden anderen Text auflöst. Fehlt eine Datei oder ein Schlüssel, bleibt
-    der Rohschlüssel übrig — translate() gibt ihn dann unverändert zurück.
+    Die Zustandstexte des Sensors "Betriebsmodus" werden unter "mode_<key>"
+    eingehängt und von translate() wie jeder andere Text aufgelöst. Fehlt eine
+    Datei oder ein Schlüssel, bleibt der Rohschlüssel stehen.
     """
     ordner = Path(__file__).parent / "translations"
     for sprache in ("de", "en"):

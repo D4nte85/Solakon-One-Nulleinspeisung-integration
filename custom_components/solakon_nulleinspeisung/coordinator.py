@@ -991,8 +991,7 @@ class SolakonCoordinator:
         self.allocated_power = allocated_power
         if self._dist_warning:
             soft_errors.append(self._dist_warning)
-        # Geraetegrenze begrenzt jedes Panel-Limit: ein darueberliegender Sollwert
-        # wird entweder von number.set_value abgewiesen oder vom Geraet nicht erreicht.
+        # Panel-Limits gegen die Geraetegrenze gedeckelt.
         effective_hard    = int(min(int(allocated_power), hard_limit_z0, DEVICE_MAX_POWER)) if allocated_power is not None else int(min(hard_limit_z0, DEVICE_MAX_POWER))
         effective_hard_z1 = int(min(int(allocated_power), hard_limit_z1, DEVICE_MAX_POWER)) if allocated_power is not None else int(min(hard_limit_z1, DEVICE_MAX_POWER))
 
@@ -2054,8 +2053,7 @@ class SolakonCoordinator:
         if new_mode_key != self.mode_key:
             self.mode_label_ts = time.time()
         self.mode_key = new_mode_key
-        # Der Zustandstext kommt aus der Übersetzungsdatei und kann keinen
-        # Parameter tragen; der unbekannte Rohwert wird deshalb hier angehängt.
+        # Beim unbekannten Modus den Rohwert an den Zustandstext anhängen.
         self.mode_label = self._tr(f"mode_{new_mode_key}")
         if new_mode_key == "unknown":
             self.mode_label = f"{self.mode_label}: {mode}"

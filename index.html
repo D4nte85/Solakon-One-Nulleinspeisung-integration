@@ -50,10 +50,9 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
 (function () {
   const DOMAIN = "solakon_nulleinspeisung";
 
-  // Das echte Panel fetcht Übersetzungen von HA-Static-Paths (/<DOMAIN>/panel.xx.json
-  // für die Panel-Texte, /<DOMAIN>/entity.xx.json für Zustandstexte und Entitätsnamen).
-  // Hier gibt es keinen HA-Server — auf die repo-relativen Pfade umleiten, damit das
-  // sowohl lokal (`python -m http.server`) als auch auf GitHub Pages funktioniert.
+  // Kein HA-Server: die Static-Paths des Panels (/<DOMAIN>/panel.xx.json,
+  // /<DOMAIN>/entity.xx.json) auf die repo-relativen Pfade umleiten — lokal über
+  // `python -m http.server` wie auf GitHub Pages.
   const origFetch = window.fetch.bind(window);
   window.fetch = (url, opts) => {
     if (typeof url === "string" && url.startsWith(`/${DOMAIN}/`)) {

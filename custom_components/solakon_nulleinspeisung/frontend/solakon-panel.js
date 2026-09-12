@@ -280,8 +280,7 @@ class SolakonPanel extends HTMLElement {
     this._activeTab      = "status";
     this._polling        = null;
     this._t              = {};
-    // HA-Übersetzung der Entitäten — einzige Quelle für Zustandstexte und
-    // Entitätsnamen, die sonst hier und in translations/<lang>.json stünden
+    // HA-Übersetzung: Zustandstexte und Entitätsnamen
     this._et             = {};
     this._textsMissing   = false;
     // Multi-Instance
@@ -319,9 +318,8 @@ class SolakonPanel extends HTMLElement {
     const lang = (this._hass.language || "en").split("-")[0].toLowerCase();
     const supported = ["de", "en"];
     const locale = supported.includes(lang) ? lang : "en";
-    // Englisch ist die Basis, die Landessprache liegt darüber. Ein Schlüssel, der nur
-    // in einer der beiden Dateien steht, kommt damit aus der anderen — kein Text muss
-    // im Code ein zweites Mal stehen.
+    // Englisch als Basis, Landessprache darüber: ein Schlüssel, der nur in einer der
+    // beiden Dateien steht, kommt aus der anderen.
     this._t  = this._merge(await this._fetchJson("panel.en.json"),
                            locale === "en" ? {} : await this._fetchJson(`panel.${locale}.json`));
     this._et = this._merge(await this._fetchJson("entity.en.json"),
@@ -1242,8 +1240,7 @@ ${this._textsMissing ? `
     const s  = this._t.status || {};
 
     const zs    = ZONE_STYLE[st.zone] || ZONE_STYLE[2];
-    // Kurzform aus panel.<lang>.json — eigener Text für den Panel-Kopf, nicht die
-    // Langform des Attributs zone_label (zone_* in i18n.py).
+    // Kurzform für den Panel-Kopf, eigener Text neben der Langform zone_label.
     const zLabel = this._t.zone_cfg?.[st.zone] ?? `Zone ${st.zone}`;
     const b = this.shadowRoot.getElementById("zone-banner");
     if (b) { b.textContent = `${zs.icon} ${zLabel}`; b.style.background = zs.color; }

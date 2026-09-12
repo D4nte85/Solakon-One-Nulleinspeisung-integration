@@ -217,8 +217,7 @@ async def _ws_set_cycle(
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     frontend_dir = Path(__file__).parent / "frontend"
     translations_dir = Path(__file__).parent / "translations"
-    # Die Übersetzungsdateien werden mit ausgeliefert, damit das Panel Zustands-
-    # texte und Entitätsnamen aus derselben Quelle liest wie Home Assistant.
+    # Übersetzungsdateien für das Panel ausliefern: Zustandstexte, Entitätsnamen.
     await hass.http.async_register_static_paths([
         StaticPathConfig(PANEL_JS_URL,               str(frontend_dir / "solakon-panel.js"), False),
         StaticPathConfig(f"/{DOMAIN}/panel.de.json", str(frontend_dir / "panel.de.json"),    False),
