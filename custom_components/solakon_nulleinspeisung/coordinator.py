@@ -2054,7 +2054,11 @@ class SolakonCoordinator:
         if new_mode_key != self.mode_key:
             self.mode_label_ts = time.time()
         self.mode_key = new_mode_key
-        self.mode_label = self._tr(f"mode_{new_mode_key}", mode=mode)
+        # Der Zustandstext kommt aus der Übersetzungsdatei und kann keinen
+        # Parameter tragen; der unbekannte Rohwert wird deshalb hier angehängt.
+        self.mode_label = self._tr(f"mode_{new_mode_key}")
+        if new_mode_key == "unknown":
+            self.mode_label = f"{self.mode_label}: {mode}"
         self._update_operating_state()
 
     def _update_operating_state(self) -> bool:

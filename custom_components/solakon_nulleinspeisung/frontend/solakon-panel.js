@@ -280,6 +280,9 @@ class SolakonPanel extends HTMLElement {
     this._activeTab      = "status";
     this._polling        = null;
     this._t              = {};
+    // HA-Übersetzung der Entitäten — einzige Quelle für Zustandstexte und
+    // Entitätsnamen, die sonst hier und in translations/<lang>.json stünden
+    this._et             = {};
     // Multi-Instance
     this._instances      = [];
     this._activeInstance = null;
@@ -315,20 +318,28 @@ class SolakonPanel extends HTMLElement {
     const lang = (this._hass.language || "en").split("-")[0].toLowerCase();
     const supported = ["de", "en"];
     const locale = supported.includes(lang) ? lang : "en";
-    try {
-      const res = await fetch(`/${DOMAIN}/panel.${locale}.json`);
-      if (!res.ok) throw new Error("fetch failed");
-      this._t = await res.json();
-    } catch (_) {
-      if (locale !== "en") {
-        try {
-          const res = await fetch(`/${DOMAIN}/panel.en.json`);
-          this._t = await res.json();
-        } catch (_) { this._t = {}; }
-      } else {
-        this._t = {};
-      }
+    this._t  = await this._fetchJson(`panel.${locale}.json`, "panel.en.json");
+    this._et = await this._fetchJson(`entity.${locale}.json`, "entity.en.json");
+  }
+
+  async _fetchJson(name, fallback) {
+    for (const file of [name, fallback]) {
+      try {
+        const res = await fetch(`/${DOMAIN}/${file}`);
+        if (res.ok) { return await res.json(); }
+      } catch (_) { /* nächster Versuch */ }
     }
+    return {};
+  }
+
+  // Zustandstext einer Entität aus der HA-Übersetzung
+  _es(key, state) {
+    return this._et.entity?.sensor?.[key]?.state?.[state] || state || "—";
+  }
+
+  // Angezeigter Name einer Entität aus der HA-Übersetzung
+  _en(key, fallback = "") {
+    return this._et.entity?.sensor?.[key]?.name || fallback;
   }
 
   // Shorthand: look up a field's label or description
@@ -586,7 +597,7 @@ class SolakonPanel extends HTMLElement {
       const cardsHtml = g.instances.map(inst => {
         const st = this._allStatuses[inst.entry_id] || {};
         const zs = ZONE_STYLE[st.zone] ?? ZONE_STYLE[2];
-        const sl = this._t.state_labels?.[st.operating_state] || st.operating_state || "—";
+        const sl = this._es("operating_state", st.operating_state);
         const cls = this._ovStateClass(st);
         return `<div class="ov-card${cls}" id="ov-card-${inst.entry_id}" data-eid="${inst.entry_id}" title="${this._esc(st.last_error || "")}">
           <div class="ov-hdr" id="ov-hdr-${inst.entry_id}" style="background:${zs.color}">
@@ -634,7 +645,7 @@ class SolakonPanel extends HTMLElement {
     for (const inst of this._instances) {
       const st = this._allStatuses[inst.entry_id] || {};
       const zs = ZONE_STYLE[st.zone] ?? ZONE_STYLE[2];
-      const sl = this._t.state_labels?.[st.operating_state] || st.operating_state || "—";
+      const sl = this._es("operating_state", st.operating_state);
 
       const hdr = this.shadowRoot.getElementById(`ov-hdr-${inst.entry_id}`);
       if (hdr) hdr.style.background = zs.color;
@@ -1142,7 +1153,7 @@ class SolakonPanel extends HTMLElement {
           <div class="stat-col-header" style="background:#7c3aed">${s.ctrl_hdr || "📈"}</div>
           <div class="stat-col-body">
             <div class="stat-row">
-              <div class="stat"><div class="val" id="st-int">—</div>   <div class="lbl">${s.integral_lbl || "Integral"}</div></div>
+              <div class="stat"><div class="val" id="st-int">—</div>   <div class="lbl">${this._en("integral", "PI integral")}</div></div>
               <div class="stat"><div class="val" id="st-stddev">—</div><div class="lbl">${s.stddev_lbl   || "StdDev"}</div></div>
             </div>
             <div class="stat-row">
@@ -1169,15 +1180,15 @@ class SolakonPanel extends HTMLElement {
               <div class="flag-row" id="st-flags"></div>
             </div>
             <div>
-              <div class="mode-lbl">${s.active_fall_lbl || ""}</div>
+              <div class="mode-lbl">${this._en("active_fall", "Active case")}</div>
               <div class="mode-val" id="st-active-fall">—</div>
             </div>
             <div>
-              <div class="mode-lbl">${s.mode_lbl || ""}</div>
+              <div class="mode-lbl">${this._en("mode_label", "Operating mode")}</div>
               <div class="mode-val" id="st-mode">—</div>
             </div>
             <div>
-              <div class="mode-lbl">${s.last_action_lbl || ""}</div>
+              <div class="mode-lbl">${this._en("last_action", "Last action")}</div>
               <div class="mode-val" id="st-action">—</div>
             </div>
             <div>
@@ -1206,6 +1217,8 @@ class SolakonPanel extends HTMLElement {
     const s  = this._t.status || {};
 
     const zs    = ZONE_STYLE[st.zone] || ZONE_STYLE[2];
+    // Kurzform aus panel.<lang>.json — eigener Text für den Panel-Kopf, nicht die
+    // Langform des Attributs zone_label (zone_* in i18n.py).
     const zLabel = this._t.zone_cfg?.[st.zone] ?? `Zone ${st.zone}`;
     const b = this.shadowRoot.getElementById("zone-banner");
     if (b) { b.textContent = `${zs.icon} ${zLabel}`; b.style.background = zs.color; }
@@ -1223,7 +1236,7 @@ class SolakonPanel extends HTMLElement {
       [s.flag_exit_lock   || "Exit-Lock",      st.forecast_exit_lock],
     ].map(([n, v]) => `<span class="flag ${v ? "on" : "off"}">${v ? "●" : "○"} ${n}</span>`).join("");
 
-    set("st-active-fall", this._t.fall_labels?.[st.active_fall] || st.active_fall || "—");
+    set("st-active-fall", this._es("active_fall", st.active_fall));
     set("st-grid",         `${(st.grid ?? 0).toFixed(0)} W`);
     set("st-actual",       `${st.actual_power ?? "—"} W`);
     set("st-solar",        `${st.solar ?? "—"} W`);

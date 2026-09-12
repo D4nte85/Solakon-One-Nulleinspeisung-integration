@@ -6,6 +6,21 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 ## [Unreleased]
 
 ### Behoben
+- Zustandstexte und Entitätsnamen standen mehrfach: die zehn Betriebszustände und die
+  vierzehn Fall-Bezeichnungen in `panel.de.json`/`panel.en.json` **und** in
+  `translations/*.json`, die sechs Modus-Texte zusätzlich in `i18n.py`, vier
+  Entitätsnamen noch einmal als Panel-Beschriftung. Nichts hielt die Kopien
+  zusammen — die englischen Fall-Bezeichnungen waren dadurch bereits in allen
+  vierzehn Fällen auseinandergelaufen (Panel Title Case, Entität Sentence Case), und
+  `strings.json` trug einen deutschen Config-Flow-Teil, obwohl es die englische
+  Quelle ist. Einzige Quelle ist jetzt `translations/<lang>.json`, weil Home
+  Assistant Entitätszustände nur von dort liest: das Panel lädt sie über die neuen
+  Static-Paths `/<domain>/entity.<lang>.json` und löst Zustandstexte und Namen daraus
+  auf, `i18n.py` liest die Modus-Texte beim Import von dort ein, und `strings.json`
+  ist wieder englisch und deckungsgleich mit `translations/en.json`. Der bisher
+  parametrisierte Text „Unbekannter Modus: {mode}" setzt den Rohwert jetzt im Code an,
+  weil ein Entitätszustand keine Parameter tragen kann. Die Kurzform der Zonen im
+  Panel-Kopf bleibt bewusst ein eigener Text
 - Die beiden kWh-Schwellen der Forecast-Features standen bei Neuinstallation auf `5000.0` (`const.py`) — ein W-Wert aus der Zeit vor der Umstellung auf `_flt_kwh_normalized()`. Verglichen wird gegen kWh Tagesertrag, die Panel-Felder reichen bis 100 bzw. 50 kWh: Surplus-Forecast-Erzwingung und Tarif-Lock-Unterdrückung waren damit bis zur manuellen Korrektur wirkungslos. Beide Vorgaben jetzt `15.0`, wie die Zone-1-Nacht-Forcierung. Bestehende Installationen behalten ihren gespeicherten Wert und müssen die Schwelle einmal prüfen
 - Doku: `README.md` beschrieb die Forecast-Schwelle als „Basiseinheit (W bzw. Wh), Standard 5000 Wh" — das war das Verhalten von `_flt_kilo_normalized()`. Richtig ist kWh mit automatischer Wh/MWh-Normalisierung. Panel-Label „Mindest-Ertrag für Surplus" trägt die Einheit jetzt ebenfalls, und die Überschuss-Parametertabelle im README listet die Forecast-Erzwingung überhaupt erst
 - Die Gerätegrenze von 1200 W war nur im Panel hinterlegt, nicht in der Regelung: die vier Leistungsfelder (`hard_limit_z0`, `hard_limit_z1`, `ac_power_limit`, `tariff_power`) tragen `max: 1200` als Eingabeattribut, `save_config` nimmt jedoch jeden Wert entgegen (`changes: dict`, keine Wertevalidierung), und Werte aus der Zeit vor der Slider-Korrektur stehen unverändert im Store. Ein Sollwert darüber wird je nach Einbindung von `number.set_value` abgewiesen — dann verfällt der Schreibvorgang und hinterlässt nur eine Exception im Log — oder angenommen und vom Gerät nicht erreicht, womit der Regler in stille Sättigung läuft, weil `at_max_limit` unter `dynamic_max` bleibt. Die Gerätegrenze wird jetzt an drei Stellen berücksichtigt: in der Limitbildung (`effective_hard`, `effective_hard_z1`, AC-Zweig von `dynamic_max`), in `_pi_calculate`, damit Klemmung und Back-Calculation gegen die real erreichbare Grenze rechnen, und als letzte Klemme in `_set_output`/`_set_output_and_wait`, die auch die nicht über `dynamic_max` laufende Tarif-Ladeleistung erfasst. Maßgeblich ist die Konstante `DEVICE_MAX_POWER` mit der Datenblattgrenze des Solakon ONE von 1200 W. Das `max`-Attribut der Ausgangs-Entität wird dafür nicht herangezogen — Modbus-Einbindungen deklarieren dort die Registergrenze (gemessen: 100000), nicht die Gerätegrenze. Der Blueprint deckelt seit jeher über `inverter_entity_max` und `effective_max` (`coordinator.py`, `README.md`)

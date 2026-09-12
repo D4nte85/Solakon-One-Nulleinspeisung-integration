@@ -1,10 +1,15 @@
 """Textbausteine für Zonen-, Modus-, Aktions- und Fehlermeldungen in DE und EN."""
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 DEFAULT_LANGUAGE = "en"
 
 _TEXTS: dict[str, dict[str, str]] = {
     # ── Zonen-Label ──────────────────────────────────────────────────────────
+    # Langform, geht als Attribut zone_label an die Entitäten. Die Kurzform im
+    # Panel-Kopf (zone_cfg in panel.<lang>.json) ist ein eigener Text, keine Kopie.
     "zone_init": {
         "de": "Initialisierung…",
         "en": "Initialising…",
@@ -26,31 +31,9 @@ _TEXTS: dict[str, dict[str, str]] = {
         "en": "Zone 3 — Safety stop",
     },
 
-    # ── Modus-Label ──────────────────────────────────────────────────────────
-    "mode_waiting": {
-        "de": "Warten auf Daten",
-        "en": "Waiting for data",
-    },
-    "mode_disabled": {
-        "de": "Disabled (Fernsteuerung abgegeben)",
-        "en": "Disabled (remote control released)",
-    },
-    "mode_discharge": {
-        "de": "INV Discharge PV Priority (Entladen mit PV-Vorrang)",
-        "en": "INV Discharge PV Priority (PV-first discharge)",
-    },
-    "mode_ac_charge": {
-        "de": "AC Charge (Netzladung)",
-        "en": "AC Charge (grid charging)",
-    },
-    "mode_disabled_regulation_off": {
-        "de": "Disabled (Regelung inaktiv)",
-        "en": "Disabled (control inactive)",
-    },
-    "mode_unknown": {
-        "de": "Unbekannter Modus: {mode}",
-        "en": "Unknown mode: {mode}",
-    },
+    # Modus-Label stehen nicht hier, sondern als Zustandstexte des Sensors
+    # "Betriebsmodus" in translations/<lang>.json und werden daraus geladen
+    # (_load_mode_texts unten).
 
     # ── Letzte Aktion ────────────────────────────────────────────────────────
     "act_integral_reset": {
@@ -232,6 +215,29 @@ _TEXTS: dict[str, dict[str, str]] = {
         "en": "Tariff: price {price:g} does not match the cheap threshold {cheap:g} ct/kWh — sensor probably reports €/kWh",
     },
 }
+
+
+def _load_mode_texts() -> None:
+    """Modus-Label aus translations/<lang>.json nach _TEXTS übernehmen.
+
+    Die Zustandstexte des Sensors "Betriebsmodus" liegen in den
+    HA-Übersetzungsdateien, weil Home Assistant Entitätszustände nur von dort
+    liest. Sie werden hier unter "mode_<key>" eingehängt, damit translate() sie
+    wie jeden anderen Text auflöst. Fehlt eine Datei oder ein Schlüssel, bleibt
+    der Rohschlüssel übrig — translate() gibt ihn dann unverändert zurück.
+    """
+    ordner = Path(__file__).parent / "translations"
+    for sprache in ("de", "en"):
+        try:
+            daten = json.loads((ordner / f"{sprache}.json").read_text(encoding="utf-8"))
+            zustaende = daten["entity"]["sensor"]["mode_label"]["state"]
+        except (OSError, ValueError, KeyError):
+            continue
+        for zustand, text in zustaende.items():
+            _TEXTS.setdefault(f"mode_{zustand}", {})[sprache] = text
+
+
+_load_mode_texts()
 
 
 def translate(language: str, key: str, **params: object) -> str:
