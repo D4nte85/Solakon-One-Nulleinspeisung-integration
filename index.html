@@ -142,7 +142,7 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
     if (o.is_night)                     return "night_off";
     if (o.cycle_active)                 return "discharging";
     if (o.zone === 3)                   return "safety_stop";
-    return "idle";
+    return "pv_direct";
   }
 
   function mkStatus(o) {

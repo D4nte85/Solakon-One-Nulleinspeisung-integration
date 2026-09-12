@@ -15,7 +15,7 @@
     "night_off":        "Nachtabschaltung",
     "discharging":      "Entladen",
     "safety_stop":      "Sicherheitsstopp",
-    "idle":             "Bereitschaft"
+    "pv_direct":        "PV-Direktnutzung"
   },
   "fall_labels": {
     "0A": "Zone 0: Überschuss Start",

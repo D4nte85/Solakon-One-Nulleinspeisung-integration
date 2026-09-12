@@ -81,7 +81,7 @@ OPERATING_STATES = [
     "night_off",
     "discharging",
     "safety_stop",
-    "idle",
+    "pv_direct",
 ]
 
 # Fall-Schlüssel des Regelzyklus, Reihenfolge wie im Zyklus durchlaufen.

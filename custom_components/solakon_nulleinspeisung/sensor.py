@@ -46,7 +46,7 @@ _STATE_ICONS = {
     "night_off":        "mdi:weather-night",
     "discharging":      "mdi:battery-arrow-up",
     "safety_stop":      "mdi:battery-off-outline",
-    "idle":             "mdi:sleep",
+    "pv_direct":        "mdi:solar-power-variant",
 }
 
 

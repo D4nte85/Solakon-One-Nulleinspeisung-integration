@@ -2074,7 +2074,7 @@ class SolakonCoordinator:
         elif self.current_zone == 3:
             state = "safety_stop"
         else:
-            state = "idle"
+            state = "pv_direct"
 
         if state == self.operating_state:
             return False

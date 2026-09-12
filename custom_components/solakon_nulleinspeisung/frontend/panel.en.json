@@ -15,7 +15,7 @@
     "night_off":        "Night shutdown",
     "discharging":      "Discharging",
     "safety_stop":      "Safety stop",
-    "idle":             "Standby"
+    "pv_direct":        "PV direct use"
   },
   "fall_labels": {
     "0A": "Zone 0: Surplus Start",

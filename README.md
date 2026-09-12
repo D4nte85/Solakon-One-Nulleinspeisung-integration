@@ -577,7 +577,7 @@ Der Zustand wird aus den Zustandsflags abgeleitet, nicht aus dem zuletzt ausgefÃ
 | 7 | `night_off` | Nachtabschaltung | Nachtabschaltung greift |
 | 8 | `discharging` | Entladen | Entladezyklus aktiv |
 | 9 | `safety_stop` | Sicherheitsstopp | Zone 3 |
-| 10 | `idle` | Bereitschaft | sonst |
+| 10 | `pv_direct` | PV-Direktnutzung | sonst â€” Zone 2 bei Tag, Wechselrichter auf PV-Vorrang, Ausgangsleistung 0 |
 
 ### Sprache
 

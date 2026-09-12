@@ -84,7 +84,7 @@
           "night_off": "Nachtabschaltung",
           "discharging": "Entladen",
           "safety_stop": "Sicherheitsstopp",
-          "idle": "Bereitschaft"
+          "pv_direct": "PV-Direktnutzung"
         }
       },
       "zone": {
