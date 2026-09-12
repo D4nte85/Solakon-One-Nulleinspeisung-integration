@@ -1291,7 +1291,7 @@ class SolakonCoordinator:
                 ac_power_base = self._total_commanded_ac_power(current_power) * ac_error_share
                 new_pw = self._pi_calculate(
                     grid, ac_power_base, ac_offset, ac_power_limit,
-                    tolerance, ac_p, ac_i, ac_charge_mode=True,
+                    ac_p, ac_i, ac_charge_mode=True,
                     error_share=ac_error_share,
                 )
                 self._set_last_action("act_ac_pi", frm=current_power, to=new_pw)
@@ -1316,7 +1316,7 @@ class SolakonCoordinator:
                 power_base = self._total_commanded_power(current_power) * error_share
                 new_pw = self._pi_calculate(
                     grid, power_base, target_offset, dynamic_max,
-                    tolerance, p_factor, i_factor, ac_charge_mode=False,
+                    p_factor, i_factor, ac_charge_mode=False,
                     error_share=error_share,
                 )
                 self._set_last_action("act_pi", frm=current_power, to=new_pw)
@@ -1987,7 +1987,6 @@ class SolakonCoordinator:
         current_power: float,
         target_offset: float,
         max_power: float,
-        tolerance: float,
         p_factor: float,
         i_factor: float,
         ac_charge_mode: bool = False,
