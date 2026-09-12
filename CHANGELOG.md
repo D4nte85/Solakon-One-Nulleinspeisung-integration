@@ -6,6 +6,15 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 ## [Unreleased]
 
 ### Behoben
+- Das Panel trug 76 englische Texte ein zweites Mal als Inline-Fallback im JavaScript
+  (`s.solar_lbl || "Solar"`). Jeder dieser Schlüssel existiert in `panel.en.json`, und
+  46 der Fallbacks wichen vom dortigen Wert ab — sie hätten im Ernstfall „Solar" statt
+  „Solar Power", „📈" statt „📈 Control State" und „Save" statt „💾 Save" angezeigt,
+  unbemerkt, weil der Zweig nur bei fehlender Sprachdatei greift. Die Sprachdateien
+  werden jetzt übereinandergelegt: `panel.en.json` ist die Basis, die Landessprache
+  liegt darüber — ein Schlüssel, der nur in einer der beiden Dateien steht, kommt damit
+  aus der anderen, und kein Text muss im Code stehen. Lässt sich die Basis gar nicht
+  laden, sagt das Panel das jetzt sichtbar, statt 76 halbaktuelle Wörter anzuzeigen
 - Zustandstexte und Entitätsnamen standen mehrfach: die zehn Betriebszustände und die
   vierzehn Fall-Bezeichnungen in `panel.de.json`/`panel.en.json` **und** in
   `translations/*.json`, die sechs Modus-Texte zusätzlich in `i18n.py`, vier

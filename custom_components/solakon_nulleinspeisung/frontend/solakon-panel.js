@@ -283,6 +283,7 @@ class SolakonPanel extends HTMLElement {
     // HA-Übersetzung der Entitäten — einzige Quelle für Zustandstexte und
     // Entitätsnamen, die sonst hier und in translations/<lang>.json stünden
     this._et             = {};
+    this._textsMissing   = false;
     // Multi-Instance
     this._instances      = [];
     this._activeInstance = null;
@@ -318,18 +319,33 @@ class SolakonPanel extends HTMLElement {
     const lang = (this._hass.language || "en").split("-")[0].toLowerCase();
     const supported = ["de", "en"];
     const locale = supported.includes(lang) ? lang : "en";
-    this._t  = await this._fetchJson(`panel.${locale}.json`, "panel.en.json");
-    this._et = await this._fetchJson(`entity.${locale}.json`, "entity.en.json");
+    // Englisch ist die Basis, die Landessprache liegt darüber. Ein Schlüssel, der nur
+    // in einer der beiden Dateien steht, kommt damit aus der anderen — kein Text muss
+    // im Code ein zweites Mal stehen.
+    this._t  = this._merge(await this._fetchJson("panel.en.json"),
+                           locale === "en" ? {} : await this._fetchJson(`panel.${locale}.json`));
+    this._et = this._merge(await this._fetchJson("entity.en.json"),
+                           locale === "en" ? {} : await this._fetchJson(`entity.${locale}.json`));
+    this._textsMissing = Object.keys(this._t).length === 0;
   }
 
-  async _fetchJson(name, fallback) {
-    for (const file of [name, fallback]) {
-      try {
-        const res = await fetch(`/${DOMAIN}/${file}`);
-        if (res.ok) { return await res.json(); }
-      } catch (_) { /* nächster Versuch */ }
-    }
+  async _fetchJson(file) {
+    try {
+      const res = await fetch(`/${DOMAIN}/${file}`);
+      if (res.ok) { return await res.json(); }
+    } catch (_) { /* fehlt — der Aufrufer entscheidet */ }
     return {};
+  }
+
+  // Basis mit der Landessprache überlagern, verschachtelt
+  _merge(base, over) {
+    const out = Array.isArray(base) ? base.slice() : { ...base };
+    for (const [k, v] of Object.entries(over || {})) {
+      out[k] = (v && typeof v === "object" && !Array.isArray(v))
+        ? this._merge(base?.[k] || {}, v)
+        : v;
+    }
+    return out;
   }
 
   // Zustandstext einer Entität aus der HA-Übersetzung
@@ -338,8 +354,8 @@ class SolakonPanel extends HTMLElement {
   }
 
   // Angezeigter Name einer Entität aus der HA-Übersetzung
-  _en(key, fallback = "") {
-    return this._et.entity?.sensor?.[key]?.name || fallback;
+  _en(key) {
+    return this._et.entity?.sensor?.[key]?.name || "";
   }
 
   // Shorthand: look up a field's label or description
@@ -493,12 +509,12 @@ class SolakonPanel extends HTMLElement {
       container.appendChild(el);
     };
 
-    mkTab(bar, "__overview__", this._t.ov?.btn || "Overview", this._activeInstance === "__overview__");
+    mkTab(bar, "__overview__", this._t.ov?.btn || "", this._activeInstance === "__overview__");
 
     if (this._groups.length <= 1) {
       // Ein-Gruppen-Fall (Normalfall): flache Leiste, Verteilung als eigener Tab
       // direkt nach Übersicht — kein Gruppen-Wrapper nötig, es gibt nur eine Gruppe.
-      mkTab(bar, "__dist__", dt.tab_lbl || "Distribution", this._activeInstance === "__dist__");
+      mkTab(bar, "__dist__", dt.tab_lbl || "", this._activeInstance === "__dist__");
       for (const inst of this._instances) {
         mkTab(bar, inst.entry_id, inst.instance_name, this._activeInstance === inst.entry_id);
       }
@@ -508,12 +524,12 @@ class SolakonPanel extends HTMLElement {
     // Mehrere Gruppen: oberste Ebene zeigt nur Gruppen (kein eigener Inhalt),
     // die aktive Gruppe öffnet eine zweite Tab-Ebene [Verteilung | Instanzen...].
     for (const g of this._groups) {
-      mkTab(bar, `__group__${g.key}`, `${dt.group_prefix || "Group"}: ${g.label}`, this._activeGroup === g.key);
+      mkTab(bar, `__group__${g.key}`, `${dt.group_prefix || ""}: ${g.label}`, this._activeGroup === g.key);
     }
     if (this._activeGroup && subBar) {
       const g = this._groups.find(x => x.key === this._activeGroup);
       if (g) {
-        mkTab(subBar, "__dist__", dt.tab_lbl || "Distribution", this._activeInstance === "__dist__");
+        mkTab(subBar, "__dist__", dt.tab_lbl || "", this._activeInstance === "__dist__");
         for (const inst of g.instances) {
           mkTab(subBar, inst.entry_id, inst.instance_name, this._activeInstance === inst.entry_id);
         }
@@ -604,28 +620,28 @@ class SolakonPanel extends HTMLElement {
             <span id="ov-icon-${inst.entry_id}">${zs.icon}</span> ${inst.instance_name}<span id="ov-err-${inst.entry_id}">${st.last_error ? " ⚠️" : ""}</span>
           </div>
           <div class="ov-body">
-            <div class="ov-row"><span>${ov.soc    || "SOC"}</span><strong id="ov-soc-${inst.entry_id}">${st.soc ?? "—"} %</strong></div>
-            <div class="ov-row"><span>${ov.output || "Output"}</span><strong id="ov-output-${inst.entry_id}">${st.actual_power != null ? st.actual_power + " W" : "—"}</strong></div>
-            <div class="ov-row"><span>${ov.grid   || "Grid"}</span><strong id="ov-grid-${inst.entry_id}">${st.grid != null ? st.grid.toFixed(0) + " W" : "—"}</strong></div>
-            <div class="ov-row"><span>${ov.state  || "State"}</span><strong id="ov-state-${inst.entry_id}">${sl}</strong></div>
+            <div class="ov-row"><span>${ov.soc    || ""}</span><strong id="ov-soc-${inst.entry_id}">${st.soc ?? "—"} %</strong></div>
+            <div class="ov-row"><span>${ov.output || ""}</span><strong id="ov-output-${inst.entry_id}">${st.actual_power != null ? st.actual_power + " W" : "—"}</strong></div>
+            <div class="ov-row"><span>${ov.grid   || ""}</span><strong id="ov-grid-${inst.entry_id}">${st.grid != null ? st.grid.toFixed(0) + " W" : "—"}</strong></div>
+            <div class="ov-row"><span>${ov.state  || ""}</span><strong id="ov-state-${inst.entry_id}">${sl}</strong></div>
           </div>
         </div>`;
       }).join("");
 
       const headerHtml = showGroupHdr ? `
         <div class="ov-group-hdr">
-          <span>${ov.group_prefix || "Group"}: ${g.label}</span>
+          <span>${ov.group_prefix || ""}: ${g.label}</span>
         </div>` : "";
 
       // Gesamtwerte in derselben Karten-/Zeilenform wie die Einzelgeräte.
       // Pro Gruppe sichtbar sobald sie >1 Instanz hat.
       const totalCardHtml = showTotal ? `<div class="ov-card ov-card-total">
-          <div class="ov-hdr" style="background:#0891b2">${ov.total_output || "Total"}</div>
+          <div class="ov-hdr" style="background:#0891b2">${ov.total_output || ""}</div>
           <div class="ov-body">
-            <div class="ov-row"><span id="ov-total-soc-label-${g.key}">${ov.soc || "SOC"}${t.socWeighted ? " ⌀" : ""}</span><strong id="ov-total-soc-${g.key}">${t.socAvg != null ? t.socAvg.toFixed(0) + " %" : "—"}</strong></div>
-            <div class="ov-row"><span>${ov.output || "Output"}</span><strong id="ov-total-output-${g.key}">${t.totalOutput.toFixed(0)} W</strong></div>
-            <div class="ov-row"><span>${ov.grid   || "Grid"}</span><strong id="ov-total-grid-${g.key}">${t.gridVal != null ? t.gridVal.toFixed(0) + " W" : "—"}</strong></div>
-            <div class="ov-row"><span>${ov.dist_mode || "Distribution"}</span><strong id="ov-total-mode-${g.key}">${this._modeText(t)}</strong></div>
+            <div class="ov-row"><span id="ov-total-soc-label-${g.key}">${ov.soc || ""}${t.socWeighted ? " ⌀" : ""}</span><strong id="ov-total-soc-${g.key}">${t.socAvg != null ? t.socAvg.toFixed(0) + " %" : "—"}</strong></div>
+            <div class="ov-row"><span>${ov.output || ""}</span><strong id="ov-total-output-${g.key}">${t.totalOutput.toFixed(0)} W</strong></div>
+            <div class="ov-row"><span>${ov.grid   || ""}</span><strong id="ov-total-grid-${g.key}">${t.gridVal != null ? t.gridVal.toFixed(0) + " W" : "—"}</strong></div>
+            <div class="ov-row"><span>${ov.dist_mode || ""}</span><strong id="ov-total-mode-${g.key}">${this._modeText(t)}</strong></div>
           </div>
         </div>` : "";
 
@@ -679,7 +695,7 @@ class SolakonPanel extends HTMLElement {
       const t = this._groupTotals(g);
 
       const socLabel = this.shadowRoot.getElementById(`ov-total-soc-label-${g.key}`);
-      if (socLabel) socLabel.textContent = `${ov.soc || "SOC"}${t.socWeighted ? " ⌀" : ""}`;
+      if (socLabel) socLabel.textContent = `${ov.soc || ""}${t.socWeighted ? " ⌀" : ""}`;
       const soc = this.shadowRoot.getElementById(`ov-total-soc-${g.key}`);
       if (soc) soc.textContent = t.socAvg != null ? `${t.socAvg.toFixed(0)} %` : "—";
       const out = this.shadowRoot.getElementById(`ov-total-output-${g.key}`);
@@ -729,8 +745,8 @@ class SolakonPanel extends HTMLElement {
       if (this._activeTab === "debug") {
         const el = this.shadowRoot.getElementById("dbg-zone-state");
         if (el) el.textContent = this._status.cycle_active
-          ? (this._t.debug?.zone1_state || "Zone 1")
-          : (this._t.debug?.zone2_state || "Zone 2");
+          ? (this._t.debug?.zone1_state || "")
+          : (this._t.debug?.zone2_state || "");
       }
       this._updateRegBanner();
     } catch (e) { /* ignore polling errors */ }
@@ -756,6 +772,10 @@ class SolakonPanel extends HTMLElement {
           background-color: var(--primary-background-color, #fafafa);
         }
         .wrap { max-width: 940px; margin: 0 auto; padding: 16px; }
+        .texts-missing {
+          background: #b91c1c; color: #fff; border-radius: 6px;
+          padding: 10px 12px; margin-bottom: 12px; font-size: 13px;
+        }
 
         /* ── App bar ─────────────────────────────────────────────────────── */
         .app-bar {
@@ -922,16 +942,21 @@ class SolakonPanel extends HTMLElement {
       <div id="inst-bar" class="inst-bar"></div>
       <div id="group-sub-bar" class="inst-bar"></div>
       <div class="wrap">
+${this._textsMissing ? `
+        <div class="texts-missing">
+          Panel texts could not be loaded (/${DOMAIN}/panel.en.json). Labels stay empty
+          until the file is reachable again.
+        </div>` : ""}
 
         <div class="top-card">
-          <div class="top-card-hdr">${tc.title || "⚡ Solakon ONE"}</div>
+          <div class="top-card-hdr">${tc.title || ""}</div>
           <div class="top-card-body">
             <div class="reg-bar off" id="reg-bar">
               <div class="reg-dot"></div>
               <span id="reg-text">${reg.inactive || ""}</span>
             </div>
             <details class="global-info">
-              <summary>${tc.info_summary || "ℹ️"}</summary>
+              <summary>${tc.info_summary || ""}</summary>
               <div class="global-body">
                 <p>${tc.p1 || ""}</p>
                 <p>${tc.p2 || ""}</p>
@@ -958,7 +983,7 @@ class SolakonPanel extends HTMLElement {
 
         <div id="save-bar">
           <span>${sb.unsaved || ""}</span>
-          <button onclick="this.getRootNode().host._saveSettings()">${sb.save || "Save"}</button>
+          <button onclick="this.getRootNode().host._saveSettings()">${sb.save || ""}</button>
         </div>
       </div>
       <div id="toast"></div>
@@ -1029,7 +1054,7 @@ class SolakonPanel extends HTMLElement {
       const topHdr = document.createElement("div");
       topHdr.className = "col-header";
       topHdr.style.background = "#475569";
-      topHdr.textContent = this._t.general_section || "⚙️ General";
+      topHdr.textContent = this._t.general_section || "";
       topCard.appendChild(topHdr);
       const topBody = document.createElement("div");
       topBody.className = "col-body";
@@ -1132,37 +1157,37 @@ class SolakonPanel extends HTMLElement {
   _renderStatus(c) {
     const s = this._t.status || {};
     c.innerHTML = `
-      <div class="zone-banner" id="zone-banner">${s.loading || "…"}</div>
+      <div class="zone-banner" id="zone-banner">${s.loading || ""}</div>
       <div class="stat-col-grid">
 
         <div class="stat-col-card">
-          <div class="stat-col-header" style="background:#0891b2">${s.measurements_hdr || "⚡"}</div>
+          <div class="stat-col-header" style="background:#0891b2">${s.measurements_hdr || ""}</div>
           <div class="stat-col-body">
             <div class="stat-row">
-              <div class="stat"><div class="val" id="st-grid">—</div><div class="lbl">${s.grid_lbl   || "Grid"}</div></div>
-              <div class="stat"><div class="val" id="st-soc">—</div> <div class="lbl">${s.soc_lbl    || "SOC"}</div></div>
+              <div class="stat"><div class="val" id="st-grid">—</div><div class="lbl">${s.grid_lbl   || ""}</div></div>
+              <div class="stat"><div class="val" id="st-soc">—</div> <div class="lbl">${s.soc_lbl    || ""}</div></div>
             </div>
             <div class="stat-row">
-              <div class="stat"><div class="val" id="st-actual">—</div><div class="lbl">${s.output_lbl || "Output"}</div></div>
-              <div class="stat"><div class="val" id="st-solar">—</div> <div class="lbl">${s.solar_lbl  || "Solar"}</div></div>
+              <div class="stat"><div class="val" id="st-actual">—</div><div class="lbl">${s.output_lbl || ""}</div></div>
+              <div class="stat"><div class="val" id="st-solar">—</div> <div class="lbl">${s.solar_lbl  || ""}</div></div>
             </div>
           </div>
         </div>
 
         <div class="stat-col-card">
-          <div class="stat-col-header" style="background:#7c3aed">${s.ctrl_hdr || "📈"}</div>
+          <div class="stat-col-header" style="background:#7c3aed">${s.ctrl_hdr || ""}</div>
           <div class="stat-col-body">
             <div class="stat-row">
-              <div class="stat"><div class="val" id="st-int">—</div>   <div class="lbl">${this._en("integral", "PI integral")}</div></div>
-              <div class="stat"><div class="val" id="st-stddev">—</div><div class="lbl">${s.stddev_lbl   || "StdDev"}</div></div>
+              <div class="stat"><div class="val" id="st-int">—</div>   <div class="lbl">${this._en("integral")}</div></div>
+              <div class="stat"><div class="val" id="st-stddev">—</div><div class="lbl">${s.stddev_lbl   || ""}</div></div>
             </div>
             <div class="stat-row">
-              <div class="stat"><div class="val" id="st-stddev-raw">—</div><div class="lbl">${s.stddev_raw_lbl || "StdDev (raw)"}</div></div>
-              <div class="stat"><div class="val" id="st-alloc">—</div><div class="lbl">${s.alloc_lbl || "Alloc."}</div></div>
+              <div class="stat"><div class="val" id="st-stddev-raw">—</div><div class="lbl">${s.stddev_raw_lbl || ""}</div></div>
+              <div class="stat"><div class="val" id="st-alloc">—</div><div class="lbl">${s.alloc_lbl || ""}</div></div>
             </div>
             <div class="stat-full">
               <div class="val" id="st-offset-val">—</div>
-              <div class="lbl" id="st-offset-lbl">${s.offset_lbl || "Offset"}</div>
+              <div class="lbl" id="st-offset-lbl">${s.offset_lbl || ""}</div>
               <div class="lbl-src" id="st-offset-src">—</div>
             </div>
             <div class="stat-row">
@@ -1173,22 +1198,22 @@ class SolakonPanel extends HTMLElement {
         </div>
 
         <div class="stat-col-card">
-          <div class="stat-col-header" style="background:#b45309">${s.modules_hdr || "🚦"}</div>
+          <div class="stat-col-header" style="background:#b45309">${s.modules_hdr || ""}</div>
           <div class="stat-col-body">
             <div>
               <div class="mode-lbl">${s.active_modules_lbl || ""}</div>
               <div class="flag-row" id="st-flags"></div>
             </div>
             <div>
-              <div class="mode-lbl">${this._en("active_fall", "Active case")}</div>
+              <div class="mode-lbl">${this._en("active_fall")}</div>
               <div class="mode-val" id="st-active-fall">—</div>
             </div>
             <div>
-              <div class="mode-lbl">${this._en("mode_label", "Operating mode")}</div>
+              <div class="mode-lbl">${this._en("mode_label")}</div>
               <div class="mode-val" id="st-mode">—</div>
             </div>
             <div>
-              <div class="mode-lbl">${this._en("last_action", "Last action")}</div>
+              <div class="mode-lbl">${this._en("last_action")}</div>
               <div class="mode-val" id="st-action">—</div>
             </div>
             <div>
@@ -1226,14 +1251,14 @@ class SolakonPanel extends HTMLElement {
     const set = (id, v) => { const e = this.shadowRoot.getElementById(id); if (e) e.textContent = v; };
     const fl = this.shadowRoot.getElementById("st-flags");
     if (fl) fl.innerHTML = [
-      [s.flag_cycle       || "Cycle",         st.cycle_active],
-      [s.flag_surplus     || "Surplus",        st.surplus_active],
-      [s.flag_ac          || "AC",             st.ac_charge],
-      [s.flag_tariff      || "Tariff",         st.tariff_charge],
-      [s.flag_night       || "Night",          st.is_night],
-      [s.flag_pv_tariff   || "PV→Tariff",      st.forecast_tariff_suppressed],
-      [s.flag_pv_surplus  || "PV→Surplus",     st.forecast_surplus_forced],
-      [s.flag_exit_lock   || "Exit-Lock",      st.forecast_exit_lock],
+      [s.flag_cycle       || "",         st.cycle_active],
+      [s.flag_surplus     || "",        st.surplus_active],
+      [s.flag_ac          || "",             st.ac_charge],
+      [s.flag_tariff      || "",         st.tariff_charge],
+      [s.flag_night       || "",          st.is_night],
+      [s.flag_pv_tariff   || "",      st.forecast_tariff_suppressed],
+      [s.flag_pv_surplus  || "",     st.forecast_surplus_forced],
+      [s.flag_exit_lock   || "",      st.forecast_exit_lock],
     ].map(([n, v]) => `<span class="flag ${v ? "on" : "off"}">${v ? "●" : "○"} ${n}</span>`).join("");
 
     set("st-active-fall", this._es("active_fall", st.active_fall));
@@ -1268,12 +1293,12 @@ class SolakonPanel extends HTMLElement {
     const dynVal      = isDyn ? (st[`dyn_${offsetZoneKey === "offset_zone_ac" ? "ac" : offsetZoneKey === "offset_zone_1" ? "z1" : "z2"}`] ?? 0).toFixed(0) : offsetStatic;
     const offsetLabel = s[offsetZoneKey] || offsetZoneKey;
     set("st-offset-val", `${dynVal} W`);
-    set("st-offset-lbl", `${s.offset_lbl || "Offset"} — ${offsetLabel}`);
+    set("st-offset-lbl", `${s.offset_lbl || ""} — ${offsetLabel}`);
     const srcEl = this.shadowRoot.getElementById("st-offset-src");
-    const staticLbl = `${s.static_tag || "static"}: ${offsetStatic} W`;
+    const staticLbl = `${s.static_tag || ""}: ${offsetStatic} W`;
     if (srcEl) srcEl.innerHTML = isDyn
-      ? `<span class="offset-src-tag active">${s.dyn_tag || "dynamic"}</span><span class="offset-src-tag inactive">${staticLbl}</span>`
-      : `<span class="offset-src-tag inactive">${s.dyn_inactive || "dyn. off"}</span><span class="offset-src-tag active">${staticLbl}</span>`;
+      ? `<span class="offset-src-tag active">${s.dyn_tag || ""}</span><span class="offset-src-tag inactive">${staticLbl}</span>`
+      : `<span class="offset-src-tag inactive">${s.dyn_inactive || ""}</span><span class="offset-src-tag active">${staticLbl}</span>`;
   }
 
   // ── Debug tab ─────────────────────────────────────────────────────────────
@@ -1282,27 +1307,27 @@ class SolakonPanel extends HTMLElement {
     const c  = this.shadowRoot.getElementById("content");
     const d  = this._t.debug || {};
     const zoneState = this._status
-      ? (this._status.cycle_active ? (d.zone1_state || "Zone 1") : (d.zone2_state || "Zone 2"))
+      ? (this._status.cycle_active ? (d.zone1_state || "") : (d.zone2_state || ""))
       : "—";
 
     c.innerHTML = `
       <div class="col-grid cols-2">
 
         <div class="col-card">
-          <div class="col-header" style="background:#7c3aed">${d.pi_hdr || "PI Integral"}</div>
+          <div class="col-header" style="background:#7c3aed">${d.pi_hdr || ""}</div>
           <div class="col-body">
             <p style="font-size:.85em;color:var(--secondary-text-color,#888);margin:0 0 12px">
               ${d.pi_desc || ""}
             </p>
             <button class="btn btn-secondary"
               onclick="this.getRootNode().host._resetIntegral()">
-              ${d.reset_btn || "Reset"}
+              ${d.reset_btn || ""}
             </button>
           </div>
         </div>
 
         <div class="col-card">
-          <div class="col-header" style="background:#0891b2">${d.zone_hdr || "Zone"}</div>
+          <div class="col-header" style="background:#0891b2">${d.zone_hdr || ""}</div>
           <div class="col-body">
             <p style="font-size:.85em;color:var(--secondary-text-color,#888);margin:0 0 4px">
               ${d.zone_desc || ""}
@@ -1313,11 +1338,11 @@ class SolakonPanel extends HTMLElement {
             <div style="display:flex;gap:8px;flex-wrap:wrap">
               <button class="btn" style="background:#16a34a;color:#fff"
                 onclick="this.getRootNode().host._toggleCycle(true)">
-                ${d.zone1_btn || "Zone 1"}
+                ${d.zone1_btn || ""}
               </button>
               <button class="btn" style="background:#0891b2;color:#fff"
                 onclick="this.getRootNode().host._toggleCycle(false)">
-                ${d.zone2_btn || "Zone 2"}
+                ${d.zone2_btn || ""}
               </button>
             </div>
           </div>
@@ -1364,7 +1389,7 @@ class SolakonPanel extends HTMLElement {
         this._dirty = {};
         this._renderActiveTab();
       }
-      this._showToast(toast.settings_saved || "✅");
+      this._showToast(toast.settings_saved || "");
     } catch (e) { this._showToast("❌ " + e.message, true); }
   }
 
@@ -1378,7 +1403,7 @@ class SolakonPanel extends HTMLElement {
         this._settings.regulation_enabled = on;
         this._updateRegBanner();
       }
-      this._showToast(on ? (toast.regulation_on || "✅") : (toast.regulation_off || "⏸️"));
+      this._showToast(on ? (toast.regulation_on || "") : (toast.regulation_off || ""));
     } catch (e) { this._showToast("❌ " + e.message, true); }
   }
 
@@ -1386,7 +1411,7 @@ class SolakonPanel extends HTMLElement {
     const toast = this._t.toast || {};
     try {
       await this._ws("reset_integral");
-      this._showToast(toast.integral_reset || "🔄");
+      this._showToast(toast.integral_reset || "");
     } catch (e) { this._showToast("❌ " + e.message, true); }
   }
 
@@ -1396,14 +1421,14 @@ class SolakonPanel extends HTMLElement {
     const d     = this._t.debug || {};
     try {
       await this._ws("set_cycle", { active: activate });
-      this._showToast(activate ? (toast.zone1_activated || "⚡") : (toast.zone2_activated || "🔋"));
+      this._showToast(activate ? (toast.zone1_activated || "") : (toast.zone2_activated || ""));
       const status = await this._ws("get_status");
       if (this._entryId !== targetId) return;
       this._status = status;
       const el = this.shadowRoot.getElementById("dbg-zone-state");
       if (el) el.textContent = this._status.cycle_active
-        ? (d.zone1_state || "Zone 1")
-        : (d.zone2_state || "Zone 2");
+        ? (d.zone1_state || "")
+        : (d.zone2_state || "");
     } catch (e) { this._showToast("❌ " + e.message, true); }
   }
 
@@ -1440,7 +1465,7 @@ class SolakonPanel extends HTMLElement {
       await this._hass.callWS({ type: `${DOMAIN}/save_distribution_config`, grid_sensor: gk, distribution: merged });
       this._distConfig[gk] = merged;
       this._distDirty[gk]  = {};
-      this._showToast(toast.dist_saved || "✅");
+      this._showToast(toast.dist_saved || "");
       this._rerenderDist();
     } catch (e) { this._showToast("❌ " + e.message, true); }
   }
@@ -1488,7 +1513,7 @@ class SolakonPanel extends HTMLElement {
     const distLoaded = Object.keys(this._distConfig[gk] || {}).length > 0 || Object.keys(this._distDirty[gk] || {}).length > 0;
     if (!distLoaded) {
       this._loadDistConfig().then(() => this._rerenderDist());
-      c.innerHTML = `<p style="font-size:.88em;color:var(--secondary-text-color,#888);padding:12px 0">${dt.loading || "…"}</p>`;
+      c.innerHTML = `<p style="font-size:.88em;color:var(--secondary-text-color,#888);padding:12px 0">${dt.loading || ""}</p>`;
       return;
     }
 
@@ -1513,7 +1538,7 @@ class SolakonPanel extends HTMLElement {
           <label>${dt[`${f.lk}_lbl`] || f.key}</label>
           <div class="desc">${dt[`${f.lk}_desc`] || ""}</div>
           <div class="entity-row">
-            <input type="text" placeholder="${dt[`${f.lk}_ph`] || "sensor.xxx"}"
+            <input type="text" placeholder="${dt[`${f.lk}_ph`] || ""}"
               value="${val}" data-dist-key="${f.key}"
               style="width:100%;box-sizing:border-box"/>
             <span class="entity-dot ${this._entityDotClass(val)}"></span>
@@ -1527,7 +1552,7 @@ class SolakonPanel extends HTMLElement {
         <div class="field">
           <label>${inst.instance_name}</label>
           <div class="entity-row">
-            <input type="text" placeholder="${dt.cap_sensor_placeholder || "sensor.battery_capacity_kwh"}"
+            <input type="text" placeholder="${dt.cap_sensor_placeholder || ""}"
               value="${capSensor}"
               data-dist-inst="${inst.entry_id}" data-dist-key="capacity_sensor"
               style="width:100%;box-sizing:border-box"
@@ -1538,13 +1563,13 @@ class SolakonPanel extends HTMLElement {
     }).join("");
 
     const groupsNote = this._groups.length > 1
-      ? `<p class="desc" style="padding:0 0 8px">${dt.groups_note || ""} — <strong>${dt.group_prefix || "Group"}: ${this._groups.find(g => g.key === this._activeGroup)?.label ?? ""}</strong></p>`
+      ? `<p class="desc" style="padding:0 0 8px">${dt.groups_note || ""} — <strong>${dt.group_prefix || ""}: ${this._groups.find(g => g.key === this._activeGroup)?.label ?? ""}</strong></p>`
       : "";
 
     c.innerHTML = `
       ${groupsNote}
       <div class="col-card top-item">
-        <div class="col-header" style="background:#0891b2">${dt.global_hdr || "🌐"}</div>
+        <div class="col-header" style="background:#0891b2">${dt.global_hdr || ""}</div>
         <div class="col-body">
           <div class="field">
             <label>${dt.global_max_lbl || ""}</label>
@@ -1555,23 +1580,23 @@ class SolakonPanel extends HTMLElement {
       </div>
 
       <div class="col-card top-item">
-        <div class="col-header" style="background:#7c3aed">${dt.mode_hdr || "⚖️"}</div>
+        <div class="col-header" style="background:#7c3aed">${dt.mode_hdr || ""}</div>
         <div class="col-body">
           <div class="field">
             <label>${dt.mode_lbl || ""}</label>
             <div class="desc">${(dt.mode_desc || "").replace(/\n/g, "<br>")}</div>
             <select data-dist-key="distribution_mode">
-              <option value="equal"${mode === "equal" ? " selected" : ""}>${dt.mode_equal || "Equal"}</option>
-              <option value="soc"${mode === "soc" ? " selected" : ""}>${dt.mode_soc || "SOC-weighted"}</option>
-              <option value="capacity"${mode === "capacity" ? " selected" : ""}>${dt.mode_capacity || "Capacity-weighted"}</option>
-              <option value="soc_switch"${mode === "soc_switch" ? " selected" : ""}>${dt.mode_soc_switch || "SOC-switching"}</option>
+              <option value="equal"${mode === "equal" ? " selected" : ""}>${dt.mode_equal || ""}</option>
+              <option value="soc"${mode === "soc" ? " selected" : ""}>${dt.mode_soc || ""}</option>
+              <option value="capacity"${mode === "capacity" ? " selected" : ""}>${dt.mode_capacity || ""}</option>
+              <option value="soc_switch"${mode === "soc_switch" ? " selected" : ""}>${dt.mode_soc_switch || ""}</option>
             </select>
           </div>
         </div>
       </div>
 
       <div class="col-card top-item" style="${mode !== "capacity" ? "opacity:.4;pointer-events:none" : ""}">
-        <div class="col-header" style="background:#059669">${dt.cap_hdr || "🔋"}</div>
+        <div class="col-header" style="background:#059669">${dt.cap_hdr || ""}</div>
         <div class="col-body">
           <div class="desc" style="margin-bottom:8px">${dt.cap_sensor_desc || ""}</div>
           ${instCards}
@@ -1579,7 +1604,7 @@ class SolakonPanel extends HTMLElement {
       </div>
 
       <div class="col-card top-item" style="${mode !== "soc_switch" ? "opacity:.4;pointer-events:none" : ""}">
-        <div class="col-header" style="background:#ea580c">${dt.soc_switch_hdr || "🔀"}</div>
+        <div class="col-header" style="background:#ea580c">${dt.soc_switch_hdr || ""}</div>
         <div class="col-body">
           <div class="field">
             <label>${dt.soc_switch_divergence_lbl || ""}</label>
@@ -1590,7 +1615,7 @@ class SolakonPanel extends HTMLElement {
       </div>
 
       <div class="col-card top-item">
-        <div class="col-header" style="background:#0284c7">${dt.global_sensors_hdr || "🌍"}</div>
+        <div class="col-header" style="background:#0284c7">${dt.global_sensors_hdr || ""}</div>
         <div class="col-body">
           <div class="desc" style="margin-bottom:8px">${dt.global_sensors_desc || ""}</div>
           ${globalSensorCards}
@@ -1599,7 +1624,7 @@ class SolakonPanel extends HTMLElement {
 
       <div id="dist-save-bar" style="position:sticky;bottom:0;background:var(--primary-color,#03a9f4);color:#fff;padding:10px 16px;border-radius:8px;margin-top:4px;align-items:center;justify-content:space-between;display:${Object.keys(this._distDirty[gk] || {}).length ? "flex" : "none"}">
         <span>${dt.unsaved || ""}</span>
-        <button onclick="this.getRootNode().host._saveDistConfig()" style="background:#fff;color:var(--primary-color,#03a9f4);border:none;padding:6px 16px;border-radius:6px;cursor:pointer;font-weight:600">${dt.save || "Save"}</button>
+        <button onclick="this.getRootNode().host._saveDistConfig()" style="background:#fff;color:var(--primary-color,#03a9f4);border:none;padding:6px 16px;border-radius:6px;cursor:pointer;font-weight:600">${dt.save || ""}</button>
       </div>
     `;
 
