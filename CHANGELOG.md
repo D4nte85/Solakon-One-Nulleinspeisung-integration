@@ -5,6 +5,9 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+### Geändert
+- Die Zustände des Sensors „Betriebsmodus" tragen jetzt den Herstellerwortlaut des Registers **und** eine Erklärung in der Anzeigesprache: `disabled` → „Disabled (Fernsteuerung abgegeben)" bzw. „Disabled (remote control released)", `discharge` → „INV Discharge PV Priority (Entladen mit PV-Vorrang)" bzw. „(PV-first discharge)". „Disabled" allein las sich wie ein ausgeschaltetes Gerät, gemeint ist aber Modus `'0'`: die Fernsteuerung ist abgegeben, Zeitplan und Easy Mode der Solakon-App greifen wieder. Der Zustandswert bleibt der sprachneutrale Schlüssel, Automationen sind nicht betroffen. `mode_unknown` im Panel heißt jetzt „Unbekannter Modus: {mode}" statt „Modus: {mode}" und deckt sich damit mit dem Entitätstext (`i18n.py`, `strings.json`, `translations/`)
+
 ### Behoben
 - Beim Entfernen der **letzten** Instanz blieben die beiden instanzübergreifenden Stores `solakon_nulleinspeisung_distribution` und `solakon_nulleinspeisung_soc_switch_state` in `.storage` liegen: `async_remove_entry` räumte nur die Einstellungsdatei der jeweiligen Instanz weg. Sie werden jetzt mitgelöscht, sobald kein Config-Entry der Integration mehr vorhanden ist — bei weiteren Instanzen bleiben sie unangetastet, da sie dort weiterhin gebraucht werden. Home Assistant trägt den Entry vor dem Aufruf aus der Registrierung aus (`config_entries.py:2280` vor `:2281`), die Prüfung auf verbleibende Entries ist damit ohne Sonderfall korrekt (`__init__.py`)
 

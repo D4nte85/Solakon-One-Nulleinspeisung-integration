@@ -113,8 +113,8 @@
         "name": "Operating mode",
         "state": {
           "waiting": "Waiting for data",
-          "disabled": "Disabled",
-          "discharge": "INV Discharge PV Priority",
+          "disabled": "Disabled (remote control released)",
+          "discharge": "INV Discharge PV Priority (PV-first discharge)",
           "ac_charge": "AC Charge (grid charging)",
           "disabled_regulation_off": "Disabled (control inactive)",
           "unknown": "Unknown mode"

@@ -32,12 +32,12 @@ _TEXTS: dict[str, dict[str, str]] = {
         "en": "Waiting for data",
     },
     "mode_disabled": {
-        "de": "Disabled",
-        "en": "Disabled",
+        "de": "Disabled (Fernsteuerung abgegeben)",
+        "en": "Disabled (remote control released)",
     },
     "mode_discharge": {
-        "de": "INV Discharge PV Priority",
-        "en": "INV Discharge PV Priority",
+        "de": "INV Discharge PV Priority (Entladen mit PV-Vorrang)",
+        "en": "INV Discharge PV Priority (PV-first discharge)",
     },
     "mode_ac_charge": {
         "de": "AC Charge (Netzladung)",
@@ -48,8 +48,8 @@ _TEXTS: dict[str, dict[str, str]] = {
         "en": "Disabled (control inactive)",
     },
     "mode_unknown": {
-        "de": "Modus: {mode}",
-        "en": "Mode: {mode}",
+        "de": "Unbekannter Modus: {mode}",
+        "en": "Unknown mode: {mode}",
     },
 
     # ── Letzte Aktion ────────────────────────────────────────────────────────

@@ -113,8 +113,8 @@
         "name": "Betriebsmodus",
         "state": {
           "waiting": "Warten auf Daten",
-          "disabled": "Disabled",
-          "discharge": "INV Discharge PV Priority",
+          "disabled": "Disabled (Fernsteuerung abgegeben)",
+          "discharge": "INV Discharge PV Priority (Entladen mit PV-Vorrang)",
           "ac_charge": "AC Charge (Netzladung)",
           "disabled_regulation_off": "Disabled (Regelung inaktiv)",
           "unknown": "Unbekannter Modus"
