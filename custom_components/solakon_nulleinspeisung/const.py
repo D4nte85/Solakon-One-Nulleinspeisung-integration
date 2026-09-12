@@ -137,6 +137,7 @@ S_SURPLUS_SOC_THRESHOLD = "surplus_soc_threshold"
 S_SURPLUS_SOC_HYST      = "surplus_soc_hyst"
 S_SURPLUS_PV_HYST       = "surplus_pv_hyst"
 S_SURPLUS_FORECAST_ENABLED   = "surplus_forecast_enabled"
+# Schwelle in kWh Tagesertrag, gelesen über _flt_kwh_normalized().
 S_SURPLUS_FORECAST_THRESHOLD = "surplus_forecast_threshold"
 S_SURPLUS_LOCK_ENABLED = "surplus_lock_enabled"
 S_SURPLUS_LOCK_SENSOR  = "surplus_lock_sensor"
@@ -161,6 +162,7 @@ S_TARIFF_EXP_ENTITY       = "tariff_exp_entity"
 
 S_PV_FORECAST_ENABLED    = "pv_forecast_enabled"
 S_PV_FORECAST_SENSOR     = "pv_forecast_sensor"
+# Schwelle in kWh Tagesertrag, gelesen über _flt_kwh_normalized().
 S_PV_FORECAST_THRESHOLD  = "pv_forecast_threshold"
 
 # Zone-1-Nacht-Forcierung. Sensor ist zeitabhängig "heute" (S_PV_FORECAST_SENSOR
@@ -224,7 +226,7 @@ SETTINGS_DEFAULTS: dict = {
     S_SURPLUS_SOC_HYST:      5,
     S_SURPLUS_PV_HYST:       50,
     S_SURPLUS_FORECAST_ENABLED:   False,
-    S_SURPLUS_FORECAST_THRESHOLD: 5000.0,
+    S_SURPLUS_FORECAST_THRESHOLD: 15.0,
     S_SURPLUS_LOCK_ENABLED: False,
     S_SURPLUS_LOCK_SENSOR:  "",
     S_SURPLUS_LOCK_FACTOR:  1.5,
@@ -248,7 +250,7 @@ SETTINGS_DEFAULTS: dict = {
 
     S_PV_FORECAST_ENABLED:   False,
     S_PV_FORECAST_SENSOR:    "",
-    S_PV_FORECAST_THRESHOLD: 5000.0,
+    S_PV_FORECAST_THRESHOLD: 15.0,
 
     S_ZONE1_FORCE_ENABLED:   False,
     S_ZONE1_FORCE_SENSOR:    "",

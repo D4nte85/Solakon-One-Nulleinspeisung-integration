@@ -189,7 +189,7 @@
       "d": "🔌 Ohne Entität „PV-Vorhersage heute“ (Entitäten-Tab) bleibt diese Funktion inaktiv — gemeinsames Feld mit der Tarif-PV-Vorhersage."
     },
     "surplus_forecast_threshold": {
-      "l": "Mindest-Ertrag für Surplus",
+      "l": "Mindest-Ertrag für Surplus (kWh)",
       "d": "PV > Hard-Limit-Z0 + Forecast ≥ Schwelle + SOC > Zone-3-Schwelle → Surplus startet ohne Export-Schwelle und bleibt aktiv solange alle drei Bedingungen gelten."
     },
     "surplus_lock_enabled": {

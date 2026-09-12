@@ -300,7 +300,7 @@ Optionale Überschuss-Einspeisung (Zone 0). **Hat absoluten Vorrang vor allen an
 
 **Forecast-Eintritt:** PV-Vorhersage ≥ Schwelle UND PV > Hard Limit Z0 UND SOC > Zone-3-Schwelle
 
-> Sensorwerte mit k-Präfix (kW, kWh, kWp …) werden automatisch ×1000 normalisiert — Schwelle immer in der Basiseinheit (W bzw. Wh) angeben. Standard: 5000 Wh.
+> Die Schwelle ist ein **kWh-Tagesertrag**, nicht eine Leistung: ein Sensor mit Einheit Wh oder MWh wird automatisch auf kWh normalisiert, ein Wert ohne erkannte Energie-Einheit (z. B. `input_number`) gilt unverändert als kWh. Standard: 15 kWh.
 >
 > Der Vorhersage-Sensor ist ein gemergtes Feld ("PV-Vorhersage heute", konfiguriert im Tarif-Tab) — dieselbe Quelle speist auch die Tarif-Lock-Unterdrückung unten, da beide Features denselben Werttyp brauchen. Bei Multi-Instanz kann dieser Sensor zusätzlich global im Verteilungs-Tab hinterlegt werden; jede Instanz überschreibt optional lokal.
 
@@ -328,6 +328,8 @@ Optionale Überschuss-Einspeisung (Zone 0). **Hat absoluten Vorrang vor allen an
 | SOC-Schwelle (%) | Ab diesem SOC wird Überschuss eingespeist | ~5 % unter App-Ladeobergrenze (z. B. 95) |
 | SOC-Hysterese (%) | Austritt erst bei SOC < (Schwelle − Hysterese) | 3–5 |
 | PV-Hysterese (W) | Mindestüberschuss über Eigenbedarf für Eintritt und Austritt | 30–80 |
+| Forecast-Erzwingung | Ein/Aus — Zone-0-Eintritt ohne Export-Schwelle bei guter Tagesprognose | — |
+| Mindest-Ertrag für Surplus (kWh) | Forcierung nur ab dieser Tagesprognose | 10–20 |
 | Austritts-Sperre | Ein/Aus — PV-Austritt gesperrt solange Vorhersage ≥ Faktor × Hard Limit Z0 | — |
 | Leistungs-Vorhersage-Sensor | 🔌 Sensor wird im **Entitäten**-Tab zugewiesen | — |
 | Sperr-Faktor | Sicherheitsmarge der Austritts-Sperre gegen Vorhersagefehler | 1,5 |
@@ -390,7 +392,7 @@ Drei Preisstufen: **Günstig** (Preis < Günstig-Schwelle): Tarif-Laden mit fest
 |-----------|-------------|------------|
 | Aktivieren | Ein/Aus-Schalter | — |
 | PV-Vorhersage heute | 🔌 Sensor wird im **Entitäten**-Tab zugewiesen — gemergtes Feld, speist auch die Surplus-Forecast-Erzwingung (siehe Überschuss oben) | — |
-| Schwellwert (kWh) | Ab diesem Wert wird Tarif-Laden/Discharge-Lock unterdrückt | 5–15 |
+| Schwellwert (kWh) | Ab diesem Wert wird Tarif-Laden/Discharge-Lock unterdrückt | 5–15, Standard 15 |
 
 **Einheiten-Plausibilität:** Beide Schwellen sind ct/kWh. Liefert der Preis-Sensor €/kWh (0,28 statt 28), liegt der Preis dauerhaft unter der Günstig-Schwelle — die Integration lädt durchgehend aus dem Netz und sperrt zusätzlich die Entladung. Erkannt wird das am Wert, nicht an der Einheit: ein Preis zwischen 0 und 1 bei einer Günstig-Schwelle ab 3 gilt nach sechs Stunden ununterbrochen als Verdacht und erscheint als Fehlermeldung im Panel. Trägt der Sensor eine Einheit mit „€" oder „EUR", erscheint die Meldung sofort; eine Einheit mit „ct", „Cent" oder „öre" unterdrückt sie. Umgerechnet wird nichts — negative Börsenpreise und einzelne Nulltarif-Stunden lösen keine Meldung aus.
 

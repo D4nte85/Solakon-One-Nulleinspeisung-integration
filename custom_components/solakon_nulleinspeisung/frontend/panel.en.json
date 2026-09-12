@@ -189,7 +189,7 @@
       "d": "🔌 Without the \"PV Forecast Today\" entity (Entities tab) this function stays inactive — shared field with the tariff PV forecast."
     },
     "surplus_forecast_threshold": {
-      "l": "Minimum Yield for Surplus",
+      "l": "Minimum Yield for Surplus (kWh)",
       "d": "PV > Hard Limit Z0 + forecast ≥ threshold + SOC > zone-3 threshold → surplus starts without export threshold and stays active while all three conditions hold."
     },
     "surplus_lock_enabled": {
