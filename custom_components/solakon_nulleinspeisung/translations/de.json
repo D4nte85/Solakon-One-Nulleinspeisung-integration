@@ -83,7 +83,7 @@
           "discharge_locked": "Entladung gesperrt (Tarif)",
           "night_off": "Nachtabschaltung",
           "battery_supply": "Batteriebetrieb",
-          "safety_stop": "Sicherheitsstopp",
+          "safety_stop": "Sicherheitsstopp (SOC-Minimum)",
           "pv_direct": "PV-Direktnutzung"
         }
       },

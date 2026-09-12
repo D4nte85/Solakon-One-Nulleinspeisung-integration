@@ -14,7 +14,7 @@
     "discharge_locked": "Discharge locked (tariff)",
     "night_off":        "Night shutdown",
     "battery_supply":   "Battery supply",
-    "safety_stop":      "Safety stop",
+    "safety_stop":      "Safety stop (SOC minimum)",
     "pv_direct":        "PV direct use"
   },
   "fall_labels": {
