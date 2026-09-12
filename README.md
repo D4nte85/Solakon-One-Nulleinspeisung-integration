@@ -575,7 +575,7 @@ Der Zustand wird aus den Zustandsflags abgeleitet, nicht aus dem zuletzt ausgef�
 | 5 | `ac_charging` | AC-Laden | Lade-Session Zone 1 |
 | 6 | `discharge_locked` | Entladung gesperrt (Tarif) | Preis unter Teuer-Schwelle, keine Lade-Session, kein Überschuss |
 | 7 | `night_off` | Nachtabschaltung | Nachtabschaltung greift |
-| 8 | `discharging` | Entladen | Entladezyklus aktiv |
+| 8 | `battery_supply` | Batteriebetrieb | Entladezyklus aktiv — gilt auch, wenn der PI-Ausgang gerade auf 0 steht |
 | 9 | `safety_stop` | Sicherheitsstopp | Zone 3 |
 | 10 | `pv_direct` | PV-Direktnutzung | sonst — Zone 2 bei Tag, Wechselrichter auf PV-Vorrang, Ausgangsleistung 0 |
 

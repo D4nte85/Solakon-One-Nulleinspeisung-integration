@@ -13,7 +13,7 @@
     "ac_charging":      "AC-Laden",
     "discharge_locked": "Entladung gesperrt (Tarif)",
     "night_off":        "Nachtabschaltung",
-    "discharging":      "Entladen",
+    "battery_supply":   "Batteriebetrieb",
     "safety_stop":      "Sicherheitsstopp",
     "pv_direct":        "PV-Direktnutzung"
   },

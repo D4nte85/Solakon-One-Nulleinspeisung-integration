@@ -140,7 +140,7 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
     if (o.ac_charge)                    return "ac_charging";
     if (o.discharge_locked)             return "discharge_locked";
     if (o.is_night)                     return "night_off";
-    if (o.cycle_active)                 return "discharging";
+    if (o.cycle_active)                 return "battery_supply";
     if (o.zone === 3)                   return "safety_stop";
     return "pv_direct";
   }

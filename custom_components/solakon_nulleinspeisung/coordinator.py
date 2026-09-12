@@ -2070,7 +2070,7 @@ class SolakonCoordinator:
         elif self.is_night:
             state = "night_off"
         elif self.cycle_active:
-            state = "discharging"
+            state = "battery_supply"
         elif self.current_zone == 3:
             state = "safety_stop"
         else:

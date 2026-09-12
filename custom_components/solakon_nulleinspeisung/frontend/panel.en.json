@@ -13,7 +13,7 @@
     "ac_charging":      "AC charging",
     "discharge_locked": "Discharge locked (tariff)",
     "night_off":        "Night shutdown",
-    "discharging":      "Discharging",
+    "battery_supply":   "Battery supply",
     "safety_stop":      "Safety stop",
     "pv_direct":        "PV direct use"
   },

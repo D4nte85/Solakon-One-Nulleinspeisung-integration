@@ -44,7 +44,7 @@ _STATE_ICONS = {
     "ac_charging":      "mdi:lightning-bolt",
     "discharge_locked": "mdi:lock-clock",
     "night_off":        "mdi:weather-night",
-    "discharging":      "mdi:battery-arrow-up",
+    "battery_supply":   "mdi:battery-arrow-up",
     "safety_stop":      "mdi:battery-off-outline",
     "pv_direct":        "mdi:solar-power-variant",
 }

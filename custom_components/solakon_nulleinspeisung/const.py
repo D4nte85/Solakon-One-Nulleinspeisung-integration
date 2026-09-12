@@ -79,7 +79,7 @@ OPERATING_STATES = [
     "ac_charging",
     "discharge_locked",
     "night_off",
-    "discharging",
+    "battery_supply",
     "safety_stop",
     "pv_direct",
 ]
