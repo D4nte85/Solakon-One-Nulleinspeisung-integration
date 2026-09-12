@@ -17,7 +17,7 @@ from homeassistant.util import dt as dt_util
 
 from .i18n import translate
 from .const import (
-    DOMAIN, STORAGE_VERSION, SETTINGS_DEFAULTS, DIST_DEFAULTS,
+    DOMAIN, STORAGE_VERSION, SETTINGS_DEFAULTS, DIST_DEFAULTS, DEVICE_MAX_POWER,
     CONF_GRID_SENSOR, CONF_ACTUAL_SENSOR, CONF_SOLAR_SENSOR,
     CONF_SOC_SENSOR, CONF_TIMEOUT_COUNTDOWN, CONF_ACTIVE_POWER,
     CONF_DISCHARGE_CURRENT, CONF_TIMEOUT_SET, CONF_MODE_SELECT, CONF_EXPORT_LIMIT,
@@ -674,8 +674,11 @@ class SolakonCoordinator:
         )
 
     async def _set_output(self, value: float) -> None:
-        """Ausgangsleistung setzen (min 0 W)."""
-        await self._set_number(self.entry.data[CONF_ACTIVE_POWER], max(0, round(value)))
+        """Ausgangsleistung setzen, geklemmt auf 0 bis DEVICE_MAX_POWER."""
+        await self._set_number(
+            self.entry.data[CONF_ACTIVE_POWER],
+            max(0, min(round(value), DEVICE_MAX_POWER)),
+        )
         self.last_output_ts = time.time()
 
     async def _set_output_and_wait(self, value: float, ac_charge_mode: bool = False) -> None:
@@ -689,6 +692,7 @@ class SolakonCoordinator:
         Nullung (`value == 0`) gilt als sicherheitskritisch und wird zusätzlich
         über `_confirm_zero_output()` verifiziert und bei Bedarf erneut geschrieben.
         """
+        value = max(0, min(value, DEVICE_MAX_POWER))
         await self._set_output(value)
         await self._wait_for_target(value, ac_charge_mode=ac_charge_mode)
         if value == 0:
@@ -987,8 +991,10 @@ class SolakonCoordinator:
         self.allocated_power = allocated_power
         if self._dist_warning:
             soft_errors.append(self._dist_warning)
-        effective_hard    = min(int(allocated_power), hard_limit_z0) if allocated_power is not None else hard_limit_z0
-        effective_hard_z1 = min(int(allocated_power), hard_limit_z1) if allocated_power is not None else hard_limit_z1
+        # Geraetegrenze begrenzt jedes Panel-Limit: ein darueberliegender Sollwert
+        # wird entweder von number.set_value abgewiesen oder vom Geraet nicht erreicht.
+        effective_hard    = int(min(int(allocated_power), hard_limit_z0, DEVICE_MAX_POWER)) if allocated_power is not None else int(min(hard_limit_z0, DEVICE_MAX_POWER))
+        effective_hard_z1 = int(min(int(allocated_power), hard_limit_z1, DEVICE_MAX_POWER)) if allocated_power is not None else int(min(hard_limit_z1, DEVICE_MAX_POWER))
 
         # Verwertbarer PV-Überschuss: Luft zwischen dem aktuellen Output und dem
         # Minimum aus geltendem Hard-Limit und aktueller PV-Leistung, geklemmt auf ≥0.
@@ -1241,7 +1247,7 @@ class SolakonCoordinator:
         mode = self._str(cfg[CONF_MODE_SELECT])
 
         if mode == MODE_AC_CHARGE:
-            dynamic_max = ac_power_limit
+            dynamic_max = int(min(ac_power_limit, DEVICE_MAX_POWER))
         elif self.cycle_active:
             dynamic_max = effective_hard_z1
         else:
@@ -1992,7 +1998,11 @@ class SolakonCoordinator:
         ac_charge_mode: bool = False,
         error_share: float = 1.0,
     ) -> float:
-        """PI-Regler-Berechnung mit modusabhängiger Fehlerrichtung und Anti-Windup via Back-Calculation."""
+        """PI-Regler-Berechnung mit modusabhängiger Fehlerrichtung und Anti-Windup via Back-Calculation.
+        max_power wird auf DEVICE_MAX_POWER gedeckelt, damit Klemmung und
+        Back-Calculation gegen die real erreichbare Grenze rechnen."""
+        max_power = min(max_power, DEVICE_MAX_POWER)
+
         if ac_charge_mode:
             raw_error = (target_offset - grid_power) * error_share
         else:

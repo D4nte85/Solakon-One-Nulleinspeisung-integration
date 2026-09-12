@@ -48,6 +48,12 @@ REQUIRED_ENTITY_DEFAULTS_EN = {
 
 PLATFORMS = ["sensor", "switch", "binary_sensor"]
 
+# -- Geraetegrenze ------------------------------------------------------------
+# Maximale Ein- und Ausgangsleistung des Solakon ONE laut Datenblatt. Deckelt jeden
+# Sollwert. Das max-Attribut der Ausgangs-Entity wird dafuer nicht gelesen: Modbus-
+# Einbindungen deklarieren dort die Registergrenze (gemessen: 100000).
+DEVICE_MAX_POWER = 1200
+
 # -- Ausgangs-Stillstandserkennung --------------------------------------------
 # Greift nur im gesaettigten Standard-PI-Zweig (at_max_limit). Weicht die tatsaechliche
 # Wechselrichter-Ausgabe um mehr als OUTPUT_STALL_DEVIATION vom Limit ab und steht der

@@ -3,6 +3,11 @@
 Alle nennenswerten Änderungen an der Solakon-ONE-Nulleinspeisung-Integration.
 Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [Unreleased]
+
+### Behoben
+- Die Gerätegrenze von 1200 W war nur im Panel hinterlegt, nicht in der Regelung: die vier Leistungsfelder (`hard_limit_z0`, `hard_limit_z1`, `ac_power_limit`, `tariff_power`) tragen `max: 1200` als Eingabeattribut, `save_config` nimmt jedoch jeden Wert entgegen (`changes: dict`, keine Wertevalidierung), und Werte aus der Zeit vor der Slider-Korrektur stehen unverändert im Store. Ein Sollwert darüber wird je nach Einbindung von `number.set_value` abgewiesen — dann verfällt der Schreibvorgang und hinterlässt nur eine Exception im Log — oder angenommen und vom Gerät nicht erreicht, womit der Regler in stille Sättigung läuft, weil `at_max_limit` unter `dynamic_max` bleibt. Die Gerätegrenze wird jetzt an drei Stellen berücksichtigt: in der Limitbildung (`effective_hard`, `effective_hard_z1`, AC-Zweig von `dynamic_max`), in `_pi_calculate`, damit Klemmung und Back-Calculation gegen die real erreichbare Grenze rechnen, und als letzte Klemme in `_set_output`/`_set_output_and_wait`, die auch die nicht über `dynamic_max` laufende Tarif-Ladeleistung erfasst. Maßgeblich ist die Konstante `DEVICE_MAX_POWER` mit der Datenblattgrenze des Solakon ONE von 1200 W. Das `max`-Attribut der Ausgangs-Entität wird dafür nicht herangezogen — Modbus-Einbindungen deklarieren dort die Registergrenze (gemessen: 100000), nicht die Gerätegrenze. Der Blueprint deckelt seit jeher über `inverter_entity_max` und `effective_max` (`coordinator.py`, `README.md`)
+
 ## [2.4.0] – 2026-09-12
 
 > **Enthält Breaking Changes und die erste echte Store-Migration.** Beide Stores steigen von Version 1 auf 2; ein Rückschritt auf 2.3.2 ist danach nicht vorgesehen — die alte Codebasis kennt das neue Format nicht. Vor der Installation ein Backup der Konfiguration anlegen.
