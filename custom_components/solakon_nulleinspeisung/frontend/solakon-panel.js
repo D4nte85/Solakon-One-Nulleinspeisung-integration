@@ -248,13 +248,32 @@ const TAB_LAYOUT = {
 
 // ── Multi-Instance State ─────────────────────────────────────────────────────
 
+// Konfiguration mit Änderungspuffer: `saved` ist der gespeicherte Stand, `dirty` die ungespeicherten Änderungen.
+class ConfigBuffer {
+  constructor() { this.reset(); }
+
+  // Wert lesen: Puffer vor Gespeichertem.
+  get(key) { return key in this.dirty ? this.dirty[key] : this.saved[key]; }
+
+  // Änderung puffern.
+  set(key, value) { this.dirty[key] = value; }
+
+  // True, solange ungespeicherte Änderungen anliegen.
+  get isDirty() { return Object.keys(this.dirty).length > 0; }
+
+  // Gespeicherten Stand setzen und Puffer leeren.
+  reset(saved = {}) { this.saved = saved; this.dirty = {}; }
+
+  // Gespeicherter Stand mit den Änderungen darüber.
+  merged() { return { ...this.saved, ...this.dirty }; }
+}
+
 class SolakonPanel extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: "open" });
     this._initialized    = false;
-    this._settings       = {};
-    this._dirty          = {};
+    this._cfg            = new ConfigBuffer();
     this._status         = null;
     this._activeTab      = "status";
     this._polling        = null;
@@ -269,9 +288,8 @@ class SolakonPanel extends HTMLElement {
     // Netzgruppen — Instanzen mit gleichem grid_power_sensor
     this._groups          = [];
     this._activeGroup     = null;
-    // Verteilungs-Config pro Gruppe verschachtelt: {groupKey: {...}}
-    this._distConfig     = {};
-    this._distDirty      = {};
+    // Verteilungs-Config je Netzgruppe: {groupKey: ConfigBuffer}
+    this._dist           = {};
   }
 
   set panel(val) {
@@ -469,7 +487,7 @@ class SolakonPanel extends HTMLElement {
       gridVal: Number.isFinite(gridNum) ? gridNum : null,
       socAvg:  socCount === 0 ? null : (socWeighted ? capWeightedSum / capSum : socSum / socCount),
       socWeighted,
-      distModeConfigured: (this._distConfig[g.key] || {}).distribution_mode || "equal",
+      distModeConfigured: this._distBuf(g.key).saved.distribution_mode || "equal",
       distModeEffective,
     };
   }
@@ -553,8 +571,7 @@ class SolakonPanel extends HTMLElement {
 
     this._setInstanceChrome(true);
     this._entryId   = id;
-    this._settings  = {};
-    this._dirty     = {};
+    this._cfg.reset();
     this._status    = null;
     this._activeTab = "status";
     // Aktiven Tab im Balken markieren.
@@ -694,13 +711,22 @@ class SolakonPanel extends HTMLElement {
   // ── Config / Status Laden ─────────────────────────────────────────────────
 
   async _loadConfig() {
-    const targetId = this._entryId;
     try {
-      const settings = await this._ws("get_config");
-      if (this._entryId !== targetId) return;
-      this._settings = settings;
-      this._renderActiveTab();
+      await this._forInstance(() => this._ws("get_config"), settings => {
+        this._cfg.saved = settings;
+        this._renderActiveTab();
+      });
     } catch (e) { console.error("Solakon: config load failed", e); }
+  }
+
+  // `fn` abwarten; `apply(ergebnis)` nur, wenn die aktive Instanz noch dieselbe ist wie beim Start.
+  // Gibt true zurück, wenn angewandt.
+  async _forInstance(fn, apply) {
+    const targetId = this._entryId;
+    const result = await fn();
+    if (this._entryId !== targetId) return false;
+    apply?.(result);
+    return true;
   }
 
   async _loadStatus() {
@@ -720,19 +746,18 @@ class SolakonPanel extends HTMLElement {
       }
       return;
     }
-    const targetId = this._entryId;
     try {
-      const status = await this._ws("get_status");
-      if (this._entryId !== targetId) return;
-      this._status = status;
-      if (this._activeTab === "status") this._updateStatusView();
-      if (this._activeTab === "debug") {
-        const el = this.shadowRoot.getElementById("dbg-zone-state");
-        if (el) el.textContent = this._status.cycle_active
-          ? (this._t.debug?.zone1_state || "")
-          : (this._t.debug?.zone2_state || "");
-      }
-      this._updateRegBanner();
+      await this._forInstance(() => this._ws("get_status"), status => {
+        this._status = status;
+        if (this._activeTab === "status") this._updateStatusView();
+        if (this._activeTab === "debug") {
+          const el = this.shadowRoot.getElementById("dbg-zone-state");
+          if (el) el.textContent = this._status.cycle_active
+            ? (this._t.debug?.zone1_state || "")
+            : (this._t.debug?.zone2_state || "");
+        }
+        this._updateRegBanner();
+      });
     } catch (e) { /* ignore polling errors */ }
   }
 
@@ -1036,7 +1061,7 @@ ${this._textsMissing ? `
     const colGrid = document.createElement("div");
     colGrid.className = `col-grid cols-${Math.min(layout.cols.length, 3)}`;
     colGrid.id = "col-grid-main";
-    if (enabledKey && !this._effectiveValue(enabledKey)) colGrid.classList.add("disabled");
+    if (enabledKey && !this._cfg.get(enabledKey)) colGrid.classList.add("disabled");
 
     for (const col of layout.cols) {
       const introDesc = col.descKey ? this._t.col_descs?.[col.descKey] : "";
@@ -1060,7 +1085,7 @@ ${this._textsMissing ? `
   }
 
   _makeField(f) {
-    const cur = this._effectiveValue(f.k);
+    const cur = this._cfg.get(f.k);
     let div = document.createElement("div");
     div.className = "field";
     const label = this._fl(f.k);
@@ -1069,14 +1094,14 @@ ${this._textsMissing ? `
     if (f.t === "bool") {
       div.innerHTML = `<label class="toggle"><input type="checkbox" data-key="${f.k}" ${cur ? "checked" : ""}/> ${label}</label><div class="desc">${desc}</div>`;
       div.querySelector("input").addEventListener("change", (e) => {
-        this._dirty[f.k] = e.target.checked;
+        this._cfg.set(f.k, e.target.checked);
         this._updateSaveBar();
       });
     } else if (f.t === "num") {
       div = this._htmlEl(this._fieldHtml(label, desc,
         `<input type="number" min="${f.min}" max="${f.max}" step="${f.step}" value="${cur ?? f.min}"/>`));
       div.querySelector("input").addEventListener("change", (e) => {
-        this._dirty[f.k] = parseFloat(e.target.value);
+        this._cfg.set(f.k, parseFloat(e.target.value));
         this._updateSaveBar();
       });
     } else if (f.t === "entity") {
@@ -1098,7 +1123,7 @@ ${this._textsMissing ? `
         });
       }
       this._bindEntityDot(inp, dot);
-      inp.addEventListener("change", () => { this._dirty[f.k] = inp.value; this._updateSaveBar(); });
+      inp.addEventListener("change", () => { this._cfg.set(f.k, inp.value); this._updateSaveBar(); });
     } else if (f.t === "note") {
       div.className = "field field-note";
       div.innerHTML = `<div class="desc">${desc}</div>`;
@@ -1328,7 +1353,7 @@ ${this._textsMissing ? `
             </p>
             <div class="field">
               <label class="toggle">
-                <input type="checkbox" id="dbg-rest-discharge" ${this._settings.rest_in_discharge ? "checked" : ""}
+                <input type="checkbox" id="dbg-rest-discharge" ${this._cfg.saved.rest_in_discharge ? "checked" : ""}
                   onchange="this.getRootNode().host._toggleRestInDischarge(this.checked)"/>
                 ${d.rest_toggle || ""}
               </label>
@@ -1341,7 +1366,7 @@ ${this._textsMissing ? `
   // ── Shared helpers ────────────────────────────────────────────────────────
 
   _updateRegBanner() {
-    const on  = this._settings.regulation_enabled;
+    const on  = this._cfg.saved.regulation_enabled;
     const reg = this._t.regulation || {};
     const bar = this.shadowRoot.getElementById("reg-bar");
     const txt = this.shadowRoot.getElementById("reg-text");
@@ -1349,11 +1374,9 @@ ${this._textsMissing ? `
     if (txt) txt.textContent = on ? (reg.active || "") : (reg.inactive || "");
   }
 
-  _effectiveValue(key) { return key in this._dirty ? this._dirty[key] : this._settings[key]; }
-
   _updateSaveBar() {
     const bar = this.shadowRoot.getElementById("save-bar");
-    if (bar) bar.style.display = Object.keys(this._dirty).length ? "flex" : "none";
+    if (bar) bar.style.display = this._cfg.isDirty ? "flex" : "none";
   }
 
   // Speicherleiste mit Hinweis `texts.unsaved` und Knopf `texts.save`, der die Methode `onSave` ruft.
@@ -1381,34 +1404,30 @@ ${this._textsMissing ? `
   }
 
   async _saveSettings() {
-    if (!Object.keys(this._dirty).length) return;
-    const targetId = this._entryId;
+    if (!this._cfg.isDirty) return;
     const toast = this._t.toast || {};
     await this._wsAction(async () => {
-      await this._ws("save_config", { changes: this._dirty });
-      if (this._entryId === targetId) {
-        this._settings = { ...this._settings, ...this._dirty };
-        this._dirty = {};
+      await this._forInstance(() => this._ws("save_config", { changes: this._cfg.dirty }), () => {
+        this._cfg.reset(this._cfg.merged());
         this._renderActiveTab();
-      }
+      });
       this._showToast(toast.settings_saved || "");
     });
   }
 
   // Schalter-Setting sofort speichern; true, wenn die Instanz noch die angezeigte ist.
   async _saveSwitch(key, on, toastOn, toastOff) {
-    const targetId = this._entryId;
     const toast = this._t.toast || {};
-    await this._ws("save_config", { changes: { [key]: on } });
-    const current = this._entryId === targetId;
-    if (current) this._settings[key] = on;
+    const current = await this._forInstance(() => this._ws("save_config", { changes: { [key]: on } }), () => {
+      this._cfg.saved[key] = on;
+    });
     this._showToast(on ? (toast[toastOn] || "") : (toast[toastOff] || ""));
     return current;
   }
 
   async _toggleRegulation() {
     await this._wsAction(async () => {
-      const on = !this._settings.regulation_enabled;
+      const on = !this._cfg.saved.regulation_enabled;
       if (await this._saveSwitch("regulation_enabled", on, "regulation_on", "regulation_off")) {
         this._updateRegBanner();
       }
@@ -1434,28 +1453,31 @@ ${this._textsMissing ? `
   }
 
   async _toggleCycle(activate) {
-    const targetId = this._entryId;
     const toast = this._t.toast || {};
     const d     = this._t.debug || {};
-    await this._wsAction(async () => {
+    await this._wsAction(() => this._forInstance(async () => {
       await this._ws("set_cycle", { active: activate });
       this._showToast(activate ? (toast.zone1_activated || "") : (toast.zone2_activated || ""));
-      const status = await this._ws("get_status");
-      if (this._entryId !== targetId) return;
+      return this._ws("get_status");
+    }, status => {
       this._status = status;
       const el = this.shadowRoot.getElementById("dbg-zone-state");
       if (el) el.textContent = this._status.cycle_active
         ? (d.zone1_state || "")
         : (d.zone2_state || "");
-    });
+    }));
   }
 
   // ── Verteilung ───────────────────────────────────────────────────────────
-  // Config pro Netzgruppe verschachtelt: this._distConfig/_distDirty sind
-  // {groupKey: {...}}.
+  // Config je Netzgruppe als ConfigBuffer in this._dist.
 
   _distGroupKey() {
     return this._activeGroup || (this._groups[0]?.key ?? "");
+  }
+
+  // Änderungspuffer der Verteilungs-Config einer Netzgruppe, bei Bedarf angelegt.
+  _distBuf(gk = this._distGroupKey()) {
+    return (this._dist[gk] ??= new ConfigBuffer());
   }
 
   // Rendert die Verteilungsseite neu, direkt in #content — nicht über
@@ -1468,38 +1490,30 @@ ${this._textsMissing ? `
   }
 
   async _loadDistConfig(gk = this._distGroupKey()) {
+    let saved = {};
     try {
       const res = await this._hass.callWS({ type: `${DOMAIN}/get_distribution_config`, grid_sensor: gk });
-      this._distConfig[gk] = res.distribution || {};
-    } catch (_) { this._distConfig[gk] = {}; }
-    this._distDirty[gk] = {};
+      saved = res.distribution || {};
+    } catch (_) { /* leer laden */ }
+    this._distBuf(gk).reset(saved);
   }
 
   async _saveDistConfig() {
     const gk     = this._distGroupKey();
-    const merged = { ...(this._distConfig[gk] || {}), ...(this._distDirty[gk] || {}) };
+    const merged = this._distBuf(gk).merged();
     const toast  = this._t.toast || {};
     await this._wsAction(async () => {
       await this._hass.callWS({ type: `${DOMAIN}/save_distribution_config`, grid_sensor: gk, distribution: merged });
-      this._distConfig[gk] = merged;
-      this._distDirty[gk]  = {};
+      this._distBuf(gk).reset(merged);
       this._showToast(toast.dist_saved || "");
       this._rerenderDist();
     });
   }
 
-  _distValFor(gk, key) {
-    const dirty = this._distDirty[gk] || {};
-    const cfg   = this._distConfig[gk] || {};
-    return key in dirty ? dirty[key] : cfg[key];
-  }
-
-  _distVal(key) { return this._distValFor(this._distGroupKey(), key); }
+  _distVal(key) { return this._distBuf().get(key); }
 
   _setDistVal(key, value) {
-    const gk = this._distGroupKey();
-    if (!this._distDirty[gk]) this._distDirty[gk] = {};
-    this._distDirty[gk][key] = value;
+    this._distBuf().set(key, value);
     this._rerenderDist();
   }
 
@@ -1528,7 +1542,8 @@ ${this._textsMissing ? `
     }
 
     const gk = this._distGroupKey();
-    const distLoaded = Object.keys(this._distConfig[gk] || {}).length > 0 || Object.keys(this._distDirty[gk] || {}).length > 0;
+    const buf = this._distBuf(gk);
+    const distLoaded = Object.keys(buf.saved).length > 0 || buf.isDirty;
     if (!distLoaded) {
       this._loadDistConfig().then(() => this._rerenderDist());
       c.innerHTML = `<p style="font-size:.88em;color:var(--secondary-text-color,#888);padding:12px 0">${dt.loading || ""}</p>`;
@@ -1586,7 +1601,7 @@ ${this._textsMissing ? `
       ${this._cardHtml("#0284c7", dt.global_sensors_hdr || "", `<div class="desc" style="margin-bottom:8px">${dt.global_sensors_desc || ""}</div>${globalSensorCards}`,
         { extraClass: "top-item" })}
 
-      ${this._saveBarHtml("dist-save-bar", dt, "_saveDistConfig", Object.keys(this._distDirty[gk] || {}).length > 0)}
+      ${this._saveBarHtml("dist-save-bar", dt, "_saveDistConfig", buf.isDirty)}
     `;
 
     c.querySelectorAll("[data-dist-key]").forEach(el => {
