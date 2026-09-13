@@ -1392,27 +1392,29 @@ ${this._textsMissing ? `
     } catch (e) { this._showToast("❌ " + e.message, true); }
   }
 
-  async _toggleRegulation() {
+  // Schalter-Setting sofort speichern; true, wenn die Instanz noch die angezeigte ist.
+  async _saveSwitch(key, on, toastOn, toastOff) {
     const targetId = this._entryId;
-    const on    = !this._settings.regulation_enabled;
     const toast = this._t.toast || {};
+    await this._ws("save_config", { changes: { [key]: on } });
+    const current = this._entryId === targetId;
+    if (current) this._settings[key] = on;
+    this._showToast(on ? (toast[toastOn] || "") : (toast[toastOff] || ""));
+    return current;
+  }
+
+  async _toggleRegulation() {
     try {
-      await this._ws("save_config", { changes: { regulation_enabled: on } });
-      if (this._entryId === targetId) {
-        this._settings.regulation_enabled = on;
+      const on = !this._settings.regulation_enabled;
+      if (await this._saveSwitch("regulation_enabled", on, "regulation_on", "regulation_off")) {
         this._updateRegBanner();
       }
-      this._showToast(on ? (toast.regulation_on || "") : (toast.regulation_off || ""));
     } catch (e) { this._showToast("❌ " + e.message, true); }
   }
 
   async _toggleRestInDischarge(on) {
-    const targetId = this._entryId;
-    const toast = this._t.toast || {};
     try {
-      await this._ws("save_config", { changes: { rest_in_discharge: on } });
-      if (this._entryId === targetId) this._settings.rest_in_discharge = on;
-      this._showToast(on ? (toast.rest_discharge_on || "") : (toast.rest_discharge_off || ""));
+      await this._saveSwitch("rest_in_discharge", on, "rest_discharge_on", "rest_discharge_off");
     } catch (e) {
       const el = this.shadowRoot.getElementById("dbg-rest-discharge");
       if (el) el.checked = !on;
