@@ -1093,6 +1093,13 @@ class SolakonCoordinator:
         # Verkettet statt überschrieben
         self.last_error = " • ".join(soft_errors)
 
+        # Preisvergleiche für Falls und Entladesperre; HT beendet Tarif-Laden auch bei
+        # abgeschaltetem Tarif, deshalb ohne Enable-Bedingung.
+        tariff_price_usable = effective_tariff_enabled and tariff_price_valid
+        price_below_exp = tariff_price_usable and tariff_price < tariff_exp
+        price_below_cheap = tariff_price_usable and tariff_price < tariff_cheap
+        price_at_least_cheap = tariff_price_valid and tariff_price >= tariff_cheap
+
         # ── 4. Abgeleitete Variablen ─────────────────────────────────────────
         prev_actual = self._prev_actual
         self._prev_actual = actual
@@ -1149,8 +1156,8 @@ class SolakonCoordinator:
             ac_enabled=cs.ac_enabled, ac_soc_target=cs.ac_soc_target,
             ac_hysteresis=cs.ac_hysteresis, ac_offset=ac_offset,
             tariff_enabled=effective_tariff_enabled, tariff_price=tariff_price,
-            tariff_price_valid=tariff_price_valid,
-            tariff_cheap=tariff_cheap, tariff_exp=tariff_exp,
+            tariff_price_valid=tariff_price_valid, price_below_exp=price_below_exp,
+            price_below_cheap=price_below_cheap, price_at_least_cheap=price_at_least_cheap,
             tariff_soc=cs.tariff_soc, tariff_power=cs.tariff_power,
             is_night=is_night, total_actual=total_actual,
             zone1_forced=self.zone1_forced,
@@ -1164,9 +1171,7 @@ class SolakonCoordinator:
         # Lade-Session oder Zone 0 läuft — dieselbe Bedingung, die in den Fällen
         # A und E den Wiedereintritt blockiert.
         self.discharge_locked = (
-            effective_tariff_enabled
-            and tariff_price_valid
-            and tariff_price < tariff_exp
+            price_below_exp
             and not (self.tariff_charge_active or self.ac_charge_active or self.surplus_active)
         )
 
@@ -1346,9 +1351,9 @@ class SolakonCoordinator:
         zone1_forced = v.get("zone1_forced", False)
         if (
             not self.ac_charge_active
-            and (not v["tariff_enabled"] or v.get("tariff_price_valid", False))
+            and (not v["tariff_enabled"] or v["tariff_price_valid"])
             and not self.tariff_charge_active
-            and not (v["tariff_enabled"] and v.get("tariff_price_valid", False) and v["tariff_price"] < v["tariff_exp"])
+            and not v["price_below_exp"]
             and (soc > zone1 or zone1_forced)
             and not self.cycle_active
         ):
@@ -1400,10 +1405,8 @@ class SolakonCoordinator:
         # Tarif-Lock blockiert Recovery für normalen Discharge (ac/tariff_charge_active-Recovery bleibt erlaubt)
         # Recovery einer aktiven Lade-Session ignoriert die Zone-3-Schwelle — Laden bleibt bei jedem SOC möglich
         tariff_lock_active = (
-            v["tariff_enabled"]
-            and v.get("tariff_price_valid", False)
-            and v["tariff_price"] >= v["tariff_cheap"]
-            and v["tariff_price"] < v["tariff_exp"]
+            v["price_below_exp"]
+            and v["price_at_least_cheap"]
             and not self.ac_charge_active
             and not self.tariff_charge_active
             and not self.surplus_active
@@ -1422,9 +1425,7 @@ class SolakonCoordinator:
         # ── Fall GT: Tarif-Laden Start ───────────────────────────────────────
         # Überschuss-Einspeisung hat Vorrang — kein Tarif-Laden während Zone 0 aktiv
         if (
-            v["tariff_enabled"]
-            and v.get("tariff_price_valid", False)
-            and v["tariff_price"] < v["tariff_cheap"]
+            v["price_below_cheap"]
             and soc < v["tariff_soc"]
             and not self.tariff_charge_active
             and not self.surplus_active
@@ -1442,7 +1443,7 @@ class SolakonCoordinator:
             self.tariff_charge_active
             and (
                 soc >= v["tariff_soc"]
-                or (v.get("tariff_price_valid", False) and v["tariff_price"] >= v["tariff_cheap"])
+                or v["price_at_least_cheap"]
             )
         ):
             await self._transition(
@@ -1455,9 +1456,7 @@ class SolakonCoordinator:
         # ── Discharge-Lock (Preis < Teuer-Schwelle) ──────────────────────────
         # Sperrt Zone 1 und Zone 2 solange Preis < teuer (günstig UND mittel).
         if (
-            v["tariff_enabled"]
-            and v.get("tariff_price_valid", False)
-            and v["tariff_price"] < v["tariff_exp"]
+            v["price_below_exp"]
             and not self.tariff_charge_active
             and not self.ac_charge_active
             and not self.surplus_active
@@ -1525,8 +1524,8 @@ class SolakonCoordinator:
         if (
             not self.ac_charge_active
             and not self.tariff_charge_active
-            and (not v["tariff_enabled"] or v.get("tariff_price_valid", False))
-            and not (v["tariff_enabled"] and v.get("tariff_price_valid", False) and v["tariff_price"] < v["tariff_exp"])
+            and (not v["tariff_enabled"] or v["tariff_price_valid"])
+            and not v["price_below_exp"]
             and zone3 < soc <= zone1
             and not self.cycle_active
             and mode == MODE_DISABLED
