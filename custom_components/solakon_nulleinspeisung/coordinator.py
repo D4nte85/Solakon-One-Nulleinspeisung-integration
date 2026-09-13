@@ -48,6 +48,11 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
+
+def _clamp(value, lo, hi):
+    """`value` auf [lo, hi] begrenzen."""
+    return max(lo, min(hi, value))
+
 # Einheitenfaktoren je Zielgröße, Schlüssel kleingeschrieben; fehlende Einheit = Faktor 1.
 UNIT_SCALE_W = {"kw": 1000.0}
 UNIT_SCALE_KILO = {"kw": 1000.0, "kwh": 1000.0, "mwh": 1_000_000.0}
@@ -72,6 +77,16 @@ SENSOR_SOURCES = {
     "surplus_lock": (S_SURPLUS_LOCK_SENSOR, "global_surplus_lock_sensor"),
     "zone1_force": (S_ZONE1_FORCE_SENSOR, "global_pv_forecast_tomorrow_sensor"),
 }
+
+# Kernsensoren der Instanz: (Konfigschlüssel, löst Regelzyklus aus, Pflicht für den Zyklus).
+# Die Ist-Leistung wird gepollt und löst bewusst keinen Zyklus aus.
+CORE_SENSORS = (
+    (CONF_GRID_SENSOR, True, True),
+    (CONF_SOLAR_SENSOR, True, True),
+    (CONF_ACTUAL_SENSOR, False, True),
+    (CONF_SOC_SENSOR, True, True),
+    (CONF_MODE_SELECT, True, False),
+)
 
 # Settings, die der Regelzyklus einmal je Durchlauf liest: (Feld, Schlüssel, Typ).
 CYCLE_SETTINGS = (
@@ -257,12 +272,7 @@ class SolakonCoordinator:
             _LOGGER.info("Solakon: Standardwerte geladen")
 
         cfg = self.entry.data
-        entities_to_track = [
-            cfg.get(CONF_GRID_SENSOR, ""),
-            cfg.get(CONF_SOLAR_SENSOR, ""),
-            cfg.get(CONF_SOC_SENSOR, ""),
-            cfg.get(CONF_MODE_SELECT, ""),
-        ]
+        entities_to_track = [cfg.get(key, "") for key, triggers, _ in CORE_SENSORS if triggers]
         entities_to_track = [e for e in entities_to_track if e]
 
         if entities_to_track:
@@ -496,7 +506,7 @@ class SolakonCoordinator:
             result = min_off
         else:
             buf = max(0.0, (stddev - noise) * factor)
-            result = min(max(min_off, round(min_off + buf)), max_off)
+            result = _clamp(round(min_off + buf), min_off, max_off)
         return float(result * (-1 if negative else 1))
 
     def _update_dynamic_offsets(self) -> None:
@@ -703,7 +713,7 @@ class SolakonCoordinator:
         """Ausgangsleistung setzen, geklemmt auf 0 bis DEVICE_MAX_POWER."""
         await self._set_number(
             self.entry.data[CONF_ACTIVE_POWER],
-            max(0, min(round(value), DEVICE_MAX_POWER)),
+            _clamp(round(value), 0, DEVICE_MAX_POWER),
         )
         self.last_output_ts = time.time()
 
@@ -718,7 +728,7 @@ class SolakonCoordinator:
         Nullung (`value == 0`) gilt als sicherheitskritisch und wird zusätzlich
         über `_confirm_zero_output()` verifiziert und bei Bedarf erneut geschrieben.
         """
-        value = max(0, min(value, DEVICE_MAX_POWER))
+        value = _clamp(value, 0, DEVICE_MAX_POWER)
         await self._set_output(value)
         await self._wait_for_target(value, ac_charge_mode=ac_charge_mode)
         if value == 0:
@@ -825,6 +835,11 @@ class SolakonCoordinator:
         """Entladestrom setzen — nur wenn aktueller Wert abweicht."""
         await self._set_number(self.entry.data[CONF_DISCHARGE_CURRENT], amps, only_if_changed=True)
 
+    @property
+    def _charging_session_active(self) -> bool:
+        """True während AC-Laden oder Tarif-Laden."""
+        return self.ac_charge_active or self.tariff_charge_active
+
     def _required_discharge(self, discharge_max: int) -> float:
         """Entladestrom für den aktuellen Regelzustand.
 
@@ -835,7 +850,7 @@ class SolakonCoordinator:
         """
         if self.surplus_active:
             return 2.0
-        if self.ac_charge_active or self.tariff_charge_active:
+        if self._charging_session_active:
             return 0.0
         if self.cycle_active:
             return float(discharge_max)
@@ -951,9 +966,7 @@ class SolakonCoordinator:
 
         # ── 1. Sensor-Werte lesen ────────────────────────────────────────────
         # Kernsensoren müssen verfügbar sein
-        if not all(self._entity_ok(cfg[k]) for k in (
-            CONF_GRID_SENSOR, CONF_SOLAR_SENSOR, CONF_ACTUAL_SENSOR, CONF_SOC_SENSOR
-        )):
+        if not all(self._entity_ok(cfg[key]) for key, _, required in CORE_SENSORS if required):
             _LOGGER.debug("Solakon: Kernsensoren nicht verfügbar, Zyklus übersprungen")
             self._end_cycle(blocked=True, notify_on_change=True)
             return
@@ -1429,7 +1442,7 @@ class SolakonCoordinator:
             and not self.tariff_charge_active
             and not self.surplus_active
         )
-        charging_session_active = self.ac_charge_active or self.tariff_charge_active
+        charging_session_active = self._charging_session_active
         if (
             (self.cycle_active or charging_session_active)
             and mode not in (MODE_DISCHARGE, MODE_AC_CHARGE)
@@ -1849,14 +1862,11 @@ class SolakonCoordinator:
                     allocations[eid] = 0.0
                 break
 
-            newly_capped = [
-                eid for eid in remaining_ids
-                if remaining_power * (shares[eid] / share_sum) >= caps[eid] - 0.01
-            ]
+            portion = {eid: remaining_power * (shares[eid] / share_sum) for eid in remaining_ids}
+            newly_capped = [eid for eid in remaining_ids if portion[eid] >= caps[eid] - 0.01]
 
             if not newly_capped:
-                for eid in remaining_ids:
-                    allocations[eid] = remaining_power * (shares[eid] / share_sum)
+                allocations.update(portion)
                 break
 
             for eid in newly_capped:
@@ -1907,13 +1917,11 @@ class SolakonCoordinator:
         integral_candidate = self.integral + error
         correction = error * p_factor + integral_candidate * i_factor
         new_power = current_power + correction
-        final = max(0, min(max_power, new_power))
+        final = _clamp(new_power, 0, max_power)
 
         if i_factor != 0:
-            back_calc = (final - current_power - error * p_factor) / i_factor
-            self.integral = max(-max_power, min(max_power, back_calc))
-        else:
-            self.integral = max(-max_power, min(max_power, integral_candidate))
+            integral_candidate = (final - current_power - error * p_factor) / i_factor
+        self.integral = _clamp(integral_candidate, -max_power, max_power)
 
         return round(final, 1)
 
@@ -1925,16 +1933,13 @@ class SolakonCoordinator:
         """Zone-Label und Modus-Label für Panel-Anzeige aktualisieren."""
         if soc <= zone3:
             self.current_zone = 3
-            self.zone_label = self._tr("zone_3")
         elif self.surplus_active:
             self.current_zone = 0
-            self.zone_label = self._tr("zone_0")
         elif self.cycle_active:
             self.current_zone = 1
-            self.zone_label = self._tr("zone_1")
         else:
             self.current_zone = 2
-            self.zone_label = self._tr("zone_2")
+        self.zone_label = self._tr(f"zone_{self.current_zone}")
 
         mode_map = {
             MODE_DISABLED: "disabled",

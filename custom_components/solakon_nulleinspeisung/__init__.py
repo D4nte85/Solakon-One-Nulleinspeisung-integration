@@ -27,6 +27,10 @@ STORAGE_VERSION_SOC_SWITCH = 1
 STORAGE_KEY_SOC_SWITCH     = f"{DOMAIN}_soc_switch_state"
 
 _LOGGER = logging.getLogger(__name__)
+
+# Integrationsweite `hass.data`-Schlüssel (ohne DOMAIN-Präfix), entfernt mit der letzten Instanz.
+DATA_KEYS = ("dist_store", "dist_config", "soc_switch_store", "soc_switch_state",
+             "panel_registered", "ws_registered")
 PANEL_JS_URL = f"/{DOMAIN}/panel.js"
 
 
@@ -245,24 +249,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Distribution-Store einmalig anlegen + Config in synchron lesbaren Cache laden.
     # Cache ist nach grid_power_sensor verschachtelt ({gruppe: {...DIST_DEFAULTS...}})
     # — jede Netzgruppe hat unabhängige Verteilungs-Einstellungen.
-    if not hass.data.get(f"{DOMAIN}_dist_store"):
-        store = SolakonDistStore(hass, STORAGE_VERSION_DIST, STORAGE_KEY_DIST)
-        hass.data[f"{DOMAIN}_dist_store"] = store
-        # Leerer Cache synchron gesetzt, bevor async_load() an den Event-Loop yieldet
-        hass.data[f"{DOMAIN}_dist_config"] = {}
-        hass.data[f"{DOMAIN}_dist_config"] = await store.async_load() or {}
+    await _ensure_store(
+        hass, "dist_store", "dist_config",
+        lambda: SolakonDistStore(hass, STORAGE_VERSION_DIST, STORAGE_KEY_DIST), {}, lambda stored: stored,
+    )
 
     # SOC-Switch-Laufzeitzustand (Modus `soc_switch`) — eigener Store, getrennt
     # von _dist_store
-    if not hass.data.get(f"{DOMAIN}_soc_switch_store"):
-        soc_switch_store = Store(hass, STORAGE_VERSION_SOC_SWITCH, STORAGE_KEY_SOC_SWITCH)
-        hass.data[f"{DOMAIN}_soc_switch_store"] = soc_switch_store
-        hass.data[f"{DOMAIN}_soc_switch_state"] = {"active_id": None, "start_soc": None}
-        stored_switch = await soc_switch_store.async_load() or {}
-        hass.data[f"{DOMAIN}_soc_switch_state"] = {
-            "active_id": stored_switch.get("active_id"),
-            "start_soc": stored_switch.get("start_soc"),
-        }
+    await _ensure_store(
+        hass, "soc_switch_store", "soc_switch_state",
+        lambda: Store(hass, STORAGE_VERSION_SOC_SWITCH, STORAGE_KEY_SOC_SWITCH),
+        {"active_id": None, "start_soc": None},
+        lambda stored: {"active_id": stored.get("active_id"), "start_soc": stored.get("start_soc")},
+    )
 
     # WebSocket-Commands nur einmal registrieren
     if not hass.data.get(f"{DOMAIN}_ws_registered"):
@@ -307,6 +306,22 @@ async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> Non
     await hass.config_entries.async_reload(entry.entry_id)
 
 
+async def _ensure_store(
+    hass: HomeAssistant, store_key: str, data_key: str, make_store, empty: dict, from_stored,
+) -> None:
+    """Store unter `<DOMAIN>_<store_key>` einmalig anlegen und in `<DOMAIN>_<data_key>` laden.
+
+    `empty` steht synchron im Cache, bevor `async_load()` an den Event-Loop abgibt;
+    danach ersetzt `from_stored(geladen or {})` den Inhalt.
+    """
+    if hass.data.get(f"{DOMAIN}_{store_key}"):
+        return
+    store = make_store()
+    hass.data[f"{DOMAIN}_{store_key}"] = store
+    hass.data[f"{DOMAIN}_{data_key}"] = empty
+    hass.data[f"{DOMAIN}_{data_key}"] = from_stored(await store.async_load() or {})
+
+
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     from homeassistant.components.frontend import async_remove_panel
 
@@ -323,12 +338,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if not hass.data.get(DOMAIN):
             async_remove_panel(hass, DOMAIN)
             hass.data.pop(DOMAIN, None)
-            hass.data.pop(f"{DOMAIN}_dist_store", None)
-            hass.data.pop(f"{DOMAIN}_dist_config", None)
-            hass.data.pop(f"{DOMAIN}_soc_switch_store", None)
-            hass.data.pop(f"{DOMAIN}_soc_switch_state", None)
-            hass.data.pop(f"{DOMAIN}_panel_registered", None)
-            hass.data.pop(f"{DOMAIN}_ws_registered", None)
+            for key in DATA_KEYS:
+                hass.data.pop(f"{DOMAIN}_{key}", None)
 
     return unload_ok
 
