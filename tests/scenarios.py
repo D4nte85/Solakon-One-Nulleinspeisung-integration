@@ -174,6 +174,9 @@ def gen_instance(rng, prefix, grid_sensor="sensor.grid") -> dict:
             "solar_zero_entry_armed": _chance(rng, 0.7),
         },
         "stored": _chance(rng, 0.9),
+        "drop_flags": [k for k in ("cycle_active", "surplus_active", "ac_charge_active",
+                                   "tariff_charge_active", "solar_zero_entry_armed")
+                       if _chance(rng, 0.08)],
         "integral": _pick(rng, [0.0, 50.0, -30.0, 5.0]),
         "prev_actual": _pick(rng, [0.0, 100.0]),
         "follow_actual": _pick(rng, [None, 1, -1, 0]),
@@ -310,7 +313,8 @@ def _setup_env(spec):
             hass.followers[entry.data[C.CONF_ACTIVE_POWER]] = [
                 (entry.data[C.CONF_ACTUAL_SENSOR], inst["follow_actual"])]
         if inst["stored"]:
-            hass.storage[f"{C.DOMAIN}_{entry.entry_id}"] = {**inst["settings"], **inst["flags"]}
+            flags = {k: v for k, v in inst["flags"].items() if k not in inst.get("drop_flags", ())}
+            hass.storage[f"{C.DOMAIN}_{entry.entry_id}"] = {**inst["settings"], **flags}
         coord = h.coordinator_mod.SolakonCoordinator(hass, entry)
         hass.data.setdefault(C.DOMAIN, {})[entry.entry_id] = coord
         coords[inst["prefix"]] = coord
