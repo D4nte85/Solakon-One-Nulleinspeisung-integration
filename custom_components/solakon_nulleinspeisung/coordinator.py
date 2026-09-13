@@ -78,6 +78,13 @@ SENSOR_SOURCES = {
     "zone1_force": (S_ZONE1_FORCE_SENSOR, "global_pv_forecast_tomorrow_sensor"),
 }
 
+# Dynamische Offsets: (Attribut, (Min, Max, Rauschen, Faktor, Negativ)).
+DYN_OFFSETS = (
+    ("dyn_offset_z1", (S_DYN_Z1_MIN, S_DYN_Z1_MAX, S_DYN_Z1_NOISE, S_DYN_Z1_FACTOR, S_DYN_Z1_NEGATIVE)),
+    ("dyn_offset_z2", (S_DYN_Z2_MIN, S_DYN_Z2_MAX, S_DYN_Z2_NOISE, S_DYN_Z2_FACTOR, S_DYN_Z2_NEGATIVE)),
+    ("dyn_offset_ac", (S_DYN_AC_MIN, S_DYN_AC_MAX, S_DYN_AC_NOISE, S_DYN_AC_FACTOR, S_DYN_AC_NEGATIVE)),
+)
+
 # Kernsensoren der Instanz: (Konfigschlüssel, löst Regelzyklus aus, Pflicht für den Zyklus).
 # Die Ist-Leistung wird gepollt und löst bewusst keinen Zyklus aus.
 CORE_SENSORS = (
@@ -511,23 +518,9 @@ class SolakonCoordinator:
 
     def _update_dynamic_offsets(self) -> None:
         """Dynamische Offsets für alle drei Zonen berechnen."""
-        sd = self.grid_stddev
-
-        self.dyn_offset_z1 = self._calc_dynamic_offset(
-            sd, self._setting(S_DYN_Z1_MIN, int), self._setting(S_DYN_Z1_MAX, int),
-            self._setting(S_DYN_Z1_NOISE, float), self._setting(S_DYN_Z1_FACTOR, float),
-            self._setting(S_DYN_Z1_NEGATIVE, bool),
-        )
-        self.dyn_offset_z2 = self._calc_dynamic_offset(
-            sd, self._setting(S_DYN_Z2_MIN, int), self._setting(S_DYN_Z2_MAX, int),
-            self._setting(S_DYN_Z2_NOISE, float), self._setting(S_DYN_Z2_FACTOR, float),
-            self._setting(S_DYN_Z2_NEGATIVE, bool),
-        )
-        self.dyn_offset_ac = self._calc_dynamic_offset(
-            sd, self._setting(S_DYN_AC_MIN, int), self._setting(S_DYN_AC_MAX, int),
-            self._setting(S_DYN_AC_NOISE, float), self._setting(S_DYN_AC_FACTOR, float),
-            self._setting(S_DYN_AC_NEGATIVE, bool),
-        )
+        for attr, keys in DYN_OFFSETS:
+            args = (self._setting(key, cast) for key, cast in zip(keys, (int, int, float, float, bool)))
+            setattr(self, attr, self._calc_dynamic_offset(self.grid_stddev, *args))
 
     # ── Settings ─────────────────────────────────────────────────────────────
 
