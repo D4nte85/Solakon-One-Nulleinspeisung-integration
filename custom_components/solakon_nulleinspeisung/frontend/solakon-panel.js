@@ -596,10 +596,6 @@ class SolakonPanel extends HTMLElement {
          + (st.last_error ? " ov-card-err" : "");
   }
 
-  _esc(s) {
-    return String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
-  }
-
   // Immer von der Verteilung getrennt (auch im Ein-Gruppen-Fall) — Instanzen
   // untereinander nach Netzgruppe sortiert, mit Gesamt-Karte je Gruppe mit
   // >1 Instanz. Gruppen-Kopfzeile (Label) nur ab 2 Gruppen sichtbar, sonst
@@ -609,22 +605,19 @@ class SolakonPanel extends HTMLElement {
     const showGroupHdr = this._groups.length > 1;
 
     const groupsHtml = this._groups.map(g => {
-      const t = this._groupTotals(g);
       const showTotal = g.instances.length > 1;
+      const row = (label, id) => `<div class="ov-row"><span>${label}</span><strong id="${id}"></strong></div>`;
       const cardsHtml = g.instances.map(inst => {
-        const st = this._allStatuses[inst.entry_id] || {};
-        const zs = ZONE_STYLE[st.zone] ?? ZONE_STYLE[2];
-        const sl = this._es("operating_state", st.operating_state);
-        const cls = this._ovStateClass(st);
-        return `<div class="ov-card${cls}" id="ov-card-${inst.entry_id}" data-eid="${inst.entry_id}" title="${this._esc(st.last_error || "")}">
-          <div class="ov-hdr" id="ov-hdr-${inst.entry_id}" style="background:${zs.color}">
-            <span id="ov-icon-${inst.entry_id}">${zs.icon}</span> ${inst.instance_name}<span id="ov-err-${inst.entry_id}">${st.last_error ? " ⚠️" : ""}</span>
+        const id = inst.entry_id;
+        return `<div class="ov-card" id="ov-card-${id}" data-eid="${id}">
+          <div class="ov-hdr" id="ov-hdr-${id}">
+            <span id="ov-icon-${id}"></span> ${inst.instance_name}<span id="ov-err-${id}"></span>
           </div>
           <div class="ov-body">
-            <div class="ov-row"><span>${ov.soc    || ""}</span><strong id="ov-soc-${inst.entry_id}">${st.soc ?? "—"} %</strong></div>
-            <div class="ov-row"><span>${ov.output || ""}</span><strong id="ov-output-${inst.entry_id}">${st.actual_power != null ? st.actual_power + " W" : "—"}</strong></div>
-            <div class="ov-row"><span>${ov.grid   || ""}</span><strong id="ov-grid-${inst.entry_id}">${st.grid != null ? st.grid.toFixed(0) + " W" : "—"}</strong></div>
-            <div class="ov-row"><span>${ov.state  || ""}</span><strong id="ov-state-${inst.entry_id}">${sl}</strong></div>
+            ${row(ov.soc || "", `ov-soc-${id}`)}
+            ${row(ov.output || "", `ov-output-${id}`)}
+            ${row(ov.grid || "", `ov-grid-${id}`)}
+            ${row(ov.state || "", `ov-state-${id}`)}
           </div>
         </div>`;
       }).join("");
@@ -639,10 +632,10 @@ class SolakonPanel extends HTMLElement {
       const totalCardHtml = showTotal ? `<div class="ov-card ov-card-total">
           <div class="ov-hdr" style="background:#0891b2">${ov.total_output || ""}</div>
           <div class="ov-body">
-            <div class="ov-row"><span id="ov-total-soc-label-${g.key}">${ov.soc || ""}${t.socWeighted ? " ⌀" : ""}</span><strong id="ov-total-soc-${g.key}">${t.socAvg != null ? t.socAvg.toFixed(0) + " %" : "—"}</strong></div>
-            <div class="ov-row"><span>${ov.output || ""}</span><strong id="ov-total-output-${g.key}">${t.totalOutput.toFixed(0)} W</strong></div>
-            <div class="ov-row"><span>${ov.grid   || ""}</span><strong id="ov-total-grid-${g.key}">${t.gridVal != null ? t.gridVal.toFixed(0) + " W" : "—"}</strong></div>
-            <div class="ov-row"><span>${ov.dist_mode || ""}</span><strong id="ov-total-mode-${g.key}">${this._modeText(t)}</strong></div>
+            <div class="ov-row"><span id="ov-total-soc-label-${g.key}"></span><strong id="ov-total-soc-${g.key}"></strong></div>
+            ${row(ov.output || "", `ov-total-output-${g.key}`)}
+            ${row(ov.grid || "", `ov-total-grid-${g.key}`)}
+            ${row(ov.dist_mode || "", `ov-total-mode-${g.key}`)}
           </div>
         </div>` : "";
 
@@ -653,58 +646,58 @@ class SolakonPanel extends HTMLElement {
     c.querySelectorAll(".ov-card:not(.ov-card-total)").forEach(card => {
       card.addEventListener("click", () => this._switchInstance(card.dataset.eid));
     });
+    this._updateOverviewCards();
   }
 
-  // Leichtgewichtiges Update der Live-Werte auf der Overview-Seite: patcht nur
-  // einzelne Textknoten statt die Overview bei jedem 1s-Poll neu zu rendern.
-  _updateOverviewCards() {
+  // Anzeigetexte der Übersicht als {id: text}: je Instanzkarte und je Gesamtkarte.
+  _overviewTexts() {
     const ov = this._t.ov || {};
+    const texts = {};
     for (const inst of this._instances) {
       const st = this._allStatuses[inst.entry_id] || {};
-      const zs = ZONE_STYLE[st.zone] ?? ZONE_STYLE[2];
-      const sl = this._es("operating_state", st.operating_state);
+      const id = inst.entry_id;
+      Object.assign(texts, {
+        [`ov-icon-${id}`]:   (ZONE_STYLE[st.zone] ?? ZONE_STYLE[2]).icon,
+        [`ov-err-${id}`]:    st.last_error ? " ⚠️" : "",
+        [`ov-soc-${id}`]:    `${st.soc ?? "—"} %`,
+        [`ov-output-${id}`]: st.actual_power != null ? `${st.actual_power} W` : "—",
+        [`ov-grid-${id}`]:   st.grid != null ? `${st.grid.toFixed(0)} W` : "—",
+        [`ov-state-${id}`]:  this._es("operating_state", st.operating_state),
+      });
+    }
+    for (const g of this._groups) {
+      const t = this._groupTotals(g);
+      Object.assign(texts, {
+        [`ov-total-soc-label-${g.key}`]: `${ov.soc || ""}${t.socWeighted ? " ⌀" : ""}`,
+        [`ov-total-soc-${g.key}`]:       t.socAvg != null ? `${t.socAvg.toFixed(0)} %` : "—",
+        [`ov-total-output-${g.key}`]:    `${t.totalOutput.toFixed(0)} W`,
+        [`ov-total-grid-${g.key}`]:      t.gridVal != null ? `${t.gridVal.toFixed(0)} W` : "—",
+        [`ov-total-mode-${g.key}`]:      this._modeText(t),
+      });
+    }
+    return texts;
+  }
 
+  // Texte aus `{id: text}` in die Elemente des Shadow-DOM schreiben; fehlende IDs werden übergangen.
+  _applyTexts(texts) {
+    for (const [id, text] of Object.entries(texts)) {
+      const el = this.shadowRoot.getElementById(id);
+      if (el) el.textContent = text;
+    }
+  }
+
+  // Live-Werte der Übersicht setzen: Texte, Zonenfarbe im Kopf, Zustandsklassen und Fehler-Tooltip.
+  _updateOverviewCards() {
+    this._applyTexts(this._overviewTexts());
+    for (const inst of this._instances) {
+      const st = this._allStatuses[inst.entry_id] || {};
       const hdr = this.shadowRoot.getElementById(`ov-hdr-${inst.entry_id}`);
-      if (hdr) hdr.style.background = zs.color;
-      const icon = this.shadowRoot.getElementById(`ov-icon-${inst.entry_id}`);
-      if (icon) icon.textContent = zs.icon;
-      const soc = this.shadowRoot.getElementById(`ov-soc-${inst.entry_id}`);
-      if (soc) soc.textContent = `${st.soc ?? "—"} %`;
-      const out = this.shadowRoot.getElementById(`ov-output-${inst.entry_id}`);
-      if (out) out.textContent = st.actual_power != null ? `${st.actual_power} W` : "—";
-      const grid = this.shadowRoot.getElementById(`ov-grid-${inst.entry_id}`);
-      if (grid) grid.textContent = st.grid != null ? `${st.grid.toFixed(0)} W` : "—";
-      const stateEl = this.shadowRoot.getElementById(`ov-state-${inst.entry_id}`);
-      if (stateEl) stateEl.textContent = sl;
-
+      if (hdr) hdr.style.background = (ZONE_STYLE[st.zone] ?? ZONE_STYLE[2]).color;
       const card = this.shadowRoot.getElementById(`ov-card-${inst.entry_id}`);
       if (card) {
         card.className = `ov-card${this._ovStateClass(st)}`;
         card.title     = st.last_error || "";
       }
-      const errEl = this.shadowRoot.getElementById(`ov-err-${inst.entry_id}`);
-      if (errEl) errEl.textContent = st.last_error ? " ⚠️" : "";
-
-      // Kapazitäts-Sensor-Dot im Verteilungsblock live mitziehen, ohne den
-      // Input selbst anzufassen.
-      const dot = this.shadowRoot.getElementById(`cap-dot-${inst.entry_id}`);
-      const inp = this.shadowRoot.getElementById(`cap-input-${inst.entry_id}`);
-      if (dot && inp) dot.className = `entity-dot ${this._entityDotClass(inp.value)}`;
-    }
-
-    for (const g of this._groups) {
-      const t = this._groupTotals(g);
-
-      const socLabel = this.shadowRoot.getElementById(`ov-total-soc-label-${g.key}`);
-      if (socLabel) socLabel.textContent = `${ov.soc || ""}${t.socWeighted ? " ⌀" : ""}`;
-      const soc = this.shadowRoot.getElementById(`ov-total-soc-${g.key}`);
-      if (soc) soc.textContent = t.socAvg != null ? `${t.socAvg.toFixed(0)} %` : "—";
-      const out = this.shadowRoot.getElementById(`ov-total-output-${g.key}`);
-      if (out) out.textContent = `${t.totalOutput.toFixed(0)} W`;
-      const grid = this.shadowRoot.getElementById(`ov-total-grid-${g.key}`);
-      if (grid) grid.textContent = t.gridVal != null ? `${t.gridVal.toFixed(0)} W` : "—";
-      const mode = this.shadowRoot.getElementById(`ov-total-mode-${g.key}`);
-      if (mode) mode.textContent = this._modeText(t);
     }
   }
 
@@ -749,13 +742,7 @@ class SolakonPanel extends HTMLElement {
     try {
       await this._forInstance(() => this._ws("get_status"), status => {
         this._status = status;
-        if (this._activeTab === "status") this._updateStatusView();
-        if (this._activeTab === "debug") {
-          const el = this.shadowRoot.getElementById("dbg-zone-state");
-          if (el) el.textContent = this._status.cycle_active
-            ? (this._t.debug?.zone1_state || "")
-            : (this._t.debug?.zone2_state || "");
-        }
+        this._updateStatusView();
         this._updateRegBanner();
       });
     } catch (e) { /* ignore polling errors */ }
@@ -1028,6 +1015,7 @@ ${this._textsMissing ? `
 
     if (this._activeTab === "debug") {
       this._renderDebug();
+      this._updateStatusView();
       this._updateSaveBar();
       return;
     }
@@ -1222,25 +1210,21 @@ ${this._textsMissing ? `
               <div class="mode-lbl">${s.active_modules_lbl || ""}</div>
               <div class="flag-row" id="st-flags"></div>
             </div>
-            <div>
-              <div class="mode-lbl">${this._en("active_fall")}</div>
-              <div class="mode-val" id="st-active-fall">—</div>
-            </div>
-            <div>
-              <div class="mode-lbl">${this._en("mode_label")}</div>
-              <div class="mode-val" id="st-mode">—</div>
-            </div>
-            <div>
-              <div class="mode-lbl">${this._en("last_action")}</div>
-              <div class="mode-val" id="st-action">—</div>
-            </div>
-            <div>
-              <div class="mode-lbl">${s.error_lbl || ""}</div>
-              <div class="mode-err" id="st-error">—</div>
-            </div>`, { kind: "stat-col" })}
+            ${this._modeCellHtml(this._en("active_fall"), "st-active-fall")}
+            ${this._modeCellHtml(this._en("mode_label"), "st-mode")}
+            ${this._modeCellHtml(this._en("last_action"), "st-action")}
+            ${this._modeCellHtml(s.error_lbl || "", "st-error", "mode-err")}`, { kind: "stat-col" })}
 
       </div>
     `;
+  }
+
+  // Beschriftete Statuszelle mit Platzhalter „—“ im Wertfeld `id`.
+  _modeCellHtml(label, id, valueClass = "mode-val") {
+    return `<div>
+              <div class="mode-lbl">${label}</div>
+              <div class="${valueClass}" id="${id}">—</div>
+            </div>`;
   }
 
   _fmt_elapsed(ts) {
@@ -1252,6 +1236,34 @@ ${this._textsMissing ? `
     return `${Math.floor(el / 3600)} h ${Math.floor((el % 3600) / 60)} min`;
   }
 
+  // Anzeigetexte von Status-Tab und Debug-Zonenzustand als {id: text}.
+  _statusTexts(st) {
+    const s = this._t.status || {};
+    const d = this._t.debug || {};
+    const offsetZoneKey = { ac: "offset_zone_ac", z1: "offset_zone_1" }[st.offset_zone] || "offset_zone_2";
+    const offsetStatic  = st.offset_static ?? "—";
+    return {
+      "st-active-fall":  this._es("active_fall", st.active_fall),
+      "st-grid":         `${(st.grid ?? 0).toFixed(0)} W`,
+      "st-actual":       `${st.actual_power ?? "—"} W`,
+      "st-solar":        `${st.solar ?? "—"} W`,
+      "st-soc":          `${st.soc ?? "—"} %`,
+      "st-int":          `${(st.integral ?? 0).toFixed(2)}`,
+      "st-stddev":       `${(st.stddev ?? 0).toFixed(1)} W`,
+      "st-stddev-raw":   `${(st.stddev_raw ?? 0).toFixed(1)} W`,
+      "st-alloc":        st.allocated_power != null ? `${st.allocated_power} W` : (s.alloc_single || "—"),
+      "st-elapsed":      this._fmt_elapsed(st.last_output_ts),
+      "st-mode-elapsed": this._fmt_elapsed(st.mode_label_ts),
+      "st-mode":         st.mode_label  || "—",
+      "st-action":       st.last_action || "—",
+      "st-error":        st.last_error  || (s.no_error || "—"),
+      "st-offset-val":   `${st.offset_dynamic ? (st.offset_value ?? 0).toFixed(0) : offsetStatic} W`,
+      "st-offset-lbl":   `${s.offset_lbl || ""} — ${s[offsetZoneKey] || offsetZoneKey}`,
+      "dbg-zone-state":  st.cycle_active ? (d.zone1_state || "") : (d.zone2_state || ""),
+    };
+  }
+
+  // Status-Tab und Debug-Zonenzustand aus `this._status` setzen; ohne Status unverändert.
   _updateStatusView() {
     const st = this._status;
     if (!st) return;
@@ -1263,7 +1275,6 @@ ${this._textsMissing ? `
     const b = this.shadowRoot.getElementById("zone-banner");
     if (b) { b.textContent = `${zs.icon} ${zLabel}`; b.style.background = zs.color; }
 
-    const set = (id, v) => { const e = this.shadowRoot.getElementById(id); if (e) e.textContent = v; };
     const fl = this.shadowRoot.getElementById("st-flags");
     if (fl) fl.innerHTML = [
       [s.flag_cycle       || "",         st.cycle_active],
@@ -1276,31 +1287,10 @@ ${this._textsMissing ? `
       [s.flag_exit_lock   || "",      st.forecast_exit_lock],
     ].map(([n, v]) => `<span class="flag ${v ? "on" : "off"}">${v ? "●" : "○"} ${n}</span>`).join("");
 
-    set("st-active-fall", this._es("active_fall", st.active_fall));
-    set("st-grid",         `${(st.grid ?? 0).toFixed(0)} W`);
-    set("st-actual",       `${st.actual_power ?? "—"} W`);
-    set("st-solar",        `${st.solar ?? "—"} W`);
-    set("st-soc",          `${st.soc ?? "—"} %`);
-    set("st-int",          `${(st.integral ?? 0).toFixed(2)}`);
-    set("st-stddev",       `${(st.stddev ?? 0).toFixed(1)} W`);
-    set("st-stddev-raw",   `${(st.stddev_raw ?? 0).toFixed(1)} W`);
-    set("st-alloc",        st.allocated_power != null ? `${st.allocated_power} W` : (s.alloc_single || "—"));
-    set("st-elapsed",      this._fmt_elapsed(st.last_output_ts));
-    set("st-mode-elapsed", this._fmt_elapsed(st.mode_label_ts));
-    set("st-mode",         st.mode_label  || "—");
-    set("st-action",       st.last_action || "—");
-    set("st-error",        st.last_error  || (s.no_error || "—"));
-
-    const offsetZoneKey = { ac: "offset_zone_ac", z1: "offset_zone_1" }[st.offset_zone] || "offset_zone_2";
-    const isDyn         = !!st.offset_dynamic;
-    const offsetStatic  = st.offset_static ?? "—";
-    const dynVal        = isDyn ? (st.offset_value ?? 0).toFixed(0) : offsetStatic;
-    const offsetLabel = s[offsetZoneKey] || offsetZoneKey;
-    set("st-offset-val", `${dynVal} W`);
-    set("st-offset-lbl", `${s.offset_lbl || ""} — ${offsetLabel}`);
+    this._applyTexts(this._statusTexts(st));
     const srcEl = this.shadowRoot.getElementById("st-offset-src");
-    const staticLbl = `${s.static_tag || ""}: ${offsetStatic} W`;
-    if (srcEl) srcEl.innerHTML = isDyn
+    const staticLbl = `${s.static_tag || ""}: ${st.offset_static ?? "—"} W`;
+    if (srcEl) srcEl.innerHTML = st.offset_dynamic
       ? `<span class="offset-src-tag active">${s.dyn_tag || ""}</span><span class="offset-src-tag inactive">${staticLbl}</span>`
       : `<span class="offset-src-tag inactive">${s.dyn_inactive || ""}</span><span class="offset-src-tag active">${staticLbl}</span>`;
   }
@@ -1310,9 +1300,6 @@ ${this._textsMissing ? `
   _renderDebug() {
     const c  = this.shadowRoot.getElementById("content");
     const d  = this._t.debug || {};
-    const zoneState = this._status
-      ? (this._status.cycle_active ? (d.zone1_state || "") : (d.zone2_state || ""))
-      : "—";
 
     c.innerHTML = `
       <div class="col-grid cols-2">
@@ -1331,7 +1318,7 @@ ${this._textsMissing ? `
               ${d.zone_desc || ""}
             </p>
             <p style="font-size:.85em;margin:0 0 12px">
-              ${d.zone_current || ""}<strong id="dbg-zone-state">${zoneState}</strong>
+              ${d.zone_current || ""}<strong id="dbg-zone-state">—</strong>
             </p>
             <div style="display:flex;gap:8px;flex-wrap:wrap">
               <button class="btn" style="background:#16a34a;color:#fff"
@@ -1454,17 +1441,13 @@ ${this._textsMissing ? `
 
   async _toggleCycle(activate) {
     const toast = this._t.toast || {};
-    const d     = this._t.debug || {};
     await this._wsAction(() => this._forInstance(async () => {
       await this._ws("set_cycle", { active: activate });
       this._showToast(activate ? (toast.zone1_activated || "") : (toast.zone2_activated || ""));
       return this._ws("get_status");
     }, status => {
       this._status = status;
-      const el = this.shadowRoot.getElementById("dbg-zone-state");
-      if (el) el.textContent = this._status.cycle_active
-        ? (d.zone1_state || "")
-        : (d.zone2_state || "");
+      this._updateStatusView();
     }));
   }
 
