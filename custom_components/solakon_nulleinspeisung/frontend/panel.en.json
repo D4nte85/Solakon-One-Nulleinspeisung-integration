@@ -48,7 +48,7 @@
     },
     "debug": {
       "summary": "Debug — manual intervention in the control state",
-      "text": "Reset integral: sets the I-part of the PI controller to 0.\n\nSet zone manually: toggles the internal cycle_active flag and resets the integral.\n• Activate Zone 1: cycle_active = true → aggressive discharge, full discharge current.\n• Activate Zone 2: cycle_active = false → battery-friendly operation, 0 A discharge current, dynamic output limit.\n\nAll actions are logged under 'Last action' in the Status tab."
+      "text": "Reset integral: sets the I-part of the PI controller to 0.\n\nSet zone manually: toggles the internal cycle_active flag and resets the integral.\n• Activate Zone 1: cycle_active = true → aggressive discharge, full discharge current.\n• Activate Zone 2: cycle_active = false → battery-friendly operation, 0 A discharge current, dynamic output limit.\n\nIdle state in mode 1 (default off): every transition that would otherwise write mode '0' — case B, C, F, TM, charge end and case I without cycle, stall recovery, control off — writes mode '1' at 0 W instead. While idle no PI runs, the instance is left out of the discharge pool, and cases E, A, D, 0A, G and GT bring it back just as from mode '0'. Not recommended: the device never leaves remote control again. Intended for devices that do not charge in mode '0'.\n\nAll actions are logged under 'Last action' in the Status tab."
     },
     "entities": {
       "summary": "Entities — every optional sensor assignment for this instance in one place",
@@ -402,7 +402,11 @@
     "zone1_btn":  "⚡ Activate Zone 1",
     "zone2_btn":  "🔋 Activate Zone 2",
     "zone1_state":"Zone 1 (cycle active)",
-    "zone2_state":"Zone 2"
+    "zone2_state":"Zone 2",
+    "rest_hdr":   "⚠️ Idle State in Mode 1",
+    "rest_desc":  "While control is idle (zone 3, night, discharge lock, charge end without cycle, control off), the device stays in mode '1' at 0 W instead of mode '0'. Only for devices that do not charge in mode '0'.",
+    "rest_warn":  "Not recommended hack: the device never leaves remote control again — not even with control switched off.",
+    "rest_toggle":"Idle state in mode 1 (0 W)"
   },
   "toast": {
     "settings_saved":  "✅ Settings saved",
@@ -411,6 +415,8 @@
     "integral_reset":  "🔄 Integral reset",
     "zone1_activated": "⚡ Zone 1 activated",
     "zone2_activated": "🔋 Zone 2 activated",
+    "rest_discharge_on": "⚠️ Idle state in mode 1 enabled",
+    "rest_discharge_off": "✅ Idle state in mode 0",
     "dist_saved":      "✅ Distribution saved"
   },
   "dist": {

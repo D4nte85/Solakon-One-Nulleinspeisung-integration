@@ -117,6 +117,8 @@
           "discharge": "INV Discharge PV Priority (PV-first discharge)",
           "ac_charge": "AC Charge (grid charging)",
           "disabled_regulation_off": "Disabled (control inactive)",
+          "rest_discharge": "Idle in INV Discharge (0 W, remote control stays active)",
+          "rest_discharge_regulation_off": "Idle in INV Discharge (0 W, control inactive)",
           "unknown": "Unknown mode"
         }
       },

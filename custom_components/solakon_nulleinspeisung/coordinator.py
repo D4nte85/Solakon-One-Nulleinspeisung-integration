@@ -39,7 +39,7 @@ from .const import (
     S_TARIFF_CHEAP_ENTITY, S_TARIFF_EXP_ENTITY,
     S_PV_FORECAST_ENABLED, S_PV_FORECAST_SENSOR, S_PV_FORECAST_THRESHOLD,
     S_ZONE1_FORCE_ENABLED, S_ZONE1_FORCE_SENSOR, S_ZONE1_FORCE_THRESHOLD, S_ZONE1_FORCE_MIN_SOC,
-    S_NIGHT_ENABLED,
+    S_NIGHT_ENABLED, S_REST_IN_DISCHARGE,
     S_SELF_ADJUST, S_SELF_ADJUST_TOL,
     S_DYN_Z1_ENABLED, S_DYN_Z1_MIN, S_DYN_Z1_MAX, S_DYN_Z1_NOISE, S_DYN_Z1_FACTOR, S_DYN_Z1_NEGATIVE,
     S_DYN_Z2_ENABLED, S_DYN_Z2_MIN, S_DYN_Z2_MAX, S_DYN_Z2_NOISE, S_DYN_Z2_FACTOR, S_DYN_Z2_NEGATIVE,
@@ -216,6 +216,8 @@ class SolakonCoordinator:
         self.surplus_active: bool = False
         self.ac_charge_active: bool = False
         self.tariff_charge_active: bool = False
+        # Ruhezustand: Output 0 im Ruhemodus, keine PI-Regelung.
+        self.resting: bool = False
         self.is_night: bool = False
         # Entladung durch den Tarif gesperrt (Preis unter Teuer-Schwelle, keine
         # Lade-Session, kein Ueberschuss) — der Zustand hinter Fall TM.
@@ -331,17 +333,20 @@ class SolakonCoordinator:
             # Aufräum-Sequenz solange regulation_enabled noch True ist,
             # danach blockt der Guard alle Modbus-Schreibbefehle
             async with self._lock:
-                _LOGGER.info("Solakon: Regelung wird deaktiviert — setze Output 0, Modus Disabled")
+                _LOGGER.info("Solakon: Regelung wird deaktiviert — setze Output 0, Ruhemodus")
                 await self._transition(output=0, wait=False, timer=False)
                 await self._set_discharge(self._setting(S_DISCHARGE_MAX, float))
-                await self._transition(mode=MODE_DISABLED)
-                if self.mode_key != "disabled_regulation_off":
+                await self._transition(rest=True)
+                off_key = f"{self._rest_mode_key}_regulation_off"
+                if self.mode_key != off_key:
                     self.mode_label_ts = time.time()
-                self.mode_key = "disabled_regulation_off"
-                self.mode_label = self._tr("mode_disabled_regulation_off")
+                self.mode_key = off_key
+                self.mode_label = self._tr(f"mode_{off_key}")
 
         before = {name: self._tracker_input(name) for name, _ in TRACKERS}
 
+        if S_REST_IN_DISCHARGE in changes:
+            self.resting = False
         self.settings.update(changes)
         await self._store.async_save(self._store_data())
         _LOGGER.info("Solakon: Einstellungen gespeichert")
@@ -869,7 +874,7 @@ class SolakonCoordinator:
         Ist-Wert, dessen `last_updated` seit `OUTPUT_STALL_SECONDS` nicht vorrückt.
 
         Erster Treffer schreibt den Sollwert neu. Bleibt die Abweichung:
-        Integral-Reset, Output 0, Timer-Toggle, Modus `'0'` — Fall D holt im
+        Integral-Reset, Output 0, Timer-Toggle, Ruhezustand — Fall D holt im
         Folgezyklus zurück. Mindestabstand zweier Aktionen: `OUTPUT_STALL_SECONDS`.
         """
         actual_eid = self.entry.data.get(CONF_ACTUAL_SENSOR, "")
@@ -908,7 +913,7 @@ class SolakonCoordinator:
 
         self._output_warning = self._tr("warn_output_stuck", actual=actual, limit=limit)
         _LOGGER.error("Solakon: %s (Versuch %d)", self._output_warning, self._output_stall_actions)
-        await self._transition(reset_integral=True, output=0, mode=MODE_DISABLED)
+        await self._transition(reset_integral=True, output=0, rest=True)
         self._set_last_action("act_output_recovery", actual=actual, limit=limit)
 
     async def _set_discharge(self, amps: float) -> None:
@@ -935,9 +940,22 @@ class SolakonCoordinator:
         return "pv"
 
     @property
-    def _resume_mode(self) -> str:
-        """Modus nach Lade-Ende oder Safety: '1' bei aktivem Zyklus, sonst '0'."""
-        return MODE_DISCHARGE if self.cycle_active else MODE_DISABLED
+    def _rest_mode(self) -> str:
+        """Modus des Ruhezustands: '1' mit aktivem `S_REST_IN_DISCHARGE`, sonst '0'."""
+        return MODE_DISCHARGE if self._setting(S_REST_IN_DISCHARGE, bool) else MODE_DISABLED
+
+    @property
+    def _rest_mode_key(self) -> str:
+        """Anzeigeschlüssel des Ruhemodus."""
+        return "rest_discharge" if self._rest_mode == MODE_DISCHARGE else "disabled"
+
+    def _at_rest(self, mode: str) -> bool:
+        """True, wenn `mode` der Ruhemodus ist und die Instanz darin ruht.
+
+        Modus '0' wird nur vom Ruhezustand geschrieben und gilt stets als Ruhe;
+        in Modus '1' entscheidet das Flag `resting`.
+        """
+        return mode == self._rest_mode and (mode == MODE_DISABLED or self.resting)
 
     @property
     def _hard_limit_key(self) -> str:
@@ -960,7 +978,8 @@ class SolakonCoordinator:
     async def _end_charge(self, flag: str, action_key: str) -> None:
         """Lade-Session beenden: Integral, Flag, Output 0, Rückkehrmodus, Aktionstext."""
         await self._transition(
-            reset_integral=True, flags={flag: False}, output=0, mode=self._resume_mode,
+            reset_integral=True, flags={flag: False}, output=0,
+            mode=MODE_DISCHARGE, rest=not self.cycle_active,
         )
         self._set_last_action(action_key)
 
@@ -968,12 +987,14 @@ class SolakonCoordinator:
         self, *, reset_integral: bool = False, flags: dict[str, bool] | None = None,
         output: float | None = None, wait: bool = True, ac_charge_mode: bool = False,
         timer: bool = True, timer_first: bool = False, mode: str | None = None,
+        rest: bool = False,
     ) -> None:
         """Zustandsübergang in fester Folge: Integral, Flags, Output, Timer, Modus.
 
         `flags` setzt nur die übergebenen Zustandsflags. `output` None lässt die
         Ausgangsleistung unberührt, `wait=False` schreibt sie ohne Konvergenzwarten.
         `timer_first` schaltet den Timer vor den Output. `mode` None schreibt keinen Modus.
+        `rest` schreibt den Ruhemodus statt `mode`; jeder geschriebene Modus setzt `resting`.
         """
         if reset_integral:
             self.integral = 0.0
@@ -988,7 +1009,10 @@ class SolakonCoordinator:
                 await self._set_output(output)
         if timer and not timer_first:
             await self._timer_toggle()
+        if rest:
+            mode = self._rest_mode
         if mode is not None:
+            self.resting = rest
             await self._set_mode(mode)
 
     async def _set_fixed_output(
@@ -1348,6 +1372,9 @@ class SolakonCoordinator:
         if timer_val < 120 and not self._timer_toggled_in_cycle and self._entity_ok(cfg[CONF_TIMEOUT_COUNTDOWN]):
             await self._timer_toggle()
 
+        if self._at_rest(mode):
+            return
+
         # Einzige CONF_ACTIVE_POWER-Lesung dieses Zyklus, nach dem letzten Await vor
         # der PI-Entscheidung. Gemeinsam genutzt von Gate, PI-Basis und Log-Zeile.
         current_power = self._flt(cfg[CONF_ACTIVE_POWER])
@@ -1455,7 +1482,7 @@ class SolakonCoordinator:
             and not self.tariff_charge_active
         ):
             # Zone 0 setzt immer auf einem aktiven Zone-1-Zyklus auf
-            switch = mode != MODE_DISCHARGE
+            switch = mode != MODE_DISCHARGE or self._at_rest(mode)
             await self._transition(
                 flags={"surplus_active": True, "cycle_active": True},
                 timer=switch, mode=MODE_DISCHARGE if switch else None,
@@ -1511,7 +1538,7 @@ class SolakonCoordinator:
                 reset_integral=True,
                 flags={"cycle_active": False, "surplus_active": False,
                        "ac_charge_active": False, "tariff_charge_active": False},
-                output=0, mode=MODE_DISABLED,
+                output=0, rest=True,
             )
             self._set_last_action("act_fall_b", soc=soc)
             return "B"
@@ -1522,12 +1549,12 @@ class SolakonCoordinator:
             and not self.tariff_charge_active
             and soc <= zone3
             and not self.cycle_active
-            and mode != MODE_DISABLED
+            and not self._at_rest(mode)
         ):
             await self._transition(
                 flags={"surplus_active": False, "ac_charge_active": False,
                        "tariff_charge_active": False},
-                output=0, mode=MODE_DISABLED,
+                output=0, rest=True,
             )
             self._set_last_action("act_fall_c")
             return "C"
@@ -1545,7 +1572,7 @@ class SolakonCoordinator:
         charging_session_active = self._charging_session_active
         if (
             (self.cycle_active or charging_session_active)
-            and mode not in (MODE_DISCHARGE, MODE_AC_CHARGE)
+            and (mode not in (MODE_DISCHARGE, MODE_AC_CHARGE) or self._at_rest(mode))
             and (charging_session_active or soc > zone3)
             and not tariff_lock_active
         ):
@@ -1588,9 +1615,10 @@ class SolakonCoordinator:
             and not self.ac_charge_active
             and not self.surplus_active
             and mode == MODE_DISCHARGE
+            and not self._at_rest(mode)
         ):
             await self._transition(
-                reset_integral=True, flags={"cycle_active": False}, output=0, mode=MODE_DISABLED,
+                reset_integral=True, flags={"cycle_active": False}, output=0, rest=True,
             )
             self._set_last_action("act_fall_tm", price=v["tariff_price"])
             return "TM"
@@ -1638,7 +1666,7 @@ class SolakonCoordinator:
         ):
             await self._transition(
                 reset_integral=True, output=0,
-                mode=self._resume_mode,
+                mode=MODE_DISCHARGE, rest=not self.cycle_active,
             )
             self._set_last_action("act_fall_i")
             return "I"
@@ -1650,7 +1678,7 @@ class SolakonCoordinator:
             and v["tariff_allows_discharge"]
             and zone3 < soc <= zone1
             and not self.cycle_active
-            and mode == MODE_DISABLED
+            and (mode == MODE_DISABLED or self._at_rest(mode))
             and not v["is_night"]
         ):
             await self._transition(reset_integral=True, mode=MODE_DISCHARGE)
@@ -1663,9 +1691,9 @@ class SolakonCoordinator:
             and not self.tariff_charge_active
             and v["is_night"]
             and not self.cycle_active
-            and mode != MODE_DISABLED
+            and not self._at_rest(mode)
         ):
-            await self._transition(reset_integral=True, output=0, mode=MODE_DISABLED)
+            await self._transition(reset_integral=True, output=0, rest=True)
             self._set_last_action("act_fall_f")
             return "F"
 
@@ -1700,10 +1728,11 @@ class SolakonCoordinator:
         return {eid: c for eid, c in self._group_coords().items() if pred(c)}
 
     def _discharge_pool(self) -> dict[str, "SolakonCoordinator"]:
-        """Regelnde Instanzen der Netzgruppe in Modus '1'."""
+        """Regelnde Instanzen der Netzgruppe in Modus '1', die nicht darin ruhen."""
         return self._pool(
             lambda c: c._regulation_on
             and c._str(c.entry.data.get(CONF_MODE_SELECT, "")) == MODE_DISCHARGE
+            and not c._at_rest(MODE_DISCHARGE)
         )
 
     def _ac_pool(self) -> dict[str, "SolakonCoordinator"]:
@@ -2034,6 +2063,8 @@ class SolakonCoordinator:
             MODE_AC_CHARGE: "ac_charge",
         }
         new_mode_key = mode_map.get(mode, "unknown")
+        if mode == MODE_DISCHARGE and self._at_rest(mode):
+            new_mode_key = "rest_discharge"
         if new_mode_key != self.mode_key:
             self.mode_label_ts = time.time()
         self.mode_key = new_mode_key

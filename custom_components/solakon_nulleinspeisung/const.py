@@ -104,6 +104,8 @@ MODE_KEYS = [
     "discharge",
     "ac_charge",
     "disabled_regulation_off",
+    "rest_discharge",
+    "rest_discharge_regulation_off",
     "unknown",
 ]
 
@@ -173,6 +175,9 @@ S_ZONE1_FORCE_THRESHOLD = "zone1_force_threshold"
 S_ZONE1_FORCE_MIN_SOC   = "zone1_force_min_soc"
 
 S_NIGHT_ENABLED = "night_enabled"
+
+# Ruhezustand in Modus '1' mit 0 W statt Modus '0'.
+S_REST_IN_DISCHARGE = "rest_in_discharge"
 
 S_PERIODIC_ENABLED  = "periodic_enabled"
 S_PERIODIC_INTERVAL = "periodic_interval"
@@ -257,6 +262,7 @@ SETTINGS_DEFAULTS: dict = {
     S_ZONE1_FORCE_MIN_SOC:   20,
 
     S_NIGHT_ENABLED: False,
+    S_REST_IN_DISCHARGE: False,
 
     S_PERIODIC_ENABLED:  False,
     S_PERIODIC_INTERVAL: 10,

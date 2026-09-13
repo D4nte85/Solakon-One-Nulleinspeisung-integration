@@ -1328,6 +1328,25 @@ ${this._textsMissing ? `
           </div>
         </div>
 
+        <div class="col-card">
+          <div class="col-header" style="background:#dc2626">${d.rest_hdr || ""}</div>
+          <div class="col-body">
+            <p style="font-size:.85em;color:var(--secondary-text-color,#888);margin:0 0 8px">
+              ${d.rest_desc || ""}
+            </p>
+            <p style="font-size:.85em;color:#dc2626;font-weight:600;margin:0 0 12px">
+              ${d.rest_warn || ""}
+            </p>
+            <div class="field">
+              <label class="toggle">
+                <input type="checkbox" id="dbg-rest-discharge" ${this._settings.rest_in_discharge ? "checked" : ""}
+                  onchange="this.getRootNode().host._toggleRestInDischarge(this.checked)"/>
+                ${d.rest_toggle || ""}
+              </label>
+            </div>
+          </div>
+        </div>
+
       </div>
     `;
   }
@@ -1385,6 +1404,20 @@ ${this._textsMissing ? `
       }
       this._showToast(on ? (toast.regulation_on || "") : (toast.regulation_off || ""));
     } catch (e) { this._showToast("❌ " + e.message, true); }
+  }
+
+  async _toggleRestInDischarge(on) {
+    const targetId = this._entryId;
+    const toast = this._t.toast || {};
+    try {
+      await this._ws("save_config", { changes: { rest_in_discharge: on } });
+      if (this._entryId === targetId) this._settings.rest_in_discharge = on;
+      this._showToast(on ? (toast.rest_discharge_on || "") : (toast.rest_discharge_off || ""));
+    } catch (e) {
+      const el = this.shadowRoot.getElementById("dbg-rest-discharge");
+      if (el) el.checked = !on;
+      this._showToast("❌ " + e.message, true);
+    }
   }
 
   async _resetIntegral() {

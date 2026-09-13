@@ -3,6 +3,15 @@
 Alle nennenswerten Änderungen an der Solakon-ONE-Nulleinspeisung-Integration.
 Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [Unreleased]
+
+### Hinzugefügt
+- Schalter **Ruhezustand in Modus 1** im Debug-Tab (Standard aus, nicht empfohlen): die
+  Regelung ruht in Modus `'1'` mit 0 W statt in Modus `'0'`. Für Geräte, die in Modus
+  `'0'` nicht laden. Alle Ruhe-Übergänge laufen über einen gemeinsamen Ruhezustand;
+  Modus `'0'` wird nur noch dort geschrieben, mit aktivem Schalter nie. Das Gerät
+  verlässt die Fernsteuerung dann nie mehr, auch nicht bei ausgeschalteter Regelung.
+
 ## [2.4.1-beta.1] – 2026-09-12
 
 > **Beta-Release.** Fehlerbehebungen und ein interner Umbau der Textquellen; keine Breaking Changes gegenüber `2.4.0`. Erscheint in HACS nur bei aktivierten Beta-Versionen.
