@@ -239,10 +239,9 @@ class SolakonCoordinator:
             # danach blockt der Guard alle Modbus-Schreibbefehle
             async with self._lock:
                 _LOGGER.info("Solakon: Regelung wird deaktiviert — setze Output 0, Modus Disabled")
-                await self._set_output(0)
+                await self._transition(output=0, wait=False, timer=False)
                 await self._set_discharge(float(self.settings.get(S_DISCHARGE_MAX, 40)))
-                await self._timer_toggle()
-                await self._set_mode(MODE_DISABLED)
+                await self._transition(mode=MODE_DISABLED)
                 if self.mode_key != "disabled_regulation_off":
                     self.mode_label_ts = time.time()
                 self.mode_key = "disabled_regulation_off"
@@ -791,10 +790,7 @@ class SolakonCoordinator:
 
         self._output_warning = self._tr("warn_output_stuck", actual=actual, limit=limit)
         _LOGGER.error("Solakon: %s (Versuch %d)", self._output_warning, self._output_stall_actions)
-        self.integral = 0.0
-        await self._set_output_and_wait(0)
-        await self._timer_toggle()
-        await self._set_mode(MODE_DISABLED)
+        await self._transition(reset_integral=True, output=0, mode=MODE_DISABLED)
         self._set_last_action("act_output_recovery", actual=actual, limit=limit)
 
     async def _set_discharge(self, amps: float) -> None:
@@ -828,6 +824,33 @@ class SolakonCoordinator:
         if abs(current - target) > 0.5:
             _LOGGER.info("Solakon: Export-Limit korrigiert %d → %d W", int(current), target)
             await self._set_number(export_entity, target)
+
+    async def _transition(
+        self, *, reset_integral: bool = False, flags: dict[str, bool] | None = None,
+        output: float | None = None, wait: bool = True, ac_charge_mode: bool = False,
+        timer: bool = True, timer_first: bool = False, mode: str | None = None,
+    ) -> None:
+        """Zustandsübergang in fester Folge: Integral, Flags, Output, Timer, Modus.
+
+        `flags` setzt nur die übergebenen Zustandsflags. `output` None lässt die
+        Ausgangsleistung unberührt, `wait=False` schreibt sie ohne Konvergenzwarten.
+        `timer_first` schaltet den Timer vor den Output. `mode` None schreibt keinen Modus.
+        """
+        if reset_integral:
+            self.integral = 0.0
+        for name, value in (flags or {}).items():
+            setattr(self, name, value)
+        if timer and timer_first:
+            await self._timer_toggle()
+        if output is not None:
+            if wait:
+                await self._set_output_and_wait(output, ac_charge_mode=ac_charge_mode)
+            else:
+                await self._set_output(output)
+        if timer and not timer_first:
+            await self._timer_toggle()
+        if mode is not None:
+            await self._set_mode(mode)
 
     async def _timer_toggle(self) -> None:
         """Timer-Wechsel 3598↔3599 — erzwingt sichere Modus-Übernahme."""
@@ -1365,22 +1388,23 @@ class SolakonCoordinator:
             and not self.tariff_charge_active
         ):
             # Zone 0 setzt immer auf einem aktiven Zone-1-Zyklus auf
-            self.surplus_active = True
-            self.cycle_active = True
-            if mode != MODE_DISCHARGE:
-                await self._timer_toggle()
-                await self._set_mode(MODE_DISCHARGE)
+            switch = mode != MODE_DISCHARGE
+            await self._transition(
+                flags={"surplus_active": True, "cycle_active": True},
+                timer=switch, mode=MODE_DISCHARGE if switch else None,
+            )
             self._set_last_action("act_surplus_on")
             return "0A"
 
         # ── Fall 0B: Surplus Exit ────────────────────────────────────────────
         # Austritt bei erfüllter Austritts-Bedingung oder deaktivierter Überschuss-Option.
         if self.surplus_active and (not v["surplus_enabled"] or not v["new_surplus"]):
-            self.surplus_active = False
             # Zone nach Overlay-Ende aus dem SOC ableiten
-            self.cycle_active = soc > zone1
-            self.integral = 0.0
-            await self._set_output_and_wait(0)
+            await self._transition(
+                reset_integral=True,
+                flags={"surplus_active": False, "cycle_active": soc > zone1},
+                output=0, timer=False,
+            )
             self._set_last_action("act_surplus_off")
             return "0B"
 
@@ -1398,13 +1422,12 @@ class SolakonCoordinator:
             and (soc > zone1 or zone1_forced)
             and not self.cycle_active
         ):
-            self.integral = 0.0
-            self.cycle_active = True
-            self.surplus_active = False
-            self.ac_charge_active = False
-            self.tariff_charge_active = False
-            await self._timer_toggle()
-            await self._set_mode(MODE_DISCHARGE)
+            await self._transition(
+                reset_integral=True,
+                flags={"cycle_active": True, "surplus_active": False,
+                       "ac_charge_active": False, "tariff_charge_active": False},
+                mode=MODE_DISCHARGE,
+            )
             if zone1_forced and soc <= zone1:
                 self._set_last_action("act_fall_a_forced", soc=soc)
             else:
@@ -1418,14 +1441,12 @@ class SolakonCoordinator:
             and soc <= zone3
             and self.cycle_active
         ):
-            self.integral = 0.0
-            self.cycle_active = False
-            self.surplus_active = False
-            self.ac_charge_active = False
-            self.tariff_charge_active = False
-            await self._set_output_and_wait(0)
-            await self._timer_toggle()
-            await self._set_mode(MODE_DISABLED)
+            await self._transition(
+                reset_integral=True,
+                flags={"cycle_active": False, "surplus_active": False,
+                       "ac_charge_active": False, "tariff_charge_active": False},
+                output=0, mode=MODE_DISABLED,
+            )
             self._set_last_action("act_fall_b", soc=soc)
             return "B"
 
@@ -1437,12 +1458,11 @@ class SolakonCoordinator:
             and not self.cycle_active
             and mode != MODE_DISABLED
         ):
-            self.surplus_active = False
-            self.ac_charge_active = False
-            self.tariff_charge_active = False
-            await self._set_output_and_wait(0)
-            await self._timer_toggle()
-            await self._set_mode(MODE_DISABLED)
+            await self._transition(
+                flags={"surplus_active": False, "ac_charge_active": False,
+                       "tariff_charge_active": False},
+                output=0, mode=MODE_DISABLED,
+            )
             self._set_last_action("act_fall_c")
             return "C"
 
@@ -1465,11 +1485,7 @@ class SolakonCoordinator:
             and (charging_session_active or soc > zone3)
             and not tariff_lock_active
         ):
-            await self._timer_toggle()
-            if charging_session_active:
-                await self._set_mode(MODE_AC_CHARGE)
-            else:
-                await self._set_mode(MODE_DISCHARGE)
+            await self._transition(mode=MODE_AC_CHARGE if charging_session_active else MODE_DISCHARGE)
             self._set_last_action("act_fall_d")
             return "D"
 
@@ -1484,10 +1500,10 @@ class SolakonCoordinator:
             and not self.surplus_active
             and mode != MODE_AC_CHARGE
         ):
-            self.tariff_charge_active = True
-            await self._timer_toggle()
-            await self._set_output_and_wait(v["tariff_power"], ac_charge_mode=True)
-            await self._set_mode(MODE_AC_CHARGE)
+            await self._transition(
+                flags={"tariff_charge_active": True}, output=v["tariff_power"],
+                ac_charge_mode=True, timer_first=True, mode=MODE_AC_CHARGE,
+            )
             self._set_last_action("act_fall_gt", price=v["tariff_price"])
             return "GT"
 
@@ -1499,16 +1515,10 @@ class SolakonCoordinator:
                 or (v.get("tariff_price_valid", False) and v["tariff_price"] >= v["tariff_cheap"])
             )
         ):
-            self.integral = 0.0
-            self.tariff_charge_active = False
-            if self.cycle_active:
-                await self._set_output_and_wait(0)
-                await self._timer_toggle()
-                await self._set_mode(MODE_DISCHARGE)
-            else:
-                await self._set_output_and_wait(0)
-                await self._timer_toggle()
-                await self._set_mode(MODE_DISABLED)
+            await self._transition(
+                reset_integral=True, flags={"tariff_charge_active": False}, output=0,
+                mode=MODE_DISCHARGE if self.cycle_active else MODE_DISABLED,
+            )
             self._set_last_action("act_fall_ht")
             return "HT"
 
@@ -1523,12 +1533,9 @@ class SolakonCoordinator:
             and not self.surplus_active
             and mode == MODE_DISCHARGE
         ):
-            self.integral = 0.0
-            if self.cycle_active:
-                self.cycle_active = False
-            await self._set_output_and_wait(0)
-            await self._timer_toggle()
-            await self._set_mode(MODE_DISABLED)
+            await self._transition(
+                reset_integral=True, flags={"cycle_active": False}, output=0, mode=MODE_DISABLED,
+            )
             self._set_last_action("act_fall_tm", price=v["tariff_price"])
             return "TM"
 
@@ -1544,10 +1551,10 @@ class SolakonCoordinator:
             and mode != MODE_AC_CHARGE
             and (grid + total_actual) < -v["ac_hysteresis"]
         ):
-            self.ac_charge_active = True
-            await self._timer_toggle()
-            await self._set_output_and_wait(0, ac_charge_mode=True)
-            await self._set_mode(MODE_AC_CHARGE)
+            await self._transition(
+                flags={"ac_charge_active": True}, output=0,
+                ac_charge_mode=True, timer_first=True, mode=MODE_AC_CHARGE,
+            )
             self._set_last_action("act_fall_g")
             return "G"
 
@@ -1564,16 +1571,10 @@ class SolakonCoordinator:
                 )
             )
         ):
-            self.integral = 0.0
-            self.ac_charge_active = False
-            if self.cycle_active:
-                await self._set_output_and_wait(0)
-                await self._timer_toggle()
-                await self._set_mode(MODE_DISCHARGE)
-            else:
-                await self._set_output_and_wait(0)
-                await self._timer_toggle()
-                await self._set_mode(MODE_DISABLED)
+            await self._transition(
+                reset_integral=True, flags={"ac_charge_active": False}, output=0,
+                mode=MODE_DISCHARGE if self.cycle_active else MODE_DISABLED,
+            )
             self._set_last_action("act_fall_h")
             return "H"
 
@@ -1583,15 +1584,10 @@ class SolakonCoordinator:
             and not self.ac_charge_active
             and not self.tariff_charge_active
         ):
-            self.integral = 0.0
-            if self.cycle_active:
-                await self._set_output_and_wait(0)
-                await self._timer_toggle()
-                await self._set_mode(MODE_DISCHARGE)
-            else:
-                await self._set_output_and_wait(0)
-                await self._timer_toggle()
-                await self._set_mode(MODE_DISABLED)
+            await self._transition(
+                reset_integral=True, output=0,
+                mode=MODE_DISCHARGE if self.cycle_active else MODE_DISABLED,
+            )
             self._set_last_action("act_fall_i")
             return "I"
 
@@ -1606,9 +1602,7 @@ class SolakonCoordinator:
             and mode == MODE_DISABLED
             and not v["is_night"]
         ):
-            self.integral = 0.0
-            await self._timer_toggle()
-            await self._set_mode(MODE_DISCHARGE)
+            await self._transition(reset_integral=True, mode=MODE_DISCHARGE)
             self._set_last_action("act_fall_e")
             return "E"
 
@@ -1620,10 +1614,7 @@ class SolakonCoordinator:
             and not self.cycle_active
             and mode != MODE_DISABLED
         ):
-            self.integral = 0.0
-            await self._set_output_and_wait(0)
-            await self._timer_toggle()
-            await self._set_mode(MODE_DISABLED)
+            await self._transition(reset_integral=True, output=0, mode=MODE_DISABLED)
             self._set_last_action("act_fall_f")
             return "F"
 
