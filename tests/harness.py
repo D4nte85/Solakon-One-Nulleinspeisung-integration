@@ -258,7 +258,7 @@ COORD_ATTRS = (
     "current_zone", "zone_label", "mode_key", "mode_label",
     "last_action", "last_action_key", "last_action_params", "last_action_ts",
     "last_error", "integral", "active_fall",
-    "cycle_active", "surplus_active", "ac_charge_active", "tariff_charge_active",
+    "cycle_active", "surplus_active", "ac_charge_active", "tariff_charge_active", "resting",
     "is_night", "discharge_locked", "operating_state", "operating_state_ts",
     "_cycle_blocked", "last_output_ts", "mode_label_ts",
     "grid_stddev", "grid_stddev_raw", "dyn_offset_z1", "dyn_offset_z2", "dyn_offset_ac",

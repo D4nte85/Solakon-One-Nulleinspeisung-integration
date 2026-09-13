@@ -14,8 +14,10 @@ from tests import harness as h
 from tests.ha_stubs import ActiveConnection, _DtState
 
 C = h.const
+# Literal statt Konstante, damit die Referenz auch vom Stand ohne das Setting erzeugbar ist.
+REST_KEY = "rest_in_discharge"
 
-COUNTS = {"cycle": 1500, "multi": 400, "stall": 120, "tariff": 160, "settings": 200, "wiring": 1, "derive": 1, "domain": 60}
+COUNTS = {"cycle": 1500, "multi": 400, "stall": 120, "tariff": 160, "settings": 200, "wiring": 1, "derive": 1, "domain": 60, "rest": 300}
 
 
 # ── Bausteine ────────────────────────────────────────────────────────────────
@@ -289,6 +291,26 @@ def gen_domain(rng) -> dict:
     return spec
 
 
+def gen_rest(rng) -> dict:
+    """Ruhezustand in Modus '1': Zyklus-, Mehrinstanz-, Stall- und Tarifpfade, mit Umschalten."""
+    variant = _pick(rng, ["cycle", "cycle", "multi", "stall", "tariff"])
+    if variant == "multi":
+        spec = gen_cycle(rng, _pick(rng, [2, 3]))
+    else:
+        spec = {"cycle": gen_cycle, "stall": gen_stall, "tariff": gen_tariff}[variant](rng)
+    for inst in spec["instances"]:
+        inst["settings"][REST_KEY] = True
+    multi = len(spec["instances"]) > 1
+    for _ in range(_pick(rng, [1, 2, 3])):
+        spec["steps"].append({"advance": _pick(rng, [5, 400]), "set": _perturb(rng, "a"),
+                              "who": _pick(rng, ["a", "all"]) if multi else "a"})
+    if _chance(rng, 0.35) and len(spec["steps"]) > 1:
+        step = spec["steps"][rng.randrange(1, len(spec["steps"]))]
+        step["changes"] = _pick(rng, [{REST_KEY: False}, {REST_KEY: False},
+                                      {C.S_REGULATION_ENABLED: False}])
+    return spec
+
+
 def gen_settings_change(rng) -> dict:
     spec = gen_cycle(rng, 1)
     base = spec["instances"][0]["settings"]
@@ -326,6 +348,8 @@ def generate(kind: str) -> list[dict]:
             spec = gen_settings_change(rng)
         elif kind == "domain":
             spec = gen_domain(rng)
+        elif kind == "rest":
+            spec = gen_rest(rng)
         else:
             spec = {}
         spec["id"] = f"{kind}-{idx:04d}"
@@ -386,6 +410,8 @@ async def _run_cycle_spec(spec) -> dict:
         h.CLOCK.now += step["advance"]
         hass.events = []
         _apply_states(hass, step["set"])
+        if "changes" in step:
+            await coords["a"].async_update_settings(dict(step["changes"]))
         notify = {p: 0 for p in coords}
         for p, c in coords.items():
             c._listeners = [lambda p=p: notify.__setitem__(p, notify[p] + 1)]
@@ -597,7 +623,7 @@ def _schema_repr(form) -> list:
 
 
 def run(kind: str, spec: dict) -> dict:
-    if kind in ("cycle", "multi", "stall", "tariff", "domain"):
+    if kind in ("cycle", "multi", "stall", "tariff", "domain", "rest"):
         coro = _run_cycle_spec(spec)
     elif kind == "settings":
         coro = _run_settings_spec(spec)
