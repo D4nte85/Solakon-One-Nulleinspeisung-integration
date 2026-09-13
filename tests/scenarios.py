@@ -15,7 +15,7 @@ from tests.ha_stubs import ActiveConnection, _DtState
 
 C = h.const
 
-COUNTS = {"cycle": 1500, "multi": 400, "stall": 120, "settings": 200, "wiring": 1, "derive": 1}
+COUNTS = {"cycle": 1500, "multi": 400, "stall": 120, "tariff": 160, "settings": 200, "wiring": 1, "derive": 1}
 
 
 # ── Bausteine ────────────────────────────────────────────────────────────────
@@ -244,6 +244,26 @@ def gen_stall(rng) -> dict:
     return spec
 
 
+def gen_tariff(rng) -> dict:
+    """Tarifpfade gezielt: Preis auf, unter und über den Schwellen, mit und ohne Forecast-Sperre."""
+    spec = gen_cycle(rng, 1)
+    inst = spec["instances"][0]
+    s = inst["settings"]
+    cheap, exp = _pick(rng, [(10.0, 25.0), (20.0, 30.0)])
+    s.update({C.S_REGULATION_ENABLED: True, C.S_TARIFF_ENABLED: True,
+              C.S_TARIFF_CHEAP_THRESHOLD: cheap, C.S_TARIFF_EXP_THRESHOLD: exp,
+              C.S_TARIFF_PRICE_SENSOR: "sensor.local_price", C.S_TARIFF_CHEAP_ENTITY: "",
+              C.S_TARIFF_EXP_ENTITY: "", C.S_PV_FORECAST_ENABLED: _chance(rng, 0.5),
+              C.S_PV_FORECAST_SENSOR: "sensor.local_pv_today", C.S_PV_FORECAST_THRESHOLD: 15.0})
+    spec["has_dist_config"] = False
+    price = _pick(rng, [cheap - 1.0, cheap, cheap + 1.0, exp, exp + 1.0, "nan"])
+    spec["shared"]["sensor.local_price"] = {"state": price, "attrs": {"unit_of_measurement": "ct/kWh"}}
+    spec["shared"]["sensor.local_pv_today"] = {"state": _pick(rng, [2.0, 20.0]), "attrs": {"unit_of_measurement": "kWh"}}
+    inst["flags"]["tariff_charge_active"] = _chance(rng, 0.5)
+    inst["states"]["sensor.a_soc"] = {"state": _pick(rng, [30, 45, 55, 70, 95]), "attrs": {"unit_of_measurement": "%"}}
+    return spec
+
+
 def gen_settings_change(rng) -> dict:
     spec = gen_cycle(rng, 1)
     base = spec["instances"][0]["settings"]
@@ -275,6 +295,8 @@ def generate(kind: str) -> list[dict]:
             spec = gen_cycle(rng, _pick(rng, [2, 2, 3]))
         elif kind == "stall":
             spec = gen_stall(rng)
+        elif kind == "tariff":
+            spec = gen_tariff(rng)
         elif kind == "settings":
             spec = gen_settings_change(rng)
         else:
@@ -548,7 +570,7 @@ def _schema_repr(form) -> list:
 
 
 def run(kind: str, spec: dict) -> dict:
-    if kind in ("cycle", "multi", "stall"):
+    if kind in ("cycle", "multi", "stall", "tariff"):
         coro = _run_cycle_spec(spec)
     elif kind == "settings":
         coro = _run_settings_spec(spec)
