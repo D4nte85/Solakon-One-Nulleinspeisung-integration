@@ -1,6 +1,8 @@
 """Base entity for Solakon ONE."""
 from __future__ import annotations
 
+from typing import Any
+
 from homeassistant.helpers.entity import Entity
 
 from .const import DOMAIN, CONF_INSTANCE_NAME, VERSION
@@ -11,8 +13,11 @@ class SolakonEntity(Entity):
     _attr_has_entity_name = True
     _attr_should_poll = False
 
-    def __init__(self, coordinator: SolakonCoordinator, suffix: str) -> None:
+    def __init__(self, coordinator: SolakonCoordinator, suffix: str, **attrs: Any) -> None:
+        """`suffix` ergänzt die unique_id; `attrs` setzt `_attr_<name>`."""
         self._coordinator = coordinator
+        for name, value in attrs.items():
+            setattr(self, f"_attr_{name}", value)
         self._attr_unique_id = f"{coordinator.entry.entry_id}_{suffix}"
         self._attr_device_info = {
             "identifiers": {(DOMAIN, coordinator.entry.entry_id)},

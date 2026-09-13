@@ -74,23 +74,18 @@ def _enum(options: list[str]) -> dict:
 
 
 class CoordinatorSensor(SolakonEntity, SensorEntity):
-    """Sensor mit Wert `value_fn(coordinator)`.
-
-    `key` ist Suffix der unique_id und translation_key; `attrs` setzt `_attr_<name>`.
-    """
+    """Sensor mit Wert `value_fn(coordinator)`; `key` ist unique_id-Suffix und translation_key."""
 
     def __init__(
         self, coord: SolakonCoordinator, key: str,
         value_fn: Callable[[SolakonCoordinator], Any], **attrs: Any,
     ) -> None:
-        super().__init__(coord, key)
-        self._attr_translation_key = key
+        super().__init__(coord, key, translation_key=key, **attrs)
         self._value_fn = value_fn
-        for name, value in attrs.items():
-            setattr(self, f"_attr_{name}", value)
 
     @property
     def native_value(self) -> Any:
+        """Wert aus `value_fn`."""
         return self._value_fn(self._coordinator)
 
 

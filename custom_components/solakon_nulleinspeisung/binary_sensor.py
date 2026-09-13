@@ -33,9 +33,7 @@ class DiagBoolSensor(SolakonEntity, BinarySensorEntity):
     """Zeigt internen Coordinator-Zustand als read-only Binärsensor an."""
 
     def __init__(self, coord: SolakonCoordinator, attr: str, icon: str) -> None:
-        super().__init__(coord, attr)
-        self._attr_translation_key = attr
-        self._attr_icon = icon
+        super().__init__(coord, attr, translation_key=attr, icon=icon)
         self._attr = attr
 
     @property
