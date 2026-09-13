@@ -5,6 +5,10 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+## [3.0.0-beta.1] – 2026-09-13
+
+> **Beta-Release.** Umfangreicher interner Umbau von Coordinator, WebSocket-Handlern, Sensoren, Config-Flow und Panel, dazu der zentrale Ruhezustand. Verhaltensänderung gegenüber `2.4.x`: Zahlenwerte kommen nur noch aus Entitäten der Domains `sensor`, `input_number` und `number`. Erscheint in HACS nur bei aktivierten Beta-Versionen.
+
 ### Hinzugefügt
 - Schalter **Ruhezustand in Modus 1** im Debug-Tab (Standard aus, nicht empfohlen): die
   Regelung ruht in Modus `'1'` mit 0 W statt in Modus `'0'`. Für Geräte, die in Modus
