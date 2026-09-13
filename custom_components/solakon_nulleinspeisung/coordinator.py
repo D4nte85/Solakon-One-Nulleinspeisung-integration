@@ -1007,9 +1007,14 @@ class SolakonCoordinator:
         self.allocated_power = allocated_power
         if self._dist_warning:
             self._add_soft_error(soft_errors, self._dist_warning)
-        # Panel-Limits gegen die Geraetegrenze gedeckelt.
-        effective_hard    = int(min(int(allocated_power), cs.hard_limit_z0, DEVICE_MAX_POWER)) if allocated_power is not None else int(min(cs.hard_limit_z0, DEVICE_MAX_POWER))
-        effective_hard_z1 = int(min(int(allocated_power), cs.hard_limit_z1, DEVICE_MAX_POWER)) if allocated_power is not None else int(min(cs.hard_limit_z1, DEVICE_MAX_POWER))
+        # Panel-Limits gegen Geraetegrenze und zugeteilte Leistung gedeckelt.
+        def cap(limit: int) -> int:
+            if allocated_power is None:
+                return int(min(limit, DEVICE_MAX_POWER))
+            return int(min(int(allocated_power), limit, DEVICE_MAX_POWER))
+
+        effective_hard = cap(cs.hard_limit_z0)
+        effective_hard_z1 = cap(cs.hard_limit_z1)
 
         # Verwertbarer PV-Überschuss: Luft zwischen dem aktuellen Output und dem
         # Minimum aus geltendem Hard-Limit und aktueller PV-Leistung, geklemmt auf ≥0.
