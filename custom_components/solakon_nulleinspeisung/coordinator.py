@@ -1229,7 +1229,8 @@ class SolakonCoordinator:
         prev_actual = self._prev_actual
         self._prev_actual = actual
 
-        total_actual = self._total_actual_power(actual)
+        total_actual = self._pool_sum(self._discharge_pool(), actual, CONF_ACTUAL_SENSOR,
+                                      SolakonCoordinator._flt_power)
 
         if surplus_enabled:
             if solar > 0:
@@ -1354,7 +1355,9 @@ class SolakonCoordinator:
         elif self.ac_charge_active:
             if abs(grid - ac_offset) > tolerance:
                 await self._pi_step(
-                    grid, self._total_commanded_ac_power(current_power) * ac_error_share,
+                    grid,
+                    self._pool_sum(self._ac_pool(), current_power, CONF_ACTIVE_POWER,
+                                   SolakonCoordinator._flt) * ac_error_share,
                     ac_offset, ac_power_limit, ac_p, ac_i, ac_error_share, current_power,
                     "act_ac_pi", ac_charge_mode=True,
                 )
@@ -1372,7 +1375,9 @@ class SolakonCoordinator:
 
             if grid_error_abs > tolerance and not saturated_high and not (at_min_limit and grid_error < 0):
                 await self._pi_step(
-                    grid, self._total_commanded_power(current_power) * error_share,
+                    grid,
+                    self._pool_sum(self._discharge_pool(), current_power, CONF_ACTIVE_POWER,
+                                   SolakonCoordinator._flt) * error_share,
                     target_offset, dynamic_max, p_factor, i_factor, error_share, current_power,
                     "act_pi",
                 )
@@ -1690,7 +1695,10 @@ class SolakonCoordinator:
         reader: Callable[["SolakonCoordinator", str], float],
     ) -> float:
         """Summe über `pool`: eigener Beitrag `own_value`, Fremdinstanzen über
-        `reader(instanz, entity_id)` der Entität `conf_key`. Höchstens eine Instanz: `own_value`."""
+        `reader(instanz, entity_id)` der Entität `conf_key`. Höchstens eine Instanz: `own_value`.
+
+        `own_value` ist der im laufenden Zyklus bereits gelesene eigene Wert — keine zweite Lesung.
+        """
         if len(pool) <= 1:
             return own_value
         return sum(
@@ -1961,35 +1969,6 @@ class SolakonCoordinator:
         `own_soc` siehe `_all_shares`.
         """
         return self._weighted_share(self._ac_pool(), own_soc)
-
-    def _total_actual_power(self, own_actual: float) -> float:
-        """Summe der Wechselrichter-Ist-Leistung über alle Nulleinspeisung-Instanzen (Modus '1').
-
-        Einzelbetrieb bzw. kein Modus-'1'-Teilnehmer: eigener actual-Wert.
-        `own_actual` ist der im laufenden Zyklus bereits gelesene eigene
-        CONF_ACTUAL_SENSOR-Wert — vermeidet eine zweite, ggf. abweichende Lesung.
-        """
-        return self._pool_sum(self._discharge_pool(), own_actual, CONF_ACTUAL_SENSOR,
-                              SolakonCoordinator._flt_power)
-
-    def _total_commanded_power(self, own_current_power: float) -> float:
-        """Summe der von allen Nulleinspeisung-Instanzen kommandierten Sollleistung (Modus '1').
-
-        Einzelbetrieb bzw. kein Modus-'1'-Teilnehmer: eigener kommandierter Wert.
-        `own_current_power` ist die im laufenden Zyklus bereits gelesene eigene
-        CONF_ACTIVE_POWER — vermeidet eine zweite, ggf. abweichende Lesung.
-        """
-        return self._pool_sum(self._discharge_pool(), own_current_power, CONF_ACTIVE_POWER,
-                              SolakonCoordinator._flt)
-
-    def _total_commanded_ac_power(self, own_current_power: float) -> float:
-        """Summe der von allen gleichzeitig AC-ladenden Instanzen kommandierten Leistung.
-
-        Einzelbetrieb bzw. keine weitere ladende Instanz: eigener kommandierter Wert.
-        `own_current_power` siehe `_total_commanded_power`.
-        """
-        return self._pool_sum(self._ac_pool(), own_current_power, CONF_ACTIVE_POWER,
-                              SolakonCoordinator._flt)
 
     # ── PI-Berechnung ────────────────────────────────────────────────────────
 
