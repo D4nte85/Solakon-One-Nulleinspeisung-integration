@@ -95,6 +95,17 @@ CORE_SENSORS = (
     (CONF_MODE_SELECT, True, False),
 )
 
+# Regelzustand → Kenngrößen. Laden liegt als Zustand über dem Entladezyklus.
+OPERATING_BY_STATE = {
+    "surplus": "exporting",
+    "tariff_charge": "tariff_charging",
+    "ac_charge": "ac_charging",
+    "cycle": "battery_supply",
+    "pv": "pv_direct",
+}
+# Entladestrom in A; der Zyklus nutzt den eingestellten Maximalstrom.
+DISCHARGE_BY_STATE = {"surplus": 2.0, "tariff_charge": 0.0, "ac_charge": 0.0, "pv": 0.0}
+
 # Settings, die der Regelzyklus einmal je Durchlauf liest: (Feld, Schlüssel, Typ).
 CYCLE_SETTINGS = (
     ("zone1_limit", S_ZONE1_LIMIT, int),
@@ -833,21 +844,33 @@ class SolakonCoordinator:
         """True während AC-Laden oder Tarif-Laden."""
         return self.ac_charge_active or self.tariff_charge_active
 
-    def _required_discharge(self, discharge_max: int) -> float:
-        """Entladestrom für den aktuellen Regelzustand.
-
-        - Surplus aktiv          → 2 A
-        - AC-/Tarif-Laden aktiv  → 0 A
-        - Entladezyklus (Zone 1) → max. Entladestrom
-        - sonst                  → 0 A
-        """
+    @property
+    def _control_state(self) -> str:
+        """Regelzustand aus den Flags, erster zutreffender gewinnt:
+        surplus → tariff_charge → ac_charge → cycle → pv."""
         if self.surplus_active:
-            return 2.0
-        if self._charging_session_active:
-            return 0.0
+            return "surplus"
+        if self.tariff_charge_active:
+            return "tariff_charge"
+        if self.ac_charge_active:
+            return "ac_charge"
         if self.cycle_active:
-            return float(discharge_max)
-        return 0.0
+            return "cycle"
+        return "pv"
+
+    @property
+    def _resume_mode(self) -> str:
+        """Modus nach Lade-Ende oder Safety: '1' bei aktivem Zyklus, sonst '0'."""
+        return MODE_DISCHARGE if self.cycle_active else MODE_DISABLED
+
+    @property
+    def _hard_limit_key(self) -> str:
+        """Settings-Schlüssel des geltenden Hard-Limits: Zone 0 bei Surplus, sonst Zone 1/2."""
+        return S_HARD_LIMIT_Z0 if self.surplus_active else S_HARD_LIMIT_Z1
+
+    def _required_discharge(self, discharge_max: int) -> float:
+        """Entladestrom für den aktuellen Regelzustand laut DISCHARGE_BY_STATE."""
+        return DISCHARGE_BY_STATE.get(self._control_state, float(discharge_max))
 
     async def _sync_export_limit(self, target: int) -> None:
         """grid_export_power_limit korrigieren wenn von Soll abgewichen — nur wenn Entity konfiguriert."""
@@ -1021,13 +1044,14 @@ class SolakonCoordinator:
 
         effective_hard = cap(cs.hard_limit_z0)
         effective_hard_z1 = cap(cs.hard_limit_z1)
+        effective_by_key = {S_HARD_LIMIT_Z0: effective_hard, S_HARD_LIMIT_Z1: effective_hard_z1}
 
         # Verwertbarer PV-Überschuss: Luft zwischen dem aktuellen Output und dem
         # Minimum aus geltendem Hard-Limit und aktueller PV-Leistung, geklemmt auf ≥0.
         # Nutzt die Zone des vorherigen Zyklus — self.surplus_active ist hier noch
         # nicht aktualisiert.
         self.surplus_power = max(0.0, min(
-            effective_hard if self.surplus_active else effective_hard_z1, solar
+            effective_by_key[self._hard_limit_key], solar
         ) - actual)
 
         # Gemergtes Feld: beide Features lesen denselben "PV-Ertrag heute"-Sensor
@@ -1472,7 +1496,7 @@ class SolakonCoordinator:
         ):
             await self._transition(
                 reset_integral=True, flags={"tariff_charge_active": False}, output=0,
-                mode=MODE_DISCHARGE if self.cycle_active else MODE_DISABLED,
+                mode=self._resume_mode,
             )
             self._set_last_action("act_fall_ht")
             return "HT"
@@ -1526,7 +1550,7 @@ class SolakonCoordinator:
         ):
             await self._transition(
                 reset_integral=True, flags={"ac_charge_active": False}, output=0,
-                mode=MODE_DISCHARGE if self.cycle_active else MODE_DISABLED,
+                mode=self._resume_mode,
             )
             self._set_last_action("act_fall_h")
             return "H"
@@ -1539,7 +1563,7 @@ class SolakonCoordinator:
         ):
             await self._transition(
                 reset_integral=True, output=0,
-                mode=MODE_DISCHARGE if self.cycle_active else MODE_DISABLED,
+                mode=self._resume_mode,
             )
             self._set_last_action("act_fall_i")
             return "I"
@@ -1837,12 +1861,7 @@ class SolakonCoordinator:
         garantiert, da pro Runde mindestens eine Instanz endgültig aus dem Rest-Pool
         entfernt wird, sobald `newly_capped` nicht leer ist.
         """
-        caps: dict[str, float] = {}
-        for eid, c in active.items():
-            if c.surplus_active:
-                caps[eid] = c._setting(S_HARD_LIMIT_Z0, float)
-            else:
-                caps[eid] = c._setting(S_HARD_LIMIT_Z1, float)
+        caps = {eid: c._setting(c._hard_limit_key, float) for eid, c in active.items()}
 
         remaining_ids = set(shares.keys())
         allocations: dict[str, float] = {}
@@ -1956,26 +1975,21 @@ class SolakonCoordinator:
         Anders als `active_fall`, das den zuletzt ausgefuehrten Uebergang haelt,
         beschreibt der Zustand, was gerade gilt.
         """
+        control = self._control_state
         if not self._regulation_on:
             state = "disabled"
         elif self._cycle_blocked:
             state = "blocked"
-        elif self.surplus_active:
-            state = "exporting"
-        elif self.tariff_charge_active:
-            state = "tariff_charging"
-        elif self.ac_charge_active:
-            state = "ac_charging"
+        elif control in ("surplus", "tariff_charge", "ac_charge"):
+            state = OPERATING_BY_STATE[control]
         elif self.discharge_locked:
             state = "discharge_locked"
         elif self.is_night:
             state = "night_off"
-        elif self.cycle_active:
-            state = "battery_supply"
-        elif self.current_zone == 3:
+        elif control == "pv" and self.current_zone == 3:
             state = "safety_stop"
         else:
-            state = "pv_direct"
+            state = OPERATING_BY_STATE[control]
 
         if state == self.operating_state:
             return False
