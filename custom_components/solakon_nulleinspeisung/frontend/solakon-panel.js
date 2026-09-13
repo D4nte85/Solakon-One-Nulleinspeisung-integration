@@ -39,6 +39,26 @@ const TAB_ICONS = {
   debug:    "🔧",
 };
 
+// Sensorgebundenes Feature: Schalter, Sensorhinweis, dann das Schwellenfeld `<prefix>_<k>` mit seinen Grenzen.
+const sensorFeatureFields = (prefix, { k, ...limits }) => [
+  { k: `${prefix}_enabled`,     t: "bool" },
+  { k: `${prefix}_sensor_note`, t: "note" },
+  { k: `${prefix}_${k}`,        t: "num", ...limits },
+];
+
+// Spaltenkarte eines dynamischen Offsets mit den Feldern `dyn_<prefix>_*`.
+const dynOffSection = (tk, prefix, icon, color) => ({
+  tk, icon, color,
+  fields: [
+    { k: `dyn_${prefix}_enabled`,  t: "bool" },
+    { k: `dyn_${prefix}_min`,      t: "num", min: 0,   max: 500,  step: 1   },
+    { k: `dyn_${prefix}_max`,      t: "num", min: 50,  max: 1000, step: 10  },
+    { k: `dyn_${prefix}_noise`,    t: "num", min: 0,   max: 100,  step: 1   },
+    { k: `dyn_${prefix}_factor`,   t: "num", min: 0.5, max: 5,    step: 0.1 },
+    { k: `dyn_${prefix}_negative`, t: "bool" },
+  ],
+});
+
 // Layout: field keys + numeric constraints only — labels/descriptions in translation files
 const TAB_LAYOUT = {
   pi: {
@@ -97,9 +117,7 @@ const TAB_LAYOUT = {
       {
         tk: "zones_force", icon: "🌙", color: "#4338ca",
         fields: [
-          { k: "zone1_force_enabled",      t: "bool" },
-          { k: "zone1_force_sensor_note",  t: "note" },
-          { k: "zone1_force_threshold",    t: "num", min: 0, max: 50, step: 0.5 },
+          ...sensorFeatureFields("zone1_force", { k: "threshold", min: 0, max: 50, step: 0.5 }),
           { k: "zone1_force_min_soc",      t: "num", min: 0, max: 100, step: 1 },
         ],
       },
@@ -143,19 +161,11 @@ const TAB_LAYOUT = {
       },
       {
         tk: "surplus_forecast", icon: "🌤️", color: "#65a30d",
-        fields: [
-          { k: "surplus_forecast_enabled",      t: "bool" },
-          { k: "surplus_forecast_sensor_note",  t: "note" },
-          { k: "surplus_forecast_threshold",    t: "num", min: 0, max: 100, step: 0.5 },
-        ],
+        fields: sensorFeatureFields("surplus_forecast", { k: "threshold", min: 0, max: 100, step: 0.5 }),
       },
       {
         tk: "surplus_lock", icon: "⛅", color: "#dc2626",
-        fields: [
-          { k: "surplus_lock_enabled",     t: "bool" },
-          { k: "surplus_lock_sensor_note", t: "note" },
-          { k: "surplus_lock_factor",      t: "num", min: 1.0, max: 3.0, step: 0.1 },
-        ],
+        fields: sensorFeatureFields("surplus_lock", { k: "factor", min: 1.0, max: 3.0, step: 0.1 }),
       },
     ],
   },
@@ -209,11 +219,7 @@ const TAB_LAYOUT = {
       },
       {
         tk: "tariff_forecast", icon: "☀️", color: "#f59e0b",
-        fields: [
-          { k: "pv_forecast_enabled",     t: "bool" },
-          { k: "pv_forecast_sensor_note", t: "note" },
-          { k: "pv_forecast_threshold",   t: "num", min: 0, max: 50, step: 0.5 },
-        ],
+        fields: sensorFeatureFields("pv_forecast", { k: "threshold", min: 0, max: 50, step: 0.5 }),
       },
     ],
   },
@@ -224,39 +230,9 @@ const TAB_LAYOUT = {
       { k: "stddev_trim_count", t: "num", min: 0,  max: 10,  step: 1  },
     ],
     cols: [
-      {
-        tk: "dynoff_z1", icon: "⚡", color: "#16a34a",
-        fields: [
-          { k: "dyn_z1_enabled",  t: "bool" },
-          { k: "dyn_z1_min",      t: "num", min: 0,   max: 500,  step: 1   },
-          { k: "dyn_z1_max",      t: "num", min: 50,  max: 1000, step: 10  },
-          { k: "dyn_z1_noise",    t: "num", min: 0,   max: 100,  step: 1   },
-          { k: "dyn_z1_factor",   t: "num", min: 0.5, max: 5,    step: 0.1 },
-          { k: "dyn_z1_negative", t: "bool" },
-        ],
-      },
-      {
-        tk: "dynoff_z2", icon: "🔋", color: "#0891b2",
-        fields: [
-          { k: "dyn_z2_enabled",  t: "bool" },
-          { k: "dyn_z2_min",      t: "num", min: 0,   max: 500,  step: 1   },
-          { k: "dyn_z2_max",      t: "num", min: 50,  max: 1000, step: 10  },
-          { k: "dyn_z2_noise",    t: "num", min: 0,   max: 100,  step: 1   },
-          { k: "dyn_z2_factor",   t: "num", min: 0.5, max: 5,    step: 0.1 },
-          { k: "dyn_z2_negative", t: "bool" },
-        ],
-      },
-      {
-        tk: "dynoff_ac", icon: "⚡", color: "#7c3aed",
-        fields: [
-          { k: "dyn_ac_enabled",  t: "bool" },
-          { k: "dyn_ac_min",      t: "num", min: 0,   max: 500,  step: 1   },
-          { k: "dyn_ac_max",      t: "num", min: 50,  max: 1000, step: 10  },
-          { k: "dyn_ac_noise",    t: "num", min: 0,   max: 100,  step: 1   },
-          { k: "dyn_ac_factor",   t: "num", min: 0.5, max: 5,    step: 0.1 },
-          { k: "dyn_ac_negative", t: "bool" },
-        ],
-      },
+      dynOffSection("dynoff_z1", "z1", "⚡", "#16a34a"),
+      dynOffSection("dynoff_z2", "z2", "🔋", "#0891b2"),
+      dynOffSection("dynoff_ac", "ac", "⚡", "#7c3aed"),
     ],
   },
 
