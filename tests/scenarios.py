@@ -15,7 +15,7 @@ from tests.ha_stubs import ActiveConnection, _DtState
 
 C = h.const
 
-COUNTS = {"cycle": 1500, "multi": 400, "stall": 120, "tariff": 160, "settings": 200, "wiring": 1, "derive": 1}
+COUNTS = {"cycle": 1500, "multi": 400, "stall": 120, "tariff": 160, "settings": 200, "wiring": 1, "derive": 1, "domain": 60}
 
 
 # ── Bausteine ────────────────────────────────────────────────────────────────
@@ -264,6 +264,31 @@ def gen_tariff(rng) -> dict:
     return spec
 
 
+def gen_domain(rng) -> dict:
+    """Tarifschwellen und PV-Vorhersage auf Entitäten mit und ohne Zahlen-Domain."""
+    spec = gen_tariff(rng)
+    s = spec["instances"][0]["settings"]
+    candidates = {
+        "sensor.local_cheap": _pick(rng, [8.0, 15.0]),
+        "input_number.cheap": _pick(rng, [8.0, 15.0]),
+        "number.cheap": 12.0,
+        "input_boolean.cheap": _pick(rng, ["on", "off"]),
+        "switch.cheap": "on",
+        "binary_sensor.cheap": "on",
+    }
+    for key in (C.S_TARIFF_CHEAP_ENTITY, C.S_TARIFF_EXP_ENTITY):
+        eid = _pick(rng, [""] + sorted(candidates))
+        s[key] = eid
+        if eid:
+            spec["shared"][eid] = {"state": candidates[eid], "attrs": {}}
+    pv = _pick(rng, ["sensor.local_pv_today", "binary_sensor.pv_today", "input_boolean.pv_today"])
+    s[C.S_PV_FORECAST_SENSOR] = pv
+    s[C.S_PV_FORECAST_ENABLED] = True
+    if pv not in spec["shared"]:
+        spec["shared"][pv] = {"state": "on", "attrs": {}}
+    return spec
+
+
 def gen_settings_change(rng) -> dict:
     spec = gen_cycle(rng, 1)
     base = spec["instances"][0]["settings"]
@@ -299,6 +324,8 @@ def generate(kind: str) -> list[dict]:
             spec = gen_tariff(rng)
         elif kind == "settings":
             spec = gen_settings_change(rng)
+        elif kind == "domain":
+            spec = gen_domain(rng)
         else:
             spec = {}
         spec["id"] = f"{kind}-{idx:04d}"
@@ -570,7 +597,7 @@ def _schema_repr(form) -> list:
 
 
 def run(kind: str, spec: dict) -> dict:
-    if kind in ("cycle", "multi", "stall", "tariff"):
+    if kind in ("cycle", "multi", "stall", "tariff", "domain"):
         coro = _run_cycle_spec(spec)
     elif kind == "settings":
         coro = _run_settings_spec(spec)
