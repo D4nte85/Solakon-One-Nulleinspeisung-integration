@@ -945,6 +945,13 @@ class SolakonCoordinator:
         if await self._set_number(export_entity, target, only_if_changed=True, current=current):
             _LOGGER.info("Solakon: Export-Limit korrigiert %d → %d W", int(current), target)
 
+    async def _end_charge(self, flag: str, action_key: str) -> None:
+        """Lade-Session beenden: Integral, Flag, Output 0, Rückkehrmodus, Aktionstext."""
+        await self._transition(
+            reset_integral=True, flags={flag: False}, output=0, mode=self._resume_mode,
+        )
+        self._set_last_action(action_key)
+
     async def _transition(
         self, *, reset_integral: bool = False, flags: dict[str, bool] | None = None,
         output: float | None = None, wait: bool = True, ac_charge_mode: bool = False,
@@ -1558,11 +1565,7 @@ class SolakonCoordinator:
                 or v["price_at_least_cheap"]
             )
         ):
-            await self._transition(
-                reset_integral=True, flags={"tariff_charge_active": False}, output=0,
-                mode=self._resume_mode,
-            )
-            self._set_last_action("act_fall_ht")
+            await self._end_charge("tariff_charge_active", "act_fall_ht")
             return "HT"
 
         # ── Discharge-Lock (Preis < Teuer-Schwelle) ──────────────────────────
@@ -1612,11 +1615,7 @@ class SolakonCoordinator:
                 )
             )
         ):
-            await self._transition(
-                reset_integral=True, flags={"ac_charge_active": False}, output=0,
-                mode=self._resume_mode,
-            )
-            self._set_last_action("act_fall_h")
+            await self._end_charge("ac_charge_active", "act_fall_h")
             return "H"
 
         # ── Fall I: Safety — Modus '3' ohne aktive Lade-Session ──────────────
