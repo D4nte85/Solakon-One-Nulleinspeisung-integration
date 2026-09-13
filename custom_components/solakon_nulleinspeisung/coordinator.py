@@ -230,7 +230,7 @@ class SolakonCoordinator:
 
     async def async_update_settings(self, changes: dict[str, Any]) -> None:
         turning_off = (
-            self.settings.get(S_REGULATION_ENABLED, False)
+            self._regulation_on
             and S_REGULATION_ENABLED in changes
             and not changes[S_REGULATION_ENABLED]
         )
@@ -292,7 +292,7 @@ class SolakonCoordinator:
         self.notify_listeners()
 
         # Neuen Zustand sofort anwenden
-        if self.settings.get(S_REGULATION_ENABLED, False):
+        if self._regulation_on:
             self.hass.async_create_task(self._async_regulate())
 
     def _update_tariff_tracker(self) -> None:
@@ -654,18 +654,36 @@ class SolakonCoordinator:
 
     # ── Modbus-Schreibbefehle (nur wenn regulation_enabled) ──────────────────
 
-    async def _set_number(self, entity_id: str, value: float) -> None:
-        """number.set_value — nur wenn Regulation aktiviert."""
-        if not self.settings.get(S_REGULATION_ENABLED, False):
-            return
+    @property
+    def _regulation_on(self) -> bool:
+        """Regelung aktiviert; Voraussetzung für jeden Schreibzugriff."""
+        return bool(self.settings.get(S_REGULATION_ENABLED, False))
+
+    async def _set_number(
+        self, entity_id: str, value: float, only_if_changed: bool = False,
+        current: float | None = None,
+    ) -> bool:
+        """number.set_value — nur wenn Regulation aktiviert; True wenn geschrieben.
+
+        `only_if_changed` schreibt nur bei Abweichung über 0,5 vom Ist-Wert. Der Ist-Wert
+        ist `current` oder wird gelesen (fehlend: -1).
+        """
+        if not self._regulation_on:
+            return False
+        if only_if_changed:
+            if current is None:
+                current = self._flt(entity_id, -1)
+            if abs(current - value) <= 0.5:
+                return False
         await self.hass.services.async_call(
             "number", "set_value",
             {"entity_id": entity_id, "value": value},
         )
+        return True
 
     async def _set_mode(self, mode: str) -> None:
         """select.select_option — nur wenn Regulation aktiviert."""
-        if not self.settings.get(S_REGULATION_ENABLED, False):
+        if not self._regulation_on:
             return
         await self.hass.services.async_call(
             "select", "select_option",
@@ -795,9 +813,7 @@ class SolakonCoordinator:
 
     async def _set_discharge(self, amps: float) -> None:
         """Entladestrom setzen — nur wenn aktueller Wert abweicht."""
-        current = self._flt(self.entry.data[CONF_DISCHARGE_CURRENT], -1)
-        if abs(current - amps) > 0.5:
-            await self._set_number(self.entry.data[CONF_DISCHARGE_CURRENT], amps)
+        await self._set_number(self.entry.data[CONF_DISCHARGE_CURRENT], amps, only_if_changed=True)
 
     def _required_discharge(self, discharge_max: int) -> float:
         """Entladestrom für den aktuellen Regelzustand.
@@ -821,9 +837,8 @@ class SolakonCoordinator:
         if not export_entity:
             return
         current = self._flt(export_entity, -1)
-        if abs(current - target) > 0.5:
+        if await self._set_number(export_entity, target, only_if_changed=True, current=current):
             _LOGGER.info("Solakon: Export-Limit korrigiert %d → %d W", int(current), target)
-            await self._set_number(export_entity, target)
 
     async def _transition(
         self, *, reset_integral: bool = False, flags: dict[str, bool] | None = None,
@@ -851,6 +866,32 @@ class SolakonCoordinator:
             await self._timer_toggle()
         if mode is not None:
             await self._set_mode(mode)
+
+    async def _set_fixed_output(
+        self, target: float, current: float, action_key: str, ac_charge_mode: bool = False,
+    ) -> None:
+        """Fester Sollwert: schreibt nur bei Abweichung über 0,5 vom kommandierten Ist-Wert."""
+        if abs(current - target) > 0.5:
+            self._set_last_action(action_key, power=target)
+            await self._set_output_and_wait(target, ac_charge_mode=ac_charge_mode)
+
+    async def _pi_step(
+        self, grid: float, power_base: float, offset: float, limit: float, p_factor: float,
+        i_factor: float, share: float, current_power: float, action_key: str,
+        ac_charge_mode: bool = False,
+    ) -> None:
+        """Ein PI-Schritt: Sollwert aus Poolanteil berechnen, Aktion setzen, schreiben."""
+        new_pw = self._pi_calculate(
+            grid, power_base, offset, limit, p_factor, i_factor,
+            ac_charge_mode=ac_charge_mode, error_share=share,
+        )
+        self._set_last_action(action_key, frm=current_power, to=new_pw)
+        await self._set_output_and_wait(new_pw, ac_charge_mode=ac_charge_mode)
+
+    def _decay_integral(self) -> None:
+        """Integral über 10 um 5 % abklingen lassen, wenn kein PI-Schritt schreibt."""
+        if abs(self.integral) > 10:
+            self.integral *= 0.95
 
     async def _timer_toggle(self) -> None:
         """Timer-Wechsel 3598↔3599 — erzwingt sichere Modus-Übernahme."""
@@ -903,7 +944,7 @@ class SolakonCoordinator:
         s = self.settings
 
         # ── 0. Regelung aktiv? ───────────────────────────────────────────────
-        if not s.get(S_REGULATION_ENABLED, False):
+        if not self._regulation_on:
             if self._update_operating_state():
                 self.notify_listeners()
             return
@@ -1308,31 +1349,20 @@ class SolakonCoordinator:
 
         # ── PI-Pfade ─────────────────────────────────────────────────────────
         if self.surplus_active:
-            # Nur schreiben wenn der Ist-Sollwert abweicht
-            if abs(current_power - effective_hard) > 0.5:
-                self._set_last_action("act_zone0_output", power=effective_hard)
-                await self._set_output_and_wait(effective_hard)
+            await self._set_fixed_output(effective_hard, current_power, "act_zone0_output")
 
         elif self.ac_charge_active:
-            ac_grid_err = grid - ac_offset
-            if abs(ac_grid_err) > tolerance:
-                ac_power_base = self._total_commanded_ac_power(current_power) * ac_error_share
-                new_pw = self._pi_calculate(
-                    grid, ac_power_base, ac_offset, ac_power_limit,
-                    ac_p, ac_i, ac_charge_mode=True,
-                    error_share=ac_error_share,
+            if abs(grid - ac_offset) > tolerance:
+                await self._pi_step(
+                    grid, self._total_commanded_ac_power(current_power) * ac_error_share,
+                    ac_offset, ac_power_limit, ac_p, ac_i, ac_error_share, current_power,
+                    "act_ac_pi", ac_charge_mode=True,
                 )
-                self._set_last_action("act_ac_pi", frm=current_power, to=new_pw)
-                await self._set_output_and_wait(new_pw, ac_charge_mode=True)
             else:
-                if abs(self.integral) > 10:
-                    self.integral *= 0.95
+                self._decay_integral()
 
         elif self.tariff_charge_active:
-            # Nur schreiben wenn der Ist-Sollwert abweicht
-            if abs(current_power - tariff_power) > 0.5:
-                self._set_last_action("act_tariff_power", power=tariff_power)
-                await self._set_output_and_wait(tariff_power, ac_charge_mode=True)
+            await self._set_fixed_output(tariff_power, current_power, "act_tariff_power", ac_charge_mode=True)
 
         else:
             grid_error = grid - target_offset
@@ -1341,17 +1371,13 @@ class SolakonCoordinator:
             saturated_high = at_max_limit and not above_dynamic_max and grid_error > 0
 
             if grid_error_abs > tolerance and not saturated_high and not (at_min_limit and grid_error < 0):
-                power_base = self._total_commanded_power(current_power) * error_share
-                new_pw = self._pi_calculate(
-                    grid, power_base, target_offset, dynamic_max,
-                    p_factor, i_factor, ac_charge_mode=False,
-                    error_share=error_share,
+                await self._pi_step(
+                    grid, self._total_commanded_power(current_power) * error_share,
+                    target_offset, dynamic_max, p_factor, i_factor, error_share, current_power,
+                    "act_pi",
                 )
-                self._set_last_action("act_pi", frm=current_power, to=new_pw)
-                await self._set_output_and_wait(new_pw)
             else:
-                if abs(self.integral) > 10:
-                    self.integral *= 0.95
+                self._decay_integral()
                 if saturated_high:
                     await self._check_output_stall(dynamic_max)
                 else:
@@ -1644,7 +1670,7 @@ class SolakonCoordinator:
         group = self._group_coords()
         active = {
             eid: c for eid, c in group.items()
-            if c.settings.get(S_REGULATION_ENABLED, False)
+            if c._regulation_on
         } or group
         return active[min(active)]
 
@@ -1841,7 +1867,7 @@ class SolakonCoordinator:
         all_coords = self._group_coords()
         active = {
             eid: c for eid, c in all_coords.items()
-            if c.settings.get(S_REGULATION_ENABLED, False)
+            if c._regulation_on
             and c._str(c.entry.data.get(CONF_MODE_SELECT, "")) == MODE_DISCHARGE
         }
         self._dist_warning = ""
@@ -1913,7 +1939,7 @@ class SolakonCoordinator:
         all_coords = self._group_coords()
         active = {
             eid: c for eid, c in all_coords.items()
-            if c.settings.get(S_REGULATION_ENABLED, False) and c.ac_charge_active
+            if c._regulation_on and c.ac_charge_active
         }
         return self._weighted_share(active, own_soc)
 
@@ -1927,7 +1953,7 @@ class SolakonCoordinator:
         all_coords = self._group_coords()
         active = [
             c for c in all_coords.values()
-            if c.settings.get(S_REGULATION_ENABLED, False)
+            if c._regulation_on
             and c._str(c.entry.data.get(CONF_MODE_SELECT, "")) == MODE_DISCHARGE
         ]
         if len(active) <= 1:
@@ -1947,7 +1973,7 @@ class SolakonCoordinator:
         all_coords = self._group_coords()
         active = [
             c for c in all_coords.values()
-            if c.settings.get(S_REGULATION_ENABLED, False)
+            if c._regulation_on
             and c._str(c.entry.data.get(CONF_MODE_SELECT, "")) == MODE_DISCHARGE
         ]
         if len(active) <= 1:
@@ -1966,7 +1992,7 @@ class SolakonCoordinator:
         all_coords = self._group_coords()
         active = [
             c for c in all_coords.values()
-            if c.settings.get(S_REGULATION_ENABLED, False) and c.ac_charge_active
+            if c._regulation_on and c.ac_charge_active
         ]
         if len(active) <= 1:
             return own_current_power
@@ -2057,7 +2083,7 @@ class SolakonCoordinator:
         Anders als `active_fall`, das den zuletzt ausgefuehrten Uebergang haelt,
         beschreibt der Zustand, was gerade gilt.
         """
-        if not self.settings.get(S_REGULATION_ENABLED, False):
+        if not self._regulation_on:
             state = "disabled"
         elif self._cycle_blocked:
             state = "blocked"
