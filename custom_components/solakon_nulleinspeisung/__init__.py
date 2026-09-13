@@ -392,10 +392,7 @@ async def _ws_save_distribution_config(
     for coord in hass.data.get(DOMAIN, {}).values():
         if coord.entry.data.get(CONF_GRID_SENSOR, "") != group_key:
             continue
-        coord._update_tariff_tracker()
-        coord._update_pv_forecast_tracker()
-        coord._update_surplus_lock_tracker()
-        coord._update_zone1_force_tracker()
+        coord.update_sensor_trackers()
         hass.async_create_task(coord._async_regulate())
 
     connection.send_result(msg["id"], {"success": True})

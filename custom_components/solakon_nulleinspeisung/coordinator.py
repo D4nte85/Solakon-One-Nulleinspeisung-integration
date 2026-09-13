@@ -57,6 +57,27 @@ PERSISTED_FLAGS = (
     ("solar_zero_entry_armed", "_solar_zero_entry_armed", True),
 )
 
+# Instanzübergreifend pflegbare Sensor-Vorgaben: (lokaler Settings-Schlüssel, globaler
+# Schlüssel der Verteilung). Lokal gewinnt, sonst der globale Wert.
+SENSOR_SOURCES = {
+    "tariff": (S_TARIFF_PRICE_SENSOR, "global_tariff_price_sensor"),
+    "tariff_cheap": (S_TARIFF_CHEAP_ENTITY, "global_tariff_cheap_entity"),
+    "tariff_exp": (S_TARIFF_EXP_ENTITY, "global_tariff_exp_entity"),
+    "pv_forecast": (S_PV_FORECAST_SENSOR, "global_pv_forecast_today_sensor"),
+    "surplus_lock": (S_SURPLUS_LOCK_SENSOR, "global_surplus_lock_sensor"),
+    "zone1_force": (S_ZONE1_FORCE_SENSOR, "global_pv_forecast_tomorrow_sensor"),
+}
+
+# Zusätzliche Regel-Trigger in Registrierungsreihenfolge: (Name, Aktivierungsschlüssel,
+# ODER-verknüpft). "periodic" ist ein Zeitintervall, alle übrigen lauschen auf ihren Sensor.
+TRACKERS = (
+    ("tariff", (S_TARIFF_ENABLED,)),
+    ("periodic", (S_PERIODIC_ENABLED,)),
+    ("pv_forecast", (S_PV_FORECAST_ENABLED, S_SURPLUS_FORECAST_ENABLED)),
+    ("surplus_lock", (S_SURPLUS_LOCK_ENABLED,)),
+    ("zone1_force", (S_ZONE1_FORCE_ENABLED,)),
+)
+
 
 class SolakonSettingsStore(Store):
     """Settings-Store mit Schemamigration."""
@@ -164,17 +185,11 @@ class SolakonCoordinator:
         self._lock = asyncio.Lock()
         self._listeners: list[Callable[[], None]] = []
         self._unsub_trackers: list[Callable] = []
-        self._tariff_unsub = None
-        self._periodic_unsub = None
-        # Ein Listener für beide Features, die das gemergte "PV-Vorhersage heute"-Feld
-        # lesen (Surplus-Forecast-Erzwingung + Tarif-Lock-Unterdrückung), siehe
-        # _update_pv_forecast_tracker() / _effective_pv_forecast_today_sensor().
-        self._forecast_unsub = None
+        # Abmeldefunktionen der TRACKERS, nach Name
+        self._tracker_unsubs: dict[str, Callable] = {}
         self.forecast_tariff_suppressed: bool = False
         self.forecast_surplus_forced: bool = False
-        self._surplus_lock_unsub = None
         self.forecast_exit_lock: bool = False
-        self._zone1_force_unsub = None
         self.zone1_forced: bool = False
 
     # ── Setup / Teardown ─────────────────────────────────────────────────────
@@ -206,32 +221,18 @@ class SolakonCoordinator:
             )
             self._unsub_trackers.append(unsub)
 
-        self._update_tariff_tracker()
-        self._update_periodic_tracker()
-        self._update_pv_forecast_tracker()
-        self._update_surplus_lock_tracker()
-        self._update_zone1_force_tracker()
+        for name, _ in TRACKERS:
+            self._retrack(name)
 
     async def async_shutdown(self) -> None:
         """Listener abräumen, Integral speichern."""
         for unsub in self._unsub_trackers:
             unsub()
         self._unsub_trackers.clear()
-        if self._tariff_unsub:
-            self._tariff_unsub()
-            self._tariff_unsub = None
-        if self._periodic_unsub:
-            self._periodic_unsub()
-            self._periodic_unsub = None
-        if self._forecast_unsub:
-            self._forecast_unsub()
-            self._forecast_unsub = None
-        if self._surplus_lock_unsub:
-            self._surplus_lock_unsub()
-            self._surplus_lock_unsub = None
-        if self._zone1_force_unsub:
-            self._zone1_force_unsub()
-            self._zone1_force_unsub = None
+        for name, _ in TRACKERS:
+            unsub = self._tracker_unsubs.pop(name, None)
+            if unsub:
+                unsub()
     # ── Settings-Management ──────────────────────────────────────────────────
 
     async def async_update_settings(self, changes: dict[str, Any]) -> None:
@@ -253,47 +254,15 @@ class SolakonCoordinator:
                 self.mode_key = "disabled_regulation_off"
                 self.mode_label = self._tr("mode_disabled_regulation_off")
 
-        old_tariff = self._effective_tariff_price_sensor()
-        old_tariff_enabled = self.settings.get(S_TARIFF_ENABLED, False)
-        old_periodic_en = self.settings.get(S_PERIODIC_ENABLED, False)
-        old_periodic_iv = self.settings.get(S_PERIODIC_INTERVAL, 10)
-        old_pv = self._effective_pv_forecast_today_sensor()
-        old_pv_en = self.settings.get(S_PV_FORECAST_ENABLED, False)
-        old_sf_en = self.settings.get(S_SURPLUS_FORECAST_ENABLED, False)
-        old_sl = self._effective_surplus_lock_sensor()
-        old_sl_en = self.settings.get(S_SURPLUS_LOCK_ENABLED, False)
-        old_zf = self._effective_zone1_force_sensor()
-        old_zf_en = self.settings.get(S_ZONE1_FORCE_ENABLED, False)
+        before = {name: self._tracker_input(name) for name, _ in TRACKERS}
 
         self.settings.update(changes)
         await self._store.async_save(self._store_data())
         _LOGGER.info("Solakon: Einstellungen gespeichert")
 
-        new_tariff = self._effective_tariff_price_sensor()
-        new_tariff_enabled = self.settings.get(S_TARIFF_ENABLED, False)
-        if old_tariff != new_tariff or old_tariff_enabled != new_tariff_enabled:
-            self._update_tariff_tracker()
-
-        new_periodic_en = self.settings.get(S_PERIODIC_ENABLED, False)
-        new_periodic_iv = self.settings.get(S_PERIODIC_INTERVAL, 10)
-        if old_periodic_en != new_periodic_en or old_periodic_iv != new_periodic_iv:
-            self._update_periodic_tracker()
-
-        new_pv = self._effective_pv_forecast_today_sensor()
-        new_pv_en = self.settings.get(S_PV_FORECAST_ENABLED, False)
-        new_sf_en = self.settings.get(S_SURPLUS_FORECAST_ENABLED, False)
-        if old_pv != new_pv or old_pv_en != new_pv_en or old_sf_en != new_sf_en:
-            self._update_pv_forecast_tracker()
-
-        new_sl = self._effective_surplus_lock_sensor()
-        new_sl_en = self.settings.get(S_SURPLUS_LOCK_ENABLED, False)
-        if old_sl != new_sl or old_sl_en != new_sl_en:
-            self._update_surplus_lock_tracker()
-
-        new_zf = self._effective_zone1_force_sensor()
-        new_zf_en = self.settings.get(S_ZONE1_FORCE_ENABLED, False)
-        if old_zf != new_zf or old_zf_en != new_zf_en:
-            self._update_zone1_force_tracker()
+        for name, _ in TRACKERS:
+            if self._tracker_input(name) != before[name]:
+                self._retrack(name)
 
         self.notify_listeners()
 
@@ -301,69 +270,39 @@ class SolakonCoordinator:
         if self._regulation_on:
             self.hass.async_create_task(self._async_regulate())
 
-    def _update_tariff_tracker(self) -> None:
-        """Tarif-Sensor-Listener dynamisch (de-)registrieren."""
-        if self._tariff_unsub:
-            self._tariff_unsub()
-            self._tariff_unsub = None
+    def _tracker_input(self, name: str) -> tuple:
+        """Eingaben eines Triggers: Aktivierungswerte und Sensor bzw. Intervall."""
+        keys = dict(TRACKERS)[name]
+        target = self.settings.get(S_PERIODIC_INTERVAL, 10) if name == "periodic" else self._effective(name)
+        return tuple(self.settings.get(k, False) for k in keys), target
 
-        tariff_enabled = self.settings.get(S_TARIFF_ENABLED, False)
-        tariff_sensor = self._effective_tariff_price_sensor()
+    def _retrack(self, name: str) -> None:
+        """Trigger `name` abmelden und neu registrieren, wenn aktiviert und Sensor gesetzt.
 
-        if tariff_enabled and tariff_sensor:
-            self._tariff_unsub = async_track_state_change_event(
-                self.hass, [tariff_sensor], self._on_state_change
+        Der periodische Trigger läuft im Intervall S_PERIODIC_INTERVAL, mindestens 5 s.
+        """
+        unsub = self._tracker_unsubs.pop(name, None)
+        if unsub:
+            unsub()
+        if not any(self.settings.get(k, False) for k in dict(TRACKERS)[name]):
+            return
+        if name == "periodic":
+            interval = max(5, int(self.settings.get(S_PERIODIC_INTERVAL, 10)))
+            self._tracker_unsubs[name] = async_track_time_interval(
+                self.hass, self._on_periodic, timedelta(seconds=interval)
             )
-
-    def _update_pv_forecast_tracker(self) -> None:
-        """PV-Vorhersage-heute-Listener dynamisch (de-)registrieren — gemergtes
-        Feld, gemeinsam genutzt von Surplus-Forecast-Erzwingung, Tarif-Lock-
-        Unterdrückung und zwischen
-        0–12 Uhr zusätzlich von der Zone-1-Nacht-Forcierung (_effective_zone1_force_sensor
-        fällt in diesem Fenster auf denselben Sensor zurück, eigener Tracker
-        bleibt trotzdem aktiv — zwei Listener auf derselben Entity in dem Fenster)."""
-        if self._forecast_unsub:
-            self._forecast_unsub()
-            self._forecast_unsub = None
-
-        enabled = self.settings.get(S_PV_FORECAST_ENABLED, False) or self.settings.get(S_SURPLUS_FORECAST_ENABLED, False)
-        sensor = self._effective_pv_forecast_today_sensor()
-
-        if enabled and sensor:
-            self._forecast_unsub = async_track_state_change_event(
+            return
+        sensor = self._effective(name)
+        if sensor:
+            self._tracker_unsubs[name] = async_track_state_change_event(
                 self.hass, [sensor], self._on_state_change
             )
 
-    def _update_surplus_lock_tracker(self) -> None:
-        if self._surplus_lock_unsub:
-            self._surplus_lock_unsub()
-            self._surplus_lock_unsub = None
-
-        enabled = self.settings.get(S_SURPLUS_LOCK_ENABLED, False)
-        sensor  = self._effective_surplus_lock_sensor()
-
-        if enabled and sensor:
-            self._surplus_lock_unsub = async_track_state_change_event(
-                self.hass, [sensor], self._on_state_change
-            )
-
-    def _update_zone1_force_tracker(self) -> None:
-        """Zone-1-Nacht-Forcierung-Listener dynamisch (de-)registrieren.
-        Der effektive Sensor wechselt selbst an der Mitternachtsgrenze (siehe
-        _effective_zone1_force_sensor) — ein Aufruf hier registriert immer nur den
-        aktuell zutreffenden. Der Wechsel um Mitternacht selbst braucht keinen
-        Trigger, da bis dahin ohnehin andere Regelzyklen laufen (Grid/Solar/SOC)."""
-        if self._zone1_force_unsub:
-            self._zone1_force_unsub()
-            self._zone1_force_unsub = None
-
-        enabled = self.settings.get(S_ZONE1_FORCE_ENABLED, False)
-        sensor  = self._effective_zone1_force_sensor()
-
-        if enabled and sensor:
-            self._zone1_force_unsub = async_track_state_change_event(
-                self.hass, [sensor], self._on_state_change
-            )
+    def update_sensor_trackers(self) -> None:
+        """Sensorgebundene Trigger neu registrieren, etwa nach geänderten globalen Vorgaben."""
+        for name, _ in TRACKERS:
+            if name != "periodic":
+                self._retrack(name)
 
     def _persisted_flags(self) -> dict[str, bool]:
         """Gespeicherte Zustandsflags unter ihrem Speicherschlüssel."""
@@ -600,29 +539,32 @@ class SolakonCoordinator:
     def _global_sensor(self, key: str) -> str:
         return str(self._dist_cfg().get(key, ""))
 
-    def _effective_pv_forecast_today_sensor(self) -> str:
-        """PV-Ertrag heute (kWh) — gemergtes Feld, gemeinsam genutzt von
-        Surplus-Forecast-Erzwingung UND Tarif-Lock-Unterdrückung."""
-        return str(self.settings.get(S_PV_FORECAST_SENSOR, "")) or self._global_sensor("global_pv_forecast_today_sensor")
+    def _effective(self, name: str) -> str:
+        """Wirksamer Sensor aus SENSOR_SOURCES: lokaler Override, sonst globale Vorgabe.
 
-    def _effective_zone1_force_sensor(self) -> str:
-        """PV-Vorhersage für Zone-1-Nacht-Forcierung: vor Mitternacht 'morgen',
-        danach 'heute' — derselbe Zieltag, nur der Sensor wechselt."""
-        if dt_util.now().hour >= 12:
-            return str(self.settings.get(S_ZONE1_FORCE_SENSOR, "")) or self._global_sensor("global_pv_forecast_tomorrow_sensor")
-        return self._effective_pv_forecast_today_sensor()
+        `zone1_force` liest ab 12 Uhr die Vorhersage für morgen, davor die für heute
+        (`pv_forecast`) — derselbe Zieltag, nur der Sensor wechselt.
+        """
+        if name == "zone1_force" and dt_util.now().hour < 12:
+            name = "pv_forecast"
+        local, global_key = SENSOR_SOURCES[name]
+        return str(self.settings.get(local, "")) or self._global_sensor(global_key)
 
-    def _effective_surplus_lock_sensor(self) -> str:
-        return str(self.settings.get(S_SURPLUS_LOCK_SENSOR, "")) or self._global_sensor("global_surplus_lock_sensor")
+    def _sensor_usable(self, soft_errors: list[str], enabled: bool, sensor: str, err_prefix: str) -> bool:
+        """True, wenn das Feature aktiviert und sein Sensor gesetzt und verfügbar ist.
 
-    def _effective_tariff_price_sensor(self) -> str:
-        return str(self.settings.get(S_TARIFF_PRICE_SENSOR, "")) or self._global_sensor("global_tariff_price_sensor")
-
-    def _effective_tariff_cheap_entity(self) -> str:
-        return str(self.settings.get(S_TARIFF_CHEAP_ENTITY, "")) or self._global_sensor("global_tariff_cheap_entity")
-
-    def _effective_tariff_exp_entity(self) -> str:
-        return str(self.settings.get(S_TARIFF_EXP_ENTITY, "")) or self._global_sensor("global_tariff_exp_entity")
+        Fehlt der Sensor oder ist er nicht verfügbar, geht `<err_prefix>_no_sensor` bzw.
+        `<err_prefix>_sensor_unavailable` in die Fehlerkette.
+        """
+        if not enabled:
+            return False
+        if not sensor:
+            self._add_soft_error(soft_errors, self._tr(f"{err_prefix}_no_sensor"))
+            return False
+        if not self._entity_ok(sensor):
+            self._add_soft_error(soft_errors, self._tr(f"{err_prefix}_sensor_unavailable", sensor=sensor))
+            return False
+        return True
 
     def _tariff_unit_warning(self, entity_id: str, price: float, cheap: float) -> str:
         """Meldung, wenn der Preis-Sensor vermutlich €/kWh statt ct/kWh liefert, sonst "".
@@ -911,20 +853,6 @@ class SolakonCoordinator:
     def _on_state_change(self, event: Event) -> None:
         self.hass.async_create_task(self._async_regulate())
 
-    def _update_periodic_tracker(self) -> None:
-        """Periodischen Fallback-Trigger (de-)registrieren."""
-        if self._periodic_unsub:
-            self._periodic_unsub()
-            self._periodic_unsub = None
-
-        if not self.settings.get(S_PERIODIC_ENABLED, False):
-            return
-
-        interval = max(5, int(self.settings.get(S_PERIODIC_INTERVAL, 10)))
-        self._periodic_unsub = async_track_time_interval(
-            self.hass, self._on_periodic, timedelta(seconds=interval)
-        )
-
     @callback
     def _on_periodic(self, _now: object) -> None:
         # Periodischer Fallback-Trigger der Regelschleife.
@@ -1023,11 +951,11 @@ class SolakonCoordinator:
 
         # Tarif-Parameter
         tariff_enabled = bool(s[S_TARIFF_ENABLED])
-        tariff_sensor = self._effective_tariff_price_sensor()
+        tariff_sensor = self._effective("tariff")
         tariff_cheap = float(s[S_TARIFF_CHEAP_THRESHOLD])
         tariff_exp = float(s[S_TARIFF_EXP_THRESHOLD])
 
-        cheap_entity = self._effective_tariff_cheap_entity()
+        cheap_entity = self._effective("tariff_cheap")
         if cheap_entity:
             raw = self.hass.states.get(cheap_entity)
             if raw and raw.state not in ("unknown", "unavailable"):
@@ -1036,7 +964,7 @@ class SolakonCoordinator:
                 except (ValueError, TypeError):
                     pass
 
-        exp_entity = self._effective_tariff_exp_entity()
+        exp_entity = self._effective("tariff_exp")
         if exp_entity:
             raw = self.hass.states.get(exp_entity)
             if raw and raw.state not in ("unknown", "unavailable"):
@@ -1075,85 +1003,49 @@ class SolakonCoordinator:
 
         # Gemergtes Feld: beide Features lesen denselben "PV-Ertrag heute"-Sensor
         # (lokaler Override oder globaler Verteilungs-Tab-Wert).
-        pv_forecast_today_sensor = self._effective_pv_forecast_today_sensor()
+        pv_forecast_today_sensor = self._effective("pv_forecast")
 
-        if surplus_forecast_enabled and not pv_forecast_today_sensor:
-            self._add_soft_error(soft_errors, self._tr("err_surplus_forecast_no_sensor"))
-            self.forecast_surplus_forced = False
-        elif surplus_forecast_enabled and pv_forecast_today_sensor:
-            if self._entity_ok(pv_forecast_today_sensor):
-                # Forcierung nur solange die PV das Ausgangslimit übersteigt und der
-                # SOC über der Zone-3-Schutzgrenze liegt.
-                self.forecast_surplus_forced = (
-                    self._flt_kwh_normalized(pv_forecast_today_sensor) >= surplus_forecast_threshold
-                    and solar > hard_limit_z0
-                    and soc > zone3_limit
-                )
-            else:
-                self._add_soft_error(soft_errors, self._tr("err_surplus_forecast_sensor_unavailable", sensor=pv_forecast_today_sensor))
-                self.forecast_surplus_forced = False
-        else:
-            self.forecast_surplus_forced = False
+        # Forcierung nur solange die PV das Ausgangslimit übersteigt und der
+        # SOC über der Zone-3-Schutzgrenze liegt.
+        self.forecast_surplus_forced = self._sensor_usable(
+            soft_errors, surplus_forecast_enabled, pv_forecast_today_sensor, "err_surplus_forecast"
+        ) and (
+            self._flt_kwh_normalized(pv_forecast_today_sensor) >= surplus_forecast_threshold
+            and solar > hard_limit_z0
+            and soc > zone3_limit
+        )
 
         surplus_lock_enabled = bool(s.get(S_SURPLUS_LOCK_ENABLED, False))
-        surplus_lock_sensor  = self._effective_surplus_lock_sensor()
+        surplus_lock_sensor  = self._effective("surplus_lock")
         surplus_lock_factor  = float(s.get(S_SURPLUS_LOCK_FACTOR, 1.5))
 
-        if surplus_lock_enabled and not surplus_lock_sensor:
-            self._add_soft_error(soft_errors, self._tr("err_exit_lock_no_sensor"))
-            self.forecast_exit_lock = False
-        elif surplus_lock_enabled and surplus_lock_sensor:
-            if self._entity_ok(surplus_lock_sensor):
-                # Sperrt nur den PV-Austritt aus Zone 0, solange die Vorhersage über
-                # dem Ausgabelimit liegt. Der SOC-Austritt bleibt ungesperrt.
-                self.forecast_exit_lock = (
-                    self._flt_kilo_normalized(surplus_lock_sensor) >= surplus_lock_factor * hard_limit_z0
-                    and soc > zone3_limit
-                )
-            else:
-                self._add_soft_error(soft_errors, self._tr("err_exit_lock_sensor_unavailable", sensor=surplus_lock_sensor))
-                self.forecast_exit_lock = False
-        else:
-            self.forecast_exit_lock = False
+        # Sperrt nur den PV-Austritt aus Zone 0, solange die Vorhersage über
+        # dem Ausgabelimit liegt. Der SOC-Austritt bleibt ungesperrt.
+        self.forecast_exit_lock = self._sensor_usable(
+            soft_errors, surplus_lock_enabled, surplus_lock_sensor, "err_exit_lock"
+        ) and (
+            self._flt_kilo_normalized(surplus_lock_sensor) >= surplus_lock_factor * hard_limit_z0
+            and soc > zone3_limit
+        )
 
-        if pv_forecast_enabled and not pv_forecast_today_sensor:
-            self._add_soft_error(soft_errors, self._tr("err_pv_forecast_no_sensor"))
-            self.forecast_tariff_suppressed = False
-        elif pv_forecast_enabled and pv_forecast_today_sensor:
-            if self._entity_ok(pv_forecast_today_sensor):
-                self.forecast_tariff_suppressed = (
-                    self._flt_kwh_normalized(pv_forecast_today_sensor) >= pv_forecast_threshold
-                )
-            else:
-                self._add_soft_error(soft_errors, self._tr("err_pv_forecast_sensor_unavailable", sensor=pv_forecast_today_sensor))
-                self.forecast_tariff_suppressed = False
-        else:
-            self.forecast_tariff_suppressed = False
+        self.forecast_tariff_suppressed = self._sensor_usable(
+            soft_errors, pv_forecast_enabled, pv_forecast_today_sensor, "err_pv_forecast"
+        ) and self._flt_kwh_normalized(pv_forecast_today_sensor) >= pv_forecast_threshold
 
         # Zone-1-Nacht-Forcierung: erlaubt Entladung unter das normale
         # Zone-1-Limit, wenn der morgige PV-Ertrag die Nacht ohnehin wieder auffüllt.
-        # Sensor wechselt an der Mitternachtsgrenze selbst zwischen "morgen" und
-        # "heute" (_effective_zone1_force_sensor) — der Zieltag bleibt derselbe.
         zone1_force_enabled = bool(s.get(S_ZONE1_FORCE_ENABLED, False))
         zone1_force_threshold = float(s.get(S_ZONE1_FORCE_THRESHOLD, 0.0))
         zone1_force_min_soc = int(s.get(S_ZONE1_FORCE_MIN_SOC, 0))
-        zone1_force_sensor = self._effective_zone1_force_sensor()
+        zone1_force_sensor = self._effective("zone1_force")
 
-        if zone1_force_enabled and not zone1_force_sensor:
-            self._add_soft_error(soft_errors, self._tr("err_zone1_force_no_sensor"))
-            self.zone1_forced = False
-        elif zone1_force_enabled and zone1_force_sensor:
-            if self._entity_ok(zone1_force_sensor):
-                self.zone1_forced = (
-                    self._flt_kwh_normalized(zone1_force_sensor) >= zone1_force_threshold
-                    and solar < pv_reserve         # "gerade dunkel", gleiche Bedingung wie is_night
-                    and soc > zone1_force_min_soc  # eigener Floor, unabhängig von zone3_limit (Exit-Schwelle)
-                )
-            else:
-                self._add_soft_error(soft_errors, self._tr("err_zone1_force_sensor_unavailable", sensor=zone1_force_sensor))
-                self.zone1_forced = False
-        else:
-            self.zone1_forced = False
+        self.zone1_forced = self._sensor_usable(
+            soft_errors, zone1_force_enabled, zone1_force_sensor, "err_zone1_force"
+        ) and (
+            self._flt_kwh_normalized(zone1_force_sensor) >= zone1_force_threshold
+            and solar < pv_reserve         # "gerade dunkel", gleiche Bedingung wie is_night
+            and soc > zone1_force_min_soc  # eigener Floor, unabhängig von zone3_limit (Exit-Schwelle)
+        )
 
         effective_tariff_enabled = tariff_enabled and bool(tariff_sensor) and not self.forecast_tariff_suppressed
         tariff_soc = int(s[S_TARIFF_SOC_TARGET])
@@ -1196,11 +1088,7 @@ class SolakonCoordinator:
                 except (ValueError, TypeError):
                     pass
 
-        if tariff_enabled and not tariff_sensor:
-            self._add_soft_error(soft_errors, self._tr("err_tariff_no_sensor"))
-        elif tariff_enabled and tariff_sensor and not self._entity_ok(tariff_sensor):
-            self._add_soft_error(soft_errors, self._tr("err_tariff_sensor_unavailable", sensor=tariff_sensor))
-        elif tariff_price_valid:
+        if self._sensor_usable(soft_errors, tariff_enabled, tariff_sensor, "err_tariff") and tariff_price_valid:
             unit_warning = self._tariff_unit_warning(tariff_sensor, tariff_price, tariff_cheap)
             if unit_warning:
                 self._add_soft_error(soft_errors, unit_warning)
