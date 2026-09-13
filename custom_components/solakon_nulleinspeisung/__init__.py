@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from typing import Any
 
 import voluptuous as vol
 
@@ -68,6 +69,21 @@ def _migrate_dist_mode(cfg: dict) -> dict:
 
 # ── WebSocket Commands ───────────────────────────────────────────────────────
 
+def _get_or_error(connection: websocket_api.ActiveConnection, msg: dict, value: Any, code: str, text: str) -> Any:
+    """`value` zurückgeben; bei None Fehler `code` an den Aufrufer senden."""
+    if value is None:
+        connection.send_error(msg["id"], code, text)
+    return value
+
+
+def _coord_or_error(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict) -> Any:
+    """Coordinator zu `msg["entry_id"]`, sonst Fehler `not_found` und None."""
+    return _get_or_error(
+        connection, msg, hass.data.get(DOMAIN, {}).get(msg["entry_id"]),
+        "not_found", "Coordinator not found",
+    )
+
+
 @websocket_api.websocket_command({
     vol.Required("type"): f"{DOMAIN}/get_all_instances",
 })
@@ -95,11 +111,9 @@ async def _ws_get_all_instances(
 async def _ws_get_config(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
 ) -> None:
-    coord = hass.data.get(DOMAIN, {}).get(msg["entry_id"])
-    if coord:
-        connection.send_result(msg["id"], coord.settings)
-    else:
-        connection.send_error(msg["id"], "not_found", "Coordinator not found")
+    if (coord := _coord_or_error(hass, connection, msg)) is None:
+        return
+    connection.send_result(msg["id"], coord.settings)
 
 
 @websocket_api.require_admin
@@ -112,12 +126,10 @@ async def _ws_get_config(
 async def _ws_save_config(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
 ) -> None:
-    coord = hass.data.get(DOMAIN, {}).get(msg["entry_id"])
-    if coord:
-        await coord.async_update_settings(msg["changes"])
-        connection.send_result(msg["id"], {"success": True})
-    else:
-        connection.send_error(msg["id"], "not_found", "Coordinator not found")
+    if (coord := _coord_or_error(hass, connection, msg)) is None:
+        return
+    await coord.async_update_settings(msg["changes"])
+    connection.send_result(msg["id"], {"success": True})
 
 
 # Schlüssel des WS-Status: Name im Panel oder Paar (Panel, Schnappschuss).
@@ -143,9 +155,7 @@ WS_STATUS_KEYS = (
 async def _ws_get_status(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
 ) -> None:
-    coord = hass.data.get(DOMAIN, {}).get(msg["entry_id"])
-    if not coord:
-        connection.send_error(msg["id"], "not_found", "Coordinator not found")
+    if (coord := _coord_or_error(hass, connection, msg)) is None:
         return
 
     cfg = coord.entry.data
@@ -167,13 +177,11 @@ async def _ws_get_status(
 async def _ws_reset_integral(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
 ) -> None:
-    coord = hass.data.get(DOMAIN, {}).get(msg["entry_id"])
-    if coord:
-        async with coord._lock:
-            coord.reset_integral()
-        connection.send_result(msg["id"], {"success": True})
-    else:
-        connection.send_error(msg["id"], "not_found", "Coordinator not found")
+    if (coord := _coord_or_error(hass, connection, msg)) is None:
+        return
+    async with coord._lock:
+        coord.reset_integral()
+    connection.send_result(msg["id"], {"success": True})
 
 
 @websocket_api.require_admin
@@ -186,19 +194,17 @@ async def _ws_reset_integral(
 async def _ws_set_cycle(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
 ) -> None:
-    coord = hass.data.get(DOMAIN, {}).get(msg["entry_id"])
-    if coord:
-        async with coord._lock:
-            coord.cycle_active = msg["active"]
-            coord.integral = 0.0
-            # Flag persistieren (Teil von _store_data)
-            coord._store.async_delay_save(coord._store_data, 5)
-            coord.notify_listeners()
-        # Neuen Zustand sofort anwenden
-        hass.async_create_task(coord._async_regulate())
-        connection.send_result(msg["id"], {"success": True})
-    else:
-        connection.send_error(msg["id"], "not_found", "Coordinator not found")
+    if (coord := _coord_or_error(hass, connection, msg)) is None:
+        return
+    async with coord._lock:
+        coord.cycle_active = msg["active"]
+        coord.integral = 0.0
+        # Flag persistieren (Teil von _store_data)
+        coord._store.async_delay_save(coord._store_data, 5)
+        coord.notify_listeners()
+    # Neuen Zustand sofort anwenden
+    hass.async_create_task(coord._async_regulate())
+    connection.send_result(msg["id"], {"success": True})
 
 
 # ── Setup / Teardown ─────────────────────────────────────────────────────────
@@ -250,14 +256,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # WebSocket-Commands nur einmal registrieren
     if not hass.data.get(f"{DOMAIN}_ws_registered"):
-        websocket_api.async_register_command(hass, _ws_get_all_instances)
-        websocket_api.async_register_command(hass, _ws_get_config)
-        websocket_api.async_register_command(hass, _ws_save_config)
-        websocket_api.async_register_command(hass, _ws_get_status)
-        websocket_api.async_register_command(hass, _ws_reset_integral)
-        websocket_api.async_register_command(hass, _ws_set_cycle)
-        websocket_api.async_register_command(hass, _ws_get_distribution_config)
-        websocket_api.async_register_command(hass, _ws_save_distribution_config)
+        for handler in WS_COMMANDS:
+            websocket_api.async_register_command(hass, handler)
         hass.data[f"{DOMAIN}_ws_registered"] = True
 
     # Panel nur einmal registrieren — kein entry_id in config
@@ -368,9 +368,11 @@ async def _ws_get_distribution_config(
 async def _ws_save_distribution_config(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
 ) -> None:
-    store = hass.data.get(f"{DOMAIN}_dist_store")
+    store = _get_or_error(
+        connection, msg, hass.data.get(f"{DOMAIN}_dist_store"),
+        "not_ready", "Distribution-Store nicht initialisiert",
+    )
     if store is None:
-        connection.send_error(msg["id"], "not_ready", "Distribution-Store nicht initialisiert")
         return
 
     group_key = msg["grid_sensor"]
@@ -392,3 +394,10 @@ async def _ws_save_distribution_config(
         hass.async_create_task(coord._async_regulate())
 
     connection.send_result(msg["id"], {"success": True})
+
+
+# Beim ersten Setup registrierte WebSocket-Commands.
+WS_COMMANDS = (
+    _ws_get_all_instances, _ws_get_config, _ws_save_config, _ws_get_status,
+    _ws_reset_integral, _ws_set_cycle, _ws_get_distribution_config, _ws_save_distribution_config,
+)
