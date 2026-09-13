@@ -1,0 +1,8 @@
+{
+  "name": "solakon-panel-render",
+  "private": true,
+  "description": "Render-Vergleich des Panels mit jsdom",
+  "devDependencies": {
+    "jsdom": "24.1.3"
+  }
+}

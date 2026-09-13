@@ -1,0 +1,29 @@
+titel: Tarif-Laden schreibt einen gespeicherten Sollwert über der Gerätegrenze
+bezug: fix-2026-09-12-sollwert-ueber-entity-max
+# Ein Store aus der Zeit vor der Slider-Korrektur trägt tariff_power 2000 W. Beim
+# günstigen Preis startet Tarif-Laden; der Schreibbefehl muss auf 1200 W begrenzt sein.
+stunde: 3
+netz: 50
+sensoren:
+  sensor.preis: {wert: 8.0, einheit: ct/kWh}
+instanzen:
+  - prefix: a
+    settings:
+      regulation_enabled: true
+      tariff_enabled: true
+      tariff_price_sensor: sensor.preis
+      tariff_cheap_threshold: 10.0
+      tariff_exp_threshold: 25.0
+      tariff_soc_target: 90
+      tariff_power: 2000
+    sensoren:
+      soc: 40
+      modus: "1"
+schritte:
+  - nach: 0
+  - nach: 5
+erwartet:
+  - schritt: alle
+    kein_aufruf: {entity: a.leistung, wert_min: 1201}
+  - schritt: 1
+    zustand: {tariff_charge_active: true}

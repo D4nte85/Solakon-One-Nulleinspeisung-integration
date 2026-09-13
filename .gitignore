@@ -1,3 +1,5 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+tests/panel/node_modules/
+tests/panel/package-lock.json
