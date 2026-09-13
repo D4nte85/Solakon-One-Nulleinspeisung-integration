@@ -25,6 +25,9 @@ const TABS = [
   { id: "debug"    },
 ];
 
+// Verteilungsmodi in Anzeigereihenfolge; Text je Modus unter `dist.mode_<modus>`.
+const DIST_MODES = ["equal", "soc", "capacity", "soc_switch"];
+
 // Tab icons — not translated
 const TAB_ICONS = {
   status:   "📊",
@@ -296,11 +299,15 @@ class SolakonPanel extends HTMLElement {
     const locale = supported.includes(lang) ? lang : "en";
     // Englisch als Basis, Landessprache darüber: ein Schlüssel, der nur in einer der
     // beiden Dateien steht, kommt aus der anderen.
-    this._t  = this._merge(await this._fetchJson("panel.en.json"),
-                           locale === "en" ? {} : await this._fetchJson(`panel.${locale}.json`));
-    this._et = this._merge(await this._fetchJson("entity.en.json"),
-                           locale === "en" ? {} : await this._fetchJson(`entity.${locale}.json`));
+    this._t  = await this._loadLocale("panel", locale);
+    this._et = await this._loadLocale("entity", locale);
     this._textsMissing = Object.keys(this._t).length === 0;
+  }
+
+  // Übersetzungsdatei `<prefix>.<locale>.json` über `<prefix>.en.json` legen.
+  async _loadLocale(prefix, locale) {
+    return this._merge(await this._fetchJson(`${prefix}.en.json`),
+                       locale === "en" ? {} : await this._fetchJson(`${prefix}.${locale}.json`));
   }
 
   async _fetchJson(file) {
@@ -367,7 +374,7 @@ class SolakonPanel extends HTMLElement {
       this._entryId        = this._instances[0].entry_id;
     }
     if (this._groups.length > 1 && !this._activeGroup) {
-      const g = this._groups.find(g => g.instances.some(i => i.entry_id === this._activeInstance));
+      const g = this._groupOf(this._activeInstance);
       if (g) this._activeGroup = g.key;
     }
     this._renderInstBar();
@@ -409,12 +416,19 @@ class SolakonPanel extends HTMLElement {
     this._groups.sort((a, b) => a.label.localeCompare(b.label));
   }
 
+  // Netzgruppe, die die Instanz `entryId` enthält.
+  _groupOf(entryId) {
+    return this._groups.find(g => g.instances.some(i => i.entry_id === entryId));
+  }
+
+  // Aktive Netzgruppe als Objekt.
+  _activeGroupObj() {
+    return this._groups.find(g => g.key === this._activeGroup);
+  }
+
   _modeLabel(mode) {
     const dt = this._t.dist || {};
-    return {
-      equal: dt.mode_equal, soc: dt.mode_soc,
-      capacity: dt.mode_capacity, soc_switch: dt.mode_soc_switch,
-    }[mode] || mode;
+    return (DIST_MODES.includes(mode) && dt[`mode_${mode}`]) || mode;
   }
 
   // Zeigt den konfigurierten Modus, ergänzt um den tatsächlich angewandten,
@@ -477,15 +491,19 @@ class SolakonPanel extends HTMLElement {
       container.appendChild(el);
     };
 
+    const mkDistAndInstanceTabs = (container, instances) => {
+      mkTab(container, "__dist__", dt.tab_lbl || "", this._activeInstance === "__dist__");
+      for (const inst of instances) {
+        mkTab(container, inst.entry_id, inst.instance_name, this._activeInstance === inst.entry_id);
+      }
+    };
+
     mkTab(bar, "__overview__", this._t.ov?.btn || "", this._activeInstance === "__overview__");
 
     if (this._groups.length <= 1) {
       // Ein-Gruppen-Fall (Normalfall): flache Leiste, Verteilung als eigener Tab
       // direkt nach Übersicht — kein Gruppen-Wrapper nötig, es gibt nur eine Gruppe.
-      mkTab(bar, "__dist__", dt.tab_lbl || "", this._activeInstance === "__dist__");
-      for (const inst of this._instances) {
-        mkTab(bar, inst.entry_id, inst.instance_name, this._activeInstance === inst.entry_id);
-      }
+      mkDistAndInstanceTabs(bar, this._instances);
       return;
     }
 
@@ -495,13 +513,8 @@ class SolakonPanel extends HTMLElement {
       mkTab(bar, `__group__${g.key}`, `${dt.group_prefix || ""}: ${g.label}`, this._activeGroup === g.key);
     }
     if (this._activeGroup && subBar) {
-      const g = this._groups.find(x => x.key === this._activeGroup);
-      if (g) {
-        mkTab(subBar, "__dist__", dt.tab_lbl || "", this._activeInstance === "__dist__");
-        for (const inst of g.instances) {
-          mkTab(subBar, inst.entry_id, inst.instance_name, this._activeInstance === inst.entry_id);
-        }
-      }
+      const g = this._activeGroupObj();
+      if (g) mkDistAndInstanceTabs(subBar, g.instances);
     }
   }
 
@@ -516,36 +529,29 @@ class SolakonPanel extends HTMLElement {
     } else if (this._groups.length > 1 && id !== "__dist__") {
       // Direktsprung auf eine Instanz außerhalb des aktuellen Gruppen-Kontexts —
       // Gruppen-Tab passend nachziehen.
-      const g = this._groups.find(g => g.instances.some(i => i.entry_id === id));
+      const g = this._groupOf(id);
       if (g) this._activeGroup = g.key;
     }
 
     this._activeInstance = id;
     this._renderInstBar();
 
-    const topCard = this.shadowRoot.querySelector(".top-card");
     const tabBar  = this.shadowRoot.getElementById("tabs");
-    const saveBar = this.shadowRoot.getElementById("save-bar");
     const c       = this.shadowRoot.getElementById("content");
 
     if (id === "__overview__") {
-      if (topCard) topCard.style.display = "none";
-      if (tabBar)  tabBar.style.display  = "none";
+      this._setInstanceChrome(false);
       if (c) this._renderOverview(c);
-      if (saveBar) saveBar.style.display = "none";
       return;
     }
 
     if (id === "__dist__") {
-      if (topCard) topCard.style.display = "none";
-      if (tabBar)  tabBar.style.display  = "none";
+      this._setInstanceChrome(false);
       if (c) { c.innerHTML = ""; this._renderVerteilung(c); }
-      if (saveBar) saveBar.style.display = "none";
       return;
     }
 
-    if (topCard) topCard.style.display = "";
-    if (tabBar)  tabBar.style.display  = "";
+    this._setInstanceChrome(true);
     this._entryId   = id;
     this._settings  = {};
     this._dirty     = {};
@@ -554,6 +560,16 @@ class SolakonPanel extends HTMLElement {
     // Aktiven Tab im Balken markieren.
     if (tabBar) tabBar.querySelectorAll(".tab").forEach(x => x.classList.toggle("active", x.dataset.id === "status"));
     this._loadConfig();
+  }
+
+  // Top-Card und Tab-Leiste ein- oder ausblenden; ausgeblendet auch die Speicherleiste.
+  _setInstanceChrome(visible) {
+    const topCard = this.shadowRoot.querySelector(".top-card");
+    const tabBar  = this.shadowRoot.getElementById("tabs");
+    const saveBar = this.shadowRoot.getElementById("save-bar");
+    if (topCard) topCard.style.display = visible ? "" : "none";
+    if (tabBar)  tabBar.style.display  = visible ? "" : "none";
+    if (!visible && saveBar) saveBar.style.display = "none";
   }
 
   // Zustandsklassen der Übersichtskarte: inaktive Regelung und anliegender
@@ -808,10 +824,10 @@ class SolakonPanel extends HTMLElement {
 
         /* ── Global info accordion ───────────────────────────────────────── */
         .global-info { border: 1px solid var(--divider-color, #ddd); border-radius: 8px; overflow: hidden; }
-        .global-info summary { padding: 9px 14px; cursor: pointer; font-weight: 600; font-size: .88em; background: var(--secondary-background-color, #f5f5f5); color: var(--primary-color, #03a9f4); list-style: none; display: flex; align-items: center; gap: 8px; user-select: none; }
-        .global-info summary::-webkit-details-marker { display: none; }
-        .global-info summary::before { content: "▶"; font-size: .7em; transition: transform .2s; }
-        .global-info[open] summary::before { transform: rotate(90deg); }
+        .global-info summary, .info-details summary { padding: 9px 14px; cursor: pointer; font-weight: 600; font-size: .88em; background: var(--secondary-background-color, #f5f5f5); color: var(--primary-color, #03a9f4); list-style: none; display: flex; align-items: center; gap: 8px; user-select: none; }
+        .global-info summary::-webkit-details-marker, .info-details summary::-webkit-details-marker { display: none; }
+        .global-info summary::before, .info-details summary::before { content: "▶"; font-size: .7em; transition: transform .2s; }
+        .global-info[open] summary::before, .info-details[open] summary::before { transform: rotate(90deg); }
         .global-info .global-body { padding: 12px 14px; font-size: .83em; line-height: 1.7; color: var(--secondary-text-color, #555); border-top: 1px solid var(--divider-color, #ddd); display: flex; flex-direction: column; gap: 8px; }
         .global-info .global-body strong { color: var(--primary-text-color, #333); }
         .prio-table { width: 100%; border-collapse: collapse; font-size: .82em; margin-top: 4px; }
@@ -832,10 +848,6 @@ class SolakonPanel extends HTMLElement {
 
         /* ── Info accordion (inside tab) ─────────────────────────────────── */
         .info-details { margin-bottom: 14px; border: 1px solid var(--divider-color, #ddd); border-radius: 8px; overflow: hidden; }
-        .info-details summary { padding: 9px 14px; cursor: pointer; font-weight: 600; font-size: .88em; background: var(--secondary-background-color, #f5f5f5); color: var(--primary-color, #03a9f4); list-style: none; display: flex; align-items: center; gap: 8px; user-select: none; }
-        .info-details summary::-webkit-details-marker { display: none; }
-        .info-details summary::before { content: "▶"; font-size: .7em; transition: transform .2s; }
-        .info-details[open] summary::before { transform: rotate(90deg); }
         .info-details .info-body { padding: 11px 14px; font-size: .83em; line-height: 1.65; color: var(--secondary-text-color, #555); white-space: pre-wrap; border-top: 1px solid var(--divider-color, #ddd); }
 
         /* ── Column grid layout ──────────────────────────────────────────── */
@@ -898,8 +910,8 @@ class SolakonPanel extends HTMLElement {
         .btn-secondary { background: var(--secondary-background-color, #eee); color: var(--primary-text-color, #333); }
 
         /* ── Save bar ────────────────────────────────────────────────────── */
-        #save-bar { display: none; position: sticky; bottom: 0; background: var(--primary-color, #03a9f4); color: #fff; padding: 10px 16px; border-radius: 8px; margin-top: 12px; align-items: center; justify-content: space-between; z-index: 10; }
-        #save-bar button { background: #fff; color: var(--primary-color, #03a9f4); border: none; padding: 6px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; }
+        .save-bar { display: none; position: sticky; bottom: 0; background: var(--primary-color, #03a9f4); color: #fff; padding: 10px 16px; border-radius: 8px; margin-top: 12px; align-items: center; justify-content: space-between; z-index: 10; }
+        .save-bar button { background: #fff; color: var(--primary-color, #03a9f4); border: none; padding: 6px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; }
         #toast { display: none; position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); padding: 10px 24px; border-radius: 8px; color: #fff; z-index: 999; font-size: .9em; }
       </style>
 
@@ -949,10 +961,7 @@ ${this._textsMissing ? `
           <div class="tab-content" id="content"></div>
         </div>
 
-        <div id="save-bar">
-          <span>${sb.unsaved || ""}</span>
-          <button onclick="this.getRootNode().host._saveSettings()">${sb.save || ""}</button>
-        </div>
+        ${this._saveBarHtml("save-bar", sb, "_saveSettings", false)}
       </div>
       <div id="toast"></div>
     `;
@@ -1347,6 +1356,22 @@ ${this._textsMissing ? `
     if (bar) bar.style.display = Object.keys(this._dirty).length ? "flex" : "none";
   }
 
+  // Speicherleiste mit Hinweis `texts.unsaved` und Knopf `texts.save`, der die Methode `onSave` ruft.
+  _saveBarHtml(id, texts, onSave, visible) {
+    return `<div id="${id}" class="save-bar" style="display:${visible ? "flex" : "none"}">
+      <span>${texts.unsaved || ""}</span>
+      <button onclick="this.getRootNode().host.${onSave}()">${texts.save || ""}</button>
+    </div>`;
+  }
+
+  // `fn` ausführen; bei Fehler `onError` und Fehler-Toast.
+  async _wsAction(fn, onError) {
+    try { return await fn(); } catch (e) {
+      onError?.();
+      this._showToast("❌ " + e.message, true);
+    }
+  }
+
   _showToast(msg, err = false) {
     const t = this.shadowRoot.getElementById("toast");
     t.textContent = msg;
@@ -1359,7 +1384,7 @@ ${this._textsMissing ? `
     if (!Object.keys(this._dirty).length) return;
     const targetId = this._entryId;
     const toast = this._t.toast || {};
-    try {
+    await this._wsAction(async () => {
       await this._ws("save_config", { changes: this._dirty });
       if (this._entryId === targetId) {
         this._settings = { ...this._settings, ...this._dirty };
@@ -1367,7 +1392,7 @@ ${this._textsMissing ? `
         this._renderActiveTab();
       }
       this._showToast(toast.settings_saved || "");
-    } catch (e) { this._showToast("❌ " + e.message, true); }
+    });
   }
 
   // Schalter-Setting sofort speichern; true, wenn die Instanz noch die angezeigte ist.
@@ -1382,37 +1407,37 @@ ${this._textsMissing ? `
   }
 
   async _toggleRegulation() {
-    try {
+    await this._wsAction(async () => {
       const on = !this._settings.regulation_enabled;
       if (await this._saveSwitch("regulation_enabled", on, "regulation_on", "regulation_off")) {
         this._updateRegBanner();
       }
-    } catch (e) { this._showToast("❌ " + e.message, true); }
+    });
   }
 
   async _toggleRestInDischarge(on) {
-    try {
-      await this._saveSwitch("rest_in_discharge", on, "rest_discharge_on", "rest_discharge_off");
-    } catch (e) {
-      const el = this.shadowRoot.getElementById("dbg-rest-discharge");
-      if (el) el.checked = !on;
-      this._showToast("❌ " + e.message, true);
-    }
+    await this._wsAction(
+      () => this._saveSwitch("rest_in_discharge", on, "rest_discharge_on", "rest_discharge_off"),
+      () => {
+        const el = this.shadowRoot.getElementById("dbg-rest-discharge");
+        if (el) el.checked = !on;
+      },
+    );
   }
 
   async _resetIntegral() {
     const toast = this._t.toast || {};
-    try {
+    await this._wsAction(async () => {
       await this._ws("reset_integral");
       this._showToast(toast.integral_reset || "");
-    } catch (e) { this._showToast("❌ " + e.message, true); }
+    });
   }
 
   async _toggleCycle(activate) {
     const targetId = this._entryId;
     const toast = this._t.toast || {};
     const d     = this._t.debug || {};
-    try {
+    await this._wsAction(async () => {
       await this._ws("set_cycle", { active: activate });
       this._showToast(activate ? (toast.zone1_activated || "") : (toast.zone2_activated || ""));
       const status = await this._ws("get_status");
@@ -1422,7 +1447,7 @@ ${this._textsMissing ? `
       if (el) el.textContent = this._status.cycle_active
         ? (d.zone1_state || "")
         : (d.zone2_state || "");
-    } catch (e) { this._showToast("❌ " + e.message, true); }
+    });
   }
 
   // ── Verteilung ───────────────────────────────────────────────────────────
@@ -1454,13 +1479,13 @@ ${this._textsMissing ? `
     const gk     = this._distGroupKey();
     const merged = { ...(this._distConfig[gk] || {}), ...(this._distDirty[gk] || {}) };
     const toast  = this._t.toast || {};
-    try {
+    await this._wsAction(async () => {
       await this._hass.callWS({ type: `${DOMAIN}/save_distribution_config`, grid_sensor: gk, distribution: merged });
       this._distConfig[gk] = merged;
       this._distDirty[gk]  = {};
       this._showToast(toast.dist_saved || "");
       this._rerenderDist();
-    } catch (e) { this._showToast("❌ " + e.message, true); }
+    });
   }
 
   _distValFor(gk, key) {
@@ -1489,7 +1514,7 @@ ${this._textsMissing ? `
   // Instanzen der aktuell aktiven Gruppe — bei nur einer Gruppe alle Instanzen.
   _currentGroupInstances() {
     if (this._groups.length <= 1) return this._instances;
-    const g = this._groups.find(x => x.key === this._activeGroup);
+    const g = this._activeGroupObj();
     return g ? g.instances : this._instances;
   }
 
@@ -1537,7 +1562,7 @@ ${this._textsMissing ? `
     )).join("");
 
     const groupsNote = this._groups.length > 1
-      ? `<p class="desc" style="padding:0 0 8px">${dt.groups_note || ""} — <strong>${dt.group_prefix || ""}: ${this._groups.find(g => g.key === this._activeGroup)?.label ?? ""}</strong></p>`
+      ? `<p class="desc" style="padding:0 0 8px">${dt.groups_note || ""} — <strong>${dt.group_prefix || ""}: ${this._activeGroupObj()?.label ?? ""}</strong></p>`
       : "";
 
     c.innerHTML = `
@@ -1547,12 +1572,8 @@ ${this._textsMissing ? `
         { extraClass: "top-item" })}
 
       ${this._cardHtml("#7c3aed", dt.mode_hdr || "", this._fieldHtml(dt.mode_lbl || "", (dt.mode_desc || "").replace(/\n/g, "<br>"),
-        `<select data-dist-key="distribution_mode">
-              <option value="equal"${mode === "equal" ? " selected" : ""}>${dt.mode_equal || ""}</option>
-              <option value="soc"${mode === "soc" ? " selected" : ""}>${dt.mode_soc || ""}</option>
-              <option value="capacity"${mode === "capacity" ? " selected" : ""}>${dt.mode_capacity || ""}</option>
-              <option value="soc_switch"${mode === "soc_switch" ? " selected" : ""}>${dt.mode_soc_switch || ""}</option>
-            </select>`),
+        `<select data-dist-key="distribution_mode">${DIST_MODES.map(m =>
+          `<option value="${m}"${mode === m ? " selected" : ""}>${dt[`mode_${m}`] || ""}</option>`).join("")}</select>`),
         { extraClass: "top-item" })}
 
       ${this._cardHtml("#059669", dt.cap_hdr || "", `<div class="desc" style="margin-bottom:8px">${dt.cap_sensor_desc || ""}</div>${instCards}`,
@@ -1565,10 +1586,7 @@ ${this._textsMissing ? `
       ${this._cardHtml("#0284c7", dt.global_sensors_hdr || "", `<div class="desc" style="margin-bottom:8px">${dt.global_sensors_desc || ""}</div>${globalSensorCards}`,
         { extraClass: "top-item" })}
 
-      <div id="dist-save-bar" style="position:sticky;bottom:0;background:var(--primary-color,#03a9f4);color:#fff;padding:10px 16px;border-radius:8px;margin-top:4px;align-items:center;justify-content:space-between;display:${Object.keys(this._distDirty[gk] || {}).length ? "flex" : "none"}">
-        <span>${dt.unsaved || ""}</span>
-        <button onclick="this.getRootNode().host._saveDistConfig()" style="background:#fff;color:var(--primary-color,#03a9f4);border:none;padding:6px 16px;border-radius:6px;cursor:pointer;font-weight:600">${dt.save || ""}</button>
-      </div>
+      ${this._saveBarHtml("dist-save-bar", dt, "_saveDistConfig", Object.keys(this._distDirty[gk] || {}).length > 0)}
     `;
 
     c.querySelectorAll("[data-dist-key]").forEach(el => {
