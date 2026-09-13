@@ -48,6 +48,11 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
+# Einheitenfaktoren je Zielgröße, Schlüssel kleingeschrieben; fehlende Einheit = Faktor 1.
+UNIT_SCALE_W = {"kw": 1000.0}
+UNIT_SCALE_KILO = {"kw": 1000.0, "kwh": 1000.0, "mwh": 1_000_000.0}
+UNIT_SCALE_KWH = {"wh": 0.001, "mwh": 1000.0}
+
 # Über Neustarts gespeicherte Zustandsflags: (Speicherschlüssel, Attribut, Default).
 PERSISTED_FLAGS = (
     ("cycle_active", "cycle_active", False),
@@ -462,77 +467,71 @@ class SolakonCoordinator:
 
     # ── State-Helpers ────────────────────────────────────────────────────────
 
-    def _flt(self, entity_id: str, default: float = 0.0) -> float:
-        """Sicher Float-Wert aus HA-State lesen; toleriert Unit-Suffixe."""
+    def _valid_state(self, entity_id: str):
+        """State der Entity, oder None wenn sie fehlt oder unknown/unavailable ist."""
         state = self.hass.states.get(entity_id)
         if state is None or state.state in ("unknown", "unavailable"):
-            return default
+            return None
+        return state
+
+    @staticmethod
+    def _unit(state) -> str:
+        """`unit_of_measurement` des States, getrimmt und kleingeschrieben; "" ohne State."""
+        return str(state.attributes.get("unit_of_measurement") or "").strip().lower() if state else ""
+
+    def _read_number(self, entity_id: str) -> tuple[float, str] | None:
+        """(Wert, Einheit) über `state_as_number`, oder None bei ungültigem State."""
+        state = self._valid_state(entity_id)
+        if state is None:
+            return None
         try:
-            return state_as_number(state)
+            return state_as_number(state), self._unit(state)
         except (ValueError, TypeError):
+            return None
+
+    def _read_scaled(self, entity_id: str, default: float, scale: dict[str, float]) -> float:
+        """Zahl lesen und mit dem Faktor ihrer Einheit aus `scale` multiplizieren.
+
+        Einheiten ohne Eintrag bleiben unverändert; ungültiger State liefert `default`.
+        """
+        read = self._read_number(entity_id)
+        if read is None:
             return default
+        value, unit = read
+        return value * scale.get(unit, 1.0)
+
+    def _flt(self, entity_id: str, default: float = 0.0) -> float:
+        """Zahl ohne Einheitenumrechnung lesen."""
+        return self._read_scaled(entity_id, default, {})
 
     def _flt_power(self, entity_id: str, default: float = 0.0) -> float:
-        """Float-Wert lesen und bei kW-Sensor auf W normalisieren."""
-        state = self.hass.states.get(entity_id)
-        if state is None or state.state in ("unknown", "unavailable"):
-            return default
-        try:
-            value = state_as_number(state)
-        except (ValueError, TypeError):
-            return default
-        if state.attributes.get("unit_of_measurement") == "kW":
-            value *= 1000.0
-        return value
+        """Leistung in W lesen (kW ×1000)."""
+        return self._read_scaled(entity_id, default, UNIT_SCALE_W)
 
     def _flt_kilo_normalized(self, entity_id: str, default: float = 0.0) -> float:
-        """Float-Wert lesen; Einheiten kW/kWh ×1000 normalisieren.
-        Nur für Vergleiche gegen einen Watt-Referenzwert (z. B. hard_limit_z0).
-        Für kWh-Schwellenfelder (im Panel als kWh beschriftet) stattdessen
-        _flt_kwh_normalized() verwenden — sonst vergleicht der ×1000-normalisierte
-        Wert gegen eine kWh-Zahl und die Schwelle greift praktisch nie."""
-        state = self.hass.states.get(entity_id)
-        if state is None or state.state in ("unknown", "unavailable"):
-            return default
-        try:
-            value = state_as_number(state)
-        except (ValueError, TypeError):
-            return default
-        unit = state.attributes.get("unit_of_measurement", "")
-        if unit in ("kW", "kWh"):
-            value *= 1000.0
-        return value
+        """Zahl auf W bzw. Wh normalisieren (kW/kWh ×1000, MWh ×1e6).
 
-    def _flt_kwh_normalized(self, entity_id: str, default: float = 0.0) -> float:
-        """Float-Wert lesen und auf kWh normalisieren (Wh ÷1000, MWh ×1000).
-        Für die kWh-Schwellenfelder (Surplus-/Tarif-/Zone-1-Forecast), deren
-        Sensor laut Panel „erwarteten kWh-Ertrag" liefern soll — ein Sensor mit
-        Einheit Wh oder MWh soll trotzdem korrekt mit der kWh-Schwelle vergleichbar
-        sein. Ohne erkannte Energie-Einheit (z. B. input_number ohne unit_of_measurement)
-        bleibt der Rohwert unverändert, wie es der dokumentierte kWh-Vertrag vorsieht."""
-        state = self.hass.states.get(entity_id)
-        if state is None or state.state in ("unknown", "unavailable"):
-            return default
-        try:
-            value = state_as_number(state)
-        except (ValueError, TypeError):
-            return default
-        unit = state.attributes.get("unit_of_measurement", "")
-        if unit == "Wh":
-            value /= 1000.0
-        elif unit == "MWh":
-            value *= 1000.0
-        return value
+        Nur für Vergleiche gegen einen Watt-Referenzwert (z. B. hard_limit_z0);
+        kWh-Schwellenfelder lesen über `_flt_kwh_normalized`.
+        """
+        return self._read_scaled(entity_id, default, UNIT_SCALE_KILO)
+
+    def _flt_kwh_normalized(self, entity_id: str, default: float | None = 0.0) -> float | None:
+        """Energie in kWh lesen (Wh ÷1000, MWh ×1000).
+
+        Ohne erkannte Energie-Einheit (z. B. input_number ohne Einheit) bleibt der
+        Rohwert unverändert, wie es der kWh-Vertrag der Schwellenfelder vorsieht.
+        """
+        return self._read_scaled(entity_id, default, UNIT_SCALE_KWH)
 
     def _str(self, entity_id: str) -> str:
         """State als String lesen, 'unknown' bei Fehler."""
-        state = self.hass.states.get(entity_id)
-        return state.state if state and state.state not in ("unknown", "unavailable") else "unknown"
+        state = self._valid_state(entity_id)
+        return state.state if state else "unknown"
 
     def _entity_ok(self, entity_id: str) -> bool:
         """Prüft ob Entity verfügbar und nicht unknown/unavailable ist."""
-        state = self.hass.states.get(entity_id)
-        return state is not None and state.state not in ("unknown", "unavailable")
+        return self._valid_state(entity_id) is not None
 
     # ── Globale Sensor-Vorgaben ───────────────────────────────────────────────
     # Entity-Picker sind instanzübergreifend im Verteilungs-Tab pflegbar, jede
@@ -578,8 +577,7 @@ class SolakonCoordinator:
         price >= 0. `unit_of_measurement` wirkt nur bestätigend — eine ct-Einheit
         unterdrückt die Meldung, eine €-Einheit macht sie sofort. Umgerechnet wird nichts.
         """
-        state = self.hass.states.get(entity_id)
-        unit = str(state.attributes.get("unit_of_measurement", "")).lower() if state else ""
+        unit = self._unit(self.hass.states.get(entity_id))
 
         if any(token in unit for token in ("ct", "cent", "öre", "ore")):
             self._tariff_unit_suspect_since = 0.0
@@ -959,21 +957,11 @@ class SolakonCoordinator:
 
         cheap_entity = self._effective("tariff_cheap")
         if cheap_entity:
-            raw = self.hass.states.get(cheap_entity)
-            if raw and raw.state not in ("unknown", "unavailable"):
-                try:
-                    tariff_cheap = float(raw.state)
-                except (ValueError, TypeError):
-                    pass
+            tariff_cheap = self._flt(cheap_entity, tariff_cheap)
 
         exp_entity = self._effective("tariff_exp")
         if exp_entity:
-            raw = self.hass.states.get(exp_entity)
-            if raw and raw.state not in ("unknown", "unavailable"):
-                try:
-                    tariff_exp = float(raw.state)
-                except (ValueError, TypeError):
-                    pass
+            tariff_exp = self._flt(exp_entity, tariff_exp)
 
         # Sammelt Meldungen zu Sensor-gated Features, die trotz aktivem Enable-Flag
         # wegen fehlendem/ungültigem Sensor wirkungslos bleiben; wird als last_error
@@ -1082,8 +1070,9 @@ class SolakonCoordinator:
         tariff_price = 0.0
         tariff_price_valid = False
         if tariff_enabled and tariff_sensor:
-            raw = self.hass.states.get(tariff_sensor)
-            if raw and raw.state not in ("unknown", "unavailable"):
+            # float() statt state_as_number: "on" bleibt als Preis ungültig
+            raw = self._valid_state(tariff_sensor)
+            if raw:
                 try:
                     tariff_price = float(raw.state)
                     tariff_price_valid = True
@@ -1683,16 +1672,7 @@ class SolakonCoordinator:
                 cap_s = str(dist.get(f"inst_{eid}_capacity_sensor", ""))
                 if not cap_s:
                     return None
-                cap_st = c.hass.states.get(cap_s)
-                if not cap_st or cap_st.state in ("unknown", "unavailable"):
-                    return None
-                try:
-                    cv = state_as_number(cap_st)
-                    # Case-insensitiver Vergleich der Unit
-                    unit = (cap_st.attributes.get("unit_of_measurement") or "").strip().lower()
-                    return cv / 1000.0 if unit == "wh" else cv
-                except (ValueError, TypeError):
-                    return None
+                return c._flt_kwh_normalized(cap_s, None)
 
             # Kapazitäten pro Instanz; sobald eine keinen gültigen Wert liefert,
             # zählen alle neutral 1.0 (degradiert zu reiner SOC-Gewichtung)
