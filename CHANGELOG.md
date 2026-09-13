@@ -12,6 +12,21 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
   Modus `'0'` wird nur noch dort geschrieben, mit aktivem Schalter nie. Das Gerät
   verlässt die Fernsteuerung dann nie mehr, auch nicht bei ausgeschalteter Regelung.
 
+### Geändert
+- Zahlenwerte werden nur noch aus Entitäten der Domains `sensor`, `input_number` und
+  `number` gelesen. Eine Entität anderer Domain gilt als ungültig: Tarifschwellen fallen
+  auf den Panel-Wert zurück, sensorgebundene Funktionen melden die falsche Domain
+- Einheiten beim Sensorlesen werden ohne Rücksicht auf Groß-/Kleinschreibung erkannt,
+  `MWh` eingeschlossen
+- Status-Tab und Übersicht zeigen Offset und Batteriekapazität aus dem gespeicherten
+  Stand der Regelung statt aus ungespeicherten Panel-Eingaben; die Kapazität wird mit
+  denselben Einheiten wie im Backend umgerechnet
+- Panel: alle Entity-Eingaben nutzen die volle Breite, die Speicherleiste der Verteilung
+  hat denselben Abstand wie die der Instanz-Tabs
+- Intern: Refactoring von Coordinator, WebSocket-Handlern, Sensoren, Config-Flow und Panel —
+  wiederholte Logik auf gemeinsame Funktionen zurückgeführt, Verhalten gegen
+  Charakterisierungstests und Render-Vergleich des Panels geprüft
+
 ## [2.4.1-beta.1] – 2026-09-12
 
 > **Beta-Release.** Fehlerbehebungen und ein interner Umbau der Textquellen; keine Breaking Changes gegenüber `2.4.0`. Erscheint in HACS nur bei aktivierten Beta-Versionen.
