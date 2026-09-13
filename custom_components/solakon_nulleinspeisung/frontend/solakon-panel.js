@@ -1017,17 +1017,8 @@ ${this._textsMissing ? `
     const enabledKey = layout.enabledKey || null;
 
     if (layout.top?.length) {
-      const topCard = document.createElement("div");
-      topCard.className = "col-card top-item";
-      const topHdr = document.createElement("div");
-      topHdr.className = "col-header";
-      topHdr.style.background = "#475569";
-      topHdr.textContent = this._t.general_section || "";
-      topCard.appendChild(topHdr);
-      const topBody = document.createElement("div");
-      topBody.className = "col-body";
-      for (const f of layout.top) topBody.appendChild(this._makeField(f));
-      topCard.appendChild(topBody);
+      const topCard = this._cardEl("#475569", this._t.general_section || "", { extraClass: "top-item" });
+      for (const f of layout.top) topCard.lastChild.appendChild(this._makeField(f));
       container.appendChild(topCard);
     }
 
@@ -1039,21 +1030,11 @@ ${this._textsMissing ? `
     if (enabledKey && !this._effectiveValue(enabledKey)) colGrid.classList.add("disabled");
 
     for (const col of layout.cols) {
-      const card = document.createElement("div");
-      card.className = "col-card";
-      const hdr = document.createElement("div");
-      hdr.className = "col-header";
-      hdr.style.background = col.color;
-      hdr.textContent = `${col.icon} ${this._t.col_titles?.[col.tk] || col.tk}`;
-      card.appendChild(hdr);
-      const body = document.createElement("div");
-      body.className = "col-body";
-      if (col.descKey) {
-        const introDesc = this._t.col_descs?.[col.descKey];
-        if (introDesc) body.innerHTML = `<div class="desc" style="margin-bottom:8px">${introDesc}</div>`;
-      }
-      for (const f of col.fields) body.appendChild(this._makeField(f));
-      card.appendChild(body);
+      const introDesc = col.descKey ? this._t.col_descs?.[col.descKey] : "";
+      const card = this._cardEl(col.color, `${col.icon} ${this._t.col_titles?.[col.tk] || col.tk}`, {
+        body: introDesc ? `<div class="desc" style="margin-bottom:8px">${introDesc}</div>` : "",
+      });
+      for (const f of col.fields) card.lastChild.appendChild(this._makeField(f));
       colGrid.appendChild(card);
     }
 
@@ -1071,7 +1052,7 @@ ${this._textsMissing ? `
 
   _makeField(f) {
     const cur = this._effectiveValue(f.k);
-    const div = document.createElement("div");
+    let div = document.createElement("div");
     div.className = "field";
     const label = this._fl(f.k);
     const desc  = this._fd(f.k);
@@ -1083,19 +1064,17 @@ ${this._textsMissing ? `
         this._updateSaveBar();
       });
     } else if (f.t === "num") {
-      div.innerHTML = `<label>${label}</label><div class="desc">${desc}</div><input type="number" min="${f.min}" max="${f.max}" step="${f.step}" value="${cur ?? f.min}"/>`;
+      div = this._htmlEl(this._fieldHtml(label, desc,
+        `<input type="number" min="${f.min}" max="${f.max}" step="${f.step}" value="${cur ?? f.min}"/>`));
       div.querySelector("input").addEventListener("change", (e) => {
         this._dirty[f.k] = parseFloat(e.target.value);
         this._updateSaveBar();
       });
     } else if (f.t === "entity") {
       const eid = `ep_${f.k}`;
-      div.innerHTML = `<label>${label}</label><div class="desc">${desc}</div>
-        <div class="entity-row">
-          <input type="text" list="${eid}_list" value="${cur || ""}" placeholder="sensor.xxx"/>
-          <span class="entity-dot ${this._entityDotClass(cur)}"></span>
-        </div>
-        <datalist id="${eid}_list"></datalist>`;
+      div = this._htmlEl(this._fieldHtml(label, desc,
+        this._entityRowHtml(cur || "", `list="${eid}_list" placeholder="sensor.xxx"`)
+        + `<datalist id="${eid}_list"></datalist>`));
       const inp = div.querySelector("input");
       const dot = div.querySelector(".entity-dot");
       const dl  = div.querySelector("datalist");
@@ -1109,15 +1088,62 @@ ${this._textsMissing ? `
           dl.appendChild(opt);
         });
       }
-      inp.addEventListener("input", () => {
-        dot.className = `entity-dot ${this._entityDotClass(inp.value)}`;
-      });
+      this._bindEntityDot(inp, dot);
       inp.addEventListener("change", () => { this._dirty[f.k] = inp.value; this._updateSaveBar(); });
     } else if (f.t === "note") {
       div.className = "field field-note";
       div.innerHTML = `<div class="desc">${desc}</div>`;
     }
     return div;
+  }
+
+  // Erstes Element aus einem HTML-String.
+  _htmlEl(html) {
+    const tpl = document.createElement("template");
+    tpl.innerHTML = html.trim();
+    return tpl.content.firstElementChild;
+  }
+
+  // Karte mit farbigem Kopf; `kind` wählt die Klassen `<kind>-card/-header/-body`, `body` ist HTML.
+  _cardEl(color, title, { body = "", extraClass = "", kind = "col", style = "" } = {}) {
+    const card = document.createElement("div");
+    card.className = extraClass ? `${kind}-card ${extraClass}` : `${kind}-card`;
+    if (style) card.setAttribute("style", style);
+    const hdr = document.createElement("div");
+    hdr.className = `${kind}-header`;
+    hdr.style.background = color;
+    hdr.textContent = title;
+    const bodyEl = document.createElement("div");
+    bodyEl.className = `${kind}-body`;
+    bodyEl.innerHTML = body;
+    card.append(hdr, bodyEl);
+    return card;
+  }
+
+  // Karte als HTML-String, für Aufrufer, die Markup zusammensetzen.
+  _cardHtml(color, title, body, opts = {}) {
+    return this._cardEl(color, title, { ...opts, body }).outerHTML;
+  }
+
+  // Feld „Label, Beschreibung, Eingabe“; `desc` null lässt die Beschreibung weg.
+  _fieldHtml(label, desc, controlHtml) {
+    const descHtml = desc == null ? "" : `<div class="desc">${desc}</div>`;
+    return `<div class="field"><label>${label}</label>${descHtml}${controlHtml}</div>`;
+  }
+
+  // Entity-Eingabe mit Status-Dot; `attrs` sind zusätzliche Attribute des Eingabefelds.
+  _entityRowHtml(value, attrs = "") {
+    return `<div class="entity-row">
+      <input type="text" ${attrs} value="${value}" style="width:100%;box-sizing:border-box"/>
+      <span class="entity-dot ${this._entityDotClass(value)}"></span>
+    </div>`;
+  }
+
+  // Status-Dot bei jeder Eingabe neu bewerten.
+  _bindEntityDot(input, dot) {
+    input.addEventListener("input", () => {
+      dot.className = `entity-dot ${this._entityDotClass(input.value)}`;
+    });
   }
 
   // ── Status tab ────────────────────────────────────────────────────────────
@@ -1128,9 +1154,7 @@ ${this._textsMissing ? `
       <div class="zone-banner" id="zone-banner">${s.loading || ""}</div>
       <div class="stat-col-grid">
 
-        <div class="stat-col-card">
-          <div class="stat-col-header" style="background:#0891b2">${s.measurements_hdr || ""}</div>
-          <div class="stat-col-body">
+        ${this._cardHtml("#0891b2", s.measurements_hdr || "", `
             <div class="stat-row">
               <div class="stat"><div class="val" id="st-grid">—</div><div class="lbl">${s.grid_lbl   || ""}</div></div>
               <div class="stat"><div class="val" id="st-soc">—</div> <div class="lbl">${s.soc_lbl    || ""}</div></div>
@@ -1138,13 +1162,9 @@ ${this._textsMissing ? `
             <div class="stat-row">
               <div class="stat"><div class="val" id="st-actual">—</div><div class="lbl">${s.output_lbl || ""}</div></div>
               <div class="stat"><div class="val" id="st-solar">—</div> <div class="lbl">${s.solar_lbl  || ""}</div></div>
-            </div>
-          </div>
-        </div>
+            </div>`, { kind: "stat-col" })}
 
-        <div class="stat-col-card">
-          <div class="stat-col-header" style="background:#7c3aed">${s.ctrl_hdr || ""}</div>
-          <div class="stat-col-body">
+        ${this._cardHtml("#7c3aed", s.ctrl_hdr || "", `
             <div class="stat-row">
               <div class="stat"><div class="val" id="st-int">—</div>   <div class="lbl">${this._en("integral")}</div></div>
               <div class="stat"><div class="val" id="st-stddev">—</div><div class="lbl">${s.stddev_lbl   || ""}</div></div>
@@ -1161,13 +1181,9 @@ ${this._textsMissing ? `
             <div class="stat-row">
               <div class="stat"><div class="val" id="st-elapsed">—</div>     <div class="lbl">${s.elapsed_lbl      || ""}</div></div>
               <div class="stat"><div class="val" id="st-mode-elapsed">—</div><div class="lbl">${s.mode_elapsed_lbl || ""}</div></div>
-            </div>
-          </div>
-        </div>
+            </div>`, { kind: "stat-col" })}
 
-        <div class="stat-col-card">
-          <div class="stat-col-header" style="background:#b45309">${s.modules_hdr || ""}</div>
-          <div class="stat-col-body">
+        ${this._cardHtml("#b45309", s.modules_hdr || "", `
             <div>
               <div class="mode-lbl">${s.active_modules_lbl || ""}</div>
               <div class="flag-row" id="st-flags"></div>
@@ -1187,9 +1203,7 @@ ${this._textsMissing ? `
             <div>
               <div class="mode-lbl">${s.error_lbl || ""}</div>
               <div class="mode-err" id="st-error">—</div>
-            </div>
-          </div>
-        </div>
+            </div>`, { kind: "stat-col" })}
 
       </div>
     `;
@@ -1269,22 +1283,16 @@ ${this._textsMissing ? `
     c.innerHTML = `
       <div class="col-grid cols-2">
 
-        <div class="col-card">
-          <div class="col-header" style="background:#7c3aed">${d.pi_hdr || ""}</div>
-          <div class="col-body">
+        ${this._cardHtml("#7c3aed", d.pi_hdr || "", `
             <p style="font-size:.85em;color:var(--secondary-text-color,#888);margin:0 0 12px">
               ${d.pi_desc || ""}
             </p>
             <button class="btn btn-secondary"
               onclick="this.getRootNode().host._resetIntegral()">
               ${d.reset_btn || ""}
-            </button>
-          </div>
-        </div>
+            </button>`)}
 
-        <div class="col-card">
-          <div class="col-header" style="background:#0891b2">${d.zone_hdr || ""}</div>
-          <div class="col-body">
+        ${this._cardHtml("#0891b2", d.zone_hdr || "", `
             <p style="font-size:.85em;color:var(--secondary-text-color,#888);margin:0 0 4px">
               ${d.zone_desc || ""}
             </p>
@@ -1300,13 +1308,9 @@ ${this._textsMissing ? `
                 onclick="this.getRootNode().host._toggleCycle(false)">
                 ${d.zone2_btn || ""}
               </button>
-            </div>
-          </div>
-        </div>
+            </div>`)}
 
-        <div class="col-card">
-          <div class="col-header" style="background:#dc2626">${d.rest_hdr || ""}</div>
-          <div class="col-body">
+        ${this._cardHtml("#dc2626", d.rest_hdr || "", `
             <p style="font-size:.85em;color:var(--secondary-text-color,#888);margin:0 0 8px">
               ${d.rest_desc || ""}
             </p>
@@ -1319,9 +1323,7 @@ ${this._textsMissing ? `
                   onchange="this.getRootNode().host._toggleRestInDischarge(this.checked)"/>
                 ${d.rest_toggle || ""}
               </label>
-            </div>
-          </div>
-        </div>
+            </div>`)}
 
       </div>
     `;
@@ -1522,36 +1524,17 @@ ${this._textsMissing ? `
       { key: "global_tariff_cheap_entity",         lk: "global_tariff_cheap",domain: "input_number" },
       { key: "global_tariff_exp_entity",           lk: "global_tariff_exp",  domain: "input_number" },
     ];
-    const globalSensorCards = GLOBAL_SENSOR_FIELDS.map(f => {
-      const val = this._distVal(f.key) || "";
-      return `
-        <div class="field">
-          <label>${dt[`${f.lk}_lbl`] || f.key}</label>
-          <div class="desc">${dt[`${f.lk}_desc`] || ""}</div>
-          <div class="entity-row">
-            <input type="text" placeholder="${dt[`${f.lk}_ph`] || ""}"
-              value="${val}" data-dist-key="${f.key}"
-              style="width:100%;box-sizing:border-box"/>
-            <span class="entity-dot ${this._entityDotClass(val)}"></span>
-          </div>
-        </div>`;
-    }).join("");
+    const globalSensorCards = GLOBAL_SENSOR_FIELDS.map(f => this._fieldHtml(
+      dt[`${f.lk}_lbl`] || f.key, dt[`${f.lk}_desc`] || "",
+      this._entityRowHtml(this._distVal(f.key) || "",
+        `placeholder="${dt[`${f.lk}_ph`] || ""}" data-dist-key="${f.key}"`),
+    )).join("");
 
-    const instCards = this._currentGroupInstances().map(inst => {
-      const capSensor = this._distInstVal(inst.entry_id, "capacity_sensor");
-      return `
-        <div class="field">
-          <label>${inst.instance_name}</label>
-          <div class="entity-row">
-            <input type="text" placeholder="${dt.cap_sensor_placeholder || ""}"
-              value="${capSensor}"
-              data-dist-inst="${inst.entry_id}" data-dist-key="capacity_sensor"
-              style="width:100%;box-sizing:border-box"
-              id="cap-input-${inst.entry_id}"/>
-            <span class="entity-dot ${this._entityDotClass(capSensor)}" id="cap-dot-${inst.entry_id}"></span>
-          </div>
-        </div>`;
-    }).join("");
+    const instCards = this._currentGroupInstances().map(inst => this._fieldHtml(
+      inst.instance_name, null,
+      this._entityRowHtml(this._distInstVal(inst.entry_id, "capacity_sensor"),
+        `placeholder="${dt.cap_sensor_placeholder || ""}" data-dist-inst="${inst.entry_id}" data-dist-key="capacity_sensor"`),
+    )).join("");
 
     const groupsNote = this._groups.length > 1
       ? `<p class="desc" style="padding:0 0 8px">${dt.groups_note || ""} — <strong>${dt.group_prefix || ""}: ${this._groups.find(g => g.key === this._activeGroup)?.label ?? ""}</strong></p>`
@@ -1559,59 +1542,28 @@ ${this._textsMissing ? `
 
     c.innerHTML = `
       ${groupsNote}
-      <div class="col-card top-item">
-        <div class="col-header" style="background:#0891b2">${dt.global_hdr || ""}</div>
-        <div class="col-body">
-          <div class="field">
-            <label>${dt.global_max_lbl || ""}</label>
-            <div class="desc">${dt.global_max_desc || ""}</div>
-            <input type="number" min="0" max="9600" step="10" value="${globalMax}" data-dist-key="global_max_power"/>
-          </div>
-        </div>
-      </div>
+      ${this._cardHtml("#0891b2", dt.global_hdr || "", this._fieldHtml(dt.global_max_lbl || "", dt.global_max_desc || "",
+        `<input type="number" min="0" max="9600" step="10" value="${globalMax}" data-dist-key="global_max_power"/>`),
+        { extraClass: "top-item" })}
 
-      <div class="col-card top-item">
-        <div class="col-header" style="background:#7c3aed">${dt.mode_hdr || ""}</div>
-        <div class="col-body">
-          <div class="field">
-            <label>${dt.mode_lbl || ""}</label>
-            <div class="desc">${(dt.mode_desc || "").replace(/\n/g, "<br>")}</div>
-            <select data-dist-key="distribution_mode">
+      ${this._cardHtml("#7c3aed", dt.mode_hdr || "", this._fieldHtml(dt.mode_lbl || "", (dt.mode_desc || "").replace(/\n/g, "<br>"),
+        `<select data-dist-key="distribution_mode">
               <option value="equal"${mode === "equal" ? " selected" : ""}>${dt.mode_equal || ""}</option>
               <option value="soc"${mode === "soc" ? " selected" : ""}>${dt.mode_soc || ""}</option>
               <option value="capacity"${mode === "capacity" ? " selected" : ""}>${dt.mode_capacity || ""}</option>
               <option value="soc_switch"${mode === "soc_switch" ? " selected" : ""}>${dt.mode_soc_switch || ""}</option>
-            </select>
-          </div>
-        </div>
-      </div>
+            </select>`),
+        { extraClass: "top-item" })}
 
-      <div class="col-card top-item" style="${mode !== "capacity" ? "opacity:.4;pointer-events:none" : ""}">
-        <div class="col-header" style="background:#059669">${dt.cap_hdr || ""}</div>
-        <div class="col-body">
-          <div class="desc" style="margin-bottom:8px">${dt.cap_sensor_desc || ""}</div>
-          ${instCards}
-        </div>
-      </div>
+      ${this._cardHtml("#059669", dt.cap_hdr || "", `<div class="desc" style="margin-bottom:8px">${dt.cap_sensor_desc || ""}</div>${instCards}`,
+        { extraClass: "top-item", style: mode !== "capacity" ? "opacity:.4;pointer-events:none" : "" })}
 
-      <div class="col-card top-item" style="${mode !== "soc_switch" ? "opacity:.4;pointer-events:none" : ""}">
-        <div class="col-header" style="background:#ea580c">${dt.soc_switch_hdr || ""}</div>
-        <div class="col-body">
-          <div class="field">
-            <label>${dt.soc_switch_divergence_lbl || ""}</label>
-            <div class="desc">${dt.soc_switch_divergence_desc || ""}</div>
-            <input type="number" min="1" max="50" step="1" value="${socSwitchDiv}" data-dist-key="soc_switch_divergence"/>
-          </div>
-        </div>
-      </div>
+      ${this._cardHtml("#ea580c", dt.soc_switch_hdr || "", this._fieldHtml(dt.soc_switch_divergence_lbl || "", dt.soc_switch_divergence_desc || "",
+        `<input type="number" min="1" max="50" step="1" value="${socSwitchDiv}" data-dist-key="soc_switch_divergence"/>`),
+        { extraClass: "top-item", style: mode !== "soc_switch" ? "opacity:.4;pointer-events:none" : "" })}
 
-      <div class="col-card top-item">
-        <div class="col-header" style="background:#0284c7">${dt.global_sensors_hdr || ""}</div>
-        <div class="col-body">
-          <div class="desc" style="margin-bottom:8px">${dt.global_sensors_desc || ""}</div>
-          ${globalSensorCards}
-        </div>
-      </div>
+      ${this._cardHtml("#0284c7", dt.global_sensors_hdr || "", `<div class="desc" style="margin-bottom:8px">${dt.global_sensors_desc || ""}</div>${globalSensorCards}`,
+        { extraClass: "top-item" })}
 
       <div id="dist-save-bar" style="position:sticky;bottom:0;background:var(--primary-color,#03a9f4);color:#fff;padding:10px 16px;border-radius:8px;margin-top:4px;align-items:center;justify-content:space-between;display:${Object.keys(this._distDirty[gk] || {}).length ? "flex" : "none"}">
         <span>${dt.unsaved || ""}</span>
@@ -1631,18 +1583,8 @@ ${this._textsMissing ? `
       });
     });
 
-    c.querySelectorAll('input[data-dist-key="capacity_sensor"]').forEach(inp => {
-      const dot = c.querySelector(`#cap-dot-${inp.dataset.distInst}`);
-      inp.addEventListener("input", () => {
-        if (dot) dot.className = `entity-dot ${this._entityDotClass(inp.value)}`;
-      });
-    });
-
-    c.querySelectorAll(".entity-row input[type=\"text\"]:not([id])").forEach(inp => {
-      const dot = inp.parentElement.querySelector(".entity-dot");
-      inp.addEventListener("input", () => {
-        if (dot) dot.className = `entity-dot ${this._entityDotClass(inp.value)}`;
-      });
+    c.querySelectorAll(".entity-row").forEach(row => {
+      this._bindEntityDot(row.querySelector("input"), row.querySelector(".entity-dot"));
     });
   }
 
