@@ -48,6 +48,15 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
+# Über Neustarts gespeicherte Zustandsflags: (Speicherschlüssel, Attribut, Default).
+PERSISTED_FLAGS = (
+    ("cycle_active", "cycle_active", False),
+    ("surplus_active", "surplus_active", False),
+    ("ac_charge_active", "ac_charge_active", False),
+    ("tariff_charge_active", "tariff_charge_active", False),
+    ("solar_zero_entry_armed", "_solar_zero_entry_armed", True),
+)
+
 
 class SolakonSettingsStore(Store):
     """Settings-Store mit Schemamigration."""
@@ -175,11 +184,8 @@ class SolakonCoordinator:
         stored = await self._store.async_load()
         if stored:
             self.settings = {**SETTINGS_DEFAULTS, **stored}
-            self.cycle_active = bool(stored.get("cycle_active", False))
-            self.surplus_active = bool(stored.get("surplus_active", False))
-            self.ac_charge_active = bool(stored.get("ac_charge_active", False))
-            self.tariff_charge_active = bool(stored.get("tariff_charge_active", False))
-            self._solar_zero_entry_armed = bool(stored.get("solar_zero_entry_armed", True))
+            for key, attr, default in PERSISTED_FLAGS:
+                setattr(self, attr, bool(stored.get(key, default)))
             _LOGGER.debug("Solakon: Einstellungen aus Speicher geladen")
         else:
             self.settings = SETTINGS_DEFAULTS.copy()
@@ -359,15 +365,12 @@ class SolakonCoordinator:
                 self.hass, [sensor], self._on_state_change
             )
 
+    def _persisted_flags(self) -> dict[str, bool]:
+        """Gespeicherte Zustandsflags unter ihrem Speicherschlüssel."""
+        return {key: getattr(self, attr) for key, attr, _ in PERSISTED_FLAGS}
+
     def _store_data(self) -> dict:
-        return {
-            **self.settings,
-            "cycle_active":        self.cycle_active,
-            "surplus_active":      self.surplus_active,
-            "ac_charge_active":    self.ac_charge_active,
-            "tariff_charge_active": self.tariff_charge_active,
-            "solar_zero_entry_armed": self._solar_zero_entry_armed,
-        }
+        return {**self.settings, **self._persisted_flags()}
 
     # ── Entity-Listener-Pattern ──────────────────────────────────────────────
 
@@ -945,15 +948,14 @@ class SolakonCoordinator:
 
         # ── 0. Regelung aktiv? ───────────────────────────────────────────────
         if not self._regulation_on:
-            if self._update_operating_state():
-                self.notify_listeners()
+            self._end_cycle(notify_on_change=True)
             return
 
         self._timer_toggled_in_cycle = False
         self._output_warning = ""
         self._cycle_blocked = False
 
-        _prev_flags = (self.cycle_active, self.surplus_active, self.ac_charge_active, self.tariff_charge_active, self._solar_zero_entry_armed)
+        prev_flags = self._persisted_flags()
 
         # ── 1. Sensor-Werte lesen ────────────────────────────────────────────
         # Kernsensoren müssen verfügbar sein
@@ -961,9 +963,7 @@ class SolakonCoordinator:
             CONF_GRID_SENSOR, CONF_SOLAR_SENSOR, CONF_ACTUAL_SENSOR, CONF_SOC_SENSOR
         )):
             _LOGGER.debug("Solakon: Kernsensoren nicht verfügbar, Zyklus übersprungen")
-            self._cycle_blocked = True
-            if self._update_operating_state():
-                self.notify_listeners()
+            self._end_cycle(blocked=True, notify_on_change=True)
             return
 
         soc = self._flt(cfg[CONF_SOC_SENSOR])
@@ -1054,7 +1054,7 @@ class SolakonCoordinator:
         error_share, allocated_power = self._compute_distribution(soc)
         self.allocated_power = allocated_power
         if self._dist_warning:
-            soft_errors.append(self._dist_warning)
+            self._add_soft_error(soft_errors, self._dist_warning)
         # Panel-Limits gegen die Geraetegrenze gedeckelt.
         effective_hard    = int(min(int(allocated_power), hard_limit_z0, DEVICE_MAX_POWER)) if allocated_power is not None else int(min(hard_limit_z0, DEVICE_MAX_POWER))
         effective_hard_z1 = int(min(int(allocated_power), hard_limit_z1, DEVICE_MAX_POWER)) if allocated_power is not None else int(min(hard_limit_z1, DEVICE_MAX_POWER))
@@ -1078,7 +1078,7 @@ class SolakonCoordinator:
         pv_forecast_today_sensor = self._effective_pv_forecast_today_sensor()
 
         if surplus_forecast_enabled and not pv_forecast_today_sensor:
-            soft_errors.append(self._tr("err_surplus_forecast_no_sensor"))
+            self._add_soft_error(soft_errors, self._tr("err_surplus_forecast_no_sensor"))
             self.forecast_surplus_forced = False
         elif surplus_forecast_enabled and pv_forecast_today_sensor:
             if self._entity_ok(pv_forecast_today_sensor):
@@ -1090,7 +1090,7 @@ class SolakonCoordinator:
                     and soc > zone3_limit
                 )
             else:
-                soft_errors.append(self._tr("err_surplus_forecast_sensor_unavailable", sensor=pv_forecast_today_sensor))
+                self._add_soft_error(soft_errors, self._tr("err_surplus_forecast_sensor_unavailable", sensor=pv_forecast_today_sensor))
                 self.forecast_surplus_forced = False
         else:
             self.forecast_surplus_forced = False
@@ -1100,7 +1100,7 @@ class SolakonCoordinator:
         surplus_lock_factor  = float(s.get(S_SURPLUS_LOCK_FACTOR, 1.5))
 
         if surplus_lock_enabled and not surplus_lock_sensor:
-            soft_errors.append(self._tr("err_exit_lock_no_sensor"))
+            self._add_soft_error(soft_errors, self._tr("err_exit_lock_no_sensor"))
             self.forecast_exit_lock = False
         elif surplus_lock_enabled and surplus_lock_sensor:
             if self._entity_ok(surplus_lock_sensor):
@@ -1111,13 +1111,13 @@ class SolakonCoordinator:
                     and soc > zone3_limit
                 )
             else:
-                soft_errors.append(self._tr("err_exit_lock_sensor_unavailable", sensor=surplus_lock_sensor))
+                self._add_soft_error(soft_errors, self._tr("err_exit_lock_sensor_unavailable", sensor=surplus_lock_sensor))
                 self.forecast_exit_lock = False
         else:
             self.forecast_exit_lock = False
 
         if pv_forecast_enabled and not pv_forecast_today_sensor:
-            soft_errors.append(self._tr("err_pv_forecast_no_sensor"))
+            self._add_soft_error(soft_errors, self._tr("err_pv_forecast_no_sensor"))
             self.forecast_tariff_suppressed = False
         elif pv_forecast_enabled and pv_forecast_today_sensor:
             if self._entity_ok(pv_forecast_today_sensor):
@@ -1125,7 +1125,7 @@ class SolakonCoordinator:
                     self._flt_kwh_normalized(pv_forecast_today_sensor) >= pv_forecast_threshold
                 )
             else:
-                soft_errors.append(self._tr("err_pv_forecast_sensor_unavailable", sensor=pv_forecast_today_sensor))
+                self._add_soft_error(soft_errors, self._tr("err_pv_forecast_sensor_unavailable", sensor=pv_forecast_today_sensor))
                 self.forecast_tariff_suppressed = False
         else:
             self.forecast_tariff_suppressed = False
@@ -1140,7 +1140,7 @@ class SolakonCoordinator:
         zone1_force_sensor = self._effective_zone1_force_sensor()
 
         if zone1_force_enabled and not zone1_force_sensor:
-            soft_errors.append(self._tr("err_zone1_force_no_sensor"))
+            self._add_soft_error(soft_errors, self._tr("err_zone1_force_no_sensor"))
             self.zone1_forced = False
         elif zone1_force_enabled and zone1_force_sensor:
             if self._entity_ok(zone1_force_sensor):
@@ -1150,7 +1150,7 @@ class SolakonCoordinator:
                     and soc > zone1_force_min_soc  # eigener Floor, unabhängig von zone3_limit (Exit-Schwelle)
                 )
             else:
-                soft_errors.append(self._tr("err_zone1_force_sensor_unavailable", sensor=zone1_force_sensor))
+                self._add_soft_error(soft_errors, self._tr("err_zone1_force_sensor_unavailable", sensor=zone1_force_sensor))
                 self.zone1_forced = False
         else:
             self.zone1_forced = False
@@ -1164,38 +1164,23 @@ class SolakonCoordinator:
 
         # ── 3. Validierung ───────────────────────────────────────────────────
         if zone1_limit <= zone3_limit:
-            self.last_error = self._tr("err_soc_zone1_zone3")
-            self._cycle_blocked = True
-            self._update_operating_state()
-            self.notify_listeners()
+            self._end_cycle(blocked=True, error_key="err_soc_zone1_zone3")
             return
 
         if surplus_enabled and surplus_threshold <= zone1_limit:
-            self.last_error = self._tr("err_soc_surplus_zone1")
-            self._cycle_blocked = True
-            self._update_operating_state()
-            self.notify_listeners()
+            self._end_cycle(blocked=True, error_key="err_soc_surplus_zone1")
             return
 
         if zone1_force_enabled and not (zone3_limit < zone1_force_min_soc < zone1_limit):
-            self.last_error = self._tr("err_soc_zone1_force")
-            self._cycle_blocked = True
-            self._update_operating_state()
-            self.notify_listeners()
+            self._end_cycle(blocked=True, error_key="err_soc_zone1_force")
             return
 
         if not self._entity_ok(cfg[CONF_SOC_SENSOR]):
-            self.last_error = self._tr("err_soc_sensor")
-            self._cycle_blocked = True
-            self._update_operating_state()
-            self.notify_listeners()
+            self._end_cycle(blocked=True, error_key="err_soc_sensor")
             return
 
         if not self._entity_ok(cfg[CONF_MODE_SELECT]):
-            self.last_error = self._tr("err_mode_select")
-            self._cycle_blocked = True
-            self._update_operating_state()
-            self.notify_listeners()
+            self._end_cycle(blocked=True, error_key="err_mode_select")
             return
 
         # Preis vor der Fehlersammlung lesen: die Einheitenplausibilität geht als
@@ -1212,13 +1197,13 @@ class SolakonCoordinator:
                     pass
 
         if tariff_enabled and not tariff_sensor:
-            soft_errors.append(self._tr("err_tariff_no_sensor"))
+            self._add_soft_error(soft_errors, self._tr("err_tariff_no_sensor"))
         elif tariff_enabled and tariff_sensor and not self._entity_ok(tariff_sensor):
-            soft_errors.append(self._tr("err_tariff_sensor_unavailable", sensor=tariff_sensor))
+            self._add_soft_error(soft_errors, self._tr("err_tariff_sensor_unavailable", sensor=tariff_sensor))
         elif tariff_price_valid:
             unit_warning = self._tariff_unit_warning(tariff_sensor, tariff_price, tariff_cheap)
             if unit_warning:
-                soft_errors.append(unit_warning)
+                self._add_soft_error(soft_errors, unit_warning)
 
         # Verkettet statt überschrieben
         self.last_error = " • ".join(soft_errors)
@@ -1321,13 +1306,8 @@ class SolakonCoordinator:
 
         # ── 7. PI-Gate ───────────────────────────────────────────────────────
         if mode not in (MODE_DISCHARGE, MODE_AC_CHARGE):
-            if self._output_warning:
-                soft_errors.append(self._output_warning)
-                self.last_error = " • ".join(soft_errors)
-            self._update_zone_display(soc, zone1_limit, zone3_limit, mode)
-            if (self.cycle_active, self.surplus_active, self.ac_charge_active, self.tariff_charge_active, self._solar_zero_entry_armed) != _prev_flags:
-                self._store.async_delay_save(self._store_data, 5)
-            self.notify_listeners()
+            self._end_cycle(soft_errors=soft_errors, display=(soc, zone1_limit, zone3_limit, mode),
+                            prev_flags=prev_flags)
             return
 
         # ── 9. Timeout-Reset ─────────────────────────────────────────────────
@@ -1345,8 +1325,7 @@ class SolakonCoordinator:
         # Eigener Pool für AC-Laden, nach den Falls berechnet.
         ac_error_share = self._compute_ac_distribution(soc)
         if self._dist_warning:
-            soft_errors.append(self._dist_warning)
-            self.last_error = " • ".join(soft_errors)
+            self._add_soft_error(soft_errors, self._dist_warning)
 
         # ── PI-Pfade ─────────────────────────────────────────────────────────
         if self.surplus_active:
@@ -1389,13 +1368,41 @@ class SolakonCoordinator:
                     self._reset_output_stall_state()
 
         # ── 10. Display + Flag-Persistenz ────────────────────────────────────
-        if self._output_warning:
-            soft_errors.append(self._output_warning)
-            self.last_error = " • ".join(soft_errors)
-        self._update_zone_display(soc, zone1_limit, zone3_limit, mode)
-        if (self.cycle_active, self.surplus_active, self.ac_charge_active, self.tariff_charge_active, self._solar_zero_entry_armed) != _prev_flags:
+        self._end_cycle(soft_errors=soft_errors, display=(soc, zone1_limit, zone3_limit, mode),
+                        prev_flags=prev_flags)
+
+    def _add_soft_error(self, soft_errors: list[str], text: str) -> None:
+        """Meldung an die Fehlerkette hängen und `last_error` neu verketten."""
+        soft_errors.append(text)
+        self.last_error = " • ".join(soft_errors)
+
+    def _end_cycle(
+        self, *, blocked: bool = False, error_key: str = "", soft_errors: list[str] | None = None,
+        display: tuple[float, int, int, str] | None = None, prev_flags: dict[str, bool] | None = None,
+        notify_on_change: bool = False,
+    ) -> None:
+        """Zyklus abschließen: Fehler, Anzeige, Flag-Speicherung, Benachrichtigung.
+
+        `error_key` ersetzt `last_error`, `soft_errors` erhält eine offene Output-Warnung.
+        `display` (soc, zone1, zone3, mode) zieht Zonen- und Modusanzeige nach, sonst nur
+        den Betriebszustand. Mit `prev_flags` wird bei geänderten Flags verzögert gespeichert.
+        `notify_on_change` benachrichtigt nur, wenn der Betriebszustand gewechselt hat.
+        """
+        if error_key:
+            self.last_error = self._tr(error_key)
+        if blocked:
+            self._cycle_blocked = True
+        if soft_errors is not None and self._output_warning:
+            self._add_soft_error(soft_errors, self._output_warning)
+        if display is not None:
+            self._update_zone_display(*display)
+            changed = True
+        else:
+            changed = self._update_operating_state()
+        if prev_flags is not None and self._persisted_flags() != prev_flags:
             self._store.async_delay_save(self._store_data, 5)
-        self.notify_listeners()
+        if changed or not notify_on_change:
+            self.notify_listeners()
 
     # ── Falls (Zonenwechsel-Logik) ───────────────────────────────────────────
 
