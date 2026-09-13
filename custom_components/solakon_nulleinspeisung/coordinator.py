@@ -230,9 +230,7 @@ class SolakonCoordinator:
             unsub()
         self._unsub_trackers.clear()
         for name, _ in TRACKERS:
-            unsub = self._tracker_unsubs.pop(name, None)
-            if unsub:
-                unsub()
+            self._untrack(name)
     # ── Settings-Management ──────────────────────────────────────────────────
 
     async def async_update_settings(self, changes: dict[str, Any]) -> None:
@@ -276,14 +274,18 @@ class SolakonCoordinator:
         target = self.settings.get(S_PERIODIC_INTERVAL, 10) if name == "periodic" else self._effective(name)
         return tuple(self.settings.get(k, False) for k in keys), target
 
+    def _untrack(self, name: str) -> None:
+        """Trigger `name` abmelden, falls registriert."""
+        unsub = self._tracker_unsubs.pop(name, None)
+        if unsub:
+            unsub()
+
     def _retrack(self, name: str) -> None:
         """Trigger `name` abmelden und neu registrieren, wenn aktiviert und Sensor gesetzt.
 
         Der periodische Trigger läuft im Intervall S_PERIODIC_INTERVAL, mindestens 5 s.
         """
-        unsub = self._tracker_unsubs.pop(name, None)
-        if unsub:
-            unsub()
+        self._untrack(name)
         if not any(self.settings.get(k, False) for k in dict(TRACKERS)[name]):
             return
         if name == "periodic":
