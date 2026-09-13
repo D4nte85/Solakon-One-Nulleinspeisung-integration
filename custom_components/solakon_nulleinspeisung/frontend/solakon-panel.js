@@ -606,7 +606,8 @@ class SolakonPanel extends HTMLElement {
 
     const groupsHtml = this._groups.map(g => {
       const showTotal = g.instances.length > 1;
-      const row = (label, id) => `<div class="ov-row"><span>${label}</span><strong id="${id}"></strong></div>`;
+      const row = (label, id, labelId) =>
+        `<div class="ov-row"><span${labelId ? ` id="${labelId}"` : ""}>${label}</span><strong id="${id}"></strong></div>`;
       const cardsHtml = g.instances.map(inst => {
         const id = inst.entry_id;
         return `<div class="ov-card" id="ov-card-${id}" data-eid="${id}">
@@ -632,7 +633,7 @@ class SolakonPanel extends HTMLElement {
       const totalCardHtml = showTotal ? `<div class="ov-card ov-card-total">
           <div class="ov-hdr" style="background:#0891b2">${ov.total_output || ""}</div>
           <div class="ov-body">
-            <div class="ov-row"><span id="ov-total-soc-label-${g.key}"></span><strong id="ov-total-soc-${g.key}"></strong></div>
+            ${row("", `ov-total-soc-${g.key}`, `ov-total-soc-label-${g.key}`)}
             ${row(ov.output || "", `ov-total-output-${g.key}`)}
             ${row(ov.grid || "", `ov-total-grid-${g.key}`)}
             ${row(ov.dist_mode || "", `ov-total-mode-${g.key}`)}
