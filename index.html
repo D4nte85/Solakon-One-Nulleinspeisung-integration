@@ -191,6 +191,32 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
     return mode;
   }
 
+  // Bildet Offset- und Kapazitätsfelder aus coordinator.py::snapshot() nach —
+  // bei jedem get_status frisch, damit Zyklus-Schalter, gespeicherte Offsets und
+  // geänderte Kapazitätssensoren sofort in der Vorschau wirken.
+  const OFFSET_SOURCES = {
+    ac: ["dyn_ac_enabled", "ac_offset", "dyn_ac"],
+    z1: ["dyn_z1_enabled", "offset_1", "dyn_z1"],
+    z2: ["dyn_z2_enabled", "offset_2", "dyn_z2"],
+  };
+  const KWH_SCALE = { wh: 0.001, mwh: 1000 };
+  function computeSnapshotExtras(entryId) {
+    const inst = INSTANCES[entryId];
+    const st = inst.status, s = inst.settings;
+    const zone = st.ac_charge ? "ac" : st.cycle_active ? "z1" : "z2";
+    const [enabledKey, staticKey, dynKey] = OFFSET_SOURCES[zone];
+    const dynamic = !!s[enabledKey];
+    const capSensor = (distConfig[inst.grid_sensor] || {})[`inst_${entryId}_capacity_sensor`];
+    const capState = capSensor ? STATES[capSensor] : null;
+    const unit = (capState?.attributes?.unit_of_measurement || "").trim().toLowerCase();
+    const capKwh = capState ? parseFloat(capState.state) * (KWH_SCALE[unit] ?? 1) : NaN;
+    return {
+      offset_zone: zone, offset_dynamic: dynamic, offset_static: s[staticKey],
+      offset_value: dynamic ? st[dynKey] : s[staticKey],
+      capacity_kwh: Number.isFinite(capKwh) ? capKwh : null,
+    };
+  }
+
   // Demo-Entities für die Live-Validierungspunkte (grün/gelb/rot) an Entity-Feldern.
   const STATES = {
     "sensor.solakon_one_leistung":            { state: "120",  attributes: { unit_of_measurement: "W", friendly_name: "Solakon ONE Leistung" } },
@@ -256,7 +282,10 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
           Object.assign(inst.settings, msg.changes);
           return Promise.resolve({ success: true });
         case "get_status":
-          return Promise.resolve({ ...inst.status, dist_mode_effective: computeDistModeEffective(msg.entry_id) });
+          return Promise.resolve({
+            ...inst.status, ...computeSnapshotExtras(msg.entry_id),
+            dist_mode_effective: computeDistModeEffective(msg.entry_id),
+          });
         case "reset_integral":
           inst.status.integral = 0;
           return Promise.resolve({ success: true });
