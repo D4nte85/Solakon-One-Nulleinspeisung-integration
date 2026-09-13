@@ -27,63 +27,40 @@ def _get_defaults(hass: HomeAssistant) -> dict:
     return REQUIRED_ENTITY_DEFAULTS_EN if lang.startswith("en") else REQUIRED_ENTITY_DEFAULTS_DE
 
 
+# Entitätsfelder: (Schlüssel, Domain, device_class, Pflicht).
+ENTITY_FIELDS = (
+    (CONF_GRID_SENSOR, "sensor", "power", True),
+    (CONF_ACTUAL_SENSOR, "sensor", "power", True),
+    (CONF_SOLAR_SENSOR, "sensor", "power", True),
+    (CONF_SOC_SENSOR, "sensor", "battery", True),
+    (CONF_TIMEOUT_COUNTDOWN, "sensor", None, True),
+    (CONF_ACTIVE_POWER, "number", None, True),
+    (CONF_DISCHARGE_CURRENT, "number", None, True),
+    (CONF_TIMEOUT_SET, "number", None, True),
+    (CONF_MODE_SELECT, "select", None, True),
+    (CONF_EXPORT_LIMIT, "number", None, False),
+)
+
+
 def _schema(current: dict, defaults: dict) -> vol.Schema:
-    return vol.Schema({
-        vol.Required(
-            CONF_INSTANCE_NAME,
-            default=current.get(CONF_INSTANCE_NAME, "Speicher 1"),
-        ): TextSelector(),
+    """Formular: Instanzname, dann ENTITY_FIELDS; Vorbelegung aktueller Wert, sonst Geräte-Default."""
+    fields = {
+        vol.Required(CONF_INSTANCE_NAME, default=current.get(CONF_INSTANCE_NAME, "Speicher 1")): TextSelector(),
+    }
+    for key, domain, device_class, required in ENTITY_FIELDS:
+        marker = vol.Required if required else vol.Optional
+        config = EntitySelectorConfig(domain=domain, device_class=device_class) if device_class \
+            else EntitySelectorConfig(domain=domain)
+        fields[marker(key, default=current.get(key, defaults.get(key, "")))] = EntitySelector(config)
+    return vol.Schema(fields)
 
-        vol.Required(
-            CONF_GRID_SENSOR,
-            default=current.get(CONF_GRID_SENSOR, ""),
-        ): EntitySelector(EntitySelectorConfig(domain="sensor", device_class="power")),
 
-        vol.Required(
-            CONF_ACTUAL_SENSOR,
-            default=current.get(CONF_ACTUAL_SENSOR, defaults[CONF_ACTUAL_SENSOR]),
-        ): EntitySelector(EntitySelectorConfig(domain="sensor", device_class="power")),
-
-        vol.Required(
-            CONF_SOLAR_SENSOR,
-            default=current.get(CONF_SOLAR_SENSOR, defaults[CONF_SOLAR_SENSOR]),
-        ): EntitySelector(EntitySelectorConfig(domain="sensor", device_class="power")),
-
-        vol.Required(
-            CONF_SOC_SENSOR,
-            default=current.get(CONF_SOC_SENSOR, defaults[CONF_SOC_SENSOR]),
-        ): EntitySelector(EntitySelectorConfig(domain="sensor", device_class="battery")),
-
-        vol.Required(
-            CONF_TIMEOUT_COUNTDOWN,
-            default=current.get(CONF_TIMEOUT_COUNTDOWN, defaults[CONF_TIMEOUT_COUNTDOWN]),
-        ): EntitySelector(EntitySelectorConfig(domain="sensor")),
-
-        vol.Required(
-            CONF_ACTIVE_POWER,
-            default=current.get(CONF_ACTIVE_POWER, defaults[CONF_ACTIVE_POWER]),
-        ): EntitySelector(EntitySelectorConfig(domain="number")),
-
-        vol.Required(
-            CONF_DISCHARGE_CURRENT,
-            default=current.get(CONF_DISCHARGE_CURRENT, defaults[CONF_DISCHARGE_CURRENT]),
-        ): EntitySelector(EntitySelectorConfig(domain="number")),
-
-        vol.Required(
-            CONF_TIMEOUT_SET,
-            default=current.get(CONF_TIMEOUT_SET, defaults[CONF_TIMEOUT_SET]),
-        ): EntitySelector(EntitySelectorConfig(domain="number")),
-
-        vol.Required(
-            CONF_MODE_SELECT,
-            default=current.get(CONF_MODE_SELECT, defaults[CONF_MODE_SELECT]),
-        ): EntitySelector(EntitySelectorConfig(domain="select")),
-
-        vol.Optional(
-            CONF_EXPORT_LIMIT,
-            default=current.get(CONF_EXPORT_LIMIT, defaults[CONF_EXPORT_LIMIT]),
-        ): EntitySelector(EntitySelectorConfig(domain="number")),
-    })
+def _mode_select_taken(hass: HomeAssistant, value: str, exclude_entry_id: str | None = None) -> bool:
+    """True, wenn eine andere Instanz den Modus-Select `value` bereits nutzt."""
+    return any(
+        entry.entry_id != exclude_entry_id and entry.data.get(CONF_MODE_SELECT) == value
+        for entry in hass.config_entries.async_entries(DOMAIN)
+    )
 
 
 class SolakonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -93,10 +70,8 @@ class SolakonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self, user_input: dict | None = None
     ) -> FlowResult:
         if user_input is not None:
-            mode_select = user_input.get(CONF_MODE_SELECT, "")
-            for entry in self.hass.config_entries.async_entries(DOMAIN):
-                if entry.data.get(CONF_MODE_SELECT) == mode_select:
-                    return self.async_abort(reason="already_configured")
+            if _mode_select_taken(self.hass, user_input.get(CONF_MODE_SELECT, "")):
+                return self.async_abort(reason="already_configured")
             return self.async_create_entry(
                 title=user_input.get(CONF_INSTANCE_NAME, "Solakon ONE"),
                 data=user_input,
@@ -124,13 +99,10 @@ class SolakonOptionsFlow(config_entries.OptionsFlow):
         self, user_input: dict | None = None
     ) -> FlowResult:
         if user_input is not None:
-            mode_select = user_input.get(CONF_MODE_SELECT, "")
-            for entry in self.hass.config_entries.async_entries(DOMAIN):
-                if (
-                    entry.entry_id != self.config_entry.entry_id
-                    and entry.data.get(CONF_MODE_SELECT) == mode_select
-                ):
-                    return self.async_abort(reason="already_configured")
+            if _mode_select_taken(
+                self.hass, user_input.get(CONF_MODE_SELECT, ""), self.config_entry.entry_id,
+            ):
+                return self.async_abort(reason="already_configured")
             # Entitäten-Zuweisung liegt in entry.data, nicht in entry.options.
             self.hass.config_entries.async_update_entry(
                 self.config_entry,
