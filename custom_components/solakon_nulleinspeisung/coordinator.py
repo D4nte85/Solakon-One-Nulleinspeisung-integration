@@ -67,6 +67,9 @@ PERSISTED_FLAGS = (
     ("solar_zero_entry_armed", "_solar_zero_entry_armed", True),
 )
 
+# Domains mit Zahlenzustand; nur sie werden als Zahl gelesen.
+NUMERIC_DOMAINS = ("sensor", "input_number", "number")
+
 # Instanzübergreifend pflegbare Sensor-Vorgaben: (lokaler Settings-Schlüssel, globaler
 # Schlüssel der Verteilung). Lokal gewinnt, sonst der globale Wert.
 SENSOR_SOURCES = {
@@ -622,9 +625,9 @@ class SolakonCoordinator:
         return str(state.attributes.get("unit_of_measurement") or "").strip().lower() if state else ""
 
     def _read_number(self, entity_id: str) -> tuple[float, str] | None:
-        """(Wert, Einheit) über `state_as_number`, oder None bei ungültigem State."""
+        """(Wert, Einheit) über `state_as_number`; None bei ungültigem State oder Domain außerhalb NUMERIC_DOMAINS."""
         state = self._valid_state(entity_id)
-        if state is None:
+        if state is None or not self._numeric_domain(entity_id):
             return None
         try:
             return state_as_number(state), self._unit(state)
@@ -693,16 +696,25 @@ class SolakonCoordinator:
         local, global_key = SENSOR_SOURCES[name]
         return str(self.settings[local]) or self._global_sensor(global_key)
 
+    @staticmethod
+    def _numeric_domain(entity_id: str) -> bool:
+        """True, wenn die Entity zu einer Domain aus NUMERIC_DOMAINS gehört."""
+        return entity_id.split(".", 1)[0] in NUMERIC_DOMAINS
+
     def _sensor_usable(self, soft_errors: list[str], enabled: bool, sensor: str, err_prefix: str) -> bool:
         """True, wenn das Feature aktiviert und sein Sensor gesetzt und verfügbar ist.
 
-        Fehlt der Sensor oder ist er nicht verfügbar, geht `<err_prefix>_no_sensor` bzw.
+        Fehlt der Sensor, liegt er außerhalb NUMERIC_DOMAINS oder ist er nicht verfügbar,
+        geht `<err_prefix>_no_sensor`, `err_sensor_wrong_domain` bzw.
         `<err_prefix>_sensor_unavailable` in die Fehlerkette.
         """
         if not enabled:
             return False
         if not sensor:
             self._add_soft_error(soft_errors, self._tr(f"{err_prefix}_no_sensor"))
+            return False
+        if not self._numeric_domain(sensor):
+            self._add_soft_error(soft_errors, self._tr("err_sensor_wrong_domain", sensor=sensor))
             return False
         if not self._entity_ok(sensor):
             self._add_soft_error(soft_errors, self._tr(f"{err_prefix}_sensor_unavailable", sensor=sensor))

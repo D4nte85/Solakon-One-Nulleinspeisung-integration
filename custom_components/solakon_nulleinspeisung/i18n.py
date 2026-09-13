@@ -179,6 +179,10 @@ _TEXTS: dict[str, dict[str, str]] = {
         "de": "Tarif: Kein Preis-Sensor konfiguriert — Tarif-Funktion inaktiv",
         "en": "Tariff: no price sensor configured — tariff function inactive",
     },
+    "err_sensor_wrong_domain": {
+        "de": "Entität {sensor!r} liefert keinen Zahlenwert — erlaubt sind sensor, input_number, number",
+        "en": "Entity {sensor!r} has no numeric state — allowed are sensor, input_number, number",
+    },
     "err_tariff_sensor_unavailable": {
         "de": "Tarif: Preis-Sensor {sensor!r} nicht verfügbar",
         "en": "Tariff: price sensor {sensor!r} unavailable",
