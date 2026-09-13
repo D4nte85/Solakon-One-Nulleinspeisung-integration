@@ -399,6 +399,19 @@ class SolakonCoordinator:
 
     # ── Self-Adjusting Wait ──────────────────────────────────────────────────
 
+    def _actual_vs(self, target: float, ac_charge_mode: bool = False) -> tuple[float, float]:
+        """(Ist-Leistung in W, Betrag ihrer Abweichung vom Sollwert).
+
+        Im AC-Lademodus meldet der Ist-Sensor negativ; verglichen wird dann gegen `-target`.
+        """
+        actual = self._flt_power(self.entry.data.get(CONF_ACTUAL_SENSOR, ""))
+        return actual, abs(actual - (-target if ac_charge_mode else target))
+
+    def _actual_updated_ts(self) -> float | None:
+        """`last_updated` des Ist-Sensors als Unix-Zeit, None ohne State."""
+        state = self.hass.states.get(self.entry.data.get(CONF_ACTUAL_SENSOR, ""))
+        return state.last_updated.timestamp() if state is not None else None
+
     async def _wait_for_target(self, target: float, ac_charge_mode: bool = False) -> None:
         """Wartet bis actual_power den Zielwert erreicht, oder max wait_time."""
         wait_max = self._setting(S_WAIT_TIME, float)
@@ -408,8 +421,6 @@ class SolakonCoordinator:
             return
 
         tolerance = self._setting(S_SELF_ADJUST_TOL, float)
-        actual_eid = self.entry.data.get(CONF_ACTUAL_SENSOR, "")
-
         compare_target = -target if ac_charge_mode else target
 
         await asyncio.sleep(1.0)
@@ -418,8 +429,8 @@ class SolakonCoordinator:
         remaining = wait_max - 1.0
 
         while remaining > 0:
-            actual = self._flt_power(actual_eid)
-            if abs(actual - compare_target) <= tolerance:
+            actual, deviation = self._actual_vs(target, ac_charge_mode)
+            if deviation <= tolerance:
                 _LOGGER.debug(
                     "Solakon: Zielwert erreicht (actual=%.0f, target=%.0f) nach %.1fs",
                     actual, compare_target, time.monotonic() - start,
@@ -430,7 +441,7 @@ class SolakonCoordinator:
 
         _LOGGER.debug(
             "Solakon: Max-Wartezeit (%.0fs), actual=%.0f, target=%.0f",
-            wait_max, self._flt_power(actual_eid), compare_target,
+            wait_max, self._actual_vs(target)[0], compare_target,
         )
 
     # ── StdDev-Berechnung (Ringpuffer) ───────────────────────────────────────
@@ -733,22 +744,23 @@ class SolakonCoordinator:
         def _confirmable() -> bool:
             """True nur wenn der Sensor seit unserem letzten Schreibbefehl neu
             gepollt hat — sonst ist der gelesene Wert kein Beleg für irgendetwas."""
-            state = self.hass.states.get(actual_eid)
-            return state is not None and state.last_updated.timestamp() >= self.last_output_ts
+            updated = self._actual_updated_ts()
+            return updated is not None and updated >= self.last_output_ts
 
         for attempt in range(max_retries):
-            if abs(self._flt_power(actual_eid)) <= tolerance:
+            actual, deviation = self._actual_vs(0)
+            if deviation <= tolerance:
                 return
             if _confirmable():
                 _LOGGER.warning(
                     "Solakon: Output-Nullung nicht bestätigt (Ist: %.0f W) — erneuter Schreibversuch %d/%d",
-                    self._flt_power(actual_eid), attempt + 1, max_retries,
+                    actual, attempt + 1, max_retries,
                 )
             await self._set_output(0)
             await self._wait_for_target(0, ac_charge_mode=ac_charge_mode)
 
-        actual = self._flt_power(actual_eid)
-        if abs(actual) > tolerance and _confirmable():
+        actual, deviation = self._actual_vs(0)
+        if deviation > tolerance and _confirmable():
             self._output_warning = self._tr("warn_output_zero_unconfirmed", attempts=max_retries, actual=actual)
             _LOGGER.error("Solakon: %s", self._output_warning)
 
@@ -775,18 +787,18 @@ class SolakonCoordinator:
             self._reset_output_stall_state()
             return
 
-        actual = self._flt_power(actual_eid)
-        if abs(actual - limit) <= limit * OUTPUT_STALL_DEVIATION:
+        actual, deviation = self._actual_vs(limit)
+        if deviation <= limit * OUTPUT_STALL_DEVIATION:
             self._reset_output_stall_state()
             return
 
-        state = self.hass.states.get(actual_eid)
-        if state is None:
+        updated = self._actual_updated_ts()
+        if updated is None:
             self._reset_output_stall_state()
             return
 
         now = time.time()
-        if now - state.last_updated.timestamp() < OUTPUT_STALL_SECONDS:
+        if now - updated < OUTPUT_STALL_SECONDS:
             return
         if self._output_stall_last_ts and now - self._output_stall_last_ts < OUTPUT_STALL_SECONDS:
             return
@@ -798,7 +810,7 @@ class SolakonCoordinator:
             _LOGGER.warning(
                 "Solakon: Ausgang %.0f W folgt Limit %.0f W nicht (unverändert seit %.0f s) "
                 "— Sollwert wird neu geschrieben",
-                actual, limit, now - state.last_updated.timestamp(),
+                actual, limit, now - updated,
             )
             await self._set_output(limit)
             self._set_last_action("act_output_rewritten", actual=actual, limit=limit)
