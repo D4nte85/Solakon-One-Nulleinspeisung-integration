@@ -120,6 +120,20 @@ async def _ws_save_config(
         connection.send_error(msg["id"], "not_found", "Coordinator not found")
 
 
+# Schlüssel des WS-Status: Name im Panel oder Paar (Panel, Schnappschuss).
+WS_STATUS_KEYS = (
+    ("zone", "current_zone"), "zone_label", "mode_label", "last_action", "last_action_ts",
+    "last_output_ts", "mode_label_ts", "last_error", "integral",
+    "cycle_active", "surplus_active", ("ac_charge", "ac_charge_active"),
+    ("tariff_charge", "tariff_charge_active"), "regulation_enabled",
+    ("stddev", "grid_stddev"), ("stddev_raw", "grid_stddev_raw"),
+    "dyn_z1_enabled", "dyn_z2_enabled", "dyn_ac_enabled",
+    ("dyn_z1", "dyn_offset_z1"), ("dyn_z2", "dyn_offset_z2"), ("dyn_ac", "dyn_offset_ac"),
+    "active_fall", "operating_state", "discharge_locked", "dist_mode_effective", "is_night",
+    "forecast_tariff_suppressed", "forecast_surplus_forced", "forecast_exit_lock", "allocated_power",
+)
+
+
 @websocket_api.websocket_command({
     vol.Required("type"):     f"{DOMAIN}/get_status",
     vol.Required("entry_id"): str,
@@ -135,41 +149,11 @@ async def _ws_get_status(
 
     cfg = coord.entry.data
     connection.send_result(msg["id"], {
-        "zone":              coord.current_zone,
-        "zone_label":        coord.zone_label,
-        "mode_label":        coord.mode_label,
-        "last_action":       coord.last_action,
-        "last_action_ts":    coord.last_action_ts,
-        "last_output_ts":    coord.last_output_ts,
-        "mode_label_ts":     coord.mode_label_ts,
-        "last_error":        coord.last_error,
-        "integral":          round(coord.integral, 2),
-        "grid":              coord._flt_power(cfg.get(CONF_GRID_SENSOR, ""), 0),
-        "actual_power":      coord._flt_power(cfg.get(CONF_ACTUAL_SENSOR, ""), 0),
-        "solar":             coord._flt_power(cfg.get(CONF_SOLAR_SENSOR, ""), 0),
-        "soc":               coord._flt(cfg.get(CONF_SOC_SENSOR, ""), 0),
-        "cycle_active":      coord.cycle_active,
-        "surplus_active":    coord.surplus_active,
-        "ac_charge":         coord.ac_charge_active,
-        "tariff_charge":     coord.tariff_charge_active,
-        "regulation_enabled": coord.settings.get(S_REGULATION_ENABLED, False),
-        "stddev":            coord.grid_stddev,
-        "stddev_raw":        coord.grid_stddev_raw,
-        "dyn_z1_enabled":    coord.settings.get("dyn_z1_enabled", False),
-        "dyn_z2_enabled":    coord.settings.get("dyn_z2_enabled", False),
-        "dyn_ac_enabled":    coord.settings.get("dyn_ac_enabled", False),
-        "dyn_z1":            coord.dyn_offset_z1,
-        "dyn_z2":            coord.dyn_offset_z2,
-        "dyn_ac":            coord.dyn_offset_ac,
-        "active_fall":       coord.active_fall,
-        "operating_state":   coord.operating_state,
-        "discharge_locked":  coord.discharge_locked,
-        "dist_mode_effective": coord.dist_mode_effective,
-        "is_night":          coord.is_night,
-        "forecast_tariff_suppressed": coord.forecast_tariff_suppressed,
-        "forecast_surplus_forced": coord.forecast_surplus_forced,
-        "forecast_exit_lock": coord.forecast_exit_lock,
-        "allocated_power":   coord.allocated_power,
+        **coord.snapshot_view(WS_STATUS_KEYS),
+        "grid":         coord._flt_power(cfg.get(CONF_GRID_SENSOR, ""), 0),
+        "actual_power": coord._flt_power(cfg.get(CONF_ACTUAL_SENSOR, ""), 0),
+        "solar":        coord._flt_power(cfg.get(CONF_SOLAR_SENSOR, ""), 0),
+        "soc":          coord._flt(cfg.get(CONF_SOC_SENSOR, ""), 0),
     })
 
 

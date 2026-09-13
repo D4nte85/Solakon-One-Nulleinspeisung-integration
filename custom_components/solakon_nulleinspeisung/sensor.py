@@ -12,6 +12,13 @@ from .const import DOMAIN, FALL_KEYS, MODE_KEYS, OPERATING_STATES
 from .coordinator import SolakonCoordinator
 from .entity_base import SolakonEntity
 
+# Attribute aus dem Coordinator-Schnappschuss: Name oder Paar (Attribut, Schnappschuss).
+OPERATING_STATE_ATTRS = (
+    ("zone", "current_zone"), "zone_label", ("device_mode", "mode_label"),
+    ("last_fall", "active_fall"), "last_action", "last_error", ("changed_at", "operating_state_ts"),
+)
+ZONE_ATTRS = ("zone_label", "last_action", "last_error", "integral", "regulation_enabled")
+
 _ZONE_ICONS = {
     0: "mdi:solar-power",
     1: "mdi:battery-high",
@@ -74,16 +81,9 @@ class OperatingStateSensor(SolakonEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict:
-        coord = self._coordinator
-        return {
-            "zone": coord.current_zone,
-            "zone_label": coord.zone_label,
-            "device_mode": coord.mode_label,
-            "last_fall": coord.active_fall,
-            "last_action": coord.last_action,
-            "last_error": coord.last_error,
-            "changed_at": dt_util.utc_from_timestamp(coord.operating_state_ts).isoformat(),
-        }
+        attrs = self._coordinator.snapshot_view(OPERATING_STATE_ATTRS)
+        attrs["changed_at"] = dt_util.utc_from_timestamp(attrs["changed_at"]).isoformat()
+        return attrs
 
 
 class ZoneSensor(SolakonEntity, SensorEntity):
@@ -104,13 +104,7 @@ class ZoneSensor(SolakonEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict:
-        return {
-            "zone_label": self._coordinator.zone_label,
-            "last_action": self._coordinator.last_action,
-            "last_error": self._coordinator.last_error,
-            "integral": round(self._coordinator.integral, 2),
-            "regulation_enabled": self._coordinator.settings.get("regulation_enabled", False),
-        }
+        return self._coordinator.snapshot_view(ZONE_ATTRS)
 class ActiveFallSensor(SolakonEntity, SensorEntity):
     """Zuletzt ausgefuehrter Fall des Regelzyklus."""
 

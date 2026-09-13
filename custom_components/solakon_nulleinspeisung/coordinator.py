@@ -388,6 +388,49 @@ class SolakonCoordinator:
         """Gespeicherte Zustandsflags unter ihrem Speicherschlüssel."""
         return {key: getattr(self, attr) for key, attr, _ in PERSISTED_FLAGS}
 
+    def snapshot(self) -> dict[str, Any]:
+        """Anzeigezustand unter internen Namen, ohne Live-Sensorwerte."""
+        return {
+            "current_zone": self.current_zone,
+            "zone_label": self.zone_label,
+            "mode_label": self.mode_label,
+            "last_action": self.last_action,
+            "last_action_ts": self.last_action_ts,
+            "last_output_ts": self.last_output_ts,
+            "mode_label_ts": self.mode_label_ts,
+            "last_error": self.last_error,
+            "integral": round(self.integral, 2),
+            "cycle_active": self.cycle_active,
+            "surplus_active": self.surplus_active,
+            "ac_charge_active": self.ac_charge_active,
+            "tariff_charge_active": self.tariff_charge_active,
+            "regulation_enabled": self.settings.get(S_REGULATION_ENABLED, False),
+            "grid_stddev": self.grid_stddev,
+            "grid_stddev_raw": self.grid_stddev_raw,
+            "dyn_z1_enabled": self.settings.get(S_DYN_Z1_ENABLED, False),
+            "dyn_z2_enabled": self.settings.get(S_DYN_Z2_ENABLED, False),
+            "dyn_ac_enabled": self.settings.get(S_DYN_AC_ENABLED, False),
+            "dyn_offset_z1": self.dyn_offset_z1,
+            "dyn_offset_z2": self.dyn_offset_z2,
+            "dyn_offset_ac": self.dyn_offset_ac,
+            "active_fall": self.active_fall,
+            "operating_state": self.operating_state,
+            "operating_state_ts": self.operating_state_ts,
+            "discharge_locked": self.discharge_locked,
+            "dist_mode_effective": self.dist_mode_effective,
+            "is_night": self.is_night,
+            "forecast_tariff_suppressed": self.forecast_tariff_suppressed,
+            "forecast_surplus_forced": self.forecast_surplus_forced,
+            "forecast_exit_lock": self.forecast_exit_lock,
+            "allocated_power": self.allocated_power,
+        }
+
+    def snapshot_view(self, names: tuple[str | tuple[str, str], ...]) -> dict[str, Any]:
+        """Auswahl aus `snapshot()`; ein Paar (außen, innen) benennt den Schlüssel um."""
+        snap = self.snapshot()
+        pairs = (n if isinstance(n, tuple) else (n, n) for n in names)
+        return {outer: snap[inner] for outer, inner in pairs}
+
     def _store_data(self) -> dict:
         return {**self.settings, **self._persisted_flags()}
 
