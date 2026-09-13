@@ -4,7 +4,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from collections import deque
+from collections import deque, namedtuple
 from typing import Any, Callable
 
 from datetime import timedelta
@@ -72,6 +72,51 @@ SENSOR_SOURCES = {
     "surplus_lock": (S_SURPLUS_LOCK_SENSOR, "global_surplus_lock_sensor"),
     "zone1_force": (S_ZONE1_FORCE_SENSOR, "global_pv_forecast_tomorrow_sensor"),
 }
+
+# Settings, die der Regelzyklus einmal je Durchlauf liest: (Feld, Schlüssel, Typ).
+CYCLE_SETTINGS = (
+    ("zone1_limit", S_ZONE1_LIMIT, int),
+    ("zone3_limit", S_ZONE3_LIMIT, int),
+    ("hard_limit_z0", S_HARD_LIMIT_Z0, int),
+    ("hard_limit_z1", S_HARD_LIMIT_Z1, int),
+    ("tolerance", S_TOLERANCE, int),
+    ("p_factor", S_P_FACTOR, float),
+    ("i_factor", S_I_FACTOR, float),
+    ("pv_reserve", S_PV_RESERVE, int),
+    ("discharge_max", S_DISCHARGE_MAX, int),
+    ("dyn_z1_enabled", S_DYN_Z1_ENABLED, bool),
+    ("dyn_z2_enabled", S_DYN_Z2_ENABLED, bool),
+    ("dyn_ac_enabled", S_DYN_AC_ENABLED, bool),
+    ("offset_1", S_OFFSET_1, float),
+    ("offset_2", S_OFFSET_2, float),
+    ("surplus_enabled", S_SURPLUS_ENABLED, bool),
+    ("surplus_threshold", S_SURPLUS_SOC_THRESHOLD, int),
+    ("surplus_soc_hyst", S_SURPLUS_SOC_HYST, int),
+    ("surplus_pv_hyst", S_SURPLUS_PV_HYST, int),
+    ("ac_enabled", S_AC_ENABLED, bool),
+    ("ac_soc_target", S_AC_SOC_TARGET, int),
+    ("ac_power_limit", S_AC_POWER_LIMIT, int),
+    ("ac_hysteresis", S_AC_HYSTERESIS, int),
+    ("ac_offset", S_AC_OFFSET, float),
+    ("ac_p", S_AC_P_FACTOR, float),
+    ("ac_i", S_AC_I_FACTOR, float),
+    ("tariff_enabled", S_TARIFF_ENABLED, bool),
+    ("tariff_cheap", S_TARIFF_CHEAP_THRESHOLD, float),
+    ("tariff_exp", S_TARIFF_EXP_THRESHOLD, float),
+    ("tariff_soc", S_TARIFF_SOC_TARGET, int),
+    ("tariff_power", S_TARIFF_POWER, int),
+    ("pv_forecast_enabled", S_PV_FORECAST_ENABLED, bool),
+    ("pv_forecast_threshold", S_PV_FORECAST_THRESHOLD, float),
+    ("surplus_forecast_enabled", S_SURPLUS_FORECAST_ENABLED, bool),
+    ("surplus_forecast_threshold", S_SURPLUS_FORECAST_THRESHOLD, float),
+    ("surplus_lock_enabled", S_SURPLUS_LOCK_ENABLED, bool),
+    ("surplus_lock_factor", S_SURPLUS_LOCK_FACTOR, float),
+    ("zone1_force_enabled", S_ZONE1_FORCE_ENABLED, bool),
+    ("zone1_force_threshold", S_ZONE1_FORCE_THRESHOLD, float),
+    ("zone1_force_min_soc", S_ZONE1_FORCE_MIN_SOC, int),
+    ("night_enabled", S_NIGHT_ENABLED, bool),
+)
+CycleSettings = namedtuple("CycleSettings", [field for field, _, _ in CYCLE_SETTINGS])
 
 # Zusätzliche Regel-Trigger in Registrierungsreihenfolge: (Name, Aktivierungsschlüssel,
 # ODER-verknüpft). "periodic" ist ein Zeitintervall, alle übrigen lauschen auf ihren Sensor.
@@ -250,7 +295,7 @@ class SolakonCoordinator:
             async with self._lock:
                 _LOGGER.info("Solakon: Regelung wird deaktiviert — setze Output 0, Modus Disabled")
                 await self._transition(output=0, wait=False, timer=False)
-                await self._set_discharge(float(self.settings.get(S_DISCHARGE_MAX, 40)))
+                await self._set_discharge(self._setting(S_DISCHARGE_MAX, float))
                 await self._transition(mode=MODE_DISABLED)
                 if self.mode_key != "disabled_regulation_off":
                     self.mode_label_ts = time.time()
@@ -276,8 +321,8 @@ class SolakonCoordinator:
     def _tracker_input(self, name: str) -> tuple:
         """Eingaben eines Triggers: Aktivierungswerte und Sensor bzw. Intervall."""
         keys = dict(TRACKERS)[name]
-        target = self.settings.get(S_PERIODIC_INTERVAL, 10) if name == "periodic" else self._effective(name)
-        return tuple(self.settings.get(k, False) for k in keys), target
+        target = self.settings[S_PERIODIC_INTERVAL] if name == "periodic" else self._effective(name)
+        return tuple(self.settings[k] for k in keys), target
 
     def _untrack(self, name: str) -> None:
         """Trigger `name` abmelden, falls registriert."""
@@ -291,10 +336,10 @@ class SolakonCoordinator:
         Der periodische Trigger läuft im Intervall S_PERIODIC_INTERVAL, mindestens 5 s.
         """
         self._untrack(name)
-        if not any(self.settings.get(k, False) for k in dict(TRACKERS)[name]):
+        if not any(self.settings[k] for k in dict(TRACKERS)[name]):
             return
         if name == "periodic":
-            interval = max(5, int(self.settings.get(S_PERIODIC_INTERVAL, 10)))
+            interval = max(5, self._setting(S_PERIODIC_INTERVAL, int))
             self._tracker_unsubs[name] = async_track_time_interval(
                 self.hass, self._on_periodic, timedelta(seconds=interval)
             )
@@ -356,14 +401,13 @@ class SolakonCoordinator:
 
     async def _wait_for_target(self, target: float, ac_charge_mode: bool = False) -> None:
         """Wartet bis actual_power den Zielwert erreicht, oder max wait_time."""
-        s = self.settings
-        wait_max = float(s.get(S_WAIT_TIME, 3))
+        wait_max = self._setting(S_WAIT_TIME, float)
 
-        if not s.get(S_SELF_ADJUST, False):
+        if not self.settings[S_SELF_ADJUST]:
             await asyncio.sleep(wait_max)
             return
 
-        tolerance = float(s.get(S_SELF_ADJUST_TOL, 2))
+        tolerance = self._setting(S_SELF_ADJUST_TOL, float)
         actual_eid = self.entry.data.get(CONF_ACTUAL_SENSOR, "")
 
         compare_target = -target if ac_charge_mode else target
@@ -394,7 +438,7 @@ class SolakonCoordinator:
     def _update_stddev(self, grid_value: float) -> None:
         """Neuen Grid-Messwert in Ringpuffer aufnehmen und StdDev berechnen."""
         now = time.monotonic()
-        window = int(self.settings.get(S_STDDEV_WINDOW, 60))
+        window = self._setting(S_STDDEV_WINDOW, int)
         cutoff = now - window
 
         self._grid_samples.append((now, grid_value))
@@ -413,7 +457,7 @@ class SolakonCoordinator:
 
         # Getrimmte StdDev: die `trim` größten und kleinsten Samples im Fenster
         # ausschließen, bevor die Streuung berechnet wird.
-        trim = int(self.settings.get(S_STDDEV_TRIM_COUNT, 0))
+        trim = self._setting(S_STDDEV_TRIM_COUNT, int)
         if trim > 0 and n - 2 * trim >= 2:  # Fallback: mind. 2 Kernwerte nötig, sonst ungetrimmt
             core = sorted(values)[trim: n - trim]
             self.grid_stddev = self._stddev_of(core)
@@ -446,24 +490,33 @@ class SolakonCoordinator:
 
     def _update_dynamic_offsets(self) -> None:
         """Dynamische Offsets für alle drei Zonen berechnen."""
-        s = self.settings
         sd = self.grid_stddev
 
         self.dyn_offset_z1 = self._calc_dynamic_offset(
-            sd, int(s[S_DYN_Z1_MIN]), int(s[S_DYN_Z1_MAX]),
-            float(s[S_DYN_Z1_NOISE]), float(s[S_DYN_Z1_FACTOR]),
-            bool(s[S_DYN_Z1_NEGATIVE]),
+            sd, self._setting(S_DYN_Z1_MIN, int), self._setting(S_DYN_Z1_MAX, int),
+            self._setting(S_DYN_Z1_NOISE, float), self._setting(S_DYN_Z1_FACTOR, float),
+            self._setting(S_DYN_Z1_NEGATIVE, bool),
         )
         self.dyn_offset_z2 = self._calc_dynamic_offset(
-            sd, int(s[S_DYN_Z2_MIN]), int(s[S_DYN_Z2_MAX]),
-            float(s[S_DYN_Z2_NOISE]), float(s[S_DYN_Z2_FACTOR]),
-            bool(s[S_DYN_Z2_NEGATIVE]),
+            sd, self._setting(S_DYN_Z2_MIN, int), self._setting(S_DYN_Z2_MAX, int),
+            self._setting(S_DYN_Z2_NOISE, float), self._setting(S_DYN_Z2_FACTOR, float),
+            self._setting(S_DYN_Z2_NEGATIVE, bool),
         )
         self.dyn_offset_ac = self._calc_dynamic_offset(
-            sd, int(s[S_DYN_AC_MIN]), int(s[S_DYN_AC_MAX]),
-            float(s[S_DYN_AC_NOISE]), float(s[S_DYN_AC_FACTOR]),
-            bool(s[S_DYN_AC_NEGATIVE]),
+            sd, self._setting(S_DYN_AC_MIN, int), self._setting(S_DYN_AC_MAX, int),
+            self._setting(S_DYN_AC_NOISE, float), self._setting(S_DYN_AC_FACTOR, float),
+            self._setting(S_DYN_AC_NEGATIVE, bool),
         )
+
+    # ── Settings ─────────────────────────────────────────────────────────────
+
+    def _setting(self, key: str, cast: Callable[[Any], Any]) -> Any:
+        """Setting typisiert lesen; `self.settings` ist stets mit SETTINGS_DEFAULTS gefüllt."""
+        return cast(self.settings[key])
+
+    def _cycle_settings(self) -> CycleSettings:
+        """Schnappschuss aller CYCLE_SETTINGS für einen Regelzyklus."""
+        return CycleSettings(*(self._setting(key, cast) for _, key, cast in CYCLE_SETTINGS))
 
     # ── State-Helpers ────────────────────────────────────────────────────────
 
@@ -549,7 +602,7 @@ class SolakonCoordinator:
         if name == "zone1_force" and dt_util.now().hour < 12:
             name = "pv_forecast"
         local, global_key = SENSOR_SOURCES[name]
-        return str(self.settings.get(local, "")) or self._global_sensor(global_key)
+        return str(self.settings[local]) or self._global_sensor(global_key)
 
     def _sensor_usable(self, soft_errors: list[str], enabled: bool, sensor: str, err_prefix: str) -> bool:
         """True, wenn das Feature aktiviert und sein Sensor gesetzt und verfügbar ist.
@@ -602,7 +655,7 @@ class SolakonCoordinator:
     @property
     def _regulation_on(self) -> bool:
         """Regelung aktiviert; Voraussetzung für jeden Schreibzugriff."""
-        return bool(self.settings.get(S_REGULATION_ENABLED, False))
+        return self._setting(S_REGULATION_ENABLED, bool)
 
     async def _set_number(
         self, entity_id: str, value: float, only_if_changed: bool = False,
@@ -675,7 +728,7 @@ class SolakonCoordinator:
         if not self._entity_ok(actual_eid):
             return  # kein Sensor zur Verifikation verfügbar — nichts zu prüfen
 
-        tolerance = float(self.settings.get(S_SELF_ADJUST_TOL, 2))
+        tolerance = self._setting(S_SELF_ADJUST_TOL, float)
 
         def _confirmable() -> bool:
             """True nur wenn der Sensor seit unserem letzten Schreibbefehl neu
@@ -872,7 +925,6 @@ class SolakonCoordinator:
 
     async def _run_regulation_cycle(self) -> None:
         cfg = self.entry.data
-        s = self.settings
 
         # ── 0. Regelung aktiv? ───────────────────────────────────────────────
         if not self._regulation_on:
@@ -910,50 +962,20 @@ class SolakonCoordinator:
             self._update_stddev(grid)
         self.grid_stddev = leader.grid_stddev
         self.grid_stddev_raw = leader.grid_stddev_raw
-        if any(s.get(k, False) for k in (S_DYN_Z1_ENABLED, S_DYN_Z2_ENABLED, S_DYN_AC_ENABLED)):
+        if any(self.settings[k] for k in (S_DYN_Z1_ENABLED, S_DYN_Z2_ENABLED, S_DYN_AC_ENABLED)):
             self._update_dynamic_offsets()
 
         # ── 2. Settings auslesen ─────────────────────────────────────────────
-        zone1_limit = int(s[S_ZONE1_LIMIT])
-        zone3_limit = int(s[S_ZONE3_LIMIT])
-        hard_limit_z0 = int(s[S_HARD_LIMIT_Z0])
-        hard_limit_z1 = int(s[S_HARD_LIMIT_Z1])
-        await self._sync_export_limit(max(hard_limit_z0, hard_limit_z1))
-        tolerance = int(s[S_TOLERANCE])
-        wait_time = int(s[S_WAIT_TIME])
-        p_factor = float(s[S_P_FACTOR])
-        i_factor = float(s[S_I_FACTOR])
-        pv_reserve = int(s[S_PV_RESERVE])
-        discharge_max = int(s[S_DISCHARGE_MAX])
+        await self._sync_export_limit(max(self._setting(S_HARD_LIMIT_Z0, int), self._setting(S_HARD_LIMIT_Z1, int)))
+        cs = self._cycle_settings()
 
         # Offsets: pro Zone dynamisch oder statisch
-        dyn_z1_active = bool(s.get(S_DYN_Z1_ENABLED, False))
-        dyn_z2_active = bool(s.get(S_DYN_Z2_ENABLED, False))
-        dyn_ac_active = bool(s.get(S_DYN_AC_ENABLED, False))
-        offset_1 = self.dyn_offset_z1 if dyn_z1_active else float(s[S_OFFSET_1])
-        offset_2 = self.dyn_offset_z2 if dyn_z2_active else float(s[S_OFFSET_2])
-
-        # Überschuss-Parameter
-        surplus_enabled = bool(s[S_SURPLUS_ENABLED])
-        surplus_threshold = int(s[S_SURPLUS_SOC_THRESHOLD])
-        surplus_soc_hyst = int(s[S_SURPLUS_SOC_HYST])
-        surplus_pv_hyst = int(s[S_SURPLUS_PV_HYST])
-
-        # AC-Lade-Parameter
-        ac_enabled = bool(s[S_AC_ENABLED])
-        ac_soc_target = int(s[S_AC_SOC_TARGET])
-        ac_power_limit = int(s[S_AC_POWER_LIMIT])
-        ac_hysteresis = int(s[S_AC_HYSTERESIS])
-        ac_offset_raw = float(s[S_AC_OFFSET])
-        ac_offset = self.dyn_offset_ac if dyn_ac_active else ac_offset_raw
-        ac_p = float(s[S_AC_P_FACTOR])
-        ac_i = float(s[S_AC_I_FACTOR])
+        ac_offset = self.dyn_offset_ac if cs.dyn_ac_enabled else cs.ac_offset
 
         # Tarif-Parameter
-        tariff_enabled = bool(s[S_TARIFF_ENABLED])
         tariff_sensor = self._effective("tariff")
-        tariff_cheap = float(s[S_TARIFF_CHEAP_THRESHOLD])
-        tariff_exp = float(s[S_TARIFF_EXP_THRESHOLD])
+        tariff_cheap = cs.tariff_cheap
+        tariff_exp = cs.tariff_exp
 
         cheap_entity = self._effective("tariff_cheap")
         if cheap_entity:
@@ -974,8 +996,8 @@ class SolakonCoordinator:
         if self._dist_warning:
             self._add_soft_error(soft_errors, self._dist_warning)
         # Panel-Limits gegen die Geraetegrenze gedeckelt.
-        effective_hard    = int(min(int(allocated_power), hard_limit_z0, DEVICE_MAX_POWER)) if allocated_power is not None else int(min(hard_limit_z0, DEVICE_MAX_POWER))
-        effective_hard_z1 = int(min(int(allocated_power), hard_limit_z1, DEVICE_MAX_POWER)) if allocated_power is not None else int(min(hard_limit_z1, DEVICE_MAX_POWER))
+        effective_hard    = int(min(int(allocated_power), cs.hard_limit_z0, DEVICE_MAX_POWER)) if allocated_power is not None else int(min(cs.hard_limit_z0, DEVICE_MAX_POWER))
+        effective_hard_z1 = int(min(int(allocated_power), cs.hard_limit_z1, DEVICE_MAX_POWER)) if allocated_power is not None else int(min(cs.hard_limit_z1, DEVICE_MAX_POWER))
 
         # Verwertbarer PV-Überschuss: Luft zwischen dem aktuellen Output und dem
         # Minimum aus geltendem Hard-Limit und aktueller PV-Leistung, geklemmt auf ≥0.
@@ -985,12 +1007,6 @@ class SolakonCoordinator:
             effective_hard if self.surplus_active else effective_hard_z1, solar
         ) - actual)
 
-        pv_forecast_enabled = bool(s.get(S_PV_FORECAST_ENABLED, False))
-        pv_forecast_threshold = float(s.get(S_PV_FORECAST_THRESHOLD, 0.0))
-
-        surplus_forecast_enabled   = bool(s.get(S_SURPLUS_FORECAST_ENABLED, False))
-        surplus_forecast_threshold = float(s.get(S_SURPLUS_FORECAST_THRESHOLD, 0.0))
-
         # Gemergtes Feld: beide Features lesen denselben "PV-Ertrag heute"-Sensor
         # (lokaler Override oder globaler Verteilungs-Tab-Wert).
         pv_forecast_today_sensor = self._effective("pv_forecast")
@@ -998,62 +1014,52 @@ class SolakonCoordinator:
         # Forcierung nur solange die PV das Ausgangslimit übersteigt und der
         # SOC über der Zone-3-Schutzgrenze liegt.
         self.forecast_surplus_forced = self._sensor_usable(
-            soft_errors, surplus_forecast_enabled, pv_forecast_today_sensor, "err_surplus_forecast"
+            soft_errors, cs.surplus_forecast_enabled, pv_forecast_today_sensor, "err_surplus_forecast"
         ) and (
-            self._flt_kwh_normalized(pv_forecast_today_sensor) >= surplus_forecast_threshold
-            and solar > hard_limit_z0
-            and soc > zone3_limit
+            self._flt_kwh_normalized(pv_forecast_today_sensor) >= cs.surplus_forecast_threshold
+            and solar > cs.hard_limit_z0
+            and soc > cs.zone3_limit
         )
 
-        surplus_lock_enabled = bool(s.get(S_SURPLUS_LOCK_ENABLED, False))
-        surplus_lock_sensor  = self._effective("surplus_lock")
-        surplus_lock_factor  = float(s.get(S_SURPLUS_LOCK_FACTOR, 1.5))
+        surplus_lock_sensor = self._effective("surplus_lock")
 
         # Sperrt nur den PV-Austritt aus Zone 0, solange die Vorhersage über
         # dem Ausgabelimit liegt. Der SOC-Austritt bleibt ungesperrt.
         self.forecast_exit_lock = self._sensor_usable(
-            soft_errors, surplus_lock_enabled, surplus_lock_sensor, "err_exit_lock"
+            soft_errors, cs.surplus_lock_enabled, surplus_lock_sensor, "err_exit_lock"
         ) and (
-            self._flt_kilo_normalized(surplus_lock_sensor) >= surplus_lock_factor * hard_limit_z0
-            and soc > zone3_limit
+            self._flt_kilo_normalized(surplus_lock_sensor) >= cs.surplus_lock_factor * cs.hard_limit_z0
+            and soc > cs.zone3_limit
         )
 
         self.forecast_tariff_suppressed = self._sensor_usable(
-            soft_errors, pv_forecast_enabled, pv_forecast_today_sensor, "err_pv_forecast"
-        ) and self._flt_kwh_normalized(pv_forecast_today_sensor) >= pv_forecast_threshold
+            soft_errors, cs.pv_forecast_enabled, pv_forecast_today_sensor, "err_pv_forecast"
+        ) and self._flt_kwh_normalized(pv_forecast_today_sensor) >= cs.pv_forecast_threshold
 
         # Zone-1-Nacht-Forcierung: erlaubt Entladung unter das normale
         # Zone-1-Limit, wenn der morgige PV-Ertrag die Nacht ohnehin wieder auffüllt.
-        zone1_force_enabled = bool(s.get(S_ZONE1_FORCE_ENABLED, False))
-        zone1_force_threshold = float(s.get(S_ZONE1_FORCE_THRESHOLD, 0.0))
-        zone1_force_min_soc = int(s.get(S_ZONE1_FORCE_MIN_SOC, 0))
         zone1_force_sensor = self._effective("zone1_force")
 
         self.zone1_forced = self._sensor_usable(
-            soft_errors, zone1_force_enabled, zone1_force_sensor, "err_zone1_force"
+            soft_errors, cs.zone1_force_enabled, zone1_force_sensor, "err_zone1_force"
         ) and (
-            self._flt_kwh_normalized(zone1_force_sensor) >= zone1_force_threshold
-            and solar < pv_reserve         # "gerade dunkel", gleiche Bedingung wie is_night
-            and soc > zone1_force_min_soc  # eigener Floor, unabhängig von zone3_limit (Exit-Schwelle)
+            self._flt_kwh_normalized(zone1_force_sensor) >= cs.zone1_force_threshold
+            and solar < cs.pv_reserve         # "gerade dunkel", gleiche Bedingung wie is_night
+            and soc > cs.zone1_force_min_soc  # eigener Floor, unabhängig von zone3_limit (Exit-Schwelle)
         )
 
-        effective_tariff_enabled = tariff_enabled and bool(tariff_sensor) and not self.forecast_tariff_suppressed
-        tariff_soc = int(s[S_TARIFF_SOC_TARGET])
-        tariff_power = int(s[S_TARIFF_POWER])
-
-        # Nacht-Parameter
-        night_enabled = bool(s[S_NIGHT_ENABLED])
+        effective_tariff_enabled = cs.tariff_enabled and bool(tariff_sensor) and not self.forecast_tariff_suppressed
 
         # ── 3. Validierung ───────────────────────────────────────────────────
-        if zone1_limit <= zone3_limit:
+        if cs.zone1_limit <= cs.zone3_limit:
             self._end_cycle(blocked=True, error_key="err_soc_zone1_zone3")
             return
 
-        if surplus_enabled and surplus_threshold <= zone1_limit:
+        if cs.surplus_enabled and cs.surplus_threshold <= cs.zone1_limit:
             self._end_cycle(blocked=True, error_key="err_soc_surplus_zone1")
             return
 
-        if zone1_force_enabled and not (zone3_limit < zone1_force_min_soc < zone1_limit):
+        if cs.zone1_force_enabled and not (cs.zone3_limit < cs.zone1_force_min_soc < cs.zone1_limit):
             self._end_cycle(blocked=True, error_key="err_soc_zone1_force")
             return
 
@@ -1069,7 +1075,7 @@ class SolakonCoordinator:
         # soft_error in dieselbe Meldungskette ein.
         tariff_price = 0.0
         tariff_price_valid = False
-        if tariff_enabled and tariff_sensor:
+        if cs.tariff_enabled and tariff_sensor:
             # float() statt state_as_number: "on" bleibt als Preis ungültig
             raw = self._valid_state(tariff_sensor)
             if raw:
@@ -1079,7 +1085,7 @@ class SolakonCoordinator:
                 except (ValueError, TypeError):
                     pass
 
-        if self._sensor_usable(soft_errors, tariff_enabled, tariff_sensor, "err_tariff") and tariff_price_valid:
+        if self._sensor_usable(soft_errors, cs.tariff_enabled, tariff_sensor, "err_tariff") and tariff_price_valid:
             unit_warning = self._tariff_unit_warning(tariff_sensor, tariff_price, tariff_cheap)
             if unit_warning:
                 self._add_soft_error(soft_errors, unit_warning)
@@ -1088,24 +1094,22 @@ class SolakonCoordinator:
         self.last_error = " • ".join(soft_errors)
 
         # ── 4. Abgeleitete Variablen ─────────────────────────────────────────
-        target_offset = offset_1 if self.cycle_active else offset_2
-
         prev_actual = self._prev_actual
         self._prev_actual = actual
 
         total_actual = self._pool_sum(self._discharge_pool(), actual, CONF_ACTUAL_SENSOR,
                                       SolakonCoordinator._flt_power)
 
-        if surplus_enabled:
+        if cs.surplus_enabled:
             if solar > 0:
                 self._solar_zero_entry_armed = True
 
             # Lastanteil dieser Instanz für Ein- und Austritt: (Σactual + grid) × error_share.
             consumption_share = (total_actual + grid) * error_share
-            pv_hyst_share = surplus_pv_hyst * error_share
+            pv_hyst_share = cs.surplus_pv_hyst * error_share
 
             normal_entry = (
-                soc >= surplus_threshold
+                soc >= cs.surplus_threshold
                 and (
                     solar > (consumption_share + pv_hyst_share)
                     or (
@@ -1122,7 +1126,7 @@ class SolakonCoordinator:
             # Austritt: bei aktiver Forcierung gesperrt (SOC- und Verbrauchsterm ausgeklammert),
             # sonst normal über SOC- oder Verbrauchsschwelle. Der Exit-Lock sperrt nur den
             # Verbrauchsterm — der SOC-Austritt greift immer.
-            soc_exit = soc < (surplus_threshold - surplus_soc_hyst)
+            soc_exit = soc < (cs.surplus_threshold - cs.surplus_soc_hyst)
             power_exit = solar <= (consumption_share - pv_hyst_share) and not self.forecast_exit_lock
             surplus_exit = not self.forecast_surplus_forced and (soc_exit or power_exit)
             if self.surplus_active:
@@ -1134,20 +1138,20 @@ class SolakonCoordinator:
         else:
             new_surplus = False
 
-        is_night = night_enabled and solar < pv_reserve and not self.cycle_active
+        is_night = cs.night_enabled and solar < cs.pv_reserve and not self.cycle_active
         self.is_night = is_night
 
         # ── 5. Falls / Zonenwechsel ──────────────────────────────────────────
         fall_executed = await self._execute_falls(
             soc=soc, grid=grid, actual=actual, mode=mode,
-            zone1_limit=zone1_limit, zone3_limit=zone3_limit,
-            surplus_enabled=surplus_enabled, new_surplus=new_surplus,
-            ac_enabled=ac_enabled, ac_soc_target=ac_soc_target,
-            ac_hysteresis=ac_hysteresis, ac_offset=ac_offset,
+            zone1_limit=cs.zone1_limit, zone3_limit=cs.zone3_limit,
+            surplus_enabled=cs.surplus_enabled, new_surplus=new_surplus,
+            ac_enabled=cs.ac_enabled, ac_soc_target=cs.ac_soc_target,
+            ac_hysteresis=cs.ac_hysteresis, ac_offset=ac_offset,
             tariff_enabled=effective_tariff_enabled, tariff_price=tariff_price,
             tariff_price_valid=tariff_price_valid,
             tariff_cheap=tariff_cheap, tariff_exp=tariff_exp,
-            tariff_soc=tariff_soc, tariff_power=tariff_power,
+            tariff_soc=cs.tariff_soc, tariff_power=cs.tariff_power,
             is_night=is_night, total_actual=total_actual,
             zone1_forced=self.zone1_forced,
         )
@@ -1167,27 +1171,40 @@ class SolakonCoordinator:
         )
 
         # ── 6. Entladestrom mit Regelzustand abgleichen (vor dem PI-Gate) ────
-        await self._set_discharge(self._required_discharge(discharge_max))
+        await self._set_discharge(self._required_discharge(cs.discharge_max))
+
+        # ── 7. PI-Gate ───────────────────────────────────────────────────────
+        mode = self._str(cfg[CONF_MODE_SELECT])
+        if mode in (MODE_DISCHARGE, MODE_AC_CHARGE):
+            await self._run_pi_phase(cs, soc, mode, timer_val, error_share, effective_hard,
+                                     effective_hard_z1, ac_offset, soft_errors)
+
+        # ── 10. Display + Flag-Persistenz ────────────────────────────────────
+        self._end_cycle(soft_errors=soft_errors, display=(soc, cs.zone1_limit, cs.zone3_limit, mode),
+                        prev_flags=prev_flags)
+
+    async def _run_pi_phase(
+        self, cs: CycleSettings, soc: float, mode: str, timer_val: float, error_share: float,
+        effective_hard: int, effective_hard_z1: int, ac_offset: float, soft_errors: list[str],
+    ) -> None:
+        """PI-Phase eines Zyklus in Modus '1' oder '3': Timeout-Reset, dann Zone-0-Festwert,
+        AC-PI, Tarif-Festwert oder Standard-PI mit Stillstandsprüfung."""
+        cfg = self.entry.data
 
         # ── 6b. Frische Werte nach Falls ─────────────────────────────────────
         grid = self._flt_power(cfg[CONF_GRID_SENSOR])
         solar = self._flt_power(cfg[CONF_SOLAR_SENSOR])
-        mode = self._str(cfg[CONF_MODE_SELECT])
 
         if mode == MODE_AC_CHARGE:
-            dynamic_max = int(min(ac_power_limit, DEVICE_MAX_POWER))
+            dynamic_max = int(min(cs.ac_power_limit, DEVICE_MAX_POWER))
         elif self.cycle_active:
             dynamic_max = effective_hard_z1
         else:
-            dynamic_max = min(effective_hard_z1, max(0, solar - pv_reserve))
+            dynamic_max = min(effective_hard_z1, max(0, solar - cs.pv_reserve))
 
+        offset_1 = self.dyn_offset_z1 if cs.dyn_z1_enabled else cs.offset_1
+        offset_2 = self.dyn_offset_z2 if cs.dyn_z2_enabled else cs.offset_2
         target_offset = offset_1 if self.cycle_active else offset_2
-
-        # ── 7. PI-Gate ───────────────────────────────────────────────────────
-        if mode not in (MODE_DISCHARGE, MODE_AC_CHARGE):
-            self._end_cycle(soft_errors=soft_errors, display=(soc, zone1_limit, zone3_limit, mode),
-                            prev_flags=prev_flags)
-            return
 
         # ── 9. Timeout-Reset ─────────────────────────────────────────────────
         # Entfällt wenn ein Fall in diesem Zyklus bereits getoggelt hat
@@ -1211,19 +1228,19 @@ class SolakonCoordinator:
             await self._set_fixed_output(effective_hard, current_power, "act_zone0_output")
 
         elif self.ac_charge_active:
-            if abs(grid - ac_offset) > tolerance:
+            if abs(grid - ac_offset) > cs.tolerance:
                 await self._pi_step(
                     grid,
                     self._pool_sum(self._ac_pool(), current_power, CONF_ACTIVE_POWER,
                                    SolakonCoordinator._flt) * ac_error_share,
-                    ac_offset, ac_power_limit, ac_p, ac_i, ac_error_share, current_power,
+                    ac_offset, cs.ac_power_limit, cs.ac_p, cs.ac_i, ac_error_share, current_power,
                     "act_ac_pi", ac_charge_mode=True,
                 )
             else:
                 self._decay_integral()
 
         elif self.tariff_charge_active:
-            await self._set_fixed_output(tariff_power, current_power, "act_tariff_power", ac_charge_mode=True)
+            await self._set_fixed_output(cs.tariff_power, current_power, "act_tariff_power", ac_charge_mode=True)
 
         else:
             grid_error = grid - target_offset
@@ -1231,12 +1248,12 @@ class SolakonCoordinator:
             # Sättigung nach oben: der PI könnte hochregeln, darf aber nicht.
             saturated_high = at_max_limit and not above_dynamic_max and grid_error > 0
 
-            if grid_error_abs > tolerance and not saturated_high and not (at_min_limit and grid_error < 0):
+            if grid_error_abs > cs.tolerance and not saturated_high and not (at_min_limit and grid_error < 0):
                 await self._pi_step(
                     grid,
                     self._pool_sum(self._discharge_pool(), current_power, CONF_ACTIVE_POWER,
                                    SolakonCoordinator._flt) * error_share,
-                    target_offset, dynamic_max, p_factor, i_factor, error_share, current_power,
+                    target_offset, dynamic_max, cs.p_factor, cs.i_factor, error_share, current_power,
                     "act_pi",
                 )
             else:
@@ -1245,10 +1262,6 @@ class SolakonCoordinator:
                     await self._check_output_stall(dynamic_max)
                 else:
                     self._reset_output_stall_state()
-
-        # ── 10. Display + Flag-Persistenz ────────────────────────────────────
-        self._end_cycle(soft_errors=soft_errors, display=(soc, zone1_limit, zone3_limit, mode),
-                        prev_flags=prev_flags)
 
     def _add_soft_error(self, soft_errors: list[str], text: str) -> None:
         """Meldung an die Fehlerkette hängen und `last_error` neu verketten."""
@@ -1484,7 +1497,7 @@ class SolakonCoordinator:
                 soc >= v["ac_soc_target"]
                 or (
                     grid >= (v["ac_offset"] + v["ac_hysteresis"])
-                    and abs(actual) <= float(self.settings.get(S_SELF_ADJUST_TOL, 2))
+                    and abs(actual) <= self._setting(S_SELF_ADJUST_TOL, float)
                 )
             )
         ):
@@ -1648,7 +1661,7 @@ class SolakonCoordinator:
         if n == 0:
             return {}
         dist = self._dist_cfg()
-        mode = dist.get("distribution_mode", "equal")
+        mode = dist["distribution_mode"]
         self.dist_mode_effective = mode
 
         if n <= 1:
@@ -1689,7 +1702,7 @@ class SolakonCoordinator:
 
         # SOC-Gewichte: nutzbare kWh (mode "capacity") bzw. nutzbare SOC-% (mode "soc")
         soc_weights = {
-            eid: max(0.0, (socs[eid] - float(c.settings.get(S_ZONE3_LIMIT, 20))) / 100.0 * caps[eid])
+            eid: max(0.0, (socs[eid] - c._setting(S_ZONE3_LIMIT, float)) / 100.0 * caps[eid])
             for eid, c in active.items()
         }
         total_soc = sum(soc_weights.values())
@@ -1729,7 +1742,7 @@ class SolakonCoordinator:
             result = {eid: (1.0 / len(zone0) if eid in zone0 else 0.0) for eid in socs}
         else:
             dist = self._dist_cfg()
-            divergence = float(dist.get("soc_switch_divergence", 5))
+            divergence = float(dist["soc_switch_divergence"])
 
             if zone0:
                 z0_leader = next(iter(zone0))
@@ -1785,7 +1798,7 @@ class SolakonCoordinator:
 
         shares = self._all_shares(active, own_soc)
         dist = self._dist_cfg()
-        global_max = float(dist.get("global_max_power", 800))
+        global_max = float(dist["global_max_power"])
         allocations = self._waterfill_allocate(active, shares, global_max)
         return shares.get(self.entry.entry_id, 0.0), allocations.get(self.entry.entry_id)
 
@@ -1805,9 +1818,9 @@ class SolakonCoordinator:
         caps: dict[str, float] = {}
         for eid, c in active.items():
             if c.surplus_active:
-                caps[eid] = float(c.settings[S_HARD_LIMIT_Z0])
+                caps[eid] = c._setting(S_HARD_LIMIT_Z0, float)
             else:
-                caps[eid] = float(c.settings[S_HARD_LIMIT_Z1])
+                caps[eid] = c._setting(S_HARD_LIMIT_Z1, float)
 
         remaining_ids = set(shares.keys())
         allocations: dict[str, float] = {}
