@@ -1,6 +1,8 @@
 """Sensor platform — Betriebszustand, zone, mode label, last action, StdDev."""
 from __future__ import annotations
 
+from typing import Any, Callable
+
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory, UnitOfPower
@@ -34,12 +36,17 @@ async def async_setup_entry(
     add([
         OperatingStateSensor(coord),
         ZoneSensor(coord),
-        ModeTextSensor(coord),
+        CoordinatorSensor(coord, "mode_label", lambda c: c.mode_key,
+                          icon="mdi:information-outline", **_enum(MODE_KEYS), **DIAG),
         LastActionSensor(coord),
         GridStdDevSensor(coord),
-        ActiveFallSensor(coord),
-        IntegralSensor(coord),
-        SurplusPowerSensor(coord),
+        CoordinatorSensor(coord, "active_fall", lambda c: c.active_fall or None,
+                          icon="mdi:state-machine", **_enum(FALL_KEYS), **DIAG),
+        CoordinatorSensor(coord, "integral", lambda c: round(c.integral, 1),
+                          icon="mdi:chart-bell-curve", suggested_display_precision=1, **POWER, **DIAG),
+        # Für Automationen gedacht (z. B. Zusatzverbraucher schalten), daher keine Diagnose-Entität.
+        CoordinatorSensor(coord, "surplus_power", lambda c: round(c.surplus_power, 0),
+                          icon="mdi:transmission-tower-export", suggested_display_precision=0, **POWER),
     ])
 
 
@@ -56,24 +63,47 @@ _STATE_ICONS = {
     "pv_direct":        "mdi:solar-power-variant",
 }
 
+# Gemeinsame Entity-Attribute der Sensortabelle.
+DIAG = {"entity_category": EntityCategory.DIAGNOSTIC}
+POWER = {"native_unit_of_measurement": UnitOfPower.WATT, "state_class": SensorStateClass.MEASUREMENT}
 
-class OperatingStateSensor(SolakonEntity, SensorEntity):
+
+def _enum(options: list[str]) -> dict:
+    """Attribute eines ENUM-Sensors mit den erlaubten Zuständen `options`."""
+    return {"device_class": SensorDeviceClass.ENUM, "options": options}
+
+
+class CoordinatorSensor(SolakonEntity, SensorEntity):
+    """Sensor mit Wert `value_fn(coordinator)`.
+
+    `key` ist Suffix der unique_id und translation_key; `attrs` setzt `_attr_<name>`.
+    """
+
+    def __init__(
+        self, coord: SolakonCoordinator, key: str,
+        value_fn: Callable[[SolakonCoordinator], Any], **attrs: Any,
+    ) -> None:
+        super().__init__(coord, key)
+        self._attr_translation_key = key
+        self._value_fn = value_fn
+        for name, value in attrs.items():
+            setattr(self, f"_attr_{name}", value)
+
+    @property
+    def native_value(self) -> Any:
+        return self._value_fn(self._coordinator)
+
+
+class OperatingStateSensor(CoordinatorSensor):
     """Was die Instanz gerade tut — ein Zustand aus OPERATING_STATES.
 
-    Abgegrenzt zu `ActiveFallSensor`: der haelt den zuletzt ausgefuehrten
+    Abgegrenzt zu `active_fall`: der haelt den zuletzt ausgefuehrten
     Uebergang, dieser den aktuell geltenden Zustand.
     """
 
-    _attr_device_class = SensorDeviceClass.ENUM
-    _attr_options = OPERATING_STATES
-    _attr_translation_key = "operating_state"
-
     def __init__(self, coord: SolakonCoordinator) -> None:
-        super().__init__(coord, "operating_state")
-
-    @property
-    def native_value(self) -> str | None:
-        return self._coordinator.operating_state or None
+        super().__init__(coord, "operating_state", lambda c: c.operating_state or None,
+                         **_enum(OPERATING_STATES))
 
     @property
     def icon(self) -> str:
@@ -86,17 +116,10 @@ class OperatingStateSensor(SolakonEntity, SensorEntity):
         return attrs
 
 
-class ZoneSensor(SolakonEntity, SensorEntity):
-    _attr_translation_key = "zone"
-    _attr_state_class = SensorStateClass.MEASUREMENT
-    _attr_entity_category = EntityCategory.DIAGNOSTIC
-
+class ZoneSensor(CoordinatorSensor):
     def __init__(self, coord: SolakonCoordinator) -> None:
-        super().__init__(coord, "zone")
-
-    @property
-    def native_value(self) -> int:
-        return self._coordinator.current_zone
+        super().__init__(coord, "zone", lambda c: c.current_zone,
+                         state_class=SensorStateClass.MEASUREMENT, **DIAG)
 
     @property
     def icon(self) -> str:
@@ -105,51 +128,11 @@ class ZoneSensor(SolakonEntity, SensorEntity):
     @property
     def extra_state_attributes(self) -> dict:
         return self._coordinator.snapshot_view(ZONE_ATTRS)
-class ActiveFallSensor(SolakonEntity, SensorEntity):
-    """Zuletzt ausgefuehrter Fall des Regelzyklus."""
 
-    _attr_device_class = SensorDeviceClass.ENUM
-    _attr_options = FALL_KEYS
-    _attr_translation_key = "active_fall"
-    _attr_icon = "mdi:state-machine"
-    _attr_entity_category = EntityCategory.DIAGNOSTIC
 
+class LastActionSensor(CoordinatorSensor):
     def __init__(self, coord: SolakonCoordinator) -> None:
-        super().__init__(coord, "active_fall")
-
-    @property
-    def native_value(self) -> str | None:
-        return self._coordinator.active_fall or None
-
-
-class ModeTextSensor(SolakonEntity, SensorEntity):
-    """Betriebsmodus des Wechselrichters als Schluessel aus MODE_KEYS."""
-
-    _attr_device_class = SensorDeviceClass.ENUM
-    _attr_options = MODE_KEYS
-    _attr_translation_key = "mode_label"
-    _attr_icon = "mdi:information-outline"
-    _attr_entity_category = EntityCategory.DIAGNOSTIC
-
-    def __init__(self, coord: SolakonCoordinator) -> None:
-        super().__init__(coord, "mode_label")
-
-    @property
-    def native_value(self) -> str:
-        return self._coordinator.mode_key
-
-
-class LastActionSensor(SolakonEntity, SensorEntity):
-    _attr_translation_key = "last_action"
-    _attr_icon = "mdi:history"
-    _attr_entity_category = EntityCategory.DIAGNOSTIC
-
-    def __init__(self, coord: SolakonCoordinator) -> None:
-        super().__init__(coord, "last_action")
-
-    @property
-    def native_value(self) -> str:
-        return self._coordinator.last_action
+        super().__init__(coord, "last_action", lambda c: c.last_action, icon="mdi:history", **DIAG)
 
     @property
     def extra_state_attributes(self) -> dict:
@@ -159,21 +142,13 @@ class LastActionSensor(SolakonEntity, SensorEntity):
         }
 
 
-class GridStdDevSensor(SolakonEntity, SensorEntity):
+class GridStdDevSensor(CoordinatorSensor):
     """Netz-Standardabweichung — intern berechnet aus Grid-Messwert-Stream."""
-    _attr_translation_key = "grid_stddev"
-    _attr_icon = "mdi:chart-bell-curve-cumulative"
-    _attr_state_class = SensorStateClass.MEASUREMENT
-    _attr_native_unit_of_measurement = UnitOfPower.WATT
-    _attr_entity_category = EntityCategory.DIAGNOSTIC
-    _attr_suggested_display_precision = 1
 
     def __init__(self, coord: SolakonCoordinator) -> None:
-        super().__init__(coord, "grid_stddev")
-
-    @property
-    def native_value(self) -> float:
-        return self._coordinator.grid_stddev
+        super().__init__(coord, "grid_stddev", lambda c: c.grid_stddev,
+                         icon="mdi:chart-bell-curve-cumulative", suggested_display_precision=1,
+                         **POWER, **DIAG)
 
     @property
     def extra_state_attributes(self) -> dict:
@@ -191,37 +166,3 @@ class GridStdDevSensor(SolakonEntity, SensorEntity):
             attrs["dyn_offset_z2"] = self._coordinator.dyn_offset_z2
             attrs["dyn_offset_ac"] = self._coordinator.dyn_offset_ac
         return attrs
-
-
-class IntegralSensor(SolakonEntity, SensorEntity):
-    _attr_translation_key = "integral"
-    _attr_icon = "mdi:chart-bell-curve"
-    _attr_native_unit_of_measurement = UnitOfPower.WATT
-    _attr_state_class = SensorStateClass.MEASUREMENT
-    _attr_suggested_display_precision = 1
-    _attr_entity_category = EntityCategory.DIAGNOSTIC
-
-    def __init__(self, coord: SolakonCoordinator) -> None:
-        super().__init__(coord, "integral")
-
-    @property
-    def native_value(self) -> float:
-        return round(self._coordinator.integral, 1)
-
-
-class SurplusPowerSensor(SolakonEntity, SensorEntity):
-    """Verwertbarer PV-Überschuss — Luft zwischen aktuellem Output und dem
-    Minimum aus Hard-Limit und aktueller PV-Leistung. Für Automationen gedacht
-    (z. B. Zusatzverbraucher schalten), daher bewusst keine Diagnose-Entität."""
-    _attr_translation_key = "surplus_power"
-    _attr_icon = "mdi:transmission-tower-export"
-    _attr_native_unit_of_measurement = UnitOfPower.WATT
-    _attr_state_class = SensorStateClass.MEASUREMENT
-    _attr_suggested_display_precision = 0
-
-    def __init__(self, coord: SolakonCoordinator) -> None:
-        super().__init__(coord, "surplus_power")
-
-    @property
-    def native_value(self) -> float:
-        return round(self._coordinator.surplus_power, 0)
