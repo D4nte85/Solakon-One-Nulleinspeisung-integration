@@ -1667,12 +1667,56 @@ class SolakonCoordinator:
         Leader-Instanz aus (deaktiviert/entfernt), übernimmt automatisch die
         nächste, ohne Übergabelogik. Einzelinstanz: Leader ist immer sich selbst.
         """
-        group = self._group_coords()
-        active = {
-            eid: c for eid, c in group.items()
-            if c._regulation_on
-        } or group
+        active = self._pool(lambda c: c._regulation_on) or self._group_coords()
         return active[min(active)]
+
+    def _pool(self, pred: Callable[["SolakonCoordinator"], bool]) -> dict[str, "SolakonCoordinator"]:
+        """Instanzen der Netzgruppe, für die `pred` gilt, in Reihenfolge der Gruppe."""
+        return {eid: c for eid, c in self._group_coords().items() if pred(c)}
+
+    def _discharge_pool(self) -> dict[str, "SolakonCoordinator"]:
+        """Regelnde Instanzen der Netzgruppe in Modus '1'."""
+        return self._pool(
+            lambda c: c._regulation_on
+            and c._str(c.entry.data.get(CONF_MODE_SELECT, "")) == MODE_DISCHARGE
+        )
+
+    def _ac_pool(self) -> dict[str, "SolakonCoordinator"]:
+        """Regelnde Instanzen der Netzgruppe mit aktivem AC-Laden."""
+        return self._pool(lambda c: c._regulation_on and c.ac_charge_active)
+
+    def _pool_sum(
+        self, pool: dict[str, "SolakonCoordinator"], own_value: float, conf_key: str,
+        reader: Callable[["SolakonCoordinator", str], float],
+    ) -> float:
+        """Summe über `pool`: eigener Beitrag `own_value`, Fremdinstanzen über
+        `reader(instanz, entity_id)` der Entität `conf_key`. Höchstens eine Instanz: `own_value`."""
+        if len(pool) <= 1:
+            return own_value
+        return sum(
+            own_value if c is self else reader(c, c.entry.data.get(conf_key, ""))
+            for c in pool.values()
+        )
+
+    def _pool_socs(self, active: dict[str, "SolakonCoordinator"], own_soc: float) -> dict[str, float] | None:
+        """SOC je Instanz in `active`; eigener Wert `own_soc`, Fremdinstanzen live gelesen.
+        `None`, sobald ein Fremd-SOC nicht verfügbar ist."""
+        socs: dict[str, float] = {}
+        for eid, c in active.items():
+            if c is self:
+                socs[eid] = own_soc
+                continue
+            soc_eid = c.entry.data.get(CONF_SOC_SENSOR, "")
+            if not c._entity_ok(soc_eid):
+                return None
+            socs[eid] = c._flt(soc_eid, 0)
+        return socs
+
+    def _degrade(self, mode: str, warn_key: str = "") -> None:
+        """Tatsächlich angewandten Verteilungsmodus vermerken, mit Warnung bei `warn_key`."""
+        if warn_key:
+            self._dist_warning = self._tr(warn_key)
+        self.dist_mode_effective = mode
 
     def _dist_cfg(self) -> dict:
         """Verteilungs-Config nur der eigenen Netzgruppe, mit Defaults aufgefüllt."""
@@ -1709,7 +1753,6 @@ class SolakonCoordinator:
         n = len(active)
         if n == 0:
             return {}
-        eq = 1.0 / n
         dist = self._dist_cfg()
         mode = dist.get("distribution_mode", "equal")
         self.dist_mode_effective = mode
@@ -1717,17 +1760,19 @@ class SolakonCoordinator:
         if n <= 1:
             return {eid: 1.0 for eid in active}
 
+        equal = {eid: 1.0 / n for eid in active}
         if mode == "equal":
-            return {eid: eq for eid in active}
+            return equal
 
         if mode == "soc_switch":
             shares = self._soc_switch_shares(active, own_soc)
             if shares is None:
-                self._dist_warning = self._tr("warn_dist_soc_switch_sensor")
-                self.dist_mode_effective = "equal"
-                return {eid: eq for eid in active}
+                self._degrade("equal", "warn_dist_soc_switch_sensor")
+                return equal
             return shares
 
+        # Modus "soc" und unbekannte Modi: reine SOC-Prozentpunkt-Gewichtung.
+        caps = {eid: 1.0 for eid in active}
         if mode == "capacity":
             def _cap_kwh(eid: str, c) -> float | None:
                 cap_s = str(dist.get(f"inst_{eid}_capacity_sensor", ""))
@@ -1746,36 +1791,26 @@ class SolakonCoordinator:
 
             # Kapazitäten pro Instanz; sobald eine keinen gültigen Wert liefert,
             # zählen alle neutral 1.0 (degradiert zu reiner SOC-Gewichtung)
-            caps = {eid: _cap_kwh(eid, c) for eid, c in active.items()}
-            if any(cap is None for cap in caps.values()):
-                self._dist_warning = self._tr("warn_dist_capacity_sensor")
-                self.dist_mode_effective = "soc"
-                caps = {eid: 1.0 for eid in caps}
-        else:
-            # mode == "soc": reine SOC-Prozentpunkt-Gewichtung, keine
-            # Kapazitätssensoren beteiligt.
-            caps = {eid: 1.0 for eid in active}
+            measured = {eid: _cap_kwh(eid, c) for eid, c in active.items()}
+            if any(cap is None for cap in measured.values()):
+                self._degrade("soc", "warn_dist_capacity_sensor")
+            else:
+                caps = measured
+
+        socs = self._pool_socs(active, own_soc)
+        if socs is None:
+            self._degrade("equal", "warn_dist_soc_sensor")
+            return equal
 
         # SOC-Gewichte: nutzbare kWh (mode "capacity") bzw. nutzbare SOC-% (mode "soc")
-        soc_weights: dict[str, float] = {}
-        for eid, c in active.items():
-            if c is self:
-                soc = own_soc
-            else:
-                soc_eid = c.entry.data.get(CONF_SOC_SENSOR, "")
-                if not c._entity_ok(soc_eid):
-                    # SOC-Read einer Fremdinstanz unsicher — auf Gleichverteilung ausweichen
-                    self._dist_warning = self._tr("warn_dist_soc_sensor")
-                    self.dist_mode_effective = "equal"
-                    return {eid: eq for eid in active}
-                soc = c._flt(soc_eid, 0)
-            zone3 = float(c.settings.get(S_ZONE3_LIMIT, 20))
-            soc_weights[eid] = max(0.0, (soc - zone3) / 100.0 * caps[eid])
-
+        soc_weights = {
+            eid: max(0.0, (socs[eid] - float(c.settings.get(S_ZONE3_LIMIT, 20))) / 100.0 * caps[eid])
+            for eid, c in active.items()
+        }
         total_soc = sum(soc_weights.values())
         if total_soc <= 0:
-            self.dist_mode_effective = "equal"
-            return {eid: eq for eid in active}
+            self._degrade("equal")
+            return equal
         return {eid: w / total_soc for eid, w in soc_weights.items()}
 
     def _soc_switch_shares(self, active: dict[str, "SolakonCoordinator"], own_soc: float) -> dict[str, float] | None:
@@ -1789,15 +1824,9 @@ class SolakonCoordinator:
         `_soc_switch_state`. Zone 0 übernimmt bedingungslos, mehrere Zone-0-Instanzen
         gleichmäßig; beim Rückgang in die Rotation wird `start_soc` neu verankert.
         """
-        socs: dict[str, float] = {}
-        for eid, c in active.items():
-            if c is self:
-                socs[eid] = own_soc
-                continue
-            soc_eid = c.entry.data.get(CONF_SOC_SENSOR, "")
-            if not c._entity_ok(soc_eid):
-                return None
-            socs[eid] = c._flt(soc_eid, 0)
+        socs = self._pool_socs(active, own_soc)
+        if socs is None:
+            return None
 
         zone0 = {eid for eid, c in active.items() if c.surplus_active}
 
@@ -1809,6 +1838,7 @@ class SolakonCoordinator:
         was_zone0 = bool(state.get("was_zone0", False))
         active_id = state.get("active_id")
         changed = False
+        rebase = False
 
         if len(zone0) > 1:
             result = {eid: (1.0 / len(zone0) if eid in zone0 else 0.0) for eid in socs}
@@ -1819,22 +1849,21 @@ class SolakonCoordinator:
             if zone0:
                 z0_leader = next(iter(zone0))
                 if active_id != z0_leader:
-                    active_id, changed = z0_leader, True
-                    state["start_soc"] = socs[active_id]
+                    active_id, rebase = z0_leader, True
             elif was_zone0 and active_id in socs:
                 # Zone 0 gerade verlassen — Baseline für die Rotation neu setzen
-                state["start_soc"] = socs[active_id]
-                changed = True
+                rebase = True
             elif active_id not in socs:
                 active_id = max(socs, key=socs.get)
-                state["start_soc"] = socs[active_id]
-                changed = True
+                rebase = True
             elif state.get("start_soc") is None:
-                state["start_soc"] = socs[active_id]
-                changed = True
+                rebase = True
             elif state["start_soc"] - socs[active_id] >= divergence:
                 remaining = {eid: s for eid, s in socs.items() if eid != active_id}
                 active_id = max(remaining, key=remaining.get) if remaining else active_id
+                rebase = True
+
+            if rebase:
                 state["start_soc"] = socs[active_id]
                 changed = True
 
@@ -1864,12 +1893,7 @@ class SolakonCoordinator:
         von global_max_power, gekappt am lokalen Hard-Limit jeder Instanz,
         ungenutzter Spielraum wird an Instanzen mit Reserve weitergereicht.
         """
-        all_coords = self._group_coords()
-        active = {
-            eid: c for eid, c in all_coords.items()
-            if c._regulation_on
-            and c._str(c.entry.data.get(CONF_MODE_SELECT, "")) == MODE_DISCHARGE
-        }
+        active = self._discharge_pool()
         self._dist_warning = ""
         if self.entry.entry_id not in active or len(active) <= 1:
             return (1.0, None) if self.entry.entry_id in active else (0.0, None)
@@ -1936,12 +1960,7 @@ class SolakonCoordinator:
         Kein `allocated_power`: das AC-Leistungslimit bleibt unabhängig vom hard_limit.
         `own_soc` siehe `_all_shares`.
         """
-        all_coords = self._group_coords()
-        active = {
-            eid: c for eid, c in all_coords.items()
-            if c._regulation_on and c.ac_charge_active
-        }
-        return self._weighted_share(active, own_soc)
+        return self._weighted_share(self._ac_pool(), own_soc)
 
     def _total_actual_power(self, own_actual: float) -> float:
         """Summe der Wechselrichter-Ist-Leistung über alle Nulleinspeisung-Instanzen (Modus '1').
@@ -1950,18 +1969,8 @@ class SolakonCoordinator:
         `own_actual` ist der im laufenden Zyklus bereits gelesene eigene
         CONF_ACTUAL_SENSOR-Wert — vermeidet eine zweite, ggf. abweichende Lesung.
         """
-        all_coords = self._group_coords()
-        active = [
-            c for c in all_coords.values()
-            if c._regulation_on
-            and c._str(c.entry.data.get(CONF_MODE_SELECT, "")) == MODE_DISCHARGE
-        ]
-        if len(active) <= 1:
-            return own_actual
-        return sum(
-            own_actual if c is self else c._flt_power(c.entry.data.get(CONF_ACTUAL_SENSOR, ""))
-            for c in active
-        )
+        return self._pool_sum(self._discharge_pool(), own_actual, CONF_ACTUAL_SENSOR,
+                              SolakonCoordinator._flt_power)
 
     def _total_commanded_power(self, own_current_power: float) -> float:
         """Summe der von allen Nulleinspeisung-Instanzen kommandierten Sollleistung (Modus '1').
@@ -1970,18 +1979,8 @@ class SolakonCoordinator:
         `own_current_power` ist die im laufenden Zyklus bereits gelesene eigene
         CONF_ACTIVE_POWER — vermeidet eine zweite, ggf. abweichende Lesung.
         """
-        all_coords = self._group_coords()
-        active = [
-            c for c in all_coords.values()
-            if c._regulation_on
-            and c._str(c.entry.data.get(CONF_MODE_SELECT, "")) == MODE_DISCHARGE
-        ]
-        if len(active) <= 1:
-            return own_current_power
-        return sum(
-            own_current_power if c is self else c._flt(c.entry.data.get(CONF_ACTIVE_POWER, ""))
-            for c in active
-        )
+        return self._pool_sum(self._discharge_pool(), own_current_power, CONF_ACTIVE_POWER,
+                              SolakonCoordinator._flt)
 
     def _total_commanded_ac_power(self, own_current_power: float) -> float:
         """Summe der von allen gleichzeitig AC-ladenden Instanzen kommandierten Leistung.
@@ -1989,17 +1988,8 @@ class SolakonCoordinator:
         Einzelbetrieb bzw. keine weitere ladende Instanz: eigener kommandierter Wert.
         `own_current_power` siehe `_total_commanded_power`.
         """
-        all_coords = self._group_coords()
-        active = [
-            c for c in all_coords.values()
-            if c._regulation_on and c.ac_charge_active
-        ]
-        if len(active) <= 1:
-            return own_current_power
-        return sum(
-            own_current_power if c is self else c._flt(c.entry.data.get(CONF_ACTIVE_POWER, ""))
-            for c in active
-        )
+        return self._pool_sum(self._ac_pool(), own_current_power, CONF_ACTIVE_POWER,
+                              SolakonCoordinator._flt)
 
     # ── PI-Berechnung ────────────────────────────────────────────────────────
 
