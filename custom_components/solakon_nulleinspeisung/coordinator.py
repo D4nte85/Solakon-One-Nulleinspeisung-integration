@@ -1111,6 +1111,8 @@ class SolakonCoordinator:
         price_below_exp = tariff_price_usable and tariff_price < tariff_exp
         price_below_cheap = tariff_price_usable and tariff_price < tariff_cheap
         price_at_least_cheap = tariff_price_valid and tariff_price >= tariff_cheap
+        # Zone-1/2-Start (A, E): ohne Tarif frei, mit Tarif nur bei gültigem Preis ab Teuer-Schwelle.
+        tariff_allows_discharge = (not effective_tariff_enabled or tariff_price_valid) and not price_below_exp
 
         # ── 4. Abgeleitete Variablen ─────────────────────────────────────────
         prev_actual = self._prev_actual
@@ -1167,9 +1169,9 @@ class SolakonCoordinator:
             surplus_enabled=cs.surplus_enabled, new_surplus=new_surplus,
             ac_enabled=cs.ac_enabled, ac_soc_target=cs.ac_soc_target,
             ac_hysteresis=cs.ac_hysteresis, ac_offset=ac_offset,
-            tariff_enabled=effective_tariff_enabled, tariff_price=tariff_price,
-            tariff_price_valid=tariff_price_valid, price_below_exp=price_below_exp,
+            tariff_price=tariff_price, price_below_exp=price_below_exp,
             price_below_cheap=price_below_cheap, price_at_least_cheap=price_at_least_cheap,
+            tariff_allows_discharge=tariff_allows_discharge,
             tariff_soc=cs.tariff_soc, tariff_power=cs.tariff_power,
             is_night=is_night, total_actual=total_actual,
             zone1_forced=self.zone1_forced,
@@ -1363,9 +1365,8 @@ class SolakonCoordinator:
         zone1_forced = v.get("zone1_forced", False)
         if (
             not self.ac_charge_active
-            and (not v["tariff_enabled"] or v["tariff_price_valid"])
+            and v["tariff_allows_discharge"]
             and not self.tariff_charge_active
-            and not v["price_below_exp"]
             and (soc > zone1 or zone1_forced)
             and not self.cycle_active
         ):
@@ -1536,8 +1537,7 @@ class SolakonCoordinator:
         if (
             not self.ac_charge_active
             and not self.tariff_charge_active
-            and (not v["tariff_enabled"] or v["tariff_price_valid"])
-            and not v["price_below_exp"]
+            and v["tariff_allows_discharge"]
             and zone3 < soc <= zone1
             and not self.cycle_active
             and mode == MODE_DISABLED
