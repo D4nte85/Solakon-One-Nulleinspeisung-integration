@@ -466,13 +466,7 @@ class SolakonPanel extends HTMLElement {
       if (st.soc != null) {
         socSum += st.soc;
         socCount++;
-        const capSensor = this._distValFor(g.key, `inst_${inst.entry_id}_capacity_sensor`);
-        const capState  = capSensor ? this._hass?.states?.[capSensor] : null;
-        const capRaw    = capState ? parseFloat(capState.state) : NaN;
-        // Wh→kWh normalisieren, analog zur Backend-Gewichtung in coordinator.py
-        // (_all_shares, Modus "capacity").
-        const capUnit   = (capState?.attributes?.unit_of_measurement || "").trim().toLowerCase();
-        const capNum    = capUnit === "wh" ? capRaw / 1000 : capRaw;
+        const capNum = st.capacity_kwh ?? NaN;
         capWeightedSum += st.soc * capNum;
         capSum += (Number.isFinite(capNum) && capNum > 0) ? capNum : NaN;
       }
@@ -1273,21 +1267,10 @@ ${this._textsMissing ? `
     set("st-action",       st.last_action || "—");
     set("st-error",        st.last_error  || (s.no_error || "—"));
 
-    let offsetZoneKey, isDyn, offsetStatic;
-    if (st.ac_charge) {
-      offsetZoneKey = "offset_zone_ac";
-      isDyn         = !!st.dyn_ac_enabled;
-      offsetStatic  = this._settings.ac_offset ?? "—";
-    } else if (st.cycle_active) {
-      offsetZoneKey = "offset_zone_1";
-      isDyn         = !!st.dyn_z1_enabled;
-      offsetStatic  = this._settings.offset_1 ?? "—";
-    } else {
-      offsetZoneKey = "offset_zone_2";
-      isDyn         = !!st.dyn_z2_enabled;
-      offsetStatic  = this._settings.offset_2 ?? "—";
-    }
-    const dynVal      = isDyn ? (st[`dyn_${offsetZoneKey === "offset_zone_ac" ? "ac" : offsetZoneKey === "offset_zone_1" ? "z1" : "z2"}`] ?? 0).toFixed(0) : offsetStatic;
+    const offsetZoneKey = { ac: "offset_zone_ac", z1: "offset_zone_1" }[st.offset_zone] || "offset_zone_2";
+    const isDyn         = !!st.offset_dynamic;
+    const offsetStatic  = st.offset_static ?? "—";
+    const dynVal        = isDyn ? (st.offset_value ?? 0).toFixed(0) : offsetStatic;
     const offsetLabel = s[offsetZoneKey] || offsetZoneKey;
     set("st-offset-val", `${dynVal} W`);
     set("st-offset-lbl", `${s.offset_lbl || ""} — ${offsetLabel}`);

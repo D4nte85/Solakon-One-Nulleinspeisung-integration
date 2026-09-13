@@ -85,6 +85,13 @@ DYN_OFFSETS = (
     ("dyn_offset_ac", (S_DYN_AC_MIN, S_DYN_AC_MAX, S_DYN_AC_NOISE, S_DYN_AC_FACTOR, S_DYN_AC_NEGATIVE)),
 )
 
+# Offset je Anzeigezone: (Enable-Setting, statisches Setting, Attribut des dynamischen Werts).
+OFFSET_SOURCES = {
+    "ac": (S_DYN_AC_ENABLED, S_AC_OFFSET, "dyn_offset_ac"),
+    "z1": (S_DYN_Z1_ENABLED, S_OFFSET_1, "dyn_offset_z1"),
+    "z2": (S_DYN_Z2_ENABLED, S_OFFSET_2, "dyn_offset_z2"),
+}
+
 # Kernsensoren der Instanz: (Konfigschlüssel, löst Regelzyklus aus, Pflicht für den Zyklus).
 # Die Ist-Leistung wird gepollt und löst bewusst keinen Zyklus aus.
 CORE_SENSORS = (
@@ -389,8 +396,22 @@ class SolakonCoordinator:
         return {key: getattr(self, attr) for key, attr, _ in PERSISTED_FLAGS}
 
     def snapshot(self) -> dict[str, Any]:
-        """Anzeigezustand unter internen Namen, ohne Live-Sensorwerte."""
+        """Anzeigezustand unter internen Namen, ohne Live-Sensorwerte.
+
+        Offsetzone: AC-Laden, sonst Zone 1 bei aktivem Zyklus, sonst Zone 2.
+        Kapazität in kWh aus dem Verteilungs-Sensor der Instanz, None ohne gültigen Wert.
+        """
+        offset_zone = "ac" if self.ac_charge_active else "z1" if self.cycle_active else "z2"
+        enabled_key, static_key, dyn_attr = OFFSET_SOURCES[offset_zone]
+        offset_dynamic = bool(self.settings.get(enabled_key, False))
+        offset_static = self.settings.get(static_key)
+        cap_sensor = str(self._dist_cfg().get(f"inst_{self.entry.entry_id}_capacity_sensor", ""))
         return {
+            "offset_zone": offset_zone,
+            "offset_dynamic": offset_dynamic,
+            "offset_static": offset_static,
+            "offset_value": getattr(self, dyn_attr) if offset_dynamic else offset_static,
+            "capacity_kwh": self._flt_kwh_normalized(cap_sensor, None) if cap_sensor else None,
             "current_zone": self.current_zone,
             "zone_label": self.zone_label,
             "mode_label": self.mode_label,
