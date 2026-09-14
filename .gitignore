@@ -3,3 +3,4 @@ __pycache__/
 .pytest_cache/
 tests/panel/node_modules/
 tests/panel/package-lock.json
+tests/geraet-integration/

@@ -19,6 +19,14 @@ python -m venv ~/.cache/solakon-tests-venv
 npm install --prefix tests/panel        # nur für den Panel-Vergleich (jsdom)
 ```
 
+Die offizielle Geräte-Integration liegt als ignorierter Klon in `tests/geraet-integration/`
+(Referenz für Entity-Keys, Einheiten und `min`/`max`/`step`, kein Testcode):
+
+```bash
+git clone https://github.com/solakon-de/solakon-one-homeassistant tests/geraet-integration
+git -C tests/geraet-integration pull --tags && git -C tests/geraet-integration describe --tags
+```
+
 ## Reproduktionsszenarien
 
 Eine Datei je Fehlervorgang unter `tests/repro/`, benannt wie die Bugfix-Seite
