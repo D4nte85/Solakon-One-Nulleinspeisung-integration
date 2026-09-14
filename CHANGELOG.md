@@ -15,6 +15,9 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
   Meldung. Lieferte er Text statt einer Zahl, regelte die Integration mit 0 weiter —
   ein SOC-Sensor im Fehlerzustand löste so den Sicherheitsstopp aus. Beides überspringt
   jetzt den Zyklus mit der Meldung „Sensor … nicht verfügbar oder ohne Zahlenwert“
+- Die Ruhe in Modus `'0'` (Falls B, C, F, Tarifsperre) setzte den Entladestrom auf 0 A,
+  weil sie für den Abgleich wie Zone 2 zählte. Verließ das Gerät die Fernsteuerung, blieb
+  es geklemmt. Ohne Zyklus gilt 0 A jetzt nur noch in Modus `'1'`, sonst der Max-Entladestrom
 
 
 ## [3.0.0-beta.2] – 2026-09-14

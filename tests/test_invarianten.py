@@ -12,7 +12,6 @@ from tests import invarianten as inv
 
 OFFEN = {
     "b2": "fix-2026-09-14-zone2-output-ueber-pv-grenze",
-    "b3": "fix-2026-09-14-ruhe-entladestrom-null",
     "f1": "fix-2026-09-14-pool-summe-ohne-eigene-instanz",
 }
 

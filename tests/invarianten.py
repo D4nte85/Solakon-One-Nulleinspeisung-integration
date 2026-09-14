@@ -233,7 +233,8 @@ def b3(c: Ctx):
         soll, lage = 0, "Zone 2"
     else:
         return None
-    if strom is None or abs(strom - soll) > 1e-6:
+    # Toleranz wie `_set_number(only_if_changed=True)`: Abweichungen bis 0,5 A schreibt der Zyklus nicht.
+    if strom is None or abs(strom - soll) > 0.5:
         return f"{lage}: Entladestrom {strom} statt {soll}"
 
 

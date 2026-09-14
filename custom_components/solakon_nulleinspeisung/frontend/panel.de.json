@@ -127,7 +127,7 @@
     },
     "discharge_max": {
       "l": "Max. Entladestrom Zone 1 (A)",
-      "d": "Entladestrom in Zone 1. Zone 2 und AC Laden setzen automatisch 0 A. Surplus setzt 2 A."
+      "d": "Entladestrom in Zone 1 und in der Ruhe in Modus 0. Zone 2 und AC Laden setzen automatisch 0 A. Surplus setzt 2 A."
     },
     "offset_1": {
       "l": "Offset Zone 1 (W)",

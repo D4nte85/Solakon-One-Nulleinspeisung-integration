@@ -965,9 +965,16 @@ class SolakonCoordinator:
         """Settings-Schlüssel des geltenden Hard-Limits: Zone 0 bei Surplus, sonst Zone 1/2."""
         return S_HARD_LIMIT_Z0 if self.surplus_active else S_HARD_LIMIT_Z1
 
-    def _required_discharge(self, discharge_max: int) -> float:
-        """Entladestrom für den aktuellen Regelzustand laut DISCHARGE_BY_STATE."""
-        return DISCHARGE_BY_STATE.get(self._control_state, float(discharge_max))
+    def _required_discharge(self, discharge_max: int, mode: str) -> float:
+        """Entladestrom für den aktuellen Regelzustand laut DISCHARGE_BY_STATE.
+
+        Ohne Zyklus und Lade-Session gilt 0 A nur in Modus '1' (Zone 2, Ruhe in Modus 1);
+        in jedem anderen Modus `discharge_max`.
+        """
+        state = self._control_state
+        if state == "pv" and mode != MODE_DISCHARGE:
+            return float(discharge_max)
+        return DISCHARGE_BY_STATE.get(state, float(discharge_max))
 
     async def _sync_export_limit(self, target: int) -> None:
         """grid_export_power_limit korrigieren wenn von Soll abgewichen — nur wenn Entity konfiguriert."""
@@ -1340,10 +1347,10 @@ class SolakonCoordinator:
         )
 
         # ── 6. Entladestrom mit Regelzustand abgleichen (vor dem PI-Gate) ────
-        await self._set_discharge(self._required_discharge(cs.discharge_max))
+        mode = self._str(cfg[CONF_MODE_SELECT])
+        await self._set_discharge(self._required_discharge(cs.discharge_max, mode))
 
         # ── 7. PI-Gate ───────────────────────────────────────────────────────
-        mode = self._str(cfg[CONF_MODE_SELECT])
         if mode in (MODE_DISCHARGE, MODE_AC_CHARGE):
             await self._run_pi_phase(cs, soc, mode, timer_val, error_share, effective_hard,
                                      effective_hard_z1, ac_offset, soft_errors)

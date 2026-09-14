@@ -127,7 +127,7 @@
     },
     "discharge_max": {
       "l": "Max. Discharge Current Zone 1 (A)",
-      "d": "Discharge current in Zone 1. Zone 2 and AC charging automatically set 0 A. Surplus sets 2 A."
+      "d": "Discharge current in Zone 1 and at rest in mode 0. Zone 2 and AC charging automatically set 0 A. Surplus sets 2 A."
     },
     "offset_1": {
       "l": "Offset Zone 1 (W)",

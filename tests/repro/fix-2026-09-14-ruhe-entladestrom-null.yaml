@@ -1,6 +1,5 @@
 titel: Ruhezustand setzt den Entladestrom auf 0 A statt auf den Maximalstrom
 bezug: fix-2026-09-14-ruhe-entladestrom-null
-offen: true
 # SOC unter der Zone-3-Grenze bei laufendem Modus 1: Fall C legt das Gerät in den
 # Ruhezustand. Der Entladestrom soll dabei auf discharge_max (40 A) bleiben.
 netz: 100
