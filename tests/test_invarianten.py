@@ -11,7 +11,6 @@ import pytest
 from tests import invarianten as inv
 
 OFFEN = {
-    "b2": "fix-2026-09-14-zone2-output-ueber-pv-grenze",
     "f1": "fix-2026-09-14-pool-summe-ohne-eigene-instanz",
 }
 

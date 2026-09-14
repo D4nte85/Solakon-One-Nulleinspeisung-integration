@@ -18,6 +18,9 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 - Die Ruhe in Modus `'0'` (Falls B, C, F, Tarifsperre) setzte den Entladestrom auf 0 A,
   weil sie für den Abgleich wie Zone 2 zählte. Verließ das Gerät die Fernsteuerung, blieb
   es geklemmt. Ohne Zyklus gilt 0 A jetzt nur noch in Modus `'1'`, sonst der Max-Entladestrom
+- Lag der Output-Sollwert über dem dynamischen Limit (Zone 2: PV − Reserve), der
+  Netzfehler aber in der Toleranz, blieb er stehen und die Batterie deckte den Verbrauch.
+  Der PI-Schritt läuft jetzt auch dann und begrenzt auf das Limit
 
 
 ## [3.0.0-beta.2] – 2026-09-14

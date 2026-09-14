@@ -1427,7 +1427,9 @@ class SolakonCoordinator:
             # Sättigung nach oben: der PI könnte hochregeln, darf aber nicht.
             saturated_high = at_max_limit and not above_dynamic_max and grid_error > 0
 
-            if grid_error_abs > cs.tolerance and not saturated_high and not (at_min_limit and grid_error < 0):
+            # Über dynamic_max schreibt der PI-Schritt auch bei Netzfehler in der Toleranz herunter.
+            if ((grid_error_abs > cs.tolerance or above_dynamic_max)
+                    and not saturated_high and not (at_min_limit and grid_error < 0)):
                 await self._pi_step(
                     grid,
                     self._pool_sum(self._discharge_pool(), current_power, CONF_ACTIVE_POWER,
