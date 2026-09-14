@@ -1760,16 +1760,14 @@ class SolakonCoordinator:
         self, pool: dict[str, "SolakonCoordinator"], own_value: float, conf_key: str,
         reader: Callable[["SolakonCoordinator", str], float],
     ) -> float:
-        """Summe über `pool`: eigener Beitrag `own_value`, Fremdinstanzen über
-        `reader(instanz, entity_id)` der Entität `conf_key`. Höchstens eine Instanz: `own_value`.
+        """Eigener Wert `own_value` plus Fremdinstanzen aus `pool` über
+        `reader(instanz, entity_id)` der Entität `conf_key`.
 
+        Der eigene Wert zählt immer, auch wenn die Instanz selbst nicht in `pool` ist.
         `own_value` ist der im laufenden Zyklus bereits gelesene eigene Wert — keine zweite Lesung.
         """
-        if len(pool) <= 1:
-            return own_value
-        return sum(
-            own_value if c is self else reader(c, c.entry.data.get(conf_key, ""))
-            for c in pool.values()
+        return own_value + sum(
+            reader(c, c.entry.data.get(conf_key, "")) for c in pool.values() if c is not self
         )
 
     def _pool_socs(self, active: dict[str, "SolakonCoordinator"], own_soc: float) -> dict[str, float] | None:

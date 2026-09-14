@@ -21,6 +21,9 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 - Lag der Output-Sollwert über dem dynamischen Limit (Zone 2: PV − Reserve), der
   Netzfehler aber in der Toleranz, blieb er stehen und die Batterie deckte den Verbrauch.
   Der PI-Schritt läuft jetzt auch dann und begrenzt auf das Limit
+- Mehrere Instanzen: Entlud genau eine Schwester, ließ die Summe der Ist-Leistungen sie
+  weg und zählte nur die eigene Instanz. Eine ruhende Instanz startete so AC-Laden aus der
+  Entladung der Schwester. Die Summe zählt jetzt die eigene Instanz plus alle Schwestern im Pool
 
 
 ## [3.0.0-beta.2] – 2026-09-14

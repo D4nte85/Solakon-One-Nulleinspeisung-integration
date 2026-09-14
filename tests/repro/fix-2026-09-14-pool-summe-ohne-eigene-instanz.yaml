@@ -1,6 +1,5 @@
 titel: Ruhende Instanz übersieht die einzige entladende Schwester und startet AC-Laden
 bezug: fix-2026-09-14-pool-summe-ohne-eigene-instanz
-offen: true
 # a ruht in Modus 0, b entlädt 800 W in dieselbe Netzgruppe, das Netz zeigt −449 W.
 # Ohne b gäbe es Netzbezug von 351 W — kein Überschuss, Fall G darf nicht starten.
 netz: -449
