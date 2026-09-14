@@ -1117,7 +1117,6 @@ class SolakonCoordinator:
             self._update_dynamic_offsets()
 
         # ── 2. Settings auslesen ─────────────────────────────────────────────
-        await self._sync_export_limit(max(self._setting(S_HARD_LIMIT_Z0, int), self._setting(S_HARD_LIMIT_Z1, int)))
         cs = self._cycle_settings()
 
         # Offsets: pro Zone dynamisch oder statisch
@@ -1227,6 +1226,8 @@ class SolakonCoordinator:
         if not self._entity_ok(cfg[CONF_MODE_SELECT]):
             self._end_cycle(blocked=True, error_key="err_mode_select")
             return
+
+        await self._sync_export_limit(max(self._setting(S_HARD_LIMIT_Z0, int), self._setting(S_HARD_LIMIT_Z1, int)))
 
         # Preis vor der Fehlersammlung lesen: die Einheitenplausibilität geht als
         # soft_error in dieselbe Meldungskette ein.

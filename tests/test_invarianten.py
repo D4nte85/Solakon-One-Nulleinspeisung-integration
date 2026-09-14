@@ -14,7 +14,6 @@ OFFEN = {
     "b2": "fix-2026-09-14-zone2-output-ueber-pv-grenze",
     "b3": "fix-2026-09-14-ruhe-entladestrom-null",
     "c2": "fix-2026-09-14-sensorausfall-ohne-meldung, fix-2026-09-14-nicht-numerischer-sensor",
-    "c3": "fix-2026-09-14-export-limit-vor-validierung",
     "f1": "fix-2026-09-14-pool-summe-ohne-eigene-instanz",
 }
 

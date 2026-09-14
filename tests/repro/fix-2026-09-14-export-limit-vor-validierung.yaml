@@ -1,6 +1,5 @@
 titel: Ungültige SOC-Grenzen blockieren die Regelung erst nach dem Schreiben des Export-Limits
 bezug: fix-2026-09-14-export-limit-vor-validierung
-offen: true
 # Zone-1-Grenze gleich Zone-3-Grenze: der Zyklus muss vor jedem Schreibbefehl abbrechen.
 netz: 100
 instanzen:

@@ -9,6 +9,8 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 - Warnhinweis und Hilfetext zu **Ruhezustand in Modus 1** sowie die README-Tabelle
   sagten noch, das Gerät verlasse die Fernsteuerung nie mehr. Seit `3.0.0-beta.2`
   verlässt es sie bei ausgeschalteter Regelung
+- Bei ungültigen SOC-Grenzen schrieb der Zyklus noch das Export-Limit, bevor er
+  abbrach. Der Abgleich läuft jetzt erst nach der Validierung
 
 
 ## [3.0.0-beta.2] – 2026-09-14
