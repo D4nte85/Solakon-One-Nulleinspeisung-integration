@@ -151,7 +151,10 @@ def _aufrufe(schritt_rec: dict, entity: str) -> list:
 
 
 def pruefe(erwartung: dict, rec: dict) -> tuple[bool, str]:
-    """Eine Erwartung gegen das Protokoll prüfen → (erfüllt, Beschreibung mit Istwert)."""
+    """Eine Erwartung gegen das Protokoll prüfen → (erfüllt, Beschreibung mit Istwert).
+
+    Alle Prüfarten einer Erwartung zählen; erfüllt ist sie nur, wenn jede erfüllt ist.
+    """
     schritte = rec["steps"]
     auswahl = erwartung.get("schritt", "letzter")
     if auswahl == "alle":
@@ -164,6 +167,7 @@ def pruefe(erwartung: dict, rec: dict) -> tuple[bool, str]:
         raise SzenarioFehler(f"ungültiger Schritt {auswahl!r}")
     instanz = erwartung.get("instanz", "a")
     ort = f"Schritt {auswahl}" if auswahl != "alle" else "alle Schritte"
+    ergebnisse: list[tuple[bool, str]] = []
 
     for art, zeichen in (("zustand", "="), ("zustand_nicht", "≠")):
         if art not in erwartung:
@@ -177,7 +181,7 @@ def pruefe(erwartung: dict, rec: dict) -> tuple[bool, str]:
                 if _zahl_gleich(ist[attr], soll) != (art == "zustand"):
                     abweichend.append(f"{attr}={ist[attr]!r} (Schritt {nr})")
         text = f"{ort}, Instanz {instanz}: " + ", ".join(f"{k}{zeichen}{v!r}" for k, v in erwartung[art].items())
-        return not abweichend, text + ("" if not abweichend else " — ist " + ", ".join(abweichend))
+        ergebnisse.append((not abweichend, text + ("" if not abweichend else " — ist " + ", ".join(abweichend))))
 
     for art in ("aufruf", "kein_aufruf"):
         if art not in erwartung:
@@ -192,11 +196,13 @@ def pruefe(erwartung: dict, rec: dict) -> tuple[bool, str]:
         grenzen = ", ".join(f"{z} {bed[k]}" for k, z in (("wert", "="), ("wert_min", "≥"), ("wert_max", "≤")) if k in bed)
         text = f"{ort}: {'ein' if art == 'aufruf' else 'kein'} Schreibbefehl auf {entity}" \
                + (f" {grenzen}" if grenzen else "") + f" — geschrieben: {werte or 'nichts'}"
-        return (bool(passend) if art == "aufruf" else not passend), text
+        ergebnisse.append(((bool(passend) if art == "aufruf" else not passend), text))
 
     if "log" in erwartung:
         treffer = [r for r in rec["logs"] if erwartung["log"] in r[1]]
-        return bool(treffer), f"Log enthält {erwartung['log']!r}" + ("" if treffer else " — nicht gefunden")
+        ergebnisse.append((bool(treffer), f"Log enthält {erwartung['log']!r}" + ("" if treffer else " — nicht gefunden")))
+    if ergebnisse:
+        return all(ok for ok, _ in ergebnisse), "; ".join(text for _, text in ergebnisse)
     raise SzenarioFehler(f"Erwartung ohne zustand/zustand_nicht/aufruf/kein_aufruf/log: {erwartung}")
 
 
