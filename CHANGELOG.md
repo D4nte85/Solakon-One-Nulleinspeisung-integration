@@ -5,6 +5,12 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+### Behoben
+- Warnhinweis und Hilfetext zu **Ruhezustand in Modus 1** sowie die README-Tabelle
+  sagten noch, das Gerät verlasse die Fernsteuerung nie mehr. Seit `3.0.0-beta.2`
+  verlässt es sie bei ausgeschalteter Regelung
+
+
 ## [3.0.0-beta.2] – 2026-09-14
 
 > **Beta-Release.** Folgestand zu `3.0.0-beta.1`: Regelung aus verlässt den Ruhezustand in Modus 1, Nachtabschaltung mit Hysterese. Erscheint in HACS nur bei aktivierten Beta-Versionen.

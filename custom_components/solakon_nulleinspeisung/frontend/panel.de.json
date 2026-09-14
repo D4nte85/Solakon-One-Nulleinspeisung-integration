@@ -48,7 +48,7 @@
     },
     "debug": {
       "summary": "Debug — manuelle Eingriffe in den Regelzustand",
-      "text": "Integral zurücksetzen: Setzt den I-Anteil des PI-Reglers auf 0.\n\nZone manuell setzen: Schaltet den internen cycle_active-Flag und setzt das Integral zurück.\n• Zone 1 aktivieren: cycle_active = true → aggressiver Entladebetrieb, voller Entladestrom.\n• Zone 2 aktivieren: cycle_active = false → batterieschonender Betrieb, 0 A Entladestrom, dynamisches Output-Limit.\n\nRuhezustand in Modus 1 (Standard aus): Alle Übergänge, die sonst Modus '0' schreiben — Fall B, C, F, TM, Lade-Ende und Fall I ohne Zyklus, Stillstands-Recovery —, schreiben stattdessen Modus '1' mit 0 W. Regelung aus schreibt immer Modus '0'. In dieser Ruhe läuft kein PI, die Instanz zählt nicht zum Entlade-Pool, und die Fälle E, A, D, 0A, G und GT holen sie zurück wie aus Modus '0'. Nicht empfohlen: das Gerät verlässt die Fernsteuerung nie mehr. Gedacht für Geräte, die in Modus '0' nicht laden.\n\nAlle Aktionen werden unter 'Letzte Aktion' im Status-Tab protokolliert."
+      "text": "Integral zurücksetzen: Setzt den I-Anteil des PI-Reglers auf 0.\n\nZone manuell setzen: Schaltet den internen cycle_active-Flag und setzt das Integral zurück.\n• Zone 1 aktivieren: cycle_active = true → aggressiver Entladebetrieb, voller Entladestrom.\n• Zone 2 aktivieren: cycle_active = false → batterieschonender Betrieb, 0 A Entladestrom, dynamisches Output-Limit.\n\nRuhezustand in Modus 1 (Standard aus): Alle Übergänge, die sonst Modus '0' schreiben — Fall B, C, F, TM, Lade-Ende und Fall I ohne Zyklus, Stillstands-Recovery —, schreiben stattdessen Modus '1' mit 0 W. Regelung aus schreibt immer Modus '0'. In dieser Ruhe läuft kein PI, die Instanz zählt nicht zum Entlade-Pool, und die Fälle E, A, D, 0A, G und GT holen sie zurück wie aus Modus '0'. Nicht empfohlen: das Gerät verlässt die Fernsteuerung nur noch bei ausgeschalteter Regelung. Gedacht für Geräte, die in Modus '0' nicht laden.\n\nAlle Aktionen werden unter 'Letzte Aktion' im Status-Tab protokolliert."
     },
     "entities": {
       "summary": "Entitäten — alle optionalen Sensor-Zuweisungen dieser Instanz an einer Stelle",
@@ -409,7 +409,7 @@
     "zone2_state":"Zone 2",
     "rest_hdr":   "⚠️ Ruhezustand in Modus 1",
     "rest_desc":  "Ruht die Regelung (Zone 3, Nacht, Entladesperre, Lade-Ende ohne Zyklus), steht das Gerät dann in Modus '1' mit 0 W statt in Modus '0'. Nur für Geräte, die in Modus '0' nicht laden.",
-    "rest_warn":  "Nicht empfohlener Hack: Das Gerät verlässt die Fernsteuerung nie mehr — auch nicht bei ausgeschalteter Regelung.",
+    "rest_warn":  "Nicht empfohlener Hack: Das Gerät verlässt die Fernsteuerung nur noch bei ausgeschalteter Regelung.",
     "rest_toggle":"Ruhezustand in Modus 1 (0 W)"
   },
   "toast": {
