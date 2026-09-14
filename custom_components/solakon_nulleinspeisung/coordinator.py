@@ -1264,8 +1264,8 @@ class SolakonCoordinator:
         price_below_exp = tariff_price_usable and tariff_price < tariff_exp
         price_below_cheap = tariff_price_usable and tariff_price < tariff_cheap
         price_at_least_cheap = tariff_price_valid and tariff_price >= tariff_cheap
-        # Zone-1/2-Start (A, E): ohne Tarif frei, mit Tarif nur bei gültigem Preis ab Teuer-Schwelle.
-        tariff_allows_discharge = (not effective_tariff_enabled or tariff_price_valid) and not price_below_exp
+        # Zone-1/2-Start (A, E): gesperrt nur bei gültigem Preis unter der Teuer-Schwelle.
+        tariff_allows_discharge = not price_below_exp
 
         # ── 4. Abgeleitete Variablen ─────────────────────────────────────────
         prev_actual = self._prev_actual

@@ -24,6 +24,8 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 - Mehrere Instanzen: Entlud genau eine Schwester, ließ die Summe der Ist-Leistungen sie
   weg und zählte nur die eigene Instanz. Eine ruhende Instanz startete so AC-Laden aus der
   Entladung der Schwester. Die Summe zählt jetzt die eigene Instanz plus alle Schwestern im Pool
+- Bei aktivem Tarif und nicht verfügbarem Preis-Sensor startete weder Zone 1 noch Zone 2.
+  Ein ungültiger Preis schaltet jetzt nur das Tarif-Subsystem ab, die Regelung läuft wie ohne Tarif
 
 
 ## [3.0.0-beta.2] – 2026-09-14
