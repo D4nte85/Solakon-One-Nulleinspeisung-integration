@@ -1,6 +1,5 @@
 titel: Ausfall des Netzsensors überspringt den Zyklus ohne Fehlermeldung
 bezug: fix-2026-09-14-sensorausfall-ohne-meldung
-offen: true
 # Netzsensor unavailable: der Zyklus darf nichts schreiben, muss aber eine Meldung setzen.
 netz: unavailable
 instanzen:

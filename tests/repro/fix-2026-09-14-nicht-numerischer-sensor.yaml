@@ -1,6 +1,5 @@
 titel: Nicht-numerischer SOC wird als 0 % gelesen und löst den Sicherheitsstopp aus
 bezug: fix-2026-09-14-nicht-numerischer-sensor
-offen: true
 # SOC-Sensor liefert Text statt Zahl. Der Zyklus soll wie beim Ausfall nichts schreiben
 # und eine Meldung setzen, statt mit 0 % in Zone 3 zu fallen.
 netz: 100

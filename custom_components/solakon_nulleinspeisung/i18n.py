@@ -133,9 +133,9 @@ _TEXTS: dict[str, dict[str, str]] = {
         "de": "SOC-Limits ungültig (Zone-1-Forcierung-Mindest-SOC muss zwischen Zone3 und Zone1 liegen)",
         "en": "SOC limits invalid (Zone 1 forcing minimum SOC must lie between Zone 3 and Zone 1)",
     },
-    "err_soc_sensor": {
-        "de": "SOC-Sensor nicht verfügbar",
-        "en": "SOC sensor unavailable",
+    "err_core_sensor": {
+        "de": "Sensor {sensor!r} nicht verfügbar oder ohne Zahlenwert",
+        "en": "Sensor {sensor!r} unavailable or not numeric",
     },
     "err_mode_select": {
         "de": "Modus-Selektor nicht verfügbar",

@@ -11,6 +11,10 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
   verlässt es sie bei ausgeschalteter Regelung
 - Bei ungültigen SOC-Grenzen schrieb der Zyklus noch das Export-Limit, bevor er
   abbrach. Der Abgleich läuft jetzt erst nach der Validierung
+- Fiel ein Kernsensor (Netz, PV, Ist-Leistung, SOC) aus, übersprang der Zyklus ohne
+  Meldung. Lieferte er Text statt einer Zahl, regelte die Integration mit 0 weiter —
+  ein SOC-Sensor im Fehlerzustand löste so den Sicherheitsstopp aus. Beides überspringt
+  jetzt den Zyklus mit der Meldung „Sensor … nicht verfügbar oder ohne Zahlenwert“
 
 
 ## [3.0.0-beta.2] – 2026-09-14

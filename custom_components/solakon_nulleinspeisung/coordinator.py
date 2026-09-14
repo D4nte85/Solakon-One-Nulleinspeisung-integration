@@ -1091,10 +1091,14 @@ class SolakonCoordinator:
         prev_flags = self._persisted_flags()
 
         # ── 1. Sensor-Werte lesen ────────────────────────────────────────────
-        # Kernsensoren müssen verfügbar sein
-        if not all(self._entity_ok(cfg[key]) for key, _, required in CORE_SENSORS if required):
-            _LOGGER.debug("Solakon: Kernsensoren nicht verfügbar, Zyklus übersprungen")
-            self._end_cycle(blocked=True, notify_on_change=True)
+        # Pflichtsensoren müssen eine Zahl liefern
+        missing = next((cfg[key] for key, _, required in CORE_SENSORS
+                        if required and self._read_number(cfg[key]) is None), None)
+        if missing is not None:
+            _LOGGER.debug("Solakon: Kernsensor %s ohne Zahlenwert, Zyklus übersprungen", missing)
+            prev_error = self.last_error
+            self.last_error = self._tr("err_core_sensor", sensor=missing)
+            self._end_cycle(blocked=True, notify_on_change=self.last_error == prev_error)
             return
 
         soc = self._flt(cfg[CONF_SOC_SENSOR])
@@ -1217,10 +1221,6 @@ class SolakonCoordinator:
 
         if cs.zone1_force_enabled and not (cs.zone3_limit < cs.zone1_force_min_soc < cs.zone1_limit):
             self._end_cycle(blocked=True, error_key="err_soc_zone1_force")
-            return
-
-        if not self._entity_ok(cfg[CONF_SOC_SENSOR]):
-            self._end_cycle(blocked=True, error_key="err_soc_sensor")
             return
 
         if not self._entity_ok(cfg[CONF_MODE_SELECT]):
