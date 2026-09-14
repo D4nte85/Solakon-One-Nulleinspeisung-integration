@@ -5,6 +5,10 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+## [3.0.0-beta.2] – 2026-09-14
+
+> **Beta-Release.** Folgestand zu `3.0.0-beta.1`: Regelung aus verlässt den Ruhezustand in Modus 1, Nachtabschaltung mit Hysterese. Erscheint in HACS nur bei aktivierten Beta-Versionen.
+
 ### Hinzugefügt
 - Nachtabschaltung: Einstellung **Hysterese Einschalten** (W, Standard 0). Die Nacht
   beginnt weiter bei PV < PV-Ladereserve und endet erst bei PV ≥ PV-Ladereserve +
