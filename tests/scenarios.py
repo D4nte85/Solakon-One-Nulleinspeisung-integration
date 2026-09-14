@@ -10,7 +10,7 @@ import asyncio
 import random
 from datetime import datetime, timezone
 
-from tests import harness as h
+from tests import geraet, harness as h
 from tests.ha_stubs import ActiveConnection, _DtState
 
 C = h.const
@@ -379,9 +379,10 @@ def _setup_env(spec):
     _apply_states(hass, spec["shared"])
     coords = {}
     for inst in spec["instances"]:
-        _apply_states(hass, inst["states"])
         entry = h.FakeEntry(f"entry_{inst['prefix']}",
                             h.entry_data(inst["prefix"], inst["grid_sensor"], inst["export_limit"]))
+        geraet.registrieren(hass, entry.data)
+        _apply_states(hass, inst["states"])
         if inst["follow_actual"] is not None:
             hass.followers[entry.data[C.CONF_ACTIVE_POWER]] = [
                 (entry.data[C.CONF_ACTUAL_SENSOR], inst["follow_actual"])]

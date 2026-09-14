@@ -105,6 +105,7 @@ class FakeState:
 class FakeStates:
     def __init__(self):
         self._states: dict[str, FakeState] = {}
+        self.defaults: dict[str, dict] = {}   # Standardattribute je Entity, s. tests/geraet.py
 
     def get(self, entity_id):
         return self._states.get(entity_id)
@@ -113,7 +114,8 @@ class FakeStates:
         if state is None:
             self._states.pop(entity_id, None)
             return
-        self._states[entity_id] = FakeState(entity_id, state, attributes, last_updated)
+        attrs = {**self.defaults.get(entity_id, {}), **(attributes or {})}
+        self._states[entity_id] = FakeState(entity_id, state, attrs, last_updated)
 
 
 class FakeServices:
@@ -126,14 +128,20 @@ class FakeServices:
         self.hass.log("call", domain, service, eid, value)
         old = self.hass.states.get(eid)
         attrs = old.attributes if old else {}
+        geraet = self.hass.geraet.get(eid)
         if domain == "number" and service == "set_value":
-            self.hass.states.set(eid, _num(value), attrs)
+            if geraet and not geraet.min <= float(value) <= geraet.max:
+                return  # HA weist ab; ohne blocking erreicht der Fehler den Aufrufer nicht
+            # Geräte-Integration schreibt int(value) ins Register, Rückmeldung per Poll
+            self.hass.states.set(eid, _num(int(float(value)) if geraet else value), attrs)
             for follower, sign in self.hass.followers.get(eid, ()):
                 # sign 0: Sensor meldet frisch, bleibt aber auf seinem Wert stehen
                 prev = self.hass.states.get(follower)
                 new = prev.state if sign == 0 and prev else _num(sign * float(value))
                 self.hass.states.set(follower, new, prev.attributes if prev else {})
         elif domain == "select" and service == "select_option":
+            if geraet and value not in geraet.optionen:
+                return
             self.hass.states.set(eid, value, attrs)
 
 
@@ -191,6 +199,7 @@ class FakeHass:
         self.http = FakeHttp(self)
         self.events: list = []
         self.followers: dict[str, list[tuple[str, float]]] = {}
+        self.geraet: dict = {}   # entity_id -> tests.geraet.Entity
         self._tracker_seq = 0
         CLOCK.hass = self
 

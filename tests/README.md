@@ -20,8 +20,14 @@ python -m venv ~/.cache/solakon-tests-venv
 npm install --prefix tests/panel        # nur für den Panel-Vergleich (jsdom)
 ```
 
-Die offizielle Geräte-Integration liegt als ignorierter Klon in `tests/geraet-integration/`
-(Referenz für Entity-Keys, Einheiten und `min`/`max`/`step`, kein Testcode):
+Die Geräteseite der Attrappe folgt der offiziellen Geräte-Integration (Stand 1.7.0).
+`geraet.py` hält je genutzter Entity Default-ID (de/en), Einheit, `device_class`,
+`min`/`max`/`step` und Select-Optionen mit Beleg; es ist die einzige Quelle dafür und wird
+eingecheckt. Die Attribute stehen als Standard an den Zuständen, ein Szenario kann sie
+überschreiben. `number.set_value` außerhalb `min`/`max` und unbekannte Select-Optionen
+bleiben ohne Wirkung, wie in HA ohne `blocking`. Geschrieben wird `int(value)`, auf `step`
+wird nicht gerundet. Den Klon selbst lesen die Tests nicht; er dient beim Nachziehen einer
+neuen Version als Referenz:
 
 ```bash
 git clone https://github.com/solakon-de/solakon-one-homeassistant tests/geraet-integration

@@ -17,22 +17,29 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import yaml  # noqa: E402
 
+from tests import geraet  # noqa: E402
 from tests import harness as h  # noqa: E402
 from tests import scenarios  # noqa: E402
 
 C = h.const
 
 # Kurzname → (Entity-Muster, Standardeinheit, Standardwert) je Instanz
+_G = {k: geraet.ENTITIES[c].einheit for k, c in (
+    ("soc", h.const.CONF_SOC_SENSOR), ("solar", h.const.CONF_SOLAR_SENSOR), ("ist", h.const.CONF_ACTUAL_SENSOR),
+    ("countdown", h.const.CONF_TIMEOUT_COUNTDOWN), ("leistung", h.const.CONF_ACTIVE_POWER),
+    ("entladestrom", h.const.CONF_DISCHARGE_CURRENT), ("timeout", h.const.CONF_TIMEOUT_SET),
+    ("export", h.const.CONF_EXPORT_LIMIT))}
+# Einheiten der Geräteseite aus tests/geraet.py; die Kapazität liefert die Geräte-Integration nicht
 INSTANZ_SENSOREN = {
-    "soc":          ("sensor.{p}_soc", "%", 50),
-    "solar":        ("sensor.{p}_solar", "W", 0),
-    "ist":          ("sensor.{p}_actual", "W", 0),
-    "countdown":    ("sensor.{p}_countdown", "s", 3000),
-    "leistung":     ("number.{p}_power", None, 0),
-    "entladestrom": ("number.{p}_discharge", None, 40),
-    "timeout":      ("number.{p}_timeout", None, 3599),
+    "soc":          ("sensor.{p}_soc", _G["soc"], 50),
+    "solar":        ("sensor.{p}_solar", _G["solar"], 0),
+    "ist":          ("sensor.{p}_actual", _G["ist"], 0),
+    "countdown":    ("sensor.{p}_countdown", _G["countdown"], 3000),
+    "leistung":     ("number.{p}_power", _G["leistung"], 0),
+    "entladestrom": ("number.{p}_discharge", _G["entladestrom"], 40),
+    "timeout":      ("number.{p}_timeout", _G["timeout"], 3599),
     "modus":        ("select.{p}_mode", None, "1"),
-    "export":       ("number.{p}_export", None, 800),
+    "export":       ("number.{p}_export", _G["export"], 800),
     "kapazitaet":   ("sensor.{p}_capacity", "kWh", 2.0),
 }
 FLAGS = ("cycle_active", "surplus_active", "ac_charge_active", "tariff_charge_active", "solar_zero_entry_armed")
