@@ -1,0 +1,14 @@
+titel: Ungültige SOC-Grenzen blockieren die Regelung erst nach dem Schreiben des Export-Limits
+bezug: fix-2026-09-14-export-limit-vor-validierung
+offen: true
+# Zone-1-Grenze gleich Zone-3-Grenze: der Zyklus muss vor jedem Schreibbefehl abbrechen.
+netz: 100
+instanzen:
+  - prefix: a
+    settings: {regulation_enabled: true, zone1_limit: 20, zone3_limit: 20}
+    sensoren: {soc: 60, modus: "1", export: 100}
+schritte:
+  - nach: 0
+erwartet:
+  - zustand_nicht: {last_error: ""}
+  - kein_aufruf: {entity: a.export}

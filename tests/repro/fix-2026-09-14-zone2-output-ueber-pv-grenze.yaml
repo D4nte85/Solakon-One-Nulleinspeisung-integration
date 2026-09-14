@@ -1,0 +1,17 @@
+titel: Zone 2 hält einen Output über PV minus Reserve, solange der Netzfehler in der Toleranz liegt
+bezug: fix-2026-09-14-zone2-output-ueber-pv-grenze
+offen: true
+# Zone 2 (Zyklus aus, Modus 1) mit 800 W Output bei 30 W PV: der Hausverbrauch wird
+# aus der Batterie gedeckt, das Netz steht in der Toleranz. Der Output muss auf
+# max(0, PV − Reserve) = 0 W herunter.
+netz: 5
+instanzen:
+  - prefix: a
+    settings: {regulation_enabled: true}
+    sensoren: {soc: 40, solar: 30, modus: "1", leistung: 800, ist: 800}
+schritte:
+  - nach: 0
+  - nach: 5
+erwartet:
+  - schritt: alle
+    aufruf: {entity: a.leistung, wert_max: 0}

@@ -1,0 +1,38 @@
+"""Prüft die Verhaltensregeln aus `invarianten.py` über alle Charakterisierungsszenarien.
+
+Gezählt werden nur Regelläufe mit konsistentem Start. Eine Regel mit offener Bugfix-Seite
+steht in OFFEN und muss rot sein (strikt erwarteter Fehlschlag); wird sie grün, ist der
+Eintrag zu entfernen.
+"""
+from __future__ import annotations
+
+import pytest
+
+from tests import invarianten as inv
+
+OFFEN = {
+    "b2": "fix-2026-09-14-zone2-output-ueber-pv-grenze",
+    "b3": "fix-2026-09-14-ruhe-entladestrom-null",
+    "c2": "fix-2026-09-14-sensorausfall-ohne-meldung, fix-2026-09-14-nicht-numerischer-sensor",
+    "c3": "fix-2026-09-14-export-limit-vor-validierung",
+    "f1": "fix-2026-09-14-pool-summe-ohne-eigene-instanz",
+}
+
+
+@pytest.fixture(scope="module")
+def befunde():
+    return inv.pruefen()
+
+
+@pytest.mark.parametrize("regel", sorted(inv.REGELN))
+def test_regel(befunde, regel):
+    treffer = [t[:4] for t in befunde.get(regel, []) if t[4]]
+    if regel in OFFEN:
+        assert treffer, f"als offen markiert, aber ohne Verstoß — Eintrag in OFFEN entfernen ({OFFEN[regel]})"
+        pytest.xfail(f"offener Fehler {OFFEN[regel]}: {len(treffer)} Verstöße")
+    assert not treffer, "\n".join(map(str, treffer[:10]))
+
+
+def test_e3():
+    treffer = inv.e3_befunde()
+    assert not treffer, "\n".join(map(str, treffer[:10]))

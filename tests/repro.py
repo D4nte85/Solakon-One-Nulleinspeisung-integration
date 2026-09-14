@@ -158,16 +158,18 @@ def pruefe(erwartung: dict, rec: dict) -> tuple[bool, str]:
     instanz = erwartung.get("instanz", "a")
     ort = f"Schritt {auswahl}" if auswahl != "alle" else "alle Schritte"
 
-    if "zustand" in erwartung:
+    for art, zeichen in (("zustand", "="), ("zustand_nicht", "≠")):
+        if art not in erwartung:
+            continue
         abweichend = []
         for nr in nummern:
             ist = schritte[nr - 1]["state"][instanz]
-            for attr, soll in erwartung["zustand"].items():
+            for attr, soll in erwartung[art].items():
                 if attr not in ist:
                     raise SzenarioFehler(f"unbekanntes Zustandsattribut {attr!r}")
-                if not _zahl_gleich(ist[attr], soll):
+                if _zahl_gleich(ist[attr], soll) != (art == "zustand"):
                     abweichend.append(f"{attr}={ist[attr]!r} (Schritt {nr})")
-        text = f"{ort}, Instanz {instanz}: " + ", ".join(f"{k}={v!r}" for k, v in erwartung["zustand"].items())
+        text = f"{ort}, Instanz {instanz}: " + ", ".join(f"{k}{zeichen}{v!r}" for k, v in erwartung[art].items())
         return not abweichend, text + ("" if not abweichend else " — ist " + ", ".join(abweichend))
 
     for art in ("aufruf", "kein_aufruf"):
@@ -188,7 +190,7 @@ def pruefe(erwartung: dict, rec: dict) -> tuple[bool, str]:
     if "log" in erwartung:
         treffer = [r for r in rec["logs"] if erwartung["log"] in r[1]]
         return bool(treffer), f"Log enthält {erwartung['log']!r}" + ("" if treffer else " — nicht gefunden")
-    raise SzenarioFehler(f"Erwartung ohne zustand/aufruf/kein_aufruf/log: {erwartung}")
+    raise SzenarioFehler(f"Erwartung ohne zustand/zustand_nicht/aufruf/kein_aufruf/log: {erwartung}")
 
 
 def lade(pfad: Path) -> dict:

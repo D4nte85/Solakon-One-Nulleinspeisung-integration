@@ -7,6 +7,7 @@ importiert. Drei Schichten nutzen das:
 | Schicht | Zweck | Aufruf |
 |---|---|---|
 | Charakterisierung | Verhalten über Zufallsszenarien festhalten, Referenz in `golden/` | `pytest tests` · neu schreiben nur nach gewollter Änderung: `python tests/regen.py [art]` |
+| Invarianten | Verhaltensregeln nach jedem Regellauf aller Charakterisierungsszenarien prüfen | `pytest tests` · Zählung je Regel: `python -m tests.invarianten [regel ...]` |
 | Reproduktion | einen Fehlervorgang als benanntes Szenario abspielen | `python tests/repro.py tests/repro/<name>.yaml` |
 | Panel | Render-Vergleich von `solakon-panel.js` gegen einen git-Stand | `python tests/panel/vergleich.py [REV]` |
 
@@ -68,7 +69,7 @@ erwartet:
   - log: Teiltext einer WARNING
 ```
 
-`zustand` prüft Attribute aus `COORD_ATTRS` in `harness.py`. `aufruf`/`kein_aufruf` prüfen
+`zustand` prüft Attribute aus `COORD_ATTRS` in `harness.py` auf Gleichheit, `zustand_nicht` auf Ungleichheit (z. B. `last_error: ""` für „Fehlermeldung gesetzt"). `aufruf`/`kein_aufruf` prüfen
 die Schreibbefehle eines Schritts auf eine Entity, optional mit `wert`, `wert_min`,
 `wert_max`.
 
@@ -86,6 +87,19 @@ python tests/repro_import.py verlauf.csv --map netz=sensor.shelly_power \
 Standard ist ein Regelschritt je Änderung des Netzsensors (`--takt netz`), alternativ ein
 festes Raster in Sekunden (`--takt 5`). Einheiten, die der Export nicht enthält, gibt
 `--einheit netz=kW` an.
+
+## Invarianten
+
+`invarianten.py` hält die Regeln für gewolltes Verhalten als Funktionen `(ctx) -> str | None`,
+eine je Regel mit der Nummer aus der Regelbeschreibung (`a1` … `k5`). Jede prüft einen
+Regellauf einer Instanz: Eingänge davor, Schreibbefehle, Zustand danach.
+
+- Gezählt werden nur Läufe mit konsistentem Startzustand; Treffer aus widersprüchlichen
+  Startflags prüfen das Heilen und laufen getrennt mit.
+- Regeln in `VERZOEGERT` gelten nur in Läufen ohne Übergang (kein Fallwechsel, kein
+  geschriebener Modus), weil der erste zutreffende Fall gewinnt.
+- `test_invarianten.py` prüft jede Regel einzeln. Eine Regel mit offener Bugfix-Seite steht
+  in `OFFEN` und muss rot sein; wird sie grün, ist der Eintrag zu entfernen.
 
 ## Panel-Vergleich
 

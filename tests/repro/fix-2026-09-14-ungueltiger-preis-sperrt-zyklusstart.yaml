@@ -1,0 +1,18 @@
+titel: Ungültiger Preis bei aktivem Tarif sperrt den Start von Zone 1 und Zone 2
+bezug: fix-2026-09-14-ungueltiger-preis-sperrt-zyklusstart
+offen: true
+# Tarif aktiv, Preissensor nicht verfügbar: das Tarif-Subsystem fällt aus, die Regelung
+# verhält sich wie ohne Tarif. SOC 70 % über der Zone-1-Schwelle → Fall A startet.
+netz: 300
+sensoren:
+  sensor.preis: unavailable
+instanzen:
+  - prefix: a
+    settings: {regulation_enabled: true, tariff_enabled: true, tariff_price_sensor: sensor.preis}
+    sensoren: {soc: 70, modus: "0"}
+schritte:
+  - nach: 0
+  - nach: 5
+erwartet:
+  - zustand: {cycle_active: true}
+  - zustand_nicht: {last_error: ""}
