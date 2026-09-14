@@ -118,7 +118,6 @@
           "ac_charge": "AC Charge (Netzladung)",
           "disabled_regulation_off": "Disabled (Regelung inaktiv)",
           "rest_discharge": "Ruhe in INV Discharge (0 W, Fernsteuerung bleibt aktiv)",
-          "rest_discharge_regulation_off": "Ruhe in INV Discharge (0 W, Regelung inaktiv)",
           "unknown": "Unbekannter Modus"
         }
       },

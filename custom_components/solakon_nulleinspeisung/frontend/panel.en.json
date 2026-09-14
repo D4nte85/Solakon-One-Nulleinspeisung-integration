@@ -43,12 +43,12 @@
       "text": "Calculates the zero-point offset from the standard deviation of grid power over the configured time window.\n\nFormula: offset = clamp(min + max(0, (StdDev − noise) × factor), min, max)\n\nExample (min=30, noise=15, factor=1.5):\n• StdDev 5 W → 30 W (minimum)\n• StdDev 30 W → 52 W\n• StdDev 80 W → 128 W\n• StdDev 160 W → 248 W\n• StdDev 250 W+ → 250 W (maximum)\n\nEach zone (Zone 1, Zone 2, Zone AC) can be enabled individually and overrides the static offset of that zone.\n\nThe StdDev sensor is calculated internally — no external statistics sensor required.\n\nMultiple instances on the same grid sensor: one instance (the group leader) maintains the StdDev ring buffer, all others adopt its value — prevents independent, slightly phase-shifted StdDev calculations per instance.\n\nTrimming (stddev_trim_count): excludes the N highest AND the N lowest individual readings in the window before the calculation — per side, not in total (N=5 → 10 samples excluded). Expressed as a sample count, not a percentage, since the number of samples in the window depends on the grid sensor's update rate. Separates short, rare load spikes (e.g. a compressor or pump inrush lasting a few seconds) from genuine sustained volatility: a spike that fills only a minority of the window's samples falls out entirely; a fluctuation affecting most of the window survives trimming unchanged and still moves the offset. Default 0 = no trimming. Effect directly comparable via the second StdDev value (raw, untrimmed) in the status display."
     },
     "night": {
-      "summary": "Night Shutdown — disable Zone 2 when PV < PV reserve",
-      "text": "Affects Zone 2 only (case F): output 0 W, timer toggle, mode → disabled, integral reset.\nZone 1 and AC charging continue running at night.\n\nThreshold: PV reserve from zone settings — no separate parameter.\n\nReactivation: once PV rises above the PV reserve again, case E applies (integral reset, timer toggle, mode → '1') — provided no tariff lock is active."
+      "summary": "Night Shutdown — disable Zone 2 when PV < PV reserve, re-enable with hysteresis",
+      "text": "Affects Zone 2 only (case F): output 0 W, timer toggle, mode → disabled, integral reset.\nZone 1 and AC charging continue running at night.\n\nOff threshold: PV reserve from zone settings. On threshold: PV reserve + hysteresis (default 0 W). In between, the last state is kept.\n\nReactivation: once PV reaches the on threshold, case E applies (integral reset, timer toggle, mode → '1') — provided no tariff lock is active."
     },
     "debug": {
       "summary": "Debug — manual intervention in the control state",
-      "text": "Reset integral: sets the I-part of the PI controller to 0.\n\nSet zone manually: toggles the internal cycle_active flag and resets the integral.\n• Activate Zone 1: cycle_active = true → aggressive discharge, full discharge current.\n• Activate Zone 2: cycle_active = false → battery-friendly operation, 0 A discharge current, dynamic output limit.\n\nIdle state in mode 1 (default off): every transition that would otherwise write mode '0' — case B, C, F, TM, charge end and case I without cycle, stall recovery, control off — writes mode '1' at 0 W instead. While idle no PI runs, the instance is left out of the discharge pool, and cases E, A, D, 0A, G and GT bring it back just as from mode '0'. Not recommended: the device never leaves remote control again. Intended for devices that do not charge in mode '0'.\n\nAll actions are logged under 'Last action' in the Status tab."
+      "text": "Reset integral: sets the I-part of the PI controller to 0.\n\nSet zone manually: toggles the internal cycle_active flag and resets the integral.\n• Activate Zone 1: cycle_active = true → aggressive discharge, full discharge current.\n• Activate Zone 2: cycle_active = false → battery-friendly operation, 0 A discharge current, dynamic output limit.\n\nIdle state in mode 1 (default off): every transition that would otherwise write mode '0' — case B, C, F, TM, charge end and case I without cycle, stall recovery — writes mode '1' at 0 W instead. Control off always writes mode '0'. While idle no PI runs, the instance is left out of the discharge pool, and cases E, A, D, 0A, G and GT bring it back just as from mode '0'. Not recommended: the device never leaves remote control again. Intended for devices that do not charge in mode '0'.\n\nAll actions are logged under 'Last action' in the Status tab."
     },
     "entities": {
       "summary": "Entities — every optional sensor assignment for this instance in one place",
@@ -115,7 +115,7 @@
     },
     "pv_reserve": {
       "l": "PV Reserve (W)",
-      "d": "Zone-2 output limit: min(Hard Limit Z1, max(0, PV − reserve)) — PV-based limit capped by Hard Limit Z1. Also the threshold for night shutdown: Zone 2 disabled when PV < reserve."
+      "d": "Zone-2 output limit: min(Hard Limit Z1, max(0, PV − reserve)) — PV-based limit capped by Hard Limit Z1. Also the off threshold for night shutdown: Zone 2 disabled when PV < reserve (re-enabled at reserve + night hysteresis)."
     },
     "hard_limit_z0": {
       "l": "Hard Limit Zone 0 — Surplus (W)",
@@ -309,6 +309,10 @@
       "l": "Enable Night Shutdown",
       "d": "Disable Zone 2 when PV < PV reserve. Zone 1 and AC charging continue running. Zone 2 is not reactivated while a tariff lock (medium/cheap price) is active."
     },
+    "night_hysteresis": {
+      "l": "Re-enable hysteresis (W)",
+      "d": "Night ends only once PV ≥ PV reserve + hysteresis; it still starts at PV < PV reserve. 0 = on and off threshold identical."
+    },
     "periodic_enabled": {
       "l": "Enable Periodic Trigger",
       "d": "Runs the regulation loop at a fixed interval — even without sensor changes. Useful for stable households where grid power rarely fluctuates, and for setups without PV panels on the device, where the solar sensor never fires."
@@ -404,7 +408,7 @@
     "zone1_state":"Zone 1 (cycle active)",
     "zone2_state":"Zone 2",
     "rest_hdr":   "⚠️ Idle State in Mode 1",
-    "rest_desc":  "While control is idle (zone 3, night, discharge lock, charge end without cycle, control off), the device stays in mode '1' at 0 W instead of mode '0'. Only for devices that do not charge in mode '0'.",
+    "rest_desc":  "While control is idle (zone 3, night, discharge lock, charge end without cycle), the device stays in mode '1' at 0 W instead of mode '0'. Only for devices that do not charge in mode '0'.",
     "rest_warn":  "Not recommended hack: the device never leaves remote control again — not even with control switched off.",
     "rest_toggle":"Idle state in mode 1 (0 W)"
   },

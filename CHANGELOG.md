@@ -5,6 +5,17 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+### Hinzugefügt
+- Nachtabschaltung: Einstellung **Hysterese Einschalten** (W, Standard 0). Die Nacht
+  beginnt weiter bei PV < PV-Ladereserve und endet erst bei PV ≥ PV-Ladereserve +
+  Hysterese — verhindert Flattern zwischen Fall F und E in der Dämmerung
+
+### Geändert
+- Regelung ausschalten schreibt immer Modus `'0'`, auch mit aktivem Schalter
+  **Ruhezustand in Modus 1** — das Gerät verlässt die Fernsteuerung, wenn die
+  Integration nicht mehr regelt. Der Betriebsmodus-Zustand
+  `rest_discharge_regulation_off` entfällt
+
 ## [3.0.0-beta.1] – 2026-09-13
 
 > **Beta-Release.** Umfangreicher interner Umbau von Coordinator, WebSocket-Handlern, Sensoren, Config-Flow und Panel, dazu der zentrale Ruhezustand. Verhaltensänderung gegenüber `2.4.x`: Zahlenwerte kommen nur noch aus Entitäten der Domains `sensor`, `input_number` und `number`. Erscheint in HACS nur bei aktivierten Beta-Versionen.

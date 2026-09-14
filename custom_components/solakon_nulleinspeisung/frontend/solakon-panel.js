@@ -242,6 +242,7 @@ const TAB_LAYOUT = {
   night: {
     top: [
       { k: "night_enabled", t: "bool" },
+      { k: "night_hysteresis", t: "num", min: 0, max: 500, step: 10 },
     ],
   },
 };

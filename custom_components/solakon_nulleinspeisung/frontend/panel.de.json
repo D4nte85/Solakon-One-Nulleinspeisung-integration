@@ -43,12 +43,12 @@
       "text": "Berechnet den Nullpunkt-Offset aus der Standardabweichung der Netzleistung über das konfigurierte Zeitfenster.\n\nFormel: offset = clamp(min + max(0, (StdDev − Rausch) × Faktor), min, max)\n\nBeispiel (min=30, noise=15, factor=1.5):\n• StdDev 5 W → 30 W (Minimum)\n• StdDev 30 W → 52 W\n• StdDev 80 W → 128 W\n• StdDev 160 W → 248 W\n• StdDev 250 W+ → 250 W (Maximum)\n\nJede Zone (Zone 1, Zone 2, Zone AC) ist einzeln aktivierbar und überschreibt den statischen Offset der jeweiligen Zone.\n\nDer StdDev-Sensor wird intern berechnet — kein externer Statistik-Sensor erforderlich.\n\nMehrere Instanzen am selben Netzsensor: eine Instanz (der Gruppen-Leader) pflegt den StdDev-Ringpuffer, alle anderen übernehmen ihren Wert — verhindert unabhängige, leicht phasenversetzte StdDev-Berechnungen pro Instanz.\n\nTrimmen (stddev_trim_count): schließt die N höchsten UND die N niedrigsten Einzelmesswerte im Fenster vor der Berechnung aus — pro Seite, nicht insgesamt (N=5 → 10 Samples ausgeschlossen). Als Anzahl Samples, nicht Prozent, da die Sample-Zahl im Fenster von der Update-Rate des Netzsensors abhängt. Trennt kurze, seltene Lastspitzen (z. B. Kompressor-/Pumpen-Anlaufstrom für wenige Sekunden) von echter Dauerunruhe: ein Puls, der nur eine Minderheit der Samples füllt, fällt komplett raus; eine Schwankung über den Großteil des Fensters übersteht das Trimmen unverändert und bewegt den Offset weiterhin. Standard 0 = kein Trimmen. Wirkung direkt vergleichbar über den zweiten StdDev-Wert (roh, ungetrimmt) in der Statusanzeige."
     },
     "night": {
-      "summary": "Nachtabschaltung — Zone 2 bei PV < PV-Ladereserve deaktivieren",
-      "text": "Betrifft ausschließlich Zone 2 (Fall F): Output 0 W, Timer-Toggle, Modus → Disabled, Integral-Reset.\nZone 1 und AC Laden laufen auch nachts weiter.\n\nSchwelle: PV-Ladereserve aus den Zonen-Einstellungen — kein separater Parameter.\n\nReaktivierung: Sobald PV wieder über die PV-Ladereserve steigt, greift Fall E (Integral-Reset, Timer-Toggle, Modus → '1') — sofern kein Tarif-Lock aktiv ist."
+      "summary": "Nachtabschaltung — Zone 2 bei PV < PV-Ladereserve deaktivieren, Einschalten mit Hysterese",
+      "text": "Betrifft ausschließlich Zone 2 (Fall F): Output 0 W, Timer-Toggle, Modus → Disabled, Integral-Reset.\nZone 1 und AC Laden laufen auch nachts weiter.\n\nAusschaltschwelle: PV-Ladereserve aus den Zonen-Einstellungen. Einschaltschwelle: PV-Ladereserve + Hysterese (Standard 0 W). Dazwischen bleibt der letzte Zustand erhalten.\n\nReaktivierung: Sobald PV die Einschaltschwelle erreicht, greift Fall E (Integral-Reset, Timer-Toggle, Modus → '1') — sofern kein Tarif-Lock aktiv ist."
     },
     "debug": {
       "summary": "Debug — manuelle Eingriffe in den Regelzustand",
-      "text": "Integral zurücksetzen: Setzt den I-Anteil des PI-Reglers auf 0.\n\nZone manuell setzen: Schaltet den internen cycle_active-Flag und setzt das Integral zurück.\n• Zone 1 aktivieren: cycle_active = true → aggressiver Entladebetrieb, voller Entladestrom.\n• Zone 2 aktivieren: cycle_active = false → batterieschonender Betrieb, 0 A Entladestrom, dynamisches Output-Limit.\n\nRuhezustand in Modus 1 (Standard aus): Alle Übergänge, die sonst Modus '0' schreiben — Fall B, C, F, TM, Lade-Ende und Fall I ohne Zyklus, Stillstands-Recovery, Regelung aus —, schreiben stattdessen Modus '1' mit 0 W. In dieser Ruhe läuft kein PI, die Instanz zählt nicht zum Entlade-Pool, und die Fälle E, A, D, 0A, G und GT holen sie zurück wie aus Modus '0'. Nicht empfohlen: das Gerät verlässt die Fernsteuerung nie mehr. Gedacht für Geräte, die in Modus '0' nicht laden.\n\nAlle Aktionen werden unter 'Letzte Aktion' im Status-Tab protokolliert."
+      "text": "Integral zurücksetzen: Setzt den I-Anteil des PI-Reglers auf 0.\n\nZone manuell setzen: Schaltet den internen cycle_active-Flag und setzt das Integral zurück.\n• Zone 1 aktivieren: cycle_active = true → aggressiver Entladebetrieb, voller Entladestrom.\n• Zone 2 aktivieren: cycle_active = false → batterieschonender Betrieb, 0 A Entladestrom, dynamisches Output-Limit.\n\nRuhezustand in Modus 1 (Standard aus): Alle Übergänge, die sonst Modus '0' schreiben — Fall B, C, F, TM, Lade-Ende und Fall I ohne Zyklus, Stillstands-Recovery —, schreiben stattdessen Modus '1' mit 0 W. Regelung aus schreibt immer Modus '0'. In dieser Ruhe läuft kein PI, die Instanz zählt nicht zum Entlade-Pool, und die Fälle E, A, D, 0A, G und GT holen sie zurück wie aus Modus '0'. Nicht empfohlen: das Gerät verlässt die Fernsteuerung nie mehr. Gedacht für Geräte, die in Modus '0' nicht laden.\n\nAlle Aktionen werden unter 'Letzte Aktion' im Status-Tab protokolliert."
     },
     "entities": {
       "summary": "Entitäten — alle optionalen Sensor-Zuweisungen dieser Instanz an einer Stelle",
@@ -115,7 +115,7 @@
     },
     "pv_reserve": {
       "l": "PV-Ladereserve (W)",
-      "d": "Zone-2-Output-Limit: min(Hard-Limit-Z1, max(0, PV − Reserve)) — PV-basiertes Limit, durch Hard-Limit-Z1 gedeckelt. Gleichzeitig Schwelle für Nachtabschaltung: Zone 2 deaktiviert wenn PV < Reserve."
+      "d": "Zone-2-Output-Limit: min(Hard-Limit-Z1, max(0, PV − Reserve)) — PV-basiertes Limit, durch Hard-Limit-Z1 gedeckelt. Gleichzeitig Ausschaltschwelle der Nachtabschaltung: Zone 2 deaktiviert wenn PV < Reserve (Einschalten ab Reserve + Nacht-Hysterese)."
     },
     "hard_limit_z0": {
       "l": "Hard Limit Zone 0 — Surplus (W)",
@@ -309,6 +309,10 @@
       "l": "Nachtabschaltung aktivieren",
       "d": "Zone 2 bei PV < PV-Ladereserve deaktivieren. Zone 1 und AC Laden laufen weiter. Zone 2 wird nicht reaktiviert solange ein Tarif-Lock (mittlerer/günstiger Preis) aktiv ist."
     },
+    "night_hysteresis": {
+      "l": "Hysterese Einschalten (W)",
+      "d": "Die Nacht endet erst ab PV ≥ PV-Ladereserve + Hysterese; sie beginnt weiterhin bei PV < PV-Ladereserve. 0 = Ein- und Ausschaltschwelle gleich."
+    },
     "periodic_enabled": {
       "l": "Periodischen Trigger aktivieren",
       "d": "Startet die Regelschleife im konfigurierten Intervall neu — auch ohne Sensor-Änderung. Sinnvoll bei stabilen Haushalten, in denen der Netzbezug selten springt, und in Aufbauten ohne eigene PV am Gerät, in denen der Solar-Sensor als Trigger-Quelle ausfällt."
@@ -404,7 +408,7 @@
     "zone1_state":"Zone 1 (Zyklus aktiv)",
     "zone2_state":"Zone 2",
     "rest_hdr":   "⚠️ Ruhezustand in Modus 1",
-    "rest_desc":  "Ruht die Regelung (Zone 3, Nacht, Entladesperre, Lade-Ende ohne Zyklus, Regelung aus), steht das Gerät dann in Modus '1' mit 0 W statt in Modus '0'. Nur für Geräte, die in Modus '0' nicht laden.",
+    "rest_desc":  "Ruht die Regelung (Zone 3, Nacht, Entladesperre, Lade-Ende ohne Zyklus), steht das Gerät dann in Modus '1' mit 0 W statt in Modus '0'. Nur für Geräte, die in Modus '0' nicht laden.",
     "rest_warn":  "Nicht empfohlener Hack: Das Gerät verlässt die Fernsteuerung nie mehr — auch nicht bei ausgeschalteter Regelung.",
     "rest_toggle":"Ruhezustand in Modus 1 (0 W)"
   },

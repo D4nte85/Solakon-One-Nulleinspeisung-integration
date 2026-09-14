@@ -105,7 +105,6 @@ MODE_KEYS = [
     "ac_charge",
     "disabled_regulation_off",
     "rest_discharge",
-    "rest_discharge_regulation_off",
     "unknown",
 ]
 
@@ -175,6 +174,8 @@ S_ZONE1_FORCE_THRESHOLD = "zone1_force_threshold"
 S_ZONE1_FORCE_MIN_SOC   = "zone1_force_min_soc"
 
 S_NIGHT_ENABLED = "night_enabled"
+# Einschaltschwelle der Nacht = PV-Ladereserve + Hysterese.
+S_NIGHT_HYSTERESIS = "night_hysteresis"
 
 # Ruhezustand in Modus '1' mit 0 W statt Modus '0'.
 S_REST_IN_DISCHARGE = "rest_in_discharge"
@@ -262,6 +263,7 @@ SETTINGS_DEFAULTS: dict = {
     S_ZONE1_FORCE_MIN_SOC:   20,
 
     S_NIGHT_ENABLED: False,
+    S_NIGHT_HYSTERESIS: 0,
     S_REST_IN_DISCHARGE: False,
 
     S_PERIODIC_ENABLED:  False,

@@ -39,7 +39,7 @@ from .const import (
     S_TARIFF_CHEAP_ENTITY, S_TARIFF_EXP_ENTITY,
     S_PV_FORECAST_ENABLED, S_PV_FORECAST_SENSOR, S_PV_FORECAST_THRESHOLD,
     S_ZONE1_FORCE_ENABLED, S_ZONE1_FORCE_SENSOR, S_ZONE1_FORCE_THRESHOLD, S_ZONE1_FORCE_MIN_SOC,
-    S_NIGHT_ENABLED, S_REST_IN_DISCHARGE,
+    S_NIGHT_ENABLED, S_NIGHT_HYSTERESIS, S_REST_IN_DISCHARGE,
     S_SELF_ADJUST, S_SELF_ADJUST_TOL,
     S_DYN_Z1_ENABLED, S_DYN_Z1_MIN, S_DYN_Z1_MAX, S_DYN_Z1_NOISE, S_DYN_Z1_FACTOR, S_DYN_Z1_NEGATIVE,
     S_DYN_Z2_ENABLED, S_DYN_Z2_MIN, S_DYN_Z2_MAX, S_DYN_Z2_NOISE, S_DYN_Z2_FACTOR, S_DYN_Z2_NEGATIVE,
@@ -158,6 +158,7 @@ CYCLE_SETTINGS = (
     ("zone1_force_threshold", S_ZONE1_FORCE_THRESHOLD, float),
     ("zone1_force_min_soc", S_ZONE1_FORCE_MIN_SOC, int),
     ("night_enabled", S_NIGHT_ENABLED, bool),
+    ("night_hysteresis", S_NIGHT_HYSTERESIS, int),
 )
 CycleSettings = namedtuple("CycleSettings", [field for field, _, _ in CYCLE_SETTINGS])
 
@@ -219,6 +220,8 @@ class SolakonCoordinator:
         # Ruhezustand: Output 0 im Ruhemodus, keine PI-Regelung.
         self.resting: bool = False
         self.is_night: bool = False
+        # Dunkelheit mit Hysterese: an unter PV-Ladereserve, aus ab Reserve + Hysterese.
+        self._dark: bool = False
         # Entladung durch den Tarif gesperrt (Preis unter Teuer-Schwelle, keine
         # Lade-Session, kein Ueberschuss) — der Zustand hinter Fall TM.
         self.discharge_locked: bool = False
@@ -333,11 +336,11 @@ class SolakonCoordinator:
             # Aufräum-Sequenz solange regulation_enabled noch True ist,
             # danach blockt der Guard alle Modbus-Schreibbefehle
             async with self._lock:
-                _LOGGER.info("Solakon: Regelung wird deaktiviert — setze Output 0, Ruhemodus")
+                _LOGGER.info("Solakon: Regelung wird deaktiviert — setze Output 0, Modus Disabled")
                 await self._transition(output=0, wait=False, timer=False)
                 await self._set_discharge(self._setting(S_DISCHARGE_MAX, float))
-                await self._transition(rest=True)
-                off_key = f"{self._rest_mode_key}_regulation_off"
+                await self._transition(mode=MODE_DISABLED)
+                off_key = "disabled_regulation_off"
                 if self.mode_key != off_key:
                     self.mode_label_ts = time.time()
                 self.mode_key = off_key
@@ -1198,7 +1201,7 @@ class SolakonCoordinator:
             soft_errors, cs.zone1_force_enabled, zone1_force_sensor, "err_zone1_force"
         ) and (
             self._flt_kwh_normalized(zone1_force_sensor) >= cs.zone1_force_threshold
-            and solar < cs.pv_reserve         # "gerade dunkel", gleiche Bedingung wie is_night
+            and solar < cs.pv_reserve         # "gerade dunkel", ohne Nacht-Hysterese
             and soc > cs.zone1_force_min_soc  # eigener Floor, unabhängig von zone3_limit (Exit-Schwelle)
         )
 
@@ -1301,7 +1304,11 @@ class SolakonCoordinator:
         else:
             new_surplus = False
 
-        is_night = cs.night_enabled and solar < cs.pv_reserve and not self.cycle_active
+        if solar < cs.pv_reserve:
+            self._dark = True
+        elif solar >= cs.pv_reserve + cs.night_hysteresis:
+            self._dark = False
+        is_night = cs.night_enabled and self._dark and not self.cycle_active
         self.is_night = is_night
 
         # ── 5. Falls / Zonenwechsel ──────────────────────────────────────────
