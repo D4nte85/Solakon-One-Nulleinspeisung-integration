@@ -77,7 +77,7 @@ erwartet:
 
 `zustand` prüft Attribute aus `COORD_ATTRS` in `harness.py` auf Gleichheit, `zustand_nicht` auf Ungleichheit (z. B. `last_error: ""` für „Fehlermeldung gesetzt"). `aufruf`/`kein_aufruf` prüfen
 die Schreibbefehle eines Schritts auf eine Entity, optional mit `wert`, `wert_min`,
-`wert_max`.
+`wert_max`. Trägt eine Erwartung mehrere Prüfarten, ist sie nur erfüllt, wenn jede erfüllt ist.
 
 ### Aus einem HA-Verlauf
 
