@@ -342,7 +342,7 @@ Optionales Laden bei erkanntem externem Überschuss. Aktiv in Zone 1 und Zone 2.
 
 **Eintritts-Bedingung:** SOC < Ladeziel UND kein Überschuss aktiv UND kein AC/Tarif-Laden aktiv UND Modus ≠ `'3'` UND (Grid + ΣOutput_entladend) < −Hysterese
 
-> Der Modus-Guard `≠ '3'` verhindert einen Re-Eintritt wenn AC Laden bereits aktiv ist. `ΣOutput_entladend` ist im Einzelbetrieb der eigene Output, im Multi-Instanz-Betrieb die Summe aller Instanzen im Entlademodus — sonst würde eine Instanz die Entladung einer Schwester-Instanz als externen Netzüberschuss werten und aus dem Netz genau das nachladen, was die Schwester gerade einspeist.
+> Der Modus-Guard `≠ '3'` verhindert einen Re-Eintritt wenn AC Laden bereits aktiv ist. `ΣOutput_entladend` ist im Einzelbetrieb der eigene Output, im Multi-Instanz-Betrieb der eigene Output plus der Output aller Schwester-Instanzen, die in Modus `'1'` entladen (nicht ruhend) — sonst würde eine Instanz die Entladung einer Schwester-Instanz als externen Netzüberschuss werten und aus dem Netz genau das nachladen, was die Schwester gerade einspeist.
 
 **Abbruch-Bedingung:** Modus = `'3'` UND `ac_charge_active` UND kein Tarif-Laden UND (SOC ≥ Ladeziel ODER (Grid ≥ ac_offset + Hysterese UND |eigener Output| ≤ Toleranz))
 
@@ -495,7 +495,7 @@ Die Regellogik arbeitet mit einer geordneten Liste von Falls. Die Reihenfolge is
 - Fall D verzichtet auf die Zone-3-Schwelle, wenn eine AC-/Tarif-Lade-Session aktiv ist — Laden muss bei jedem SOC möglich sein, sonst bleibt der Modus bei niedrigem SOC dauerhaft auf `'0'` hängen, obwohl `ac_charge_active`/`tariff_charge_active` noch `True` sind (z. B. nach Deaktivieren/Reaktivieren der Regelung während laufendem Laden).
 - Fall E ist gegen den Tarif-Block (Preis < Teuer) geblockt — verhindert, dass Zone 2 bei gesperrter Entladung neu startet.
 - Falls GT und G sind gegen aktiven Überschuss geblockt — Zone-0-Einspeisung hat absoluten Vorrang vor Tarif-Laden und AC Laden.
-- Fall G verwendet `ΣOutput_entladend` (Summe aller Instanzen im Entlademodus, Einzelbetrieb = eigener Output) statt des Eigenanteils — sonst würde eine Instanz die Entladung einer Schwester-Instanz als externen Netzüberschuss werten und daraufhin genau diese Menge aus dem Netz nachladen (Batterie-zu-Batterie-Umpumpen im Multi-Instanz-Betrieb).
+- Fall G verwendet `ΣOutput_entladend` (eigener Output plus alle in Modus `'1'` entladenden Schwester-Instanzen, Einzelbetrieb = eigener Output) statt des Eigenanteils — sonst würde eine Instanz die Entladung einer Schwester-Instanz als externen Netzüberschuss werten und daraufhin genau diese Menge aus dem Netz nachladen (Batterie-zu-Batterie-Umpumpen im Multi-Instanz-Betrieb).
 
 ---
 
@@ -524,7 +524,7 @@ Typischer Arbeitsbereich: **0.03–0.08**. Für AC Laden separat tunen — P bes
 3. **Netzleistungssensor-Polarität.** Positiv = Bezug, negativ = Einspeisung — abweichende Polarität führt zu umgekehrtem Regelverhalten.
 4. **AC Laden Eintritts-Guard.** Eintritt in AC Laden ist nur möglich wenn Modus ≠ `'3'`. Das verhindert einen Re-Eintritt wenn AC Laden bereits aktiv ist.
 5. **AC Laden P/I-Tuning.** Separates Tuning erforderlich — P klein halten (~0,3–0,5) wegen der langen Hardware-Flanke des Solakon ONE im AC-Lade-Modus (~25 s). I-Faktor bleibt auf 0,0 — bei dieser Trägheit hat der I-Anteil keine Wirkung mehr, reine P-Regelung reicht.
-6. **at_max_limit-Guard.** Greift am zonenabhängigen `dynamic_max` (Zone 0: AC-Limit, Zone 1: Hard Limit Z1, Zone 2: `min(Hard-Limit-Z1, PV−Reserve)`), jeweils zusätzlich gedeckelt auf die Gerätegrenze von 1200 W. Liegt `current_power` über `dynamic_max` (z.B. weil PV abgefallen ist), läuft der PI trotz positivem Netzfehler und reduziert den Befehl auf die neue Decke — kein Deadlock wenn das dynamic ceiling sinkt.
+6. **at_max_limit-Guard.** Greift am zonenabhängigen `dynamic_max` (Zone 0: AC-Limit, Zone 1: Hard Limit Z1, Zone 2: `min(Hard-Limit-Z1, PV−Reserve)`), jeweils zusätzlich gedeckelt auf die Gerätegrenze von 1200 W. Liegt `current_power` über `dynamic_max` (z.B. weil PV abgefallen ist), läuft der PI trotz positivem Netzfehler, auch wenn der Netzfehler im Totband liegt, und reduziert den Befehl auf die neue Decke — kein Deadlock wenn das dynamic ceiling sinkt.
 7. **at_max/at_min-Guards im AC-Lade-Modus.** Beide Guards sind während AC Laden deaktiviert — Fall I übernimmt die Safety-Funktion für unlegitimierte `'3'`-Zustände.
 8. **Tarif-Discharge-Lock.** Der Lock gilt für mittlere UND günstige Preiszonen (alles unterhalb der Teuer-Schwelle) und sperrt sowohl Zone 1 als auch Zone 2 (Output 0 W, Modus Disabled). Solange Überschuss-Einspeisung aktiv ist, wird kein Lock ausgelöst. Die Sperre hebt sich automatisch wenn der Preis die Teuer-Schwelle überschreitet. Der Zyklus startet danach über Fall A (SOC über Zone-1-Schwelle) bzw. Zone 2 über Fall E **neu** — Recovery (Fall D) greift hier nicht, weil TM `cycle_active` bereits zurückgesetzt hat und Fall D genau dieses Flag als Bedingung hat.
 9. **Dynamischer Offset.** Jede Zone wird einzeln aktiviert. Die Netz-Standardabweichung wird intern berechnet — kein externer Statistik-Sensor erforderlich. Nach dem ersten Start einige Minuten warten bis genug Samples gesammelt sind. Bei mehreren Instanzen am selben Netzsensor pflegt nur der Gruppen-Leader den Ringpuffer, alle anderen übernehmen seinen Wert. Optionales **Trimmen** (`stddev_trim_count`, Standard 0): schließt die N höchsten UND die N niedrigsten Einzelmesswerte im Fenster vor der Berechnung aus — pro Seite, nicht insgesamt (N=5 → 10 Samples ausgeschlossen). Trennt kurze, seltene Lastspitzen (z. B. Kompressor-/Pumpen-Anlaufstrom) von echter Dauerunruhe anhand des betroffenen Fensteranteils, nicht der Ereignisdauer — ein Puls, der nur eine Minderheit der Samples füllt, fällt komplett raus, eine Schwankung über den Großteil des Fensters bewegt den Offset weiterhin. Wert wird als Anzahl Samples angegeben, nicht als Prozent, weil die Sample-Zahl im Fenster von der Update-Rate des Netzsensors abhängt. Effekt live vergleichbar über den ungetrimmten Rohwert (Attribut `stddev_raw` am Netz-Stabw.-Sensor, bzw. „StdDev (roh)" im Panel).
@@ -573,7 +573,7 @@ Der Zustand wird aus den Zustandsflags abgeleitet, nicht aus dem zuletzt ausgef�
 | # | Schlüssel | Anzeige | Gilt wenn |
 |---|-----------|---------|-----------|
 | 1 | `disabled` | Regelung inaktiv | Hauptschalter aus |
-| 2 | `blocked` | Regelung blockiert | Zyklus bricht ab — Kernsensor fehlt oder SOC-Grenzen unplausibel, Grund in `last_error` |
+| 2 | `blocked` | Regelung blockiert | Zyklus bricht ab — Kernsensor fehlt, ist nicht verfügbar oder liefert keine Zahl, oder SOC-Grenzen unplausibel, Grund in `last_error` |
 | 3 | `exporting` | Überschuss-Einspeisung | Zone 0 aktiv |
 | 4 | `tariff_charging` | Tarif-Laden | Lade-Session bei günstigem Preis |
 | 5 | `ac_charging` | AC-Laden | Lade-Session Zone 1 |
@@ -665,7 +665,7 @@ P-Faktor reduzieren oder Wartezeit erhöhen. Der Standardabweichungs-Sensor im S
 Zone-3-Schwelle im Zonen-Tab prüfen. Wert muss kleiner als Zone-1-Schwelle sein.
 
 **AC Laden startet nicht trotz Überschuss**
-Der Reihe nach prüfen: Ist Zone 0 (Überschuss-Einspeisung) aktiv? Die blockiert AC Laden. Ist AC Laden im Tab aktiviert? Liegt `(Grid + ΣOutput_entladend)` unter −Hysterese — im Multi-Instanz-Betrieb zählt die Summe aller entladenden Instanzen, nicht der eigene Output? Ist der SOC unter dem Ladeziel? Das Status-Flag „AC Laden aktiv“ zeigt das Ergebnis.
+Der Reihe nach prüfen: Ist Zone 0 (Überschuss-Einspeisung) aktiv? Die blockiert AC Laden. Ist AC Laden im Tab aktiviert? Liegt `(Grid + ΣOutput_entladend)` unter −Hysterese — im Multi-Instanz-Betrieb zählen der eigene Output und alle entladenden Schwester-Instanzen? Ist der SOC unter dem Ladeziel? Das Status-Flag „AC Laden aktiv“ zeigt das Ergebnis.
 
 **AC Laden bricht sofort wieder ab**
 Eintritts-Hysterese zu klein — Grid-Wert schwankt bereits über der Abbruch-Schwelle. Hysterese erhöhen oder P/I kleiner setzen.
