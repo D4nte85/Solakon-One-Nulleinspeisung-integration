@@ -1250,10 +1250,13 @@ class SolakonCoordinator:
                 except (ValueError, TypeError):
                     pass
 
-        if self._sensor_usable(soft_errors, cs.tariff_enabled, tariff_sensor, "err_tariff") and tariff_price_valid:
-            unit_warning = self._tariff_unit_warning(tariff_sensor, tariff_price, tariff_cheap)
-            if unit_warning:
-                self._add_soft_error(soft_errors, unit_warning)
+        if self._sensor_usable(soft_errors, cs.tariff_enabled, tariff_sensor, "err_tariff"):
+            if not tariff_price_valid:
+                self._add_soft_error(soft_errors, self._tr("err_tariff_price_not_numeric", sensor=tariff_sensor))
+            else:
+                unit_warning = self._tariff_unit_warning(tariff_sensor, tariff_price, tariff_cheap)
+                if unit_warning:
+                    self._add_soft_error(soft_errors, unit_warning)
 
         # Verkettet statt überschrieben
         self.last_error = " • ".join(soft_errors)

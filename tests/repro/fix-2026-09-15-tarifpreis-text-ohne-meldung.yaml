@@ -1,0 +1,17 @@
+titel: Tarifpreis mit Textzustand gilt still als ungültig, ohne Meldung
+bezug: fix-2026-09-15-tarifpreis-text-ohne-meldung
+# Tarif aktiv, Preissensor verfügbar, aber Zustand "on": der Preis ist ungültig, das
+# Tarif-Subsystem fällt aus, und die Fehlerkette nennt den Sensor.
+netz: 300
+sensoren:
+  sensor.preis: "on"
+instanzen:
+  - prefix: a
+    settings: {regulation_enabled: true, tariff_enabled: true, tariff_price_sensor: sensor.preis}
+    sensoren: {soc: 70, modus: "0"}
+schritte:
+  - nach: 0
+  - nach: 5
+erwartet:
+  - zustand: {cycle_active: true}
+  - zustand_nicht: {last_error: ""}

@@ -187,6 +187,10 @@ _TEXTS: dict[str, dict[str, str]] = {
         "de": "Tarif: Preis-Sensor {sensor!r} nicht verfügbar",
         "en": "Tariff: price sensor {sensor!r} unavailable",
     },
+    "err_tariff_price_not_numeric": {
+        "de": "Tarif: Preis-Sensor {sensor!r} liefert keinen Zahlenwert — Tarif-Funktion inaktiv",
+        "en": "Tariff: price sensor {sensor!r} has no numeric value — tariff function inactive",
+    },
 
     # ── Warnungen aus Ausgangs-, Verteilungs- und Tarifprüfung ───────────────
     "warn_output_zero_unconfirmed": {

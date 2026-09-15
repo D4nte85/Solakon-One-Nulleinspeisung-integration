@@ -26,6 +26,8 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
   Entladung der Schwester. Die Summe zählt jetzt die eigene Instanz plus alle Schwestern im Pool
 - Bei aktivem Tarif und nicht verfügbarem Preis-Sensor startete weder Zone 1 noch Zone 2.
   Ein ungültiger Preis schaltet jetzt nur das Tarif-Subsystem ab, die Regelung läuft wie ohne Tarif
+- Lieferte der Preis-Sensor Text statt einer Zahl (z. B. `on`), fiel das Tarif-Subsystem
+  ohne Meldung aus. Jetzt meldet es „Tarif: Preis-Sensor … liefert keinen Zahlenwert“
 
 
 ## [3.0.0-beta.2] – 2026-09-14
