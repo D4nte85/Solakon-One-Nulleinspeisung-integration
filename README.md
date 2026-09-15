@@ -18,6 +18,47 @@ Die Integration regelt die Ausgangsleistung des Wechselrichters über einen **PI
 >
 > **Danach zwingend:** Die Entität `number.solakon_one_maximaler_entladestrom` ist dort **standardmäßig deaktiviert** und muss von Hand aktiviert werden (Gerät → Entität → Zahnrad → *Aktivieren*). Ohne sie kann der Entladestrom nicht gesteuert werden; im Einrichtungsformular erscheint sie sonst als „unbekannte Entität“.
 
+## Inhalt
+
+- [Solakon ONE Dashboard Vorschau](#-solakon-one-dashboard-vorschau)
+- [Funktionsübersicht](#funktionsübersicht)
+  - [Kernfunktion — Nulleinspeisung mit PI-Regler](#kernfunktion--nulleinspeisung-mit-pi-regler)
+  - [SOC-Zonenverwaltung](#soc-zonenverwaltung)
+  - [Optionale Module](#optionale-module)
+- [Multi-Instancing](#multi-instancing)
+  - [Netzgruppen (mehrere Smartmeter)](#netzgruppen-mehrere-smartmeter)
+  - [Automatische Fehleraufteilung und Leistungsverteilung](#automatische-fehleraufteilung-und-leistungsverteilung)
+  - [Leistungsverteilung konfigurieren](#leistungsverteilung-konfigurieren)
+- [Voraussetzungen](#voraussetzungen)
+- [Installation](#installation)
+  - [Über HACS (empfohlen)](#über-hacs-empfohlen)
+  - [Manuell](#manuell)
+- [Einrichtung](#einrichtung)
+- [Konfiguration im Sidebar-Panel](#konfiguration-im-sidebar-panel)
+  - [Status](#-status)
+  - [PI-Regler](#-pi-regler)
+  - [Zonen](#-zonen)
+  - [Entitäten](#-entitäten)
+  - [Überschuss](#-überschuss)
+  - [AC Laden](#-ac-laden)
+  - [Tarif](#-tarif)
+  - [Dyn. Offset](#-dyn-offset)
+  - [Nacht](#-nacht)
+  - [Debug](#-debug)
+- [SOC-Zonen und Steuerlogik (Falls)](#soc-zonen-und-steuerlogik-falls)
+- [PI-Regler Einstellung](#pi-regler-einstellung)
+  - [Schritt 1: Wartezeit finden (P = 1, I = 0)](#schritt-1-wartezeit-finden-p--1-i--0)
+  - [Schritt 2: P-Faktor finden (I = 0)](#schritt-2-p-faktor-finden-i--0)
+  - [Schritt 3: I-Faktor hinzufügen](#schritt-3-i-faktor-hinzufügen)
+- [Wichtige Hinweise](#wichtige-hinweise)
+- [Erzeugte Entitäten](#erzeugte-entitäten)
+  - [Betriebszustand](#betriebszustand)
+  - [Sprache](#sprache)
+- [FAQ](#faq)
+- [Fehlerbehebung](#fehlerbehebung)
+- [Lizenz](#lizenz)
+- [Autor](#autor)
+
 ---
 
 # ☀️ Solakon ONE Dashboard Vorschau
