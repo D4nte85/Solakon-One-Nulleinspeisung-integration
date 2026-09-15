@@ -1,0 +1,18 @@
+titel: Prognose- und Forcierungssensoren mit Textzustand fallen still aus
+bezug: fix-2026-09-15-prognosesensor-text-ohne-meldung
+# Austrittssperre und PV-Vorhersage aktiv, beide Sensoren verfügbar, aber ohne Zahlenwert
+# ("on" bzw. Text): die Features fallen aus, und die Fehlerkette nennt die Sensoren.
+netz: 300
+sensoren:
+  sensor.lock: "on"
+  sensor.prognose: "keine Daten"
+instanzen:
+  - prefix: a
+    settings: {regulation_enabled: true, surplus_lock_enabled: true, surplus_lock_sensor: sensor.lock,
+               pv_forecast_enabled: true, pv_forecast_sensor: sensor.prognose}
+    sensoren: {soc: 70, modus: "0"}
+schritte:
+  - nach: 0
+  - nach: 5
+erwartet:
+  - zustand_nicht: {last_error: ""}

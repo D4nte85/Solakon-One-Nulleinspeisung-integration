@@ -710,11 +710,12 @@ class SolakonCoordinator:
         return entity_id.split(".", 1)[0] in NUMERIC_DOMAINS
 
     def _sensor_usable(self, soft_errors: list[str], enabled: bool, sensor: str, err_prefix: str) -> bool:
-        """True, wenn das Feature aktiviert und sein Sensor gesetzt und verfügbar ist.
+        """True, wenn das Feature aktiviert und sein Sensor gesetzt, verfügbar und numerisch ist.
 
-        Fehlt der Sensor, liegt er außerhalb NUMERIC_DOMAINS oder ist er nicht verfügbar,
-        geht `<err_prefix>_no_sensor`, `err_sensor_wrong_domain` bzw.
-        `<err_prefix>_sensor_unavailable` in die Fehlerkette.
+        Fehlt der Sensor, liegt er außerhalb NUMERIC_DOMAINS, ist er nicht verfügbar oder
+        ohne Zahlenwert (auch `on`/`off`), geht `<err_prefix>_no_sensor`,
+        `err_sensor_wrong_domain`, `<err_prefix>_sensor_unavailable` bzw.
+        `<err_prefix>_sensor_not_numeric` in die Fehlerkette.
         """
         if not enabled:
             return False
@@ -724,8 +725,15 @@ class SolakonCoordinator:
         if not self._numeric_domain(sensor):
             self._add_soft_error(soft_errors, self._tr("err_sensor_wrong_domain", sensor=sensor))
             return False
-        if not self._entity_ok(sensor):
+        state = self._valid_state(sensor)
+        if state is None:
             self._add_soft_error(soft_errors, self._tr(f"{err_prefix}_sensor_unavailable", sensor=sensor))
+            return False
+        try:
+            # float() statt state_as_number: "on" bleibt ohne Zahlenwert
+            float(state.state)
+        except (ValueError, TypeError):
+            self._add_soft_error(soft_errors, self._tr(f"{err_prefix}_sensor_not_numeric", sensor=sensor))
             return False
         return True
 
@@ -1250,13 +1258,10 @@ class SolakonCoordinator:
                 except (ValueError, TypeError):
                     pass
 
-        if self._sensor_usable(soft_errors, cs.tariff_enabled, tariff_sensor, "err_tariff"):
-            if not tariff_price_valid:
-                self._add_soft_error(soft_errors, self._tr("err_tariff_price_not_numeric", sensor=tariff_sensor))
-            else:
-                unit_warning = self._tariff_unit_warning(tariff_sensor, tariff_price, tariff_cheap)
-                if unit_warning:
-                    self._add_soft_error(soft_errors, unit_warning)
+        if self._sensor_usable(soft_errors, cs.tariff_enabled, tariff_sensor, "err_tariff") and tariff_price_valid:
+            unit_warning = self._tariff_unit_warning(tariff_sensor, tariff_price, tariff_cheap)
+            if unit_warning:
+                self._add_soft_error(soft_errors, unit_warning)
 
         # Verkettet statt überschrieben
         self.last_error = " • ".join(soft_errors)

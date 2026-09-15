@@ -151,6 +151,10 @@ _TEXTS: dict[str, dict[str, str]] = {
         "de": "Surplus-Forecast: Sensor {sensor!r} nicht verfügbar",
         "en": "Surplus forecast: sensor {sensor!r} unavailable",
     },
+    "err_surplus_forecast_sensor_not_numeric": {
+        "de": "Surplus-Forecast: Sensor {sensor!r} liefert keinen Zahlenwert — Funktion inaktiv",
+        "en": "Surplus forecast: sensor {sensor!r} has no numeric value — function inactive",
+    },
     "err_exit_lock_no_sensor": {
         "de": "Austritts-Sperre: Kein Leistungs-Vorhersage-Sensor konfiguriert — Funktion inaktiv",
         "en": "Exit lock: no power forecast sensor configured — function inactive",
@@ -158,6 +162,10 @@ _TEXTS: dict[str, dict[str, str]] = {
     "err_exit_lock_sensor_unavailable": {
         "de": "Austritts-Sperre: Sensor {sensor!r} nicht verfügbar",
         "en": "Exit lock: sensor {sensor!r} unavailable",
+    },
+    "err_exit_lock_sensor_not_numeric": {
+        "de": "Austritts-Sperre: Sensor {sensor!r} liefert keinen Zahlenwert — Funktion inaktiv",
+        "en": "Exit lock: sensor {sensor!r} has no numeric value — function inactive",
     },
     "err_pv_forecast_no_sensor": {
         "de": "PV-Vorhersage: Kein Sensor konfiguriert — Funktion inaktiv",
@@ -167,6 +175,10 @@ _TEXTS: dict[str, dict[str, str]] = {
         "de": "PV-Vorhersage: Sensor {sensor!r} nicht verfügbar",
         "en": "PV forecast: sensor {sensor!r} unavailable",
     },
+    "err_pv_forecast_sensor_not_numeric": {
+        "de": "PV-Vorhersage: Sensor {sensor!r} liefert keinen Zahlenwert — Funktion inaktiv",
+        "en": "PV forecast: sensor {sensor!r} has no numeric value — function inactive",
+    },
     "err_zone1_force_no_sensor": {
         "de": "Zone-1-Forcierung: Kein PV-Vorhersage-Sensor konfiguriert — Funktion inaktiv",
         "en": "Zone 1 forcing: no PV forecast sensor configured — function inactive",
@@ -174,6 +186,10 @@ _TEXTS: dict[str, dict[str, str]] = {
     "err_zone1_force_sensor_unavailable": {
         "de": "Zone-1-Forcierung: Sensor {sensor!r} nicht verfügbar",
         "en": "Zone 1 forcing: sensor {sensor!r} unavailable",
+    },
+    "err_zone1_force_sensor_not_numeric": {
+        "de": "Zone-1-Forcierung: Sensor {sensor!r} liefert keinen Zahlenwert — Funktion inaktiv",
+        "en": "Zone 1 forcing: sensor {sensor!r} has no numeric value — function inactive",
     },
     "err_tariff_no_sensor": {
         "de": "Tarif: Kein Preis-Sensor konfiguriert — Tarif-Funktion inaktiv",
@@ -187,7 +203,7 @@ _TEXTS: dict[str, dict[str, str]] = {
         "de": "Tarif: Preis-Sensor {sensor!r} nicht verfügbar",
         "en": "Tariff: price sensor {sensor!r} unavailable",
     },
-    "err_tariff_price_not_numeric": {
+    "err_tariff_sensor_not_numeric": {
         "de": "Tarif: Preis-Sensor {sensor!r} liefert keinen Zahlenwert — Tarif-Funktion inaktiv",
         "en": "Tariff: price sensor {sensor!r} has no numeric value — tariff function inactive",
     },
