@@ -5,6 +5,10 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+## [3.0.0-beta.3] – 2026-09-15
+
+> **Beta-Release.** Folgestand zu `3.0.0-beta.2`: Fehlerbehebungen aus der Prüfung der Verhaltensregeln, Meldungen bei Sensoren ohne Zahlenwert. Erscheint in HACS nur bei aktivierten Beta-Versionen.
+
 ### Behoben
 - Warnhinweis und Hilfetext zu **Ruhezustand in Modus 1** sowie die README-Tabelle
   sagten noch, das Gerät verlasse die Fernsteuerung nie mehr. Seit `3.0.0-beta.2`
@@ -30,7 +34,6 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
   Zone-1-Forcierung Text statt einer Zahl (z. B. `on`), fiel die Funktion ohne Meldung aus.
   Jetzt meldet sie „Sensor … liefert keinen Zahlenwert — Funktion inaktiv“. Der
   Validierungspunkt am Sensorfeld zeigt in diesem Fall gelb statt grün
-
 
 ## [3.0.0-beta.2] – 2026-09-14
 
