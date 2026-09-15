@@ -408,7 +408,7 @@
     "zone1_state":"Zone 1 (Zyklus aktiv)",
     "zone2_state":"Zone 2",
     "rest_hdr":   "⚠️ Ruhezustand in Modus 1",
-    "rest_desc":  "Ruht die Regelung (Zone 3, Nacht, Entladesperre, Lade-Ende ohne Zyklus), steht das Gerät dann in Modus '1' mit 0 W statt in Modus '0'. Nur für Geräte, die in Modus '0' nicht laden.",
+    "rest_desc":  "Ruht die Regelung (Zone 3, Nacht, Entladesperre, Lade-Ende ohne Zyklus), steht das Gerät dann in Modus '1' mit 0 W statt in Modus '0'. Nur für Geräte, die in Modus '0' trotz App-Einstellung (0 W Standard-Ausgangsleistung, Überschussladung) nicht laden.",
     "rest_warn":  "Nicht empfohlener Hack: Das Gerät verlässt die Fernsteuerung nur noch bei ausgeschalteter Regelung.",
     "rest_toggle":"Ruhezustand in Modus 1 (0 W)"
   },

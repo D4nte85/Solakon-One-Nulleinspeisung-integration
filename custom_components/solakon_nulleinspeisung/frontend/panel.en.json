@@ -408,7 +408,7 @@
     "zone1_state":"Zone 1 (cycle active)",
     "zone2_state":"Zone 2",
     "rest_hdr":   "⚠️ Idle State in Mode 1",
-    "rest_desc":  "While control is idle (zone 3, night, discharge lock, charge end without cycle), the device stays in mode '1' at 0 W instead of mode '0'. Only for devices that do not charge in mode '0'.",
+    "rest_desc":  "While control is idle (zone 3, night, discharge lock, charge end without cycle), the device stays in mode '1' at 0 W instead of mode '0'. Only for devices that do not charge in mode '0' despite the app settings (0 W default output, surplus charging).",
     "rest_warn":  "Not recommended hack: the device only leaves remote control when control is switched off.",
     "rest_toggle":"Idle state in mode 1 (0 W)"
   },

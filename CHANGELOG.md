@@ -5,6 +5,10 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+### Geändert
+
+- README-Voraussetzungen: Die einmalige App-Einstellung nennt jetzt auch „Überschussladung aktivieren“. Ohne sie lädt das Gerät in Zone 3 nicht, weil die Regelung es dort freigibt. Der Debug-Schalter „Ruhezustand in Modus 1“ verweist in README und Panel zuerst auf diese Einstellung.
+
 ## [3.0.0-beta.3] – 2026-09-15
 
 > **Beta-Release.** Folgestand zu `3.0.0-beta.2`: Fehlerbehebungen aus der Prüfung der Verhaltensregeln, Meldungen bei Sensoren ohne Zahlenwert. Erscheint in HACS nur bei aktivierten Beta-Versionen.
