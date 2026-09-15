@@ -433,7 +433,7 @@
     "global_max_lbl":     "Total Max. Output Power (W)",
     "global_max_desc":    "Absolute ceiling for all instances combined — split according to weights. If an instance is capped by its own hard limit (Zones tab), the unused remainder is automatically passed on to instances with headroom (water-filling) — otherwise the pool would never reach this value with unevenly sized instances. Default: 800 W (legal feed-in maximum).",
     "cap_hdr":                 "🔋 Capacity Sensors",
-    "cap_sensor_desc":         "Battery capacity sensor (in kWh) per instance — used to weight the power split in \"Capacity-weighted\" mode. The dot next to the field shows entity validity live: green = provides a value, amber = exists but unknown/unavailable, red = does not exist (check for typos):",
+    "cap_sensor_desc":         "Battery capacity sensor (in kWh) per instance — used to weight the power split in \"Capacity-weighted\" mode. The dot next to the field shows entity validity live: green = provides a number, amber = exists but unknown/unavailable or not numeric, red = does not exist (check for typos):",
     "cap_sensor_placeholder":  "sensor.solakon_one_battery_capacity",
     "mode_hdr":           "⚖️ Distribution Mode",
     "mode_lbl":           "Mode",

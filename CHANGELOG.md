@@ -28,7 +28,8 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
   Ein ungültiger Preis schaltet jetzt nur das Tarif-Subsystem ab, die Regelung läuft wie ohne Tarif
 - Lieferte der Sensor von Tarif, Surplus-Forecast, Austritts-Sperre, PV-Vorhersage oder
   Zone-1-Forcierung Text statt einer Zahl (z. B. `on`), fiel die Funktion ohne Meldung aus.
-  Jetzt meldet sie „Sensor … liefert keinen Zahlenwert — Funktion inaktiv“
+  Jetzt meldet sie „Sensor … liefert keinen Zahlenwert — Funktion inaktiv“. Der
+  Validierungspunkt am Sensorfeld zeigt in diesem Fall gelb statt grün
 
 
 ## [3.0.0-beta.2] – 2026-09-14

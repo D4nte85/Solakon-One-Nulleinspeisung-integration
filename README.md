@@ -131,7 +131,7 @@ Im Panel wird bei mehreren Instanzen ein zusätzlicher **Verteilungs-Tab** einge
 |-----------|-------------|
 | Gesamte Max. Ausgangsleistung (W) | Absolute Obergrenze aller Instanzen zusammen |
 | Verteilungs-Modus | Gleichverteilung / SOC-gewichtet / Kapazitätsgewichtet / SOC-Umschaltung — vier sich gegenseitig ausschließende Optionen, siehe Formeln oben |
-| Kapazitätssensor (pro Instanz) | Nur bei Modus „Kapazitätsgewichtet" wirksam (Feld sonst ausgegraut). `sensor.solakon_one_batteriekapazitat`. Der Validierungspunkt neben dem Feld zeigt live, ob die Entity existiert und einen Wert liefert (grün/gelb/rot) |
+| Kapazitätssensor (pro Instanz) | Nur bei Modus „Kapazitätsgewichtet" wirksam (Feld sonst ausgegraut). `sensor.solakon_one_batteriekapazitat`. Der Validierungspunkt neben dem Feld zeigt live, ob die Entity existiert und eine Zahl liefert (grün/gelb/rot) |
 | Divergenz-Schwelle (Prozentpunkte) | Nur bei Modus „SOC-Umschaltung" wirksam. Die aktive Instanz entlädt exklusiv, bis ihr SOC um diesen Wert gefallen ist, dann Übergabe an die Instanz mit dem höchsten verbleibenden SOC. Standard 5 |
 
 **Globale Sensoren:** Zusätzliche Karte im Verteilungs-Tab für Sensoren, die typischerweise für den ganzen Haushalt gelten statt pro Solakon-Instanz zu unterscheiden — eine Wetter-/Solcast-Vorhersage, ein Stromtarif. Jede Instanz kann im jeweiligen Tab (Überschuss/Zonen/Tarif) optional lokal überschreiben; ist dort nichts gesetzt, gilt der globale Wert. Anders als der Kapazitätssensor (real pro Instanz unterschiedlich, keine sinnvolle globale Vorgabe) sind das reine Entity-Picker ohne eigene Enable-Flags oder Schwellen — die bleiben ausschließlich lokal pro Instanz.
@@ -210,7 +210,7 @@ Nach der Einrichtung erscheint in der HA-Seitenleiste der Eintrag **Solakon ONE*
 
 **Adminrechte:** Das Panel ist für jeden angemeldeten Home-Assistant-Benutzer sichtbar, alle Anzeigen sind frei lesbar. Schreibende Aktionen — Speichern der Einstellungen, Regelung ein/aus, Zyklus umschalten, Integral zurücksetzen und Speichern der Leistungsverteilung — erfordern dagegen ein Administratorkonto. Ohne Adminrechte quittiert das Panel diese Aktionen mit einer Fehlermeldung.
 
-Alle Eingabefelder für Entity-IDs (z. B. Kapazitäts-, Vorhersage- und Preis-Sensoren) zeigen rechts einen **Validierungspunkt**, der die eingetragene Entity live gegen Home Assistant prüft: **grün** = Entity liefert einen Wert, **gelb** = Entity existiert, ist aber `unknown`/`unavailable`, **rot** = Entity existiert nicht (Tippfehler prüfen). Der Punkt aktualisiert sich beim Tippen und im laufenden Betrieb.
+Alle Eingabefelder für Entity-IDs (z. B. Kapazitäts-, Vorhersage- und Preis-Sensoren) zeigen rechts einen **Validierungspunkt**, der die eingetragene Entity live gegen Home Assistant prüft: **grün** = Entity liefert eine Zahl, **gelb** = Entity existiert, ist aber `unknown`/`unavailable` oder liefert keine Zahl (z. B. `on`) — die Regelung schaltet die zugehörige Funktion dann ab und meldet es im Status-Tab, **rot** = Entity existiert nicht (Tippfehler prüfen). Der Punkt aktualisiert sich beim Tippen und im laufenden Betrieb.
 
 ---
 
@@ -671,10 +671,13 @@ Der Reihe nach prüfen: Ist Zone 0 (Überschuss-Einspeisung) aktiv? Die blockier
 Eintritts-Hysterese zu klein — Grid-Wert schwankt bereits über der Abbruch-Schwelle. Hysterese erhöhen oder P/I kleiner setzen.
 
 **Tarif-Laden reagiert nicht auf Preisänderungen**
-Preis-Sensor im Tarif-Tab prüfen. Günstig-Schwelle muss über dem aktuellen Preis liegen. Prüfen ob Überschuss-Einspeisung aktiv ist — blockiert Tarif-Laden.
+Zuerst die Fehlermeldung im Status-Tab prüfen — liefert der Preis-Sensor keine Zahl oder ist er nicht verfügbar, ist die Tarif-Funktion abgeschaltet. Günstig-Schwelle muss über dem aktuellen Preis liegen. Prüfen ob Überschuss-Einspeisung aktiv ist — blockiert Tarif-Laden.
 
 **Discharge-Lock greift nicht**
-Preis muss unterhalb der Teuer-Schwelle liegen (gilt für günstig UND mittel). Modus muss `'1'` (Discharge aktiv) sein — bei Modus `'0'` (Disabled) greift TM nicht, weil keine aktive Entladung zu stoppen ist. Überschuss-Einspeisung darf nicht aktiv sein.
+Zuerst die Fehlermeldung im Status-Tab prüfen (Preis-Sensor ohne Zahl oder nicht verfügbar schaltet die Tarif-Funktion ab). Preis muss unterhalb der Teuer-Schwelle liegen (gilt für günstig UND mittel). Modus muss `'1'` (Discharge aktiv) sein — bei Modus `'0'` (Disabled) greift TM nicht, weil keine aktive Entladung zu stoppen ist. Überschuss-Einspeisung darf nicht aktiv sein.
+
+**Surplus-Forecast, Austritts-Sperre, PV-Vorhersage oder Nacht-Forcierung greift nicht**
+Zuerst die Fehlermeldung im Status-Tab prüfen. Fehlt der Sensor, ist er nicht verfügbar oder liefert er keine Zahl, ist die Funktion abgeschaltet — der Validierungspunkt am Sensorfeld steht dann auf gelb oder rot. Sonst Schwelle und Einheit des Vorhersage-Sensors prüfen.
 
 **Dynamischer Offset bleibt auf Minimum**
 Stabw.-Sensor im Status-Tab prüfen. Nach dem ersten Start einige Minuten warten bis genug Samples gesammelt sind. Volatilitäts-Faktor erhöhen oder Rausch-Schwelle senken.

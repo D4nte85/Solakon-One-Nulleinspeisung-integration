@@ -433,7 +433,7 @@
     "global_max_lbl":     "Gesamte Max. Ausgangsleistung (W)",
     "global_max_desc":    "Absolute Obergrenze aller Instanzen zusammen — wird nach Gewichtung aufgeteilt. Kappt eine Instanz an ihrem eigenen Hard-Limit (Zonen-Tab), wird der ungenutzte Rest automatisch an Instanzen mit Reserve weitergereicht (Wasserfüllverfahren) — bei unterschiedlich starken Instanzen erreicht der Pool diesen Wert sonst nicht. Standard: 800 W (gesetzliches Einspeise-Maximum).",
     "cap_hdr":                 "🔋 Kapazitätssensoren",
-    "cap_sensor_desc":         "Batteriekapazitätssensor (in kWh) pro Instanz — bestimmt die Leistungsaufteilung bei Modus „Kapazitätsgewichtet\". Der Punkt neben dem Feld zeigt die Gültigkeit der Entity live: grün = liefert einen Wert, gelb = existiert, aber unknown/unavailable, rot = existiert nicht (Tippfehler prüfen):",
+    "cap_sensor_desc":         "Batteriekapazitätssensor (in kWh) pro Instanz — bestimmt die Leistungsaufteilung bei Modus „Kapazitätsgewichtet\". Der Punkt neben dem Feld zeigt die Gültigkeit der Entity live: grün = liefert eine Zahl, gelb = existiert, aber unknown/unavailable oder ohne Zahl, rot = existiert nicht (Tippfehler prüfen):",
     "cap_sensor_placeholder":  "sensor.solakon_one_batteriekapazitat",
     "mode_hdr":           "⚖️ Verteilungs-Modus",
     "mode_lbl":           "Modus",

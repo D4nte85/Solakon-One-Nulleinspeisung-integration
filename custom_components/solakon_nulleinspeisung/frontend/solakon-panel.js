@@ -363,12 +363,13 @@ class SolakonPanel extends HTMLElement {
   _fd(key) { return this._t.fields?.[key]?.d || ""; }
 
   // Gültigkeit einer händisch eingetragenen Entity-ID: err = existiert nicht,
-  // warn = existiert, aber unknown/unavailable, ok = liefert einen Wert.
+  // warn = existiert, aber unknown/unavailable oder ohne Zahlenwert, ok = liefert eine Zahl.
   _entityDotClass(entityId) {
     if (!entityId) return "";
     const st = this._hass?.states?.[entityId];
     if (!st) return "err";
     if (st.state === "unknown" || st.state === "unavailable") return "warn";
+    if (Number.isNaN(Number(st.state))) return "warn";
     return "ok";
   }
 
