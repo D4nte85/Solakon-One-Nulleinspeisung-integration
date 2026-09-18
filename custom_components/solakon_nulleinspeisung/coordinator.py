@@ -1684,9 +1684,9 @@ class SolakonCoordinator:
         Im Einzelbetrieb oder wenn diese Instanz gerade nicht in Modus '1' steht:
         (1.0 bzw. 0.0, None) — kein Einfluss auf hard_limit. `own_soc` siehe `_all_shares`.
 
-        allocated_power kommt aus _waterfill_allocate(): proportionale Aufteilung
-        von global_max_power, gekappt am lokalen Hard-Limit jeder Instanz,
-        ungenutzter Spielraum wird an Instanzen mit Reserve weitergereicht.
+        allocated_power: Anteil aus _waterfill_allocate(), angehoben höchstens bis zu
+        dem, was die veröffentlichten Limits der übrigen Instanzen der Netzgruppe
+        von global_max_power freilassen; Senken wirkt sofort.
         """
         active = self._discharge_pool()
         self._dist_warning = None
@@ -1697,7 +1697,13 @@ class SolakonCoordinator:
         dist = self._dist_cfg()
         global_max = float(dist["global_max_power"])
         allocations = self._waterfill_allocate(active, shares, global_max)
-        return shares.get(self.entry.entry_id, 0.0), allocations.get(self.entry.entry_id)
+        others = sum(
+            c.allocated_power or 0 for c in self._group_coords().values() if c is not self
+        )
+        own = allocations.get(self.entry.entry_id)
+        if own is not None:
+            own = min(own, max(0, math.floor(global_max - others)))
+        return shares.get(self.entry.entry_id, 0.0), own
 
     def _waterfill_allocate(
         self,

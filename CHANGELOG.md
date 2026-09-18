@@ -19,6 +19,7 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 - Panel, Status-Tab und Übersicht: **Letzte Aktion** und **Fehlermeldungen** erschienen aus demselben Grund in der Sprache der HA-Instanz. Das Panel schickt seine Sprache jetzt beim Statusabruf mit, das Backend liefert beide Texte darin.
 - Verteilung, **SOC-Umschaltung**: Der Zustand (aktive Instanz, SOC bei Übernahme) galt für alle Netzgruppen gemeinsam. Liefen zwei Netzgruppen in diesem Modus, setzten sie ihn gegenseitig zurück, und die Rotation griff nie. Jetzt hat jede Netzgruppe ihren eigenen Zustand, ein gespeicherter alter Zustand wird für jede Gruppe übernommen. Nach einem Neustart ging außerdem verloren, ob gerade Zone 0 aktiv war. Das bleibt jetzt erhalten.
 - Verteilung: Die zugeteilten Leistungen wurden je Instanz gerundet und konnten zusammen die **Gesamtleistung** überschreiten, z. B. 3 × 267 W = 801 W bei 800 W. Sie werden jetzt abgerundet.
+- Verteilung: Jede Instanz berechnet ihre Zuteilung im eigenen Zyklus. Nach einem Wechsel, etwa einer Übergabe bei der **SOC-Umschaltung**, hielten deshalb kurzzeitig zwei Instanzen den vollen Anteil, und die Summe lag bis zum Doppelten über der **Gesamtleistung**. Eine Instanz hebt ihr Limit jetzt nur so weit an, wie die übrigen Instanzen der Netzgruppe freilassen. Die Übergabe dauert dadurch einen Zyklus länger.
 
 ## [3.0.0-beta.3] – 2026-09-15
 

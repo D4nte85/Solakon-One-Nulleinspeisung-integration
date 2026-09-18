@@ -1,0 +1,34 @@
+titel: Nach einer Rotation im soc_switch halten zwei Instanzen gleichzeitig den vollen Anteil
+bezug: fix-2026-09-18-zuteilung-versatz-ueber-gesamtleistung
+offen: false
+netz: 300
+verteilung: {distribution_mode: soc_switch, soc_switch_divergence: 5, global_max_power: 800}
+instanzen:
+  - prefix: a
+    settings: {regulation_enabled: true}
+    sensoren: {soc: 60, modus: "1"}
+  - prefix: b
+    settings: {regulation_enabled: true}
+    sensoren: {soc: 80, modus: "1"}
+schritte:
+  - nach: 0
+    wer: all
+  # b fällt um 6 Punkte, nur a regelt: a übernimmt, b hält ihre 800 W noch.
+  - nach: 5
+    setzen: {b.soc: 74}
+    wer: a
+  - nach: 5
+    wer: all
+  - nach: 5
+    wer: all
+erwartet:
+  - schritt: 1
+    instanz: b
+    zustand: {allocated_power: 800}
+  - schritt: 2
+    instanz: a
+    zustand: {allocated_power: 0}
+  - instanz: a
+    zustand: {allocated_power: 800}
+  - instanz: b
+    zustand: {allocated_power: 0}

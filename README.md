@@ -148,7 +148,7 @@ allocated_power_i = wasserfüll(total_power, {w_i}, {hard_limit_i})
 error_share_i     = w_i        → Anteil am Netzfehler im PI-Regler
 ```
 
-**Wasserfüllverfahren:** `roh_i = total_power × w_i`. Übersteigt `roh_i` das Hard-Limit einer Instanz, wird sie darauf gekappt und der ungenutzte Rest unter den übrigen erneut nach `w_i` verteilt — iterativ, bis nichts mehr verteilbar ist. Bei gleich dimensionierten Instanzen ohne Wirkung; bei unterschiedlichen verhindert es, dass Spielraum verfällt.
+**Wasserfüllverfahren:** `roh_i = total_power × w_i`. Übersteigt `roh_i` das Hard-Limit einer Instanz, wird sie darauf gekappt und der ungenutzte Rest unter den übrigen erneut nach `w_i` verteilt — iterativ, bis nichts mehr verteilbar ist. Bei gleich dimensionierten Instanzen ohne Wirkung; bei unterschiedlichen verhindert es, dass Spielraum verfällt. Die Werte werden abgerundet. Jede Instanz rechnet in ihrem eigenen Zyklus und hebt ihr Limit nur so weit an, wie die aktuellen Limits der übrigen Instanzen der Netzgruppe freilassen. Wechselt die Zuteilung (z. B. bei der SOC-Umschaltung), bekommt die neue Instanz ihren vollen Anteil erst, nachdem die alte gesenkt hat. Die Summe übersteigt `total_power` dadurch nie.
 
 **SOC-Umschaltung:** Die aktive Instanz entlädt exklusiv, bis ihr SOC seit Übernahme um die Divergenz-Schwelle gefallen ist — dann übernimmt die Instanz mit dem höchsten verbleibenden SOC (nie zweimal in Folge dieselbe). Der Zustand gilt je Netzgruppe und übersteht HA-Neustarts. Zone 0 hat Vorrang: eine Instanz in Überschuss-Einspeisung übernimmt sofort die Führung, mehrere teilen sich gleichmäßig. Beim Verlassen von Zone 0 wird die Rotations-Baseline auf den aktuellen SOC neu verankert.
 
