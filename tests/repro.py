@@ -89,6 +89,7 @@ def spec_aus(szenario: dict) -> dict:
         "grid": zustand(szenario.get("netz", 0), "W"),
         "dist": szenario.get("verteilung") or {},
         "has_dist_config": "verteilung" in szenario,
+        "dist_other": szenario.get("verteilung_netz") or {},
         "soc_switch_state": None,
         "shared": {},
         "instances": [],

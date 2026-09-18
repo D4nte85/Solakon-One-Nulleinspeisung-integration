@@ -416,9 +416,9 @@ def _setup_env(spec):
     hass = h.FakeHass(spec["language"])
     logs = h.capture_logs()
     if spec["has_dist_config"]:
-        hass.data[f"{C.DOMAIN}_dist_config"] = {"sensor.grid": spec["dist"]}
+        hass.data[f"{C.DOMAIN}_dist_config"] = {"sensor.grid": spec["dist"], **spec.get("dist_other", {})}
     if spec["soc_switch_state"] is not None:
-        hass.data[f"{C.DOMAIN}_soc_switch_state"] = dict(spec["soc_switch_state"])
+        hass.data[f"{C.DOMAIN}_soc_switch_state"] = {"sensor.grid": dict(spec["soc_switch_state"])}
         hass.data[f"{C.DOMAIN}_soc_switch_store"] = h.ha_stubs.Store(hass, 1, "soc_switch")
     _apply_states(hass, {"sensor.grid": spec["grid"], "sensor.grid_other": spec["grid"]})
     _apply_states(hass, spec["shared"])
@@ -513,7 +513,8 @@ async def _run_wiring() -> dict:
     entries = [h.FakeEntry("entry_a", h.entry_data("a")), h.FakeEntry("entry_b", h.entry_data("b"))]
     hass.config_entries.entries = entries
     hass.storage["solakon_nulleinspeisung_distribution"] = {"sensor.grid": {"distribution_mode": "soc"}}
-    hass.storage["solakon_nulleinspeisung_soc_switch_state"] = {"active_id": "entry_b", "start_soc": 55}
+    hass.storage["solakon_nulleinspeisung_soc_switch_state"] = {
+        "sensor.grid": {"active_id": "entry_b", "start_soc": 55, "was_zone0": True}}
     await mod.async_setup(hass, {})
     for e in entries:
         await mod.async_setup_entry(hass, e)
@@ -581,6 +582,9 @@ async def _run_wiring() -> dict:
         "empty": {},
     }.items():
         mig["dist_" + name] = h.jsonable(await dist_store._async_migrate_func(1, 0, dict(data)))
+    soc_switch_store = mod.SolakonSocSwitchStore(hass, 2, "z")
+    for name, data in {"v1": {"active_id": "entry_b", "start_soc": 55}, "empty": {}}.items():
+        mig["soc_switch_" + name] = h.jsonable(await soc_switch_store._async_migrate_func(1, 0, dict(data)))
     settings_store = h.coordinator_mod.SolakonSettingsStore(hass, 2, "y")
     mig["settings_v1"] = h.jsonable(await settings_store._async_migrate_func(
         1, 0, {"hard_limit": 650, "surplus_forecast_sensor": "sensor.f"}))

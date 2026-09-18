@@ -52,6 +52,7 @@ netz: 50              # sensor.grid; Zahl in W oder {wert, einheit, alter}
 sensoren:             # gemeinsame Entities mit voller ID
   sensor.preis: {wert: 8.0, einheit: ct/kWh}
 verteilung: {}        # optional: Verteilungs-Config der Netzgruppe sensor.grid
+verteilung_netz: {}   # optional: Configs weiterer Netzgruppen, {sensor.grid_other: {...}}
 instanzen:
   - prefix: a         # erste Instanz immer a; weitere b, c …
     settings: {regulation_enabled: true, tariff_power: 2000}   # über SETTINGS_DEFAULTS

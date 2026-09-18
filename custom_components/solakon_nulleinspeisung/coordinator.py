@@ -1613,7 +1613,7 @@ class SolakonCoordinator:
 
         Regulär erhält genau eine Instanz vollen Anteil, alle anderen 0 — bis ihr
         SOC seit Übernahme um `soc_switch_divergence` Prozentpunkte gefallen ist,
-        dann übernimmt die Instanz mit dem höchsten SOC. Zustand liegt Pool-weit in
+        dann übernimmt die Instanz mit dem höchsten SOC. Zustand liegt je Netzgruppe in
         `_soc_switch_state`. Zone 0 übernimmt bedingungslos, mehrere Zone-0-Instanzen
         gleichmäßig; beim Rückgang in die Rotation wird `start_soc` neu verankert.
         """
@@ -1623,10 +1623,11 @@ class SolakonCoordinator:
 
         zone0 = {eid for eid, c in active.items() if c.surplus_active}
 
-        state = self.hass.data.get(f"{DOMAIN}_soc_switch_state")
-        if state is None:
-            state = {"active_id": None, "start_soc": None, "was_zone0": False}
-            self.hass.data[f"{DOMAIN}_soc_switch_state"] = state
+        all_states = self.hass.data.setdefault(f"{DOMAIN}_soc_switch_state", {})
+        state = all_states.setdefault(
+            self.entry.data.get(CONF_GRID_SENSOR, ""),
+            {"active_id": None, "start_soc": None, "was_zone0": False},
+        )
 
         was_zone0 = bool(state.get("was_zone0", False))
         active_id = state.get("active_id")
@@ -1670,7 +1671,7 @@ class SolakonCoordinator:
             state["active_id"] = active_id
             store = self.hass.data.get(f"{DOMAIN}_soc_switch_store")
             if store is not None:
-                snapshot = dict(state)
+                snapshot = {gk: dict(st) for gk, st in all_states.items()}
                 store.async_delay_save(lambda: snapshot, 2)
 
         return result

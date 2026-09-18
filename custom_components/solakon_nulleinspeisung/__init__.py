@@ -24,7 +24,7 @@ from .const import (
 STORAGE_VERSION_DIST = 2
 STORAGE_KEY_DIST     = f"{DOMAIN}_distribution"
 
-STORAGE_VERSION_SOC_SWITCH = 1
+STORAGE_VERSION_SOC_SWITCH = 2
 STORAGE_KEY_SOC_SWITCH     = f"{DOMAIN}_soc_switch_state"
 
 _LOGGER = logging.getLogger(__name__)
@@ -47,12 +47,34 @@ class SolakonDistStore(Store):
 
         if "distribution_mode" in old_data or "global_max_power" in old_data:
             flat = _migrate_dist_mode(old_data)
-            group_keys = {
-                e.data.get(CONF_GRID_SENSOR, "")
-                for e in self.hass.config_entries.async_entries(DOMAIN)
-            }
-            return {gk: dict(flat) for gk in group_keys}
+            return {gk: dict(flat) for gk in _grid_groups(self.hass)}
         return {gk: _migrate_dist_mode(cfg) for gk, cfg in old_data.items()}
+
+
+class SolakonSocSwitchStore(Store):
+    """SOC-Switch-Store mit Schemamigration."""
+
+    async def _async_migrate_func(
+        self, old_major_version: int, old_minor_version: int, old_data: dict
+    ) -> dict:
+        """Hebt Version 1 auf 2: der flache Zustand gilt für jede vorhandene Netzgruppe."""
+        if old_major_version >= 2 or not old_data:
+            return old_data
+        return {gk: dict(old_data) for gk in _grid_groups(self.hass)}
+
+
+def _grid_groups(hass: HomeAssistant) -> set[str]:
+    """Netzsensoren aller Einträge, einer je Netzgruppe."""
+    return {e.data.get(CONF_GRID_SENSOR, "") for e in hass.config_entries.async_entries(DOMAIN)}
+
+
+def _soc_switch_group_state(stored: dict) -> dict:
+    """Laufzeitzustand einer Netzgruppe im Modus `soc_switch` aus dem gespeicherten Stand."""
+    return {
+        "active_id": stored.get("active_id"),
+        "start_soc": stored.get("start_soc"),
+        "was_zone0": bool(stored.get("was_zone0", False)),
+    }
 
 
 def _migrate_dist_mode(cfg: dict) -> dict:
@@ -249,12 +271,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
 
     # SOC-Switch-Laufzeitzustand (Modus `soc_switch`) — eigener Store, getrennt
-    # von _dist_store
+    # von _dist_store, nach grid_power_sensor verschachtelt wie die Verteilungs-Config
     await _ensure_store(
         hass, "soc_switch_store", "soc_switch_state",
-        lambda: Store(hass, STORAGE_VERSION_SOC_SWITCH, STORAGE_KEY_SOC_SWITCH),
-        {"active_id": None, "start_soc": None},
-        lambda stored: {"active_id": stored.get("active_id"), "start_soc": stored.get("start_soc")},
+        lambda: SolakonSocSwitchStore(hass, STORAGE_VERSION_SOC_SWITCH, STORAGE_KEY_SOC_SWITCH),
+        {},
+        lambda stored: {gk: _soc_switch_group_state(st) for gk, st in stored.items()},
     )
 
     # WebSocket-Commands nur einmal registrieren

@@ -1,0 +1,36 @@
+titel: Zwei Netzgruppen im soc_switch setzen den gemeinsamen Zustand gegenseitig zurück, die Rotation greift nie
+bezug: fix-2026-09-18-soc-switch-zustand-global
+offen: false
+netz: 300
+verteilung: {distribution_mode: soc_switch, soc_switch_divergence: 5, global_max_power: 800}
+verteilung_netz:
+  sensor.grid_other: {distribution_mode: soc_switch, soc_switch_divergence: 5, global_max_power: 800}
+instanzen:
+  - prefix: a
+    settings: {regulation_enabled: true}
+    sensoren: {soc: 80, modus: "1"}
+  - prefix: b
+    settings: {regulation_enabled: true}
+    sensoren: {soc: 60, modus: "1"}
+  - prefix: c
+    netzsensor: sensor.grid_other
+    settings: {regulation_enabled: true}
+    sensoren: {soc: 70, modus: "1"}
+  - prefix: d
+    netzsensor: sensor.grid_other
+    settings: {regulation_enabled: true}
+    sensoren: {soc: 50, modus: "1"}
+schritte:
+  - nach: 0
+    wer: all
+  - nach: 5
+    setzen: {a.soc: 74}
+    wer: all
+  - nach: 5
+    wer: all
+erwartet:
+  # a ist seit der Übernahme um 6 Punkte gefallen (≥ 5), die Rolle geht an b.
+  - instanz: a
+    zustand: {allocated_power: 0}
+  - instanz: b
+    zustand_nicht: {allocated_power: 0}
