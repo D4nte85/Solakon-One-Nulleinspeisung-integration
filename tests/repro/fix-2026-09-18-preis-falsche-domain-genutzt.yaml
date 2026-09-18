@@ -1,0 +1,17 @@
+titel: Preis-Sensor mit falscher Domain wird gemeldet und trotzdem als Preis genutzt
+bezug: fix-2026-09-18-preis-falsche-domain-genutzt
+# Tarif aktiv, Preis aus input_select mit Zahlenzustand. Die Fehlerkette meldet die
+# falsche Domain; der Preis darf dann nicht in die Tarifentscheidung eingehen.
+netz: 300
+sensoren:
+  input_select.preis: "5"
+instanzen:
+  - prefix: a
+    settings: {regulation_enabled: true, tariff_enabled: true, tariff_price_sensor: input_select.preis}
+    sensoren: {soc: 30, modus: "0"}
+schritte:
+  - nach: 0
+  - nach: 5
+erwartet:
+  - zustand: {tariff_charge_active: false}
+  - zustand_nicht: {last_error: ""}
