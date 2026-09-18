@@ -9,6 +9,7 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 - README: Inhaltsverzeichnis am Anfang, verlinkt auf alle Abschnitte bis zur dritten Ebene.
 - README-Voraussetzungen: Die einmalige App-Einstellung nennt jetzt auch „Überschussladung aktivieren“. Ohne sie lädt das Gerät in Zone 3 nicht, weil die Regelung es dort freigibt. Der Debug-Schalter „Ruhezustand in Modus 1“ verweist in README und Panel zuerst auf diese Einstellung.
+- README und Panel, AC Laden: Die Begründung „Hardware-Flanke ~25 s“ für kleines P und I = 0 ist ersetzt. Gemessen steigt die Ladeleistung bei jeder Erhöhung mit etwa 33 W/s, Senken und Entladen wirken nach wenigen Sekunden. Die Empfehlung bleibt: P 0,3–0,5, I 0.
 
 ### Behoben
 

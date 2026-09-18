@@ -414,8 +414,8 @@ Einzelbetrieb bzw. nur eine ladende Instanz: identisch zum eigenen kommandierten
 | Max. Ladeleistung (W) | Obergrenze der AC-Ladeleistung | 400–800 |
 | Eintritts-Hysterese (W) | (Grid + ΣOutput_entladend) muss unter −Hysterese liegen | 30–80 |
 | Regel-Offset (W) | Zielwert während AC Laden (typisch negativ) | −80 bis −30 |
-| AC P-Faktor | Klein halten wegen langer Hardware-Flanke (~25 s) | 0,3–0,5 |
-| AC I-Faktor | Ohne Wirkung — die Regelung ist wegen der Hardware-Flanke (~25 s) so träge, dass der I-Anteil bedeutungslos wird | 0,0 |
+| AC P-Faktor | Klein halten: Die Ladeleistung steigt nur mit etwa 33 W/s, der PI kann vor dem Erreichen des letzten Sollwerts nachlegen | 0,3–0,5 |
+| AC I-Faktor | Auf 0 belassen — ein I-Anteil summiert während des langsamen Anstiegs weiter auf | 0,0 |
 
 ---
 
@@ -561,7 +561,7 @@ Bei P = 0,5 beginnen, schrittweise erhöhen bis das System leicht anfängt zu pe
 
 ### Schritt 3: I-Faktor hinzufügen
 
-Typischer Arbeitsbereich: **0.03–0.08**. Für AC Laden separat tunen — P besonders klein halten (~0.3–0.5), I-Faktor auf 0 belassen: die Regelung ist wegen der Hardware-Flanke des Solakon ONE (~25 s) so träge, dass der I-Anteil keine Wirkung mehr hat. Tarif-Laden verwendet keinen PI-Regler.
+Typischer Arbeitsbereich: **0.03–0.08**. Für AC Laden separat tunen — P besonders klein halten (~0.3–0.5), I-Faktor auf 0 belassen: Im AC-Lade-Modus steigt die Ladeleistung des Solakon ONE nur mit etwa 33 W/s (0 → 800 W in rund 25 s), Senken wirkt sofort. Solange das Gerät hochfährt, sieht der PI noch den alten Netzfehler und würde nachlegen. Tarif-Laden verwendet keinen PI-Regler.
 
 ---
 
@@ -571,7 +571,7 @@ Typischer Arbeitsbereich: **0.03–0.08**. Für AC Laden separat tunen — P bes
 2. **Zone-1-Schwelle > Zone-3-Schwelle.** Die Integration prüft dies und gibt im Status-Tab einen Fehler aus falls die Limits ungültig sind.
 3. **Netzleistungssensor-Polarität.** Positiv = Bezug, negativ = Einspeisung — abweichende Polarität führt zu umgekehrtem Regelverhalten.
 4. **AC Laden Eintritts-Guard.** Eintritt in AC Laden ist nur möglich wenn Modus ≠ `'3'`. Das verhindert einen Re-Eintritt wenn AC Laden bereits aktiv ist.
-5. **AC Laden P/I-Tuning.** Separates Tuning erforderlich — P klein halten (~0,3–0,5) wegen der langen Hardware-Flanke des Solakon ONE im AC-Lade-Modus (~25 s). I-Faktor bleibt auf 0,0 — bei dieser Trägheit hat der I-Anteil keine Wirkung mehr, reine P-Regelung reicht.
+5. **AC Laden P/I-Tuning.** Separates Tuning erforderlich — P klein halten (~0,3–0,5), I-Faktor auf 0,0. Im AC-Lade-Modus steigt die Ladeleistung des Solakon ONE bei jeder Erhöhung nur mit etwa 33 W/s, auch mitten in einer Ladesession; Senken wirkt nach wenigen Sekunden. Ein großer P- oder I-Anteil legt nach, bevor das Gerät den letzten Sollwert erreicht hat.
 6. **at_max_limit-Guard.** Greift am zonenabhängigen `dynamic_max` (Zone 0: AC-Limit, Zone 1: Hard Limit Z1, Zone 2: `min(Hard-Limit-Z1, PV−Reserve)`), jeweils zusätzlich gedeckelt auf die Gerätegrenze von 1200 W. Liegt `current_power` über `dynamic_max` (z.B. weil PV abgefallen ist), läuft der PI trotz positivem Netzfehler, auch wenn der Netzfehler im Totband liegt, und reduziert den Befehl auf die neue Decke — kein Deadlock wenn das dynamic ceiling sinkt.
 7. **at_max/at_min-Guards im AC-Lade-Modus.** Beide Guards sind während AC Laden deaktiviert — Fall I übernimmt die Safety-Funktion für unlegitimierte `'3'`-Zustände.
 8. **Tarif-Discharge-Lock.** Der Lock gilt für mittlere UND günstige Preiszonen (alles unterhalb der Teuer-Schwelle) und sperrt sowohl Zone 1 als auch Zone 2 (Output 0 W, Modus Disabled). Solange Überschuss-Einspeisung aktiv ist, wird kein Lock ausgelöst. Die Sperre hebt sich automatisch wenn der Preis die Teuer-Schwelle überschreitet. Der Zyklus startet danach über Fall A (SOC über Zone-1-Schwelle) bzw. Zone 2 über Fall E **neu** — Recovery (Fall D) greift hier nicht, weil TM `cycle_active` bereits zurückgesetzt hat und Fall D genau dieses Flag als Bedingung hat.
@@ -672,7 +672,7 @@ Der Hebel ist die **Zone-3-Schwelle** — sie beendet den Zyklus. Die Zone-1-Sch
 Der Offset ist der Zielwert am **Netzzähler**, nicht am Wechselrichter: `0` regelt auf die Nulllinie, `+20` hält 20 W Bezug, `−20` hält 20 W Einspeisung als Sicherheitsabstand. Beim AC Laden verhindert ein negativer Offset entsprechend, dass aus dem Netz mitgeladen wird.
 
 **Warum haben AC Laden und die Entladezonen getrennte Offsets und PI-Faktoren?**
-Weil es zwei verschiedene Regelstrecken sind: Beim Entladen regelt der Wechselrichter, beim AC Laden das Ladenetzteil mit einer deutlich längeren Flanke (~25 s). AC Laden hat deshalb einen eigenen Offset, eigene P/I-Faktoren und ein eigenes Leistungslimit; die Zonen-Offsets greifen währenddessen nicht. Die Werte sollten **nicht** gleichgesetzt werden — für AC Laden gilt die Einstellempfehlung aus [Wichtige Hinweise](#wichtige-hinweise) (P klein, I auf 0).
+Weil es zwei verschiedene Regelstrecken sind: Beim Entladen regelt der Wechselrichter, beim AC Laden das Ladenetzteil, dessen Leistung nur mit etwa 33 W/s steigt. AC Laden hat deshalb einen eigenen Offset, eigene P/I-Faktoren und ein eigenes Leistungslimit; die Zonen-Offsets greifen währenddessen nicht. Die Werte sollten **nicht** gleichgesetzt werden — für AC Laden gilt die Einstellempfehlung aus [Wichtige Hinweise](#wichtige-hinweise) (P klein, I auf 0).
 
 **„Max. Entladestrom Zone 1" in A und „Hard-Limit Z1" in W — was von beidem gilt?**
 Beides, an verschiedenen Stellen: Die Ampere begrenzen den Strom auf der Batterieseite, die Watt den AC-Ausgang, gegen den der PI regelt. Sie schließen sich nicht aus. Bei einem niedrigen Watt-Limit wird die Stromgrenze in der Regel nie erreicht — dann wirkt praktisch nur das Watt-Limit.
