@@ -425,6 +425,7 @@ class SolakonCoordinator:
             "capacity_kwh": self._flt_kwh_normalized(cap_sensor, None) if cap_sensor else None,
             "current_zone": self.current_zone,
             "zone_label": self.zone_label,
+            "mode_key": self.mode_key,
             "mode_label": self.mode_label,
             "last_action": self.last_action,
             "last_action_ts": self.last_action_ts,

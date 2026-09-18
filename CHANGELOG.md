@@ -10,6 +10,10 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 - README: Inhaltsverzeichnis am Anfang, verlinkt auf alle Abschnitte bis zur dritten Ebene.
 - README-Voraussetzungen: Die einmalige App-Einstellung nennt jetzt auch „Überschussladung aktivieren“. Ohne sie lädt das Gerät in Zone 3 nicht, weil die Regelung es dort freigibt. Der Debug-Schalter „Ruhezustand in Modus 1“ verweist in README und Panel zuerst auf diese Einstellung.
 
+### Behoben
+
+- Panel, Status-Tab: Der **Betriebsmodus** erschien in der Sprache der HA-Instanz statt in der Sprache des Benutzerprofils. Das Backend lieferte den fertigen Text, das übrige Panel folgt aber dem Profil. Das Panel übersetzt den Modus jetzt selbst aus dem neuen Statusfeld `mode_key`, wie schon „Aktiver Fall“ und „Betriebszustand“.
+
 ## [3.0.0-beta.3] – 2026-09-15
 
 > **Beta-Release.** Folgestand zu `3.0.0-beta.2`: Fehlerbehebungen aus der Prüfung der Verhaltensregeln, Meldungen bei Sensoren ohne Zahlenwert. Erscheint in HACS nur bei aktivierten Beta-Versionen.

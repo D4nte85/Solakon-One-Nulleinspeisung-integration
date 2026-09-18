@@ -134,7 +134,7 @@ async def _ws_save_config(
 
 # Schlüssel des WS-Status: Name im Panel oder Paar (Panel, Schnappschuss).
 WS_STATUS_KEYS = (
-    ("zone", "current_zone"), "zone_label", "mode_label", "last_action", "last_action_ts",
+    ("zone", "current_zone"), "zone_label", "mode_key", "mode_label", "last_action", "last_action_ts",
     "last_output_ts", "mode_label_ts", "last_error", "integral",
     "cycle_active", "surplus_active", ("ac_charge", "ac_charge_active"),
     ("tariff_charge", "tariff_charge_active"), "regulation_enabled",

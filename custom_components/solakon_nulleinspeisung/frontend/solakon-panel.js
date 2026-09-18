@@ -1257,7 +1257,9 @@ ${this._textsMissing ? `
       "st-alloc":        st.allocated_power != null ? `${st.allocated_power} W` : (s.alloc_single || "—"),
       "st-elapsed":      this._fmt_elapsed(st.last_output_ts),
       "st-mode-elapsed": this._fmt_elapsed(st.mode_label_ts),
-      "st-mode":         st.mode_label  || "—",
+      // In Panelsprache aus dem Schlüssel; der unbekannte Modus trägt den Rohwert nur im Backend-Text.
+      "st-mode":         st.mode_key && st.mode_key !== "unknown"
+                           ? this._es("mode_label", st.mode_key) : (st.mode_label || "—"),
       "st-action":       st.last_action || "—",
       "st-error":        st.last_error  || (s.no_error || "—"),
       "st-offset-val":   `${st.offset_dynamic ? (st.offset_value ?? 0).toFixed(0) : offsetStatic} W`,
