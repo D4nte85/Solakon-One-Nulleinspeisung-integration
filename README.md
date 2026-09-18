@@ -444,7 +444,7 @@ Drei Preisstufen: **Günstig** (Preis < Günstig-Schwelle): Tarif-Laden mit fest
 
 **Einheiten-Plausibilität:** Beide Schwellen sind ct/kWh. Liefert der Preis-Sensor €/kWh (0,28 statt 28), liegt der Preis dauerhaft unter der Günstig-Schwelle — die Integration lädt durchgehend aus dem Netz und sperrt zusätzlich die Entladung. Erkannt wird das am Wert, nicht an der Einheit: ein Preis zwischen 0 und 1 bei einer Günstig-Schwelle ab 3 gilt nach sechs Stunden ununterbrochen als Verdacht und erscheint als Fehlermeldung im Panel. Trägt der Sensor eine Einheit mit „€" oder „EUR", erscheint die Meldung sofort; eine Einheit mit „ct", „Cent" oder „öre" unterdrückt sie. Umgerechnet wird nichts — negative Börsenpreise und einzelne Nulltarif-Stunden lösen keine Meldung aus.
 
-**Dynamische Preisschwellen (optional lokal):** Günstig-Schwelle-Entität und Teuer-Schwelle-Entität, siehe **Entitäten**. Können bei Multi-Instanz zusätzlich global im Verteilungs-Tab hinterlegt werden (meist ein gemeinsamer Hausstrom-Tarif) — jede Instanz überschreibt optional lokal.
+**Dynamische Preisschwellen (optional lokal):** Günstig-Schwelle-Entität und Teuer-Schwelle-Entität, siehe **Entitäten**. Können bei Multi-Instanz zusätzlich global im Verteilungs-Tab hinterlegt werden (meist ein gemeinsamer Hausstrom-Tarif) — jede Instanz überschreibt optional lokal. Liefert eine Schwellen-Entität keine Zahl, gilt der eingestellte Zahlenwert, und `last_error` nennt die Entität.
 
 ---
 
@@ -621,7 +621,7 @@ Der Zustand wird aus den Zustandsflags abgeleitet, nicht aus dem zuletzt ausgef�
 | # | Schlüssel | Anzeige | Gilt wenn |
 |---|-----------|---------|-----------|
 | 1 | `disabled` | Regelung inaktiv | Hauptschalter aus |
-| 2 | `blocked` | Regelung blockiert | Zyklus bricht ab — Kernsensor fehlt, ist nicht verfügbar oder liefert keine Zahl, oder SOC-Grenzen unplausibel, Grund in `last_error` |
+| 2 | `blocked` | Regelung blockiert | Zyklus bricht ab — Kernsensor (Netz, PV, Ist-Leistung, Leistungssollwert, SOC) fehlt, ist nicht verfügbar oder liefert keine Zahl, oder SOC-Grenzen unplausibel, Grund in `last_error` |
 | 3 | `exporting` | Überschuss-Einspeisung | Zone 0 aktiv |
 | 4 | `tariff_charging` | Tarif-Laden | Lade-Session bei günstigem Preis |
 | 5 | `ac_charging` | AC-Laden | Lade-Session Zone 1 |

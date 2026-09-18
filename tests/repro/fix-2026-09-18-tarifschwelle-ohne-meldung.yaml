@@ -1,0 +1,17 @@
+titel: Tarifschwelle als Entität ohne Zahl gilt still als Settings-Wert
+bezug: fix-2026-09-18-tarifschwelle-ohne-meldung
+# Tarif aktiv, gültiger Preis; die Günstig-Schwelle zeigt auf eine Entität mit
+# Textzustand. Es gilt der Settings-Wert, die Fehlerkette muss die Entität nennen.
+netz: 300
+sensoren:
+  sensor.preis: {wert: 25.0, einheit: ct/kWh}
+  sensor.schwelle: "on"
+instanzen:
+  - prefix: a
+    settings: {regulation_enabled: true, tariff_enabled: true, tariff_price_sensor: sensor.preis, tariff_cheap_entity: sensor.schwelle}
+    sensoren: {soc: 70, modus: "0"}
+schritte:
+  - nach: 0
+  - nach: 5
+erwartet:
+  - zustand_nicht: {last_error: ""}

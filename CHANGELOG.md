@@ -5,6 +5,11 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+### Behoben
+
+- Lieferte der Leistungssollwert des Geräts keine Zahl, rechnete der PI-Regler von 0 W aus und schrieb einen falschen Sprung, ohne Meldung. Der Sollwert ist jetzt Pflichtsensor: Ohne Zahl überspringt die Regelung den Zyklus mit Meldung, wie bei Netz, PV, Ist-Leistung und SOC.
+- Lieferte eine Tarifschwellen-Entität (günstig oder teuer) keine Zahl, galt still der eingestellte Wert. Bei aktiver Tarif-Funktion meldet `last_error` das jetzt mit der Entität; der eingestellte Wert gilt weiter.
+
 ## [3.0.0-beta.4] – 2026-09-18
 
 > **Beta-Release.** Folgestand zu `3.0.0-beta.3`: Verteilung bei mehreren Instanzen und Netzgruppen, Panel-Texte in der Sprache des Benutzerprofils, Sensoren mit Text statt Zahl. Erscheint in HACS nur bei aktivierten Beta-Versionen.

@@ -235,7 +235,7 @@
       "d": "Optionale input_number-Entität, überschreibt die statische Teuer-Schwelle. Speist die Tarif-Arbitrage (Tarif-Tab)."
     },
     "tariff_dynamic_entities_note": {
-      "d": "🔌 Optionale Entitäten „Günstig-Schwelle dynamisch“ / „Teuer-Schwelle dynamisch“ (Entitäten-Tab) überschreiben die Zahlenwerte oben, wenn gesetzt."
+      "d": "🔌 Optionale Entitäten „Günstig-Schwelle dynamisch“ / „Teuer-Schwelle dynamisch“ (Entitäten-Tab) überschreiben die Zahlenwerte oben, wenn gesetzt. Liefert eine solche Entität keine Zahl, gilt der Wert oben, mit Meldung."
     },
     "tariff_soc_target": {
       "l": "Ladeziel SOC (%)",

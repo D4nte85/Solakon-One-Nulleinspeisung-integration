@@ -210,6 +210,22 @@ _TEXTS: dict[str, dict[str, str]] = {
         "de": "Tarif: Preis-Sensor {sensor!r} liefert keinen Zahlenwert — Tarif-Funktion inaktiv",
         "en": "Tariff: price sensor {sensor!r} has no numeric value — tariff function inactive",
     },
+    "err_tariff_cheap_sensor_unavailable": {
+        "de": "Tarif: Günstig-Schwelle {sensor!r} nicht verfügbar — es gilt der Wert aus den Einstellungen",
+        "en": "Tariff: cheap threshold {sensor!r} unavailable — the value from the settings applies",
+    },
+    "err_tariff_cheap_sensor_not_numeric": {
+        "de": "Tarif: Günstig-Schwelle {sensor!r} liefert keinen Zahlenwert — es gilt der Wert aus den Einstellungen",
+        "en": "Tariff: cheap threshold {sensor!r} has no numeric value — the value from the settings applies",
+    },
+    "err_tariff_exp_sensor_unavailable": {
+        "de": "Tarif: Teuer-Schwelle {sensor!r} nicht verfügbar — es gilt der Wert aus den Einstellungen",
+        "en": "Tariff: expensive threshold {sensor!r} unavailable — the value from the settings applies",
+    },
+    "err_tariff_exp_sensor_not_numeric": {
+        "de": "Tarif: Teuer-Schwelle {sensor!r} liefert keinen Zahlenwert — es gilt der Wert aus den Einstellungen",
+        "en": "Tariff: expensive threshold {sensor!r} has no numeric value — the value from the settings applies",
+    },
 
     # ── Warnungen aus Ausgangs-, Verteilungs- und Tarifprüfung ───────────────
     "warn_output_zero_unconfirmed": {

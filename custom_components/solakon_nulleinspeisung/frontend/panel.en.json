@@ -235,7 +235,7 @@
       "d": "Optional input_number entity, overrides the static expensive threshold. Feeds tariff arbitrage (Tariff tab)."
     },
     "tariff_dynamic_entities_note": {
-      "d": "🔌 Optional \"Dynamic Cheap Threshold\" / \"Dynamic Expensive Threshold\" entities (Entities tab) override the numeric values above when set."
+      "d": "🔌 Optional \"Dynamic Cheap Threshold\" / \"Dynamic Expensive Threshold\" entities (Entities tab) override the numeric values above when set. If such an entity has no numeric value, the value above applies, with a warning."
     },
     "tariff_soc_target": {
       "l": "Charge Target SOC (%)",

@@ -99,11 +99,12 @@ OFFSET_SOURCES = {
 }
 
 # Kernsensoren der Instanz: (Konfigschlüssel, löst Regelzyklus aus, Pflicht für den Zyklus).
-# Die Ist-Leistung wird gepollt und löst bewusst keinen Zyklus aus.
+# Ist-Leistung und Leistungssollwert werden gepollt und lösen keinen Zyklus aus.
 CORE_SENSORS = (
     (CONF_GRID_SENSOR, True, True),
     (CONF_SOLAR_SENSOR, True, True),
     (CONF_ACTUAL_SENSOR, False, True),
+    (CONF_ACTIVE_POWER, False, True),
     (CONF_SOC_SENSOR, True, True),
     (CONF_MODE_SELECT, True, False),
 )
@@ -1109,24 +1110,25 @@ class SolakonCoordinator:
         # Offsets: pro Zone dynamisch oder statisch
         ac_offset = self.dyn_offset_ac if cs.dyn_ac_enabled else cs.ac_offset
 
-        # Tarif-Parameter
-        tariff_sensor = self._effective("tariff")
-        tariff_cheap = cs.tariff_cheap
-        tariff_exp = cs.tariff_exp
-
-        cheap_entity = self._effective("tariff_cheap")
-        if cheap_entity:
-            tariff_cheap = self._flt(cheap_entity, tariff_cheap)
-
-        exp_entity = self._effective("tariff_exp")
-        if exp_entity:
-            tariff_exp = self._flt(exp_entity, tariff_exp)
-
         # Sammelt Meldungen zu Sensor-gated Features, die trotz aktivem Enable-Flag
         # wegen fehlendem/ungültigem Sensor wirkungslos bleiben; wird als last_error
         # ins Panel gespiegelt. Angelegt vor der Verteilungsrechnung, deren
         # Modus-Degradation ebenfalls hier einfließt.
         soft_errors: list[Msg] = []
+
+        # Tarif-Parameter; eine Schwellen-Entität ohne Zahl fällt auf den Settings-Wert zurück
+        tariff_sensor = self._effective("tariff")
+        tariff_cheap, tariff_exp = cs.tariff_cheap, cs.tariff_exp
+        cheap_entity = self._effective("tariff_cheap")
+        cheap = self._feature_value(
+            soft_errors, cs.tariff_enabled and bool(cheap_entity), cheap_entity, "err_tariff_cheap", {})
+        if cheap is not None:
+            tariff_cheap = cheap
+        exp_entity = self._effective("tariff_exp")
+        exp = self._feature_value(
+            soft_errors, cs.tariff_enabled and bool(exp_entity), exp_entity, "err_tariff_exp", {})
+        if exp is not None:
+            tariff_exp = exp
 
         self._dist_warning = None
         error_share, allocated_power, shares = self.group.distribution(self, soc)

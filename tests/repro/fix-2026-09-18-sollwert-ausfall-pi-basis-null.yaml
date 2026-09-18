@@ -1,0 +1,14 @@
+titel: Leistungssollwert ohne Zahl — PI rechnet von 0 W aus, ohne Meldung
+bezug: fix-2026-09-18-sollwert-ausfall-pi-basis-null
+# Entladen mit Netzbezug, der Leistungssollwert ist nicht verfügbar: der Zyklus darf
+# nicht vom Ersatzwert 0 aus schreiben und muss eine Meldung setzen.
+netz: 300
+instanzen:
+  - prefix: a
+    settings: {regulation_enabled: true}
+    sensoren: {soc: 60, modus: "1", leistung: unavailable}
+schritte:
+  - nach: 0
+erwartet:
+  - kein_aufruf: {entity: a.leistung}
+  - zustand_nicht: {last_error: ""}
