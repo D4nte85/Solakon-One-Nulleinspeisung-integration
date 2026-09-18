@@ -604,7 +604,7 @@ async def _run_derive() -> dict:
                 rng.choice([0.0, 0.05, 0.3]))
         ac, share, integ = rng.choice([False, True]), rng.choice([1.0, 0.5, 0.0]), rng.choice([0.0, 400.0, -2000.0])
         coord.integral = integ
-        out = coord._pi_calculate(*args, ac_charge_mode=ac, error_share=share)
+        out = coord.pi.calculate(*args, ac_charge_mode=ac, error_share=share)
         pi.append([list(args), ac, share, integ, out, round(coord.integral, 6)])
     dyn = []
     for sd in (-1.0, 0.0, 10.0, 40.0, 500.0):

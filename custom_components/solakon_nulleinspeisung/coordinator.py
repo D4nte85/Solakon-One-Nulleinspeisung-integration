@@ -15,6 +15,7 @@ from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .i18n import Msg, translate, translate_msgs
+from .pi import SATURATED, STEP, PIController, clamp as _clamp
 from .readings import (
     NO_SENSOR, NOT_NUMERIC, UNAVAILABLE, UNIT_SCALE_KILO, UNIT_SCALE_KWH, UNIT_SCALE_W,
     WRONG_DOMAIN, read_number, read_scaled, unit_of, valid_state,
@@ -51,10 +52,6 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
-
-def _clamp(value, lo, hi):
-    """`value` auf [lo, hi] begrenzen."""
-    return max(lo, min(hi, value))
 
 # Über Neustarts gespeicherte Zustandsflags: (Speicherschlüssel, Attribut, Default).
 PERSISTED_FLAGS = (
@@ -214,7 +211,7 @@ class SolakonCoordinator:
         self.last_error: str = ""
         # Bausteine von last_error als (Schlüssel, Parameter), für andere Sprachen.
         self.last_error_msgs: list[Msg] = []
-        self.integral: float = 0.0
+        self.pi = PIController()
         self.active_fall: str = ""
 
         # Boolsche Status-Flags
@@ -323,7 +320,7 @@ class SolakonCoordinator:
             self._retrack(name)
 
     async def async_shutdown(self) -> None:
-        """Listener abräumen, Integral speichern."""
+        """Listener abräumen."""
         for unsub in self._unsub_trackers:
             unsub()
         self._unsub_trackers.clear()
@@ -488,8 +485,16 @@ class SolakonCoordinator:
             except Exception:
                 _LOGGER.exception("Solakon: Fehler in Entity-Listener")
 
+    @property
+    def integral(self) -> float:
+        return self.pi.integral
+
+    @integral.setter
+    def integral(self, value: float) -> None:
+        self.pi.integral = value
+
     def reset_integral(self) -> None:
-        self.integral = 0.0
+        self.pi.reset()
         self._set_last_action("act_integral_reset")
         self.notify_listeners()
 
@@ -855,9 +860,7 @@ class SolakonCoordinator:
     async def _check_output_stall(self, limit: float) -> None:
         """Erkennt einen Wechselrichter, der dem Limit nicht folgt, und stößt ihn an.
 
-        Nur aus dem gesättigten Zweig des Standard-PI aufgerufen; die übrigen
-        PI-Pfade halten den Ausgang durch eigene Guards bewusst unterhalb ihres
-        Limits. Kriterium: Abweichung über `OUTPUT_STALL_DEVIATION` bei einem
+        Nur aus dem gesättigten Zweig des Entlade-PI aufgerufen. Kriterium: Abweichung über `OUTPUT_STALL_DEVIATION` bei einem
         Ist-Wert, dessen `last_updated` seit `OUTPUT_STALL_SECONDS` nicht vorrückt.
 
         Erster Treffer schreibt den Sollwert neu. Bleibt die Abweichung:
@@ -992,7 +995,7 @@ class SolakonCoordinator:
         `rest` schreibt den Ruhemodus statt `mode`; jeder geschriebene Modus setzt `resting`.
         """
         if reset_integral:
-            self.integral = 0.0
+            self.pi.reset()
         for name, value in (flags or {}).items():
             setattr(self, name, value)
         if timer and timer_first:
@@ -1024,17 +1027,12 @@ class SolakonCoordinator:
         ac_charge_mode: bool = False,
     ) -> None:
         """Ein PI-Schritt: Sollwert aus Poolanteil berechnen, Aktion setzen, schreiben."""
-        new_pw = self._pi_calculate(
+        new_pw = self.pi.calculate(
             grid, power_base, offset, limit, p_factor, i_factor,
             ac_charge_mode=ac_charge_mode, error_share=share,
         )
         self._set_last_action(action_key, frm=current_power, to=new_pw)
         await self._set_output_and_wait(new_pw, ac_charge_mode=ac_charge_mode)
-
-    def _decay_integral(self) -> None:
-        """Integral über 10 um 5 % abklingen lassen, wenn kein PI-Schritt schreibt."""
-        if abs(self.integral) > 10:
-            self.integral *= 0.95
 
     async def _timer_toggle(self) -> None:
         """Timer-Wechsel 3598↔3599 — erzwingt sichere Modus-Übernahme."""
@@ -1370,9 +1368,6 @@ class SolakonCoordinator:
         # Einzige CONF_ACTIVE_POWER-Lesung dieses Zyklus, nach dem letzten Await vor
         # der PI-Entscheidung. Gemeinsam genutzt von Gate, PI-Basis und Log-Zeile.
         current_power = self._flt(cfg[CONF_ACTIVE_POWER])
-        at_max_limit = current_power >= dynamic_max
-        at_min_limit = current_power <= 0
-        above_dynamic_max = current_power > dynamic_max
 
         # Eigener Pool für AC-Laden, nach den Falls berechnet.
         ac_error_share = self._compute_ac_distribution(soc)
@@ -1384,7 +1379,7 @@ class SolakonCoordinator:
             await self._set_fixed_output(effective_hard, current_power, "act_zone0_output")
 
         elif self.ac_charge_active:
-            if abs(grid - ac_offset) > cs.tolerance:
+            if self.pi.gate_ac(grid, ac_offset, cs.tolerance) == STEP:
                 await self._pi_step(
                     grid,
                     self._pool_sum(self._ac_pool(), current_power, CONF_ACTIVE_POWER,
@@ -1392,21 +1387,13 @@ class SolakonCoordinator:
                     ac_offset, cs.ac_power_limit, cs.ac_p, cs.ac_i, ac_error_share, current_power,
                     "act_ac_pi", ac_charge_mode=True,
                 )
-            else:
-                self._decay_integral()
 
         elif self.tariff_charge_active:
             await self._set_fixed_output(cs.tariff_power, current_power, "act_tariff_power", ac_charge_mode=True)
 
         else:
-            grid_error = grid - target_offset
-            grid_error_abs = abs(grid_error)
-            # Sättigung nach oben: der PI könnte hochregeln, darf aber nicht.
-            saturated_high = at_max_limit and not above_dynamic_max and grid_error > 0
-
-            # Über dynamic_max schreibt der PI-Schritt auch bei Netzfehler in der Toleranz herunter.
-            if ((grid_error_abs > cs.tolerance or above_dynamic_max)
-                    and not saturated_high and not (at_min_limit and grid_error < 0)):
+            gate = self.pi.gate_discharge(grid, current_power, target_offset, dynamic_max, cs.tolerance)
+            if gate == STEP:
                 await self._pi_step(
                     grid,
                     self._pool_sum(self._discharge_pool(), current_power, CONF_ACTIVE_POWER,
@@ -1414,12 +1401,10 @@ class SolakonCoordinator:
                     target_offset, dynamic_max, cs.p_factor, cs.i_factor, error_share, current_power,
                     "act_pi",
                 )
+            elif gate == SATURATED:
+                await self._check_output_stall(dynamic_max)
             else:
-                self._decay_integral()
-                if saturated_high:
-                    await self._check_output_stall(dynamic_max)
-                else:
-                    self._reset_output_stall_state()
+                self._reset_output_stall_state()
 
     def _add_soft_error(self, soft_errors: list[Msg], msg: Msg) -> None:
         """Baustein an die Fehlerkette hängen und `last_error` neu verketten."""
@@ -1993,45 +1978,6 @@ class SolakonCoordinator:
         `own_soc` siehe `_all_shares`.
         """
         return self._weighted_share(self._ac_pool(), own_soc)
-
-    # ── PI-Berechnung ────────────────────────────────────────────────────────
-
-    def _pi_calculate(
-        self,
-        grid_power: float,
-        current_power: float,
-        target_offset: float,
-        max_power: float,
-        p_factor: float,
-        i_factor: float,
-        ac_charge_mode: bool = False,
-        error_share: float = 1.0,
-    ) -> float:
-        """PI-Regler-Berechnung mit modusabhängiger Fehlerrichtung und Anti-Windup via Back-Calculation.
-        max_power wird auf DEVICE_MAX_POWER gedeckelt, damit Klemmung und
-        Back-Calculation gegen die real erreichbare Grenze rechnen."""
-        max_power = min(max_power, DEVICE_MAX_POWER)
-
-        if ac_charge_mode:
-            raw_error = (target_offset - grid_power) * error_share
-        else:
-            raw_error = (grid_power - target_offset) * error_share
-
-        if raw_error > 0:
-            error = min(raw_error, max(0.0, max_power - current_power))
-        else:
-            error = max(raw_error, 0 - current_power)
-
-        integral_candidate = self.integral + error
-        correction = error * p_factor + integral_candidate * i_factor
-        new_power = current_power + correction
-        final = _clamp(new_power, 0, max_power)
-
-        if i_factor != 0:
-            integral_candidate = (final - current_power - error * p_factor) / i_factor
-        self.integral = _clamp(integral_candidate, -max_power, max_power)
-
-        return round(final, 1)
 
     # ── Zonen-Display ────────────────────────────────────────────────────────
 
