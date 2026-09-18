@@ -20,6 +20,7 @@ from .readings import (
     NO_SENSOR, NOT_NUMERIC, UNAVAILABLE, UNIT_SCALE_KILO, UNIT_SCALE_KWH, UNIT_SCALE_W,
     WRONG_DOMAIN, read_number, read_scaled, unit_of, valid_state,
 )
+from .zones import ZoneInputs, decide
 from .const import (
     DOMAIN, STORAGE_VERSION, SETTINGS_DEFAULTS, DIST_DEFAULTS, DEVICE_MAX_POWER,
     CONF_GRID_SENSOR, CONF_ACTUAL_SENSOR, CONF_SOLAR_SENSOR,
@@ -912,11 +913,6 @@ class SolakonCoordinator:
         await self._set_number(self.entry.data[CONF_DISCHARGE_CURRENT], amps, only_if_changed=True)
 
     @property
-    def _charging_session_active(self) -> bool:
-        """True während AC-Laden oder Tarif-Laden."""
-        return self.ac_charge_active or self.tariff_charge_active
-
-    @property
     def _control_state(self) -> str:
         """Regelzustand aus den Flags, erster zutreffender gewinnt:
         surplus → tariff_charge → ac_charge → cycle → pv."""
@@ -972,14 +968,6 @@ class SolakonCoordinator:
         current = self._flt(export_entity, -1)
         if await self._set_number(export_entity, target, only_if_changed=True, current=current):
             _LOGGER.info("Solakon: Export-Limit korrigiert %d → %d W", int(current), target)
-
-    async def _end_charge(self, flag: str, action_key: str) -> None:
-        """Lade-Session beenden: Integral, Flag, Output 0, Rückkehrmodus, Aktionstext."""
-        await self._transition(
-            reset_integral=True, flags={flag: False}, output=0,
-            mode=MODE_DISCHARGE, rest=not self.cycle_active,
-        )
-        self._set_last_action(action_key)
 
     async def _transition(
         self, *, reset_integral: bool = False, flags: dict[str, bool] | None = None,
@@ -1442,241 +1430,21 @@ class SolakonCoordinator:
     # ── Falls (Zonenwechsel-Logik) ───────────────────────────────────────────
 
     async def _execute_falls(self, **v) -> str | None:
-        """Prüft alle Falls in Reihenfolge. Gibt den Fall-Name zurück oder None."""
-
-        soc = v["soc"]
-        mode = v["mode"]
-        grid = v["grid"]
-        actual = v["actual"]
-        total_actual = v["total_actual"]
-        zone1 = v["zone1_limit"]
-        zone3 = v["zone3_limit"]
-
-        # ── Fall 0A: Surplus Entry ───────────────────────────────────────────
-        if (
-            v["surplus_enabled"]
-            and v["new_surplus"]
-            and not self.surplus_active
-            and not self.ac_charge_active
-            and not self.tariff_charge_active
-        ):
-            # Zone 0 setzt immer auf einem aktiven Zone-1-Zyklus auf
-            switch = mode != MODE_DISCHARGE or self._at_rest(mode)
-            await self._transition(
-                flags={"surplus_active": True, "cycle_active": True},
-                timer=switch, mode=MODE_DISCHARGE if switch else None,
-            )
-            self._set_last_action("act_surplus_on")
-            return "0A"
-
-        # ── Fall 0B: Surplus Exit ────────────────────────────────────────────
-        # Austritt bei erfüllter Austritts-Bedingung oder deaktivierter Überschuss-Option.
-        if self.surplus_active and (not v["surplus_enabled"] or not v["new_surplus"]):
-            # Zone nach Overlay-Ende aus dem SOC ableiten
-            await self._transition(
-                reset_integral=True,
-                flags={"surplus_active": False, "cycle_active": soc > zone1},
-                output=0, timer=False,
-            )
-            self._set_last_action("act_surplus_off")
-            return "0B"
-
-        # ── Fall A: Zone 1 Start ─────────────────────────────────────────────
-        # zone1_forced erlaubt den Eintritt auch unter dem normalen
-        # Zone-1-Limit, wenn der morgige PV-Ertrag die Nacht ohnehin wieder
-        # auffüllt. Reiner Einweg-Trigger für den Eintritt — der Austritt läuft
-        # unabhängig davon ausschließlich über Fall B (soc < zone3).
-        zone1_forced = v.get("zone1_forced", False)
-        if (
-            not self.ac_charge_active
-            and v["tariff_allows_discharge"]
-            and not self.tariff_charge_active
-            and (soc > zone1 or zone1_forced)
-            and not self.cycle_active
-        ):
-            await self._transition(
-                reset_integral=True,
-                flags={"cycle_active": True, "surplus_active": False,
-                       "ac_charge_active": False, "tariff_charge_active": False},
-                mode=MODE_DISCHARGE,
-            )
-            if zone1_forced and soc <= zone1:
-                self._set_last_action("act_fall_a_forced", soc=soc)
-            else:
-                self._set_last_action("act_fall_a", soc=soc)
-            return "A"
-
-        # ── Fall B: Zone 3 Stop (Zyklus on) ──────────────────────────────────
-        if (
-            not self.ac_charge_active
-            and not self.tariff_charge_active
-            and soc <= zone3
-            and self.cycle_active
-        ):
-            await self._transition(
-                reset_integral=True,
-                flags={"cycle_active": False, "surplus_active": False,
-                       "ac_charge_active": False, "tariff_charge_active": False},
-                output=0, rest=True,
-            )
-            self._set_last_action("act_fall_b", soc=soc)
-            return "B"
-
-        # ── Fall C: Zone 3 Absicherung ───────────────────────────────────────
-        if (
-            not self.ac_charge_active
-            and not self.tariff_charge_active
-            and soc <= zone3
-            and not self.cycle_active
-            and not self._at_rest(mode)
-        ):
-            await self._transition(
-                flags={"surplus_active": False, "ac_charge_active": False,
-                       "tariff_charge_active": False},
-                output=0, rest=True,
-            )
-            self._set_last_action("act_fall_c")
-            return "C"
-
-        # ── Fall D: Recovery ─────────────────────────────────────────────────
-        # Tarif-Lock blockiert Recovery für normalen Discharge (ac/tariff_charge_active-Recovery bleibt erlaubt)
-        # Recovery einer aktiven Lade-Session ignoriert die Zone-3-Schwelle — Laden bleibt bei jedem SOC möglich
-        tariff_lock_active = (
-            v["price_below_exp"]
-            and v["price_at_least_cheap"]
-            and not self.ac_charge_active
-            and not self.tariff_charge_active
-            and not self.surplus_active
-        )
-        charging_session_active = self._charging_session_active
-        if (
-            (self.cycle_active or charging_session_active)
-            and (mode not in (MODE_DISCHARGE, MODE_AC_CHARGE) or self._at_rest(mode))
-            and (charging_session_active or soc > zone3)
-            and not tariff_lock_active
-        ):
-            await self._transition(mode=MODE_AC_CHARGE if charging_session_active else MODE_DISCHARGE)
-            self._set_last_action("act_fall_d")
-            return "D"
-
-        # ── Fall GT: Tarif-Laden Start ───────────────────────────────────────
-        # Überschuss-Einspeisung hat Vorrang — kein Tarif-Laden während Zone 0 aktiv
-        if (
-            v["price_below_cheap"]
-            and soc < v["tariff_soc"]
-            and not self.tariff_charge_active
-            and not self.surplus_active
-            and mode != MODE_AC_CHARGE
-        ):
-            await self._transition(
-                flags={"tariff_charge_active": True}, output=v["tariff_power"],
-                ac_charge_mode=True, timer_first=True, mode=MODE_AC_CHARGE,
-            )
-            self._set_last_action("act_fall_gt", price=v["tariff_price"])
-            return "GT"
-
-        # ── Fall HT: Tarif-Laden Ende ────────────────────────────────────────
-        if (
-            self.tariff_charge_active
-            and (
-                soc >= v["tariff_soc"]
-                or v["price_at_least_cheap"]
-            )
-        ):
-            await self._end_charge("tariff_charge_active", "act_fall_ht")
-            return "HT"
-
-        # ── Discharge-Lock (Preis < Teuer-Schwelle) ──────────────────────────
-        # Sperrt Zone 1 und Zone 2 solange Preis < teuer (günstig UND mittel).
-        if (
-            v["price_below_exp"]
-            and not self.tariff_charge_active
-            and not self.ac_charge_active
-            and not self.surplus_active
-            and mode == MODE_DISCHARGE
-            and not self._at_rest(mode)
-        ):
-            await self._transition(
-                reset_integral=True, flags={"cycle_active": False}, output=0, rest=True,
-            )
-            self._set_last_action("act_fall_tm", price=v["tariff_price"])
-            return "TM"
-
-        # ── Fall G: AC Laden Start ───────────────────────────────────────────
-        # Überschuss-Einspeisung hat Vorrang — kein AC Laden während Zone 0 aktiv
-        # total_actual summiert über alle entladenden Instanzen (Einzelbetrieb: eigener Wert)
-        if (
-            v["ac_enabled"]
-            and not self.ac_charge_active
-            and not self.tariff_charge_active
-            and not self.surplus_active
-            and soc < v["ac_soc_target"]
-            and mode != MODE_AC_CHARGE
-            and (grid + total_actual) < -v["ac_hysteresis"]
-        ):
-            await self._transition(
-                flags={"ac_charge_active": True}, output=0,
-                ac_charge_mode=True, timer_first=True, mode=MODE_AC_CHARGE,
-            )
-            self._set_last_action("act_fall_g")
-            return "G"
-
-        # ── Fall H: AC Laden Ende ────────────────────────────────────────────
-        if (
-            mode == MODE_AC_CHARGE
-            and self.ac_charge_active
-            and not self.tariff_charge_active
-            and (
-                soc >= v["ac_soc_target"]
-                or (
-                    grid >= (v["ac_offset"] + v["ac_hysteresis"])
-                    and abs(actual) <= self._setting(S_SELF_ADJUST_TOL, float)
-                )
-            )
-        ):
-            await self._end_charge("ac_charge_active", "act_fall_h")
-            return "H"
-
-        # ── Fall I: Safety — Modus '3' ohne aktive Lade-Session ──────────────
-        if (
-            mode == MODE_AC_CHARGE
-            and not self.ac_charge_active
-            and not self.tariff_charge_active
-        ):
-            await self._transition(
-                reset_integral=True, output=0,
-                mode=MODE_DISCHARGE, rest=not self.cycle_active,
-            )
-            self._set_last_action("act_fall_i")
-            return "I"
-
-        # ── Fall E: Zone 2 Start ─────────────────────────────────────────────
-        if (
-            not self.ac_charge_active
-            and not self.tariff_charge_active
-            and v["tariff_allows_discharge"]
-            and zone3 < soc <= zone1
-            and not self.cycle_active
-            and (mode == MODE_DISABLED or self._at_rest(mode))
-            and not v["is_night"]
-        ):
-            await self._transition(reset_integral=True, mode=MODE_DISCHARGE)
-            self._set_last_action("act_fall_e")
-            return "E"
-
-        # ── Fall F: Nachtabschaltung ─────────────────────────────────────────
-        if (
-            not self.ac_charge_active
-            and not self.tariff_charge_active
-            and v["is_night"]
-            and not self.cycle_active
-            and not self._at_rest(mode)
-        ):
-            await self._transition(reset_integral=True, output=0, rest=True)
-            self._set_last_action("act_fall_f")
-            return "F"
-
-        return None
+        """Fall per `zones.decide` bestimmen, Übergang und Aktionstext ausführen, Kennung zurückgeben."""
+        d = decide(ZoneInputs(
+            **v,
+            self_adjust_tol=self._setting(S_SELF_ADJUST_TOL, float),
+            surplus_active=self.surplus_active,
+            ac_charge_active=self.ac_charge_active,
+            tariff_charge_active=self.tariff_charge_active,
+            cycle_active=self.cycle_active,
+            at_rest=self._at_rest(v["mode"]),
+        ))
+        if d is None:
+            return None
+        await self._transition(**d.transition)
+        self._set_last_action(d.action, **d.params)
+        return d.name
 
     # ── Multi-Instanz Verteilung ─────────────────────────────────────────────
 
