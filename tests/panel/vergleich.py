@@ -1,7 +1,7 @@
 """Panel-Render gegen einen git-Stand vergleichen: python tests/panel/vergleich.py [REV] [--zeige N] [--ignoriere REGEX ...]
 
-Rendert `solakon-panel.js` aus REV (Standard HEAD) und aus dem Arbeitsverzeichnis mit
-render.cjs und vergleicht die Schnappschüsse. `--ignoriere` entfernt Treffer vor dem
+Rendert `solakon-panel.js` samt Panel- und Entity-Texten aus REV (Standard HEAD) und aus
+dem Arbeitsverzeichnis mit render.cjs und vergleicht die Schnappschüsse. `--ignoriere` entfernt Treffer vor dem
 Vergleich (für bewusste Änderungen). Exit 0: gleich · 1: abweichend · 2: Umgebung fehlt.
 Einrichtung einmalig: npm install --prefix tests/panel
 """
@@ -18,10 +18,13 @@ from pathlib import Path
 HIER = Path(__file__).resolve().parent
 REPO = HIER.parent.parent
 PANEL = "custom_components/solakon_nulleinspeisung/frontend/solakon-panel.js"
+TEXTE = ["custom_components/solakon_nulleinspeisung/frontend",
+         "custom_components/solakon_nulleinspeisung/translations"]
 
 
-def render(panel: Path, ziel: Path) -> list:
-    subprocess.run(["node", str(HIER / "render.cjs"), str(panel), str(ziel)], check=True, capture_output=True)
+def render(panel: Path, ziel: Path, texte: Path = REPO) -> list:
+    subprocess.run(["node", str(HIER / "render.cjs"), str(panel), str(ziel), str(texte)],
+                   check=True, capture_output=True)
     return json.loads(ziel.read_text(encoding="utf-8"))
 
 
@@ -42,7 +45,11 @@ def main(argv: list[str]) -> int:
         alt_js = Path(tmp) / "alt.js"
         alt_js.write_text(subprocess.run(["git", "-C", str(REPO), "show", f"{rev}:{PANEL}"],
                                          check=True, capture_output=True, text=True).stdout, encoding="utf-8")
-        alt = render(alt_js, Path(tmp) / "alt.json")
+        alt_texte = Path(tmp) / "rev"
+        alt_texte.mkdir()
+        archiv = subprocess.run(["git", "-C", str(REPO), "archive", rev, *TEXTE], check=True, capture_output=True).stdout
+        subprocess.run(["tar", "-x", "-C", str(alt_texte)], input=archiv, check=True)
+        alt = render(alt_js, Path(tmp) / "alt.json", alt_texte)
         neu = render(REPO / PANEL, Path(tmp) / "neu.json")
 
     def norm(v):

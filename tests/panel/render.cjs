@@ -1,5 +1,6 @@
 // Rendert das Panel mit den Mock-Daten aus index.html über eine feste Aktionsfolge und
-// schreibt je Schritt das normalisierte Shadow-DOM:  node render.cjs <panel.js> <out.json>
+// schreibt je Schritt das normalisierte Shadow-DOM:  node render.cjs <panel.js> <out.json> [textwurzel]
+// Textwurzel: Verzeichnis, aus dem fetch Panel- und Entity-Texte lädt (Standard: Repo).
 // Abgedeckt: 3 Szenarien × 2 Sprachen, alle Tabs, Eingaben, Speichern, Debug-Schalter,
 // Verteilung, Wettläufe mit Instanzwechsel, Fehlerpfade. Poll-Timer und Toast-Timer sind
 // abgeschaltet, WS-Antworten im Wettlauf laufen über eine Warteschlange — deterministisch.
@@ -7,6 +8,7 @@ const fs = require("fs"), path = require("path");
 const { JSDOM } = require(__dirname + "/node_modules/jsdom");
 const REPO = path.resolve(__dirname, "..", "..");
 const DOMAIN = "solakon_nulleinspeisung";
+const TEXTE = path.resolve(process.argv[4] || REPO);
 const panelSrc = fs.readFileSync(process.argv[2], "utf8");
 const html = fs.readFileSync(REPO + "/index.html", "utf8")
   .replace(/<script src="custom_components[^"]*"><\/script>/, () => `<script>${panelSrc}</script>`);
@@ -47,7 +49,7 @@ async function run(scenario, lang) {
       const st = win.setTimeout.bind(win); win.setTimeout = (fn, ms, ...a) => ms === 3000 ? 0 : st(fn, ms, ...a);
       win.fetch = async (url) => {
         let rel = url.replace(/^\//, "");
-        const f = path.join(REPO, rel);
+        const f = path.join(TEXTE, rel);
         if (!fs.existsSync(f)) return { ok: false, status: 404, json: async () => ({}) };
         const txt = fs.readFileSync(f, "utf8");
         return { ok: true, status: 200, json: async () => JSON.parse(txt), text: async () => txt };
@@ -65,6 +67,8 @@ async function run(scenario, lang) {
   const click = el => el && el.click();
   const instTabs = () => [...sr.querySelectorAll(".inst-tab")];
   await settle(); clearInterval(p._polling);
+  // Validierungspunkt: je ein Zustand mit Text; fehlende Entity und "unavailable" liefert der Mock
+  p._hass.states["sensor.panel_test_text"] = { state: "an", attributes: {} };
   await shot("start"); await poll(); await shot("start+poll");
 
   const tabRound = async (prefix) => {
@@ -82,7 +86,13 @@ async function run(scenario, lang) {
       }
       if (id === "entities") {
         const inp = sr.querySelector("#content .entity-row input");
-        if (inp) { inp.value = "sensor.solcast_prognose"; fire(inp, "input"); fire(inp, "change"); await shot(`${prefix}/entity-input`); }
+        if (inp) {
+          for (const [wert, name] of [["sensor.solakon_one_leistung", "zahl"], ["sensor.panel_test_text", "text"],
+                                      ["sensor.gibt_es_nicht", "fehlt"]]) {
+            inp.value = wert; fire(inp, "input"); await shot(`${prefix}/entity-dot-${name}`);
+          }
+          inp.value = "sensor.solcast_prognose"; fire(inp, "input"); fire(inp, "change"); await shot(`${prefix}/entity-input`);
+        }
       }
       if (id === "debug") {
         const btns = [...sr.querySelectorAll("#content button")];

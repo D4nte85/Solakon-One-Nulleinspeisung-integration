@@ -113,6 +113,7 @@ Regellauf einer Instanz: Eingänge davor, Schreibbefehle, Zustand danach.
 
 `tests/panel/render.cjs` lädt `index.html` mit dem echten Panel in jsdom und nimmt über eine
 feste Aktionsfolge rund 300 Schnappschüsse des Shadow-DOM auf: 3 Szenarien × 2 Sprachen,
-alle Tabs, Eingaben, Speichern, Debug-Schalter, Verteilung, Wettläufe mit Instanzwechsel und
-Fehlerpfade. `vergleich.py` rendert einen git-Stand und den Arbeitsstand und zeigt die
+alle Tabs, Eingaben, Validierungspunkt (Zahl, Text, fehlende Entity), Speichern, Debug-Schalter,
+Verteilung, Wettläufe mit Instanzwechsel und Fehlerpfade. `vergleich.py` rendert einen git-Stand
+und den Arbeitsstand, jeweils mit den Panel- und Entity-Texten dieses Stands, und zeigt die
 Unterschiede; `--ignoriere REGEX` blendet bewusste Änderungen aus.
