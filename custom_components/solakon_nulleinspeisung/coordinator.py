@@ -21,6 +21,7 @@ from .readings import (
     NO_SENSOR, NOT_NUMERIC, UNAVAILABLE, UNIT_SCALE_KILO, UNIT_SCALE_KWH, UNIT_SCALE_W,
     WRONG_DOMAIN, read_number, read_scaled, unit_of, valid_state,
 )
+from .group import NetGroup, Shares, group_for
 from .zones import ZoneInputs, decide
 from .const import (
     DOMAIN, STORAGE_VERSION, SETTINGS_DEFAULTS, DIST_DEFAULTS, DEVICE_MAX_POWER,
@@ -418,7 +419,7 @@ class SolakonCoordinator:
         enabled_key, static_key, dyn_attr = OFFSET_SOURCES[offset_zone]
         offset_dynamic = bool(self.settings.get(enabled_key, False))
         offset_static = self.settings.get(static_key)
-        cap_sensor = str(self._dist_cfg().get(f"inst_{self.entry.entry_id}_capacity_sensor", ""))
+        cap_sensor = str(self.group.dist_cfg().get(f"inst_{self.entry.entry_id}_capacity_sensor", ""))
         return {
             "offset_zone": offset_zone,
             "offset_dynamic": offset_dynamic,
@@ -531,7 +532,7 @@ class SolakonCoordinator:
 
         Im AC-Lademodus meldet der Ist-Sensor negativ; verglichen wird dann gegen `-target`.
         """
-        actual = self._flt_power(self.entry.data.get(CONF_ACTUAL_SENSOR, ""))
+        actual = self.actual_power()
         return actual, abs(actual - (-target if ac_charge_mode else target))
 
     def _actual_updated_ts(self) -> float | None:
@@ -576,8 +577,7 @@ class SolakonCoordinator:
     @property
     def _grid_samples(self) -> deque[tuple[float, float]]:
         """StdDev-Ringpuffer (timestamp, value) der Netzgruppe, gefüllt vom Gruppen-Leader."""
-        buffers = self.hass.data.setdefault(f"{DOMAIN}_grid_samples", {})
-        return buffers.setdefault(self.entry.data.get(CONF_GRID_SENSOR, ""), deque())
+        return self.group.samples
 
     def _update_stddev(self, grid_value: float) -> None:
         """Neuen Grid-Messwert in Ringpuffer aufnehmen und StdDev berechnen."""
@@ -696,7 +696,7 @@ class SolakonCoordinator:
     # Instanz kann optional lokal überschreiben. Lokal gewinnt, sonst globaler Wert.
 
     def _global_sensor(self, key: str) -> str:
-        return str(self._dist_cfg().get(key, ""))
+        return str(self.group.dist_cfg().get(key, ""))
 
     def _effective(self, name: str) -> str:
         """Wirksamer Sensor aus SENSOR_SOURCES: lokaler Override, sonst globale Vorgabe.
@@ -1095,7 +1095,7 @@ class SolakonCoordinator:
         # StdDev ist eine Eigenschaft der Netzgruppe, nicht der einzelnen Instanz:
         # nur der Gruppen-Leader pflegt den Ringpuffer, alle Instanzen übernehmen
         # seinen Wert.
-        leader = self._group_leader()
+        leader = self.group.leader()
         if leader is self:
             self._update_stddev(grid)
         self.grid_stddev = leader.grid_stddev
@@ -1124,11 +1124,13 @@ class SolakonCoordinator:
 
         # Sammelt Meldungen zu Sensor-gated Features, die trotz aktivem Enable-Flag
         # wegen fehlendem/ungültigem Sensor wirkungslos bleiben; wird als last_error
-        # ins Panel gespiegelt. Angelegt vor _compute_distribution(), dessen
+        # ins Panel gespiegelt. Angelegt vor der Verteilungsrechnung, deren
         # Modus-Degradation ebenfalls hier einfließt.
         soft_errors: list[Msg] = []
 
-        error_share, allocated_power = self._compute_distribution(soc)
+        self._dist_warning = None
+        error_share, allocated_power, shares = self.group.distribution(self, soc)
+        self._apply_shares(shares)
         self.allocated_power = allocated_power
         if self._dist_warning:
             self._add_soft_error(soft_errors, self._dist_warning)
@@ -1239,8 +1241,8 @@ class SolakonCoordinator:
         prev_actual = self._prev_actual
         self._prev_actual = actual
 
-        total_actual = self._pool_sum(self._discharge_pool(), actual, CONF_ACTUAL_SENSOR,
-                                      SolakonCoordinator._flt_power)
+        total_actual = self.group.pool_sum(self.group.discharge_pool(), self, actual,
+                                           lambda m: m.actual_power())
 
         if cs.surplus_enabled:
             if solar > 0:
@@ -1363,7 +1365,8 @@ class SolakonCoordinator:
         current_power = self._flt(cfg[CONF_ACTIVE_POWER])
 
         # Eigener Pool für AC-Laden, nach den Falls berechnet.
-        ac_error_share = self._compute_ac_distribution(soc)
+        ac_error_share, shares = self.group.ac_share(self, soc)
+        self._apply_shares(shares)
         if self._dist_warning:
             self._add_soft_error(soft_errors, self._dist_warning)
 
@@ -1375,8 +1378,8 @@ class SolakonCoordinator:
             if self.pi.gate_ac(grid, ac_offset, cs.tolerance) == STEP:
                 await self._pi_step(
                     grid,
-                    self._pool_sum(self._ac_pool(), current_power, CONF_ACTIVE_POWER,
-                                   SolakonCoordinator._flt) * ac_error_share,
+                    self.group.pool_sum(self.group.ac_pool(), self, current_power,
+                                        lambda m: m.output_setpoint()) * ac_error_share,
                     ac_offset, cs.ac_power_limit, cs.ac_p, cs.ac_i, ac_error_share, current_power,
                     "act_ac_pi", ac_charge_mode=True,
                 )
@@ -1389,8 +1392,8 @@ class SolakonCoordinator:
             if gate == STEP:
                 await self._pi_step(
                     grid,
-                    self._pool_sum(self._discharge_pool(), current_power, CONF_ACTIVE_POWER,
-                                   SolakonCoordinator._flt) * error_share,
+                    self.group.pool_sum(self.group.discharge_pool(), self, current_power,
+                                        lambda m: m.output_setpoint()) * error_share,
                     target_offset, dynamic_max, cs.p_factor, cs.i_factor, error_share, current_power,
                     "act_pi",
                 )
@@ -1451,314 +1454,65 @@ class SolakonCoordinator:
         self._set_last_action(d.action, **d.params)
         return d.name
 
-    # ── Multi-Instanz Verteilung ─────────────────────────────────────────────
+    # ── Netzgruppe: Lesefläche für group.Member ──────────────────────────────
 
-    def _group_coords(self) -> dict[str, "SolakonCoordinator"]:
-        """Alle Coordinatoren mit demselben grid_power_sensor wie diese Instanz —
-        die Netzgruppe. Instanzen an unterschiedlichen Smartmetern teilen sich
-        physisch keinen Netzpunkt und dürfen sich nicht gegenseitig in die
-        Verteilung/Summenbildung einrechnen."""
-        my_grid = self.entry.data.get(CONF_GRID_SENSOR, "")
-        return {
-            eid: c for eid, c in self.hass.data.get(DOMAIN, {}).items()
-            if c.entry.data.get(CONF_GRID_SENSOR, "") == my_grid
-        }
+    @property
+    def group(self) -> NetGroup:
+        """Netzgruppe dieser Instanz aus dem Register."""
+        return group_for(self.hass, self.grid_sensor)
 
-    def _group_leader(self) -> "SolakonCoordinator":
-        """Deterministisch bestimmte Instanz der Netzgruppe, die den geteilten
-        StdDev-Ringpuffer pflegt — kleinste entry_id unter den Instanzen mit
-        aktiver Regelung (Fallback: kleinste entry_id der Gesamtgruppe, falls
-        gerade keine aktiv ist). Kein persistenter Zustand: fällt die aktuelle
-        Leader-Instanz aus (deaktiviert/entfernt), übernimmt automatisch die
-        nächste, ohne Übergabelogik. Einzelinstanz: Leader ist immer sich selbst.
-        """
-        active = self._pool(lambda c: c._regulation_on) or self._group_coords()
-        return active[min(active)]
+    @property
+    def member_id(self) -> str:
+        return self.entry.entry_id
 
-    def _pool(self, pred: Callable[["SolakonCoordinator"], bool]) -> dict[str, "SolakonCoordinator"]:
-        """Instanzen der Netzgruppe, für die `pred` gilt, in Reihenfolge der Gruppe."""
-        return {eid: c for eid, c in self._group_coords().items() if pred(c)}
+    @property
+    def grid_sensor(self) -> str:
+        return self.entry.data.get(CONF_GRID_SENSOR, "")
 
-    def _discharge_pool(self) -> dict[str, "SolakonCoordinator"]:
-        """Regelnde Instanzen der Netzgruppe in Modus '1', die nicht darin ruhen."""
-        return self._pool(
-            lambda c: c._regulation_on
-            and c._str(c.entry.data.get(CONF_MODE_SELECT, "")) == MODE_DISCHARGE
-            and not c._at_rest(MODE_DISCHARGE)
-        )
+    @property
+    def regulating(self) -> bool:
+        return self._regulation_on
 
-    def _ac_pool(self) -> dict[str, "SolakonCoordinator"]:
-        """Regelnde Instanzen der Netzgruppe mit aktivem AC-Laden."""
-        return self._pool(lambda c: c._regulation_on and c.ac_charge_active)
+    def in_discharge_pool(self) -> bool:
+        """Regelung an, Modus '1' und nicht darin ruhend."""
+        if not self._regulation_on:
+            return False
+        mode = self._str(self.entry.data.get(CONF_MODE_SELECT, ""))
+        return mode == MODE_DISCHARGE and not self._at_rest(MODE_DISCHARGE)
 
-    def _pool_sum(
-        self, pool: dict[str, "SolakonCoordinator"], own_value: float, conf_key: str,
-        reader: Callable[["SolakonCoordinator", str], float],
-    ) -> float:
-        """Eigener Wert `own_value` plus Fremdinstanzen aus `pool` über
-        `reader(instanz, entity_id)` der Entität `conf_key`.
-
-        Der eigene Wert zählt immer, auch wenn die Instanz selbst nicht in `pool` ist.
-        `own_value` ist der im laufenden Zyklus bereits gelesene eigene Wert — keine zweite Lesung.
-        """
-        return own_value + sum(
-            reader(c, c.entry.data.get(conf_key, "")) for c in pool.values() if c is not self
-        )
-
-    def _pool_socs(self, active: dict[str, "SolakonCoordinator"], own_soc: float) -> dict[str, float] | None:
-        """SOC je Instanz in `active`; eigener Wert `own_soc`, Fremdinstanzen live gelesen.
-        `None`, sobald ein Fremd-SOC nicht verfügbar ist."""
-        socs: dict[str, float] = {}
-        for eid, c in active.items():
-            if c is self:
-                socs[eid] = own_soc
-                continue
-            soc_eid = c.entry.data.get(CONF_SOC_SENSOR, "")
-            if not c._entity_ok(soc_eid):
-                return None
-            socs[eid] = c._flt(soc_eid, 0)
-        return socs
-
-    def _degrade(self, mode: str, warn_key: str = "") -> None:
-        """Tatsächlich angewandten Verteilungsmodus vermerken, mit Warnung bei `warn_key`."""
-        if warn_key:
-            self._dist_warning = (warn_key, {})
-        self.dist_mode_effective = mode
-
-    def _dist_cfg(self) -> dict:
-        """Verteilungs-Config nur der eigenen Netzgruppe, mit Defaults aufgefüllt."""
-        all_groups = self.hass.data.get(f"{DOMAIN}_dist_config") or {}
-        group_key = self.entry.data.get(CONF_GRID_SENSOR, "")
-        return {**DIST_DEFAULTS, **all_groups.get(group_key, {})}
-
-    def _weighted_share(self, active: dict[str, "SolakonCoordinator"], own_soc: float) -> float:
-        """SOC-/kapazitätsgewichteter oder gleichverteilter Fehler-Anteil dieser Instanz.
-
-        `active` ist die Menge der aktuell gleichrangig teilnehmenden Instanzen
-        (Pool-spezifisch — z. B. alle in Modus '1', oder alle mit aktivem AC-Laden).
-        Ist diese Instanz nicht Teil von `active`, bekommt sie keinen Anteil (0.0).
-        Dünner Wrapper um _all_shares() für den (häufigeren) Fall, dass nur der
-        eigene Anteil gebraucht wird (z. B. AC-Lade-Pool ohne Hard-Limit-Verteilung).
-        `own_soc` siehe `_all_shares`.
-        """
-        if self.entry.entry_id not in active:
-            return 0.0
-        return self._all_shares(active, own_soc).get(self.entry.entry_id, 0.0)
-
-    def _all_shares(self, active: dict[str, "SolakonCoordinator"], own_soc: float) -> dict[str, float]:
-        """SOC-/kapazitätsgewichteter oder gleichverteilter Fehler-Anteil für ALLE
-        Instanzen in `active`. Grundlage für _weighted_share() (eigener Anteil)
-        und für die Wasserfüll-Verteilung in _compute_distribution().
-
-        `own_soc` ist der im laufenden Zyklus bereits gelesene eigene
-        CONF_SOC_SENSOR-Wert; Fremdinstanzen werden live gelesen.
-
-        Degradiert ein Modus mangels gültigem Fremdinstanz-Sensor (SOC oder
-        Kapazität), wird das in self._dist_warning vermerkt und von
-        _run_regulation_cycle in soft_errors überführt.
-        """
-        n = len(active)
-        if n == 0:
-            return {}
-        dist = self._dist_cfg()
-        mode = dist["distribution_mode"]
-        self.dist_mode_effective = mode
-
-        if n <= 1:
-            return {eid: 1.0 for eid in active}
-
-        equal = {eid: 1.0 / n for eid in active}
-        if mode == "equal":
-            return equal
-
-        if mode == "soc_switch":
-            shares = self._soc_switch_shares(active, own_soc)
-            if shares is None:
-                self._degrade("equal", "warn_dist_soc_switch_sensor")
-                return equal
-            return shares
-
-        # Modus "soc" und unbekannte Modi: reine SOC-Prozentpunkt-Gewichtung.
-        caps = {eid: 1.0 for eid in active}
-        if mode == "capacity":
-            def _cap_kwh(eid: str, c) -> float | None:
-                cap_s = str(dist.get(f"inst_{eid}_capacity_sensor", ""))
-                if not cap_s:
-                    return None
-                return c._flt_kwh_normalized(cap_s, None)
-
-            # Kapazitäten pro Instanz; sobald eine keinen gültigen Wert liefert,
-            # zählen alle neutral 1.0 (degradiert zu reiner SOC-Gewichtung)
-            measured = {eid: _cap_kwh(eid, c) for eid, c in active.items()}
-            if any(cap is None for cap in measured.values()):
-                self._degrade("soc", "warn_dist_capacity_sensor")
-            else:
-                caps = measured
-
-        socs = self._pool_socs(active, own_soc)
-        if socs is None:
-            self._degrade("equal", "warn_dist_soc_sensor")
-            return equal
-
-        # SOC-Gewichte: nutzbare kWh (mode "capacity") bzw. nutzbare SOC-% (mode "soc")
-        soc_weights = {
-            eid: max(0.0, (socs[eid] - c._setting(S_ZONE3_LIMIT, float)) / 100.0 * caps[eid])
-            for eid, c in active.items()
-        }
-        total_soc = sum(soc_weights.values())
-        if total_soc <= 0:
-            self._degrade("equal")
-            return equal
-        return {eid: w / total_soc for eid, w in soc_weights.items()}
-
-    def _soc_switch_shares(self, active: dict[str, "SolakonCoordinator"], own_soc: float) -> dict[str, float] | None:
-        """Anteile für Modus `soc_switch`, ein Eintrag je Instanz in `active`.
-        `own_soc` siehe `_all_shares`. `None`: eine Fremdinstanz-SOC ist unsicher,
-        der Aufrufer weicht dann auf Gleichverteilung aus.
-
-        Regulär erhält genau eine Instanz vollen Anteil, alle anderen 0 — bis ihr
-        SOC seit Übernahme um `soc_switch_divergence` Prozentpunkte gefallen ist,
-        dann übernimmt die Instanz mit dem höchsten SOC. Zustand liegt je Netzgruppe in
-        `_soc_switch_state`. Zone 0 übernimmt bedingungslos, mehrere Zone-0-Instanzen
-        gleichmäßig; beim Rückgang in die Rotation wird `start_soc` neu verankert.
-        """
-        socs = self._pool_socs(active, own_soc)
-        if socs is None:
+    def soc_reading(self) -> float | None:
+        """SOC-Sensor dieser Instanz; `None`, wenn er nicht verfügbar ist."""
+        soc_eid = self.entry.data.get(CONF_SOC_SENSOR, "")
+        if not self._entity_ok(soc_eid):
             return None
+        return self._flt(soc_eid, 0)
 
-        zone0 = {eid for eid, c in active.items() if c.surplus_active}
+    def hard_limit(self) -> float:
+        """Hard-Limit der aktuellen Zone (Zone 0 bei Überschuss, sonst Zone 1/2)."""
+        return self._setting(self._hard_limit_key, float)
 
-        all_states = self.hass.data.setdefault(f"{DOMAIN}_soc_switch_state", {})
-        state = all_states.setdefault(
-            self.entry.data.get(CONF_GRID_SENSOR, ""),
-            {"active_id": None, "start_soc": None, "was_zone0": False},
-        )
+    def zone3_limit(self) -> float:
+        return self._setting(S_ZONE3_LIMIT, float)
 
-        was_zone0 = bool(state.get("was_zone0", False))
-        active_id = state.get("active_id")
-        changed = False
-        rebase = False
+    def capacity_kwh(self, entity_id: str) -> float | None:
+        return self._flt_kwh_normalized(entity_id, None)
 
-        if len(zone0) > 1:
-            result = {eid: (1.0 / len(zone0) if eid in zone0 else 0.0) for eid in socs}
-        else:
-            dist = self._dist_cfg()
-            divergence = float(dist["soc_switch_divergence"])
+    def actual_power(self) -> float:
+        """Ist-Leistung in W."""
+        return self._flt_power(self.entry.data.get(CONF_ACTUAL_SENSOR, ""))
 
-            if zone0:
-                z0_leader = next(iter(zone0))
-                if active_id != z0_leader:
-                    active_id, rebase = z0_leader, True
-            elif was_zone0 and active_id in socs:
-                # Zone 0 gerade verlassen — Baseline für die Rotation neu setzen
-                rebase = True
-            elif active_id not in socs:
-                active_id = max(socs, key=socs.get)
-                rebase = True
-            elif state.get("start_soc") is None:
-                rebase = True
-            elif state["start_soc"] - socs[active_id] >= divergence:
-                remaining = {eid: s for eid, s in socs.items() if eid != active_id}
-                active_id = max(remaining, key=remaining.get) if remaining else active_id
-                rebase = True
+    def output_setpoint(self) -> float:
+        """Gesetzte Ausgangsleistung."""
+        return self._flt(self.entry.data.get(CONF_ACTIVE_POWER, ""))
 
-            if rebase:
-                state["start_soc"] = socs[active_id]
-                changed = True
-
-            result = {eid: (1.0 if eid == active_id else 0.0) for eid in socs}
-
-        if bool(zone0) != was_zone0:
-            state["was_zone0"] = bool(zone0)
-            changed = True
-
-        if changed:
-            state["active_id"] = active_id
-            store = self.hass.data.get(f"{DOMAIN}_soc_switch_store")
-            if store is not None:
-                snapshot = {gk: dict(st) for gk, st in all_states.items()}
-                store.async_delay_save(lambda: snapshot, 2)
-
-        return result
-
-    def _compute_distribution(self, own_soc: float) -> tuple[float, float | None]:
-        """Fehler-Anteil + zugeteilte Leistung für Nulleinspeisung-Instanzen (Modus '1').
-
-        Gibt (error_share, allocated_power) zurück.
-        Im Einzelbetrieb oder wenn diese Instanz gerade nicht in Modus '1' steht:
-        (1.0 bzw. 0.0, None) — kein Einfluss auf hard_limit. `own_soc` siehe `_all_shares`.
-
-        allocated_power: Anteil aus _waterfill_allocate(), angehoben höchstens bis zu
-        dem, was die veröffentlichten Limits der übrigen Instanzen der Netzgruppe
-        von global_max_power freilassen; Senken wirkt sofort.
-        """
-        active = self._discharge_pool()
-        self._dist_warning = None
-        if self.entry.entry_id not in active or len(active) <= 1:
-            return (1.0, None) if self.entry.entry_id in active else (0.0, None)
-
-        shares = self._all_shares(active, own_soc)
-        dist = self._dist_cfg()
-        global_max = float(dist["global_max_power"])
-        allocations = self._waterfill_allocate(active, shares, global_max)
-        others = sum(
-            c.allocated_power or 0 for c in self._group_coords().values() if c is not self
-        )
-        own = allocations.get(self.entry.entry_id)
-        if own is not None:
-            own = min(own, max(0, math.floor(global_max - others)))
-        return shares.get(self.entry.entry_id, 0.0), own
-
-    def _waterfill_allocate(
-        self,
-        active: dict[str, "SolakonCoordinator"],
-        shares: dict[str, float],
-        global_max: float,
-    ) -> dict[str, float]:
-        """Verteilt global_max proportional zu `shares`, gekappt am lokalen Hard-Limit
-        jeder Instanz (Zone-0- oder Zone-1/2-Wert, je nachdem ob die Instanz gerade
-        surplus_active ist), und reicht dabei ungenutzten Spielraum kapp-limitierter
-        Instanzen iterativ an die übrigen weiter (Wasserfüllverfahren) — terminiert
-        garantiert, da pro Runde mindestens eine Instanz endgültig aus dem Rest-Pool
-        entfernt wird, sobald `newly_capped` nicht leer ist. Abgerundet, damit die
-        Summe `global_max` nicht übersteigt.
-        """
-        caps = {eid: c._setting(c._hard_limit_key, float) for eid, c in active.items()}
-
-        remaining_ids = set(shares.keys())
-        allocations: dict[str, float] = {}
-        remaining_power = global_max
-
-        while remaining_ids:
-            share_sum = sum(shares[eid] for eid in remaining_ids)
-            if share_sum <= 0:
-                for eid in remaining_ids:
-                    allocations[eid] = 0.0
-                break
-
-            portion = {eid: remaining_power * (shares[eid] / share_sum) for eid in remaining_ids}
-            newly_capped = [eid for eid in remaining_ids if portion[eid] >= caps[eid] - 0.01]
-
-            if not newly_capped:
-                allocations.update(portion)
-                break
-
-            for eid in newly_capped:
-                allocations[eid] = caps[eid]
-                remaining_power -= caps[eid]
-            remaining_ids -= set(newly_capped)
-
-        return {eid: math.floor(v) for eid, v in allocations.items()}
-
-    def _compute_ac_distribution(self, own_soc: float) -> float:
-        """Fehler-Anteil unter gleichzeitig AC-ladenden Instanzen (Modus '3', `ac_charge_active`).
-
-        Eigener Pool, unabhängig von der Nulleinspeisungs-Verteilung (Modus '1') —
-        verhindert, dass mehrere AC-Lader denselben Netzüberschuss doppelt beanspruchen.
-        Kein `allocated_power`: das AC-Leistungslimit bleibt unabhängig vom hard_limit.
-        `own_soc` siehe `_all_shares`.
-        """
-        return self._weighted_share(self._ac_pool(), own_soc)
+    def _apply_shares(self, shares: Shares | None) -> None:
+        """Angewandten Verteilungsmodus und Warnung aus einer Anteilsrechnung übernehmen."""
+        if shares is None:
+            return
+        if shares.warning:
+            self._dist_warning = (shares.warning, {})
+        if shares.mode is not None:
+            self.dist_mode_effective = shares.mode
 
     # ── Zonen-Display ────────────────────────────────────────────────────────
 

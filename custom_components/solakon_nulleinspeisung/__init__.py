@@ -30,7 +30,7 @@ STORAGE_KEY_SOC_SWITCH     = f"{DOMAIN}_soc_switch_state"
 _LOGGER = logging.getLogger(__name__)
 
 # Integrationsweite `hass.data`-Schlüssel (ohne DOMAIN-Präfix), entfernt mit der letzten Instanz.
-DATA_KEYS = ("dist_store", "dist_config", "soc_switch_store", "soc_switch_state", "grid_samples",
+DATA_KEYS = ("dist_store", "dist_config", "soc_switch_store", "soc_switch_state", "groups",
              "panel_registered", "ws_registered")
 PANEL_JS_URL = f"/{DOMAIN}/panel.js"
 
