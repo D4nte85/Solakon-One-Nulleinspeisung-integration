@@ -14,6 +14,7 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 ### Behoben
 
 - Panel, Status-Tab: Der **Betriebsmodus** erschien in der Sprache der HA-Instanz statt in der Sprache des Benutzerprofils. Das Backend lieferte den fertigen Text, das übrige Panel folgt aber dem Profil. Das Panel übersetzt den Modus jetzt selbst aus dem neuen Statusfeld `mode_key`, wie schon „Aktiver Fall“ und „Betriebszustand“.
+- Sensoren mit einem Text wie `on` oder `off` galten bisher als Zahl 1 oder 0, jetzt gelten sie als „keine Zahl“. Liefert ein Pflichtsensor (Netz, PV, Ist-Leistung, SOC) einen solchen Text, überspringt die Regelung den Zyklus mit Meldung. Vorher rechnete sie etwa mit SOC 1 % und fiel in Zone 3. Eine Tarifschwelle aus einer Entität mit solchem Text fällt auf den eingestellten Wert zurück.
 - Panel, Status-Tab und Übersicht: **Letzte Aktion** und **Fehlermeldungen** erschienen aus demselben Grund in der Sprache der HA-Instanz. Das Panel schickt seine Sprache jetzt beim Statusabruf mit, das Backend liefert beide Texte darin.
 
 ## [3.0.0-beta.3] – 2026-09-15

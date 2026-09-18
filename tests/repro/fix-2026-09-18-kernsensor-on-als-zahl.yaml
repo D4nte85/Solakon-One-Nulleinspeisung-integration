@@ -1,0 +1,16 @@
+titel: Kernsensor mit Zustand on wird als 1 gelesen und löst den Sicherheitsstopp aus
+bezug: fix-2026-09-18-kernsensor-on-als-zahl
+# SOC-Sensor liefert "on". state_as_number macht daraus 1 %, der Zyklus fällt in Zone 3.
+# Erwartet wie bei jedem Kernsensor ohne Zahlenwert: nichts schreiben, Meldung setzen.
+netz: 100
+instanzen:
+  - prefix: a
+    settings: {regulation_enabled: true}
+    flags: {cycle_active: true}
+    sensoren: {soc: "on", modus: "1", leistung: 300}
+schritte:
+  - nach: 0
+erwartet:
+  - kein_aufruf: {entity: a.modus}
+  - kein_aufruf: {entity: a.leistung}
+  - zustand_nicht: {last_error: ""}

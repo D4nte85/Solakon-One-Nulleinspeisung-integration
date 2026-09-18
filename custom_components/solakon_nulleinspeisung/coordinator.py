@@ -11,7 +11,6 @@ from datetime import timedelta
 
 from homeassistant.core import HomeAssistant, Event, callback
 from homeassistant.helpers.event import async_track_state_change_event, async_track_time_interval
-from homeassistant.helpers.state import state_as_number
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
@@ -649,12 +648,15 @@ class SolakonCoordinator:
         return str(state.attributes.get("unit_of_measurement") or "").strip().lower() if state else ""
 
     def _read_number(self, entity_id: str) -> tuple[float, str] | None:
-        """(Wert, Einheit) über `state_as_number`; None bei ungültigem State oder Domain außerhalb NUMERIC_DOMAINS."""
+        """(Wert, Einheit); None bei ungültigem State, Domain außerhalb NUMERIC_DOMAINS oder ohne Zahl.
+
+        Liest mit float(): `on`/`off` und andere Texte sind keine Zahl.
+        """
         state = self._valid_state(entity_id)
         if state is None or not self._numeric_domain(entity_id):
             return None
         try:
-            return state_as_number(state), self._unit(state)
+            return float(state.state), self._unit(state)
         except (ValueError, TypeError):
             return None
 
