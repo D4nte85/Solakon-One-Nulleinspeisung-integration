@@ -150,6 +150,7 @@ WS_STATUS_KEYS = (
 @websocket_api.websocket_command({
     vol.Required("type"):     f"{DOMAIN}/get_status",
     vol.Required("entry_id"): str,
+    vol.Optional("language"): str,
 })
 @websocket_api.async_response
 async def _ws_get_status(
@@ -165,6 +166,8 @@ async def _ws_get_status(
         "actual_power": coord._flt_power(cfg.get(CONF_ACTUAL_SENSOR, ""), 0),
         "solar":        coord._flt_power(cfg.get(CONF_SOLAR_SENSOR, ""), 0),
         "soc":          coord._flt(cfg.get(CONF_SOC_SENSOR, ""), 0),
+        # Mit Panelsprache: Aktion und Fehlerkette in dieser statt in der Instanzsprache.
+        **(coord.status_texts(msg["language"]) if msg.get("language") else {}),
     })
 
 

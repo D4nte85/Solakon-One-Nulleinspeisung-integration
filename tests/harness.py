@@ -266,7 +266,7 @@ def entry_data(prefix: str, grid_sensor: str = "sensor.grid", export_limit: bool
 COORD_ATTRS = (
     "current_zone", "zone_label", "mode_key", "mode_label",
     "last_action", "last_action_key", "last_action_params", "last_action_ts",
-    "last_error", "integral", "active_fall",
+    "last_error", "last_error_msgs", "integral", "active_fall",
     "cycle_active", "surplus_active", "ac_charge_active", "tariff_charge_active", "resting",
     "is_night", "discharge_locked", "operating_state", "operating_state_ts",
     "_cycle_blocked", "last_output_ts", "mode_label_ts",

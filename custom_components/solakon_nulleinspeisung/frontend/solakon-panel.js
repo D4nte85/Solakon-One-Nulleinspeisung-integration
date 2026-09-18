@@ -316,6 +316,7 @@ class SolakonPanel extends HTMLElement {
     const lang = (this._hass.language || "en").split("-")[0].toLowerCase();
     const supported = ["de", "en"];
     const locale = supported.includes(lang) ? lang : "en";
+    this._locale = locale;
     // Englisch als Basis, Landessprache darüber: ein Schlüssel, der nur in einer der
     // beiden Dateien steht, kommt aus der anderen.
     this._t  = await this._loadLocale("panel", locale);
@@ -730,7 +731,7 @@ class SolakonPanel extends HTMLElement {
       for (const inst of this._instances) {
         try {
           this._allStatuses[inst.entry_id] = await this._hass.callWS(
-            { type: `${DOMAIN}/get_status`, entry_id: inst.entry_id }
+            { type: `${DOMAIN}/get_status`, entry_id: inst.entry_id, language: this._locale }
           );
         } catch (_) {}
       }
@@ -743,7 +744,7 @@ class SolakonPanel extends HTMLElement {
       return;
     }
     try {
-      await this._forInstance(() => this._ws("get_status"), status => {
+      await this._forInstance(() => this._ws("get_status", { language: this._locale }), status => {
         this._status = status;
         this._updateStatusView();
         this._updateRegBanner();
@@ -1449,7 +1450,7 @@ ${this._textsMissing ? `
     await this._wsAction(() => this._forInstance(async () => {
       await this._ws("set_cycle", { active: activate });
       this._showToast(activate ? (toast.zone1_activated || "") : (toast.zone2_activated || ""));
-      return this._ws("get_status");
+      return this._ws("get_status", { language: this._locale });
     }, status => {
       this._status = status;
       this._updateStatusView();

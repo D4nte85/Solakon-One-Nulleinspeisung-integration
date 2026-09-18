@@ -6,6 +6,9 @@ from pathlib import Path
 
 DEFAULT_LANGUAGE = "en"
 
+# Textbaustein als (Schlüssel, Parameter), erst beim Anzeigen übersetzt.
+Msg = tuple[str, dict[str, object]]
+
 _TEXTS: dict[str, dict[str, str]] = {
     # ── Zonen-Label ──────────────────────────────────────────────────────────
     # Langform, geht als Attribut zone_label an die Entitäten.
@@ -267,3 +270,8 @@ def translate(language: str, key: str, **params: object) -> str:
         return template.format(**params)
     except (KeyError, IndexError, ValueError):
         return template
+
+
+def translate_msgs(language: str, msgs: list[Msg]) -> str:
+    """Bausteine (Schlüssel, Parameter) in `language` übersetzt, mit " • " verkettet."""
+    return " • ".join(translate(language, key, **params) for key, params in msgs)

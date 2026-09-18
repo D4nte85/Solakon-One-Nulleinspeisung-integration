@@ -15,7 +15,7 @@ from homeassistant.helpers.state import state_as_number
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
-from .i18n import translate
+from .i18n import Msg, translate, translate_msgs
 from .const import (
     DOMAIN, STORAGE_VERSION, SETTINGS_DEFAULTS, DIST_DEFAULTS, DEVICE_MAX_POWER,
     CONF_GRID_SENSOR, CONF_ACTUAL_SENSOR, CONF_SOLAR_SENSOR,
@@ -209,6 +209,8 @@ class SolakonCoordinator:
         self.last_action_key: str = ""
         self.last_action_params: dict = {}
         self.last_error: str = ""
+        # Bausteine von last_error als (Schlüssel, Parameter), für andere Sprachen.
+        self.last_error_msgs: list[Msg] = []
         self.integral: float = 0.0
         self.active_fall: str = ""
 
@@ -256,12 +258,12 @@ class SolakonCoordinator:
         # wegen eines fehlenden/ungültigen Fremdinstanz-Sensors degradiert (z. B.
         # capacity → soc, soc/soc_switch → equal) — wird im selben Zyklus sofort
         # nach dem jeweiligen Aufruf in soft_errors übernommen, siehe _run_regulation_cycle.
-        self._dist_warning: str = ""
+        self._dist_warning: Msg | None = None
         # Analog zu _dist_warning: von _confirm_zero_output() gesetzt wenn eine
         # sicherheitskritische Output-Nullung (Fall-Übergänge, PI-Ziel 0) trotz
         # Retries nicht bestätigt werden konnte — sofort im selben Zyklus nach dem
         # jeweiligen Aufruf in soft_errors übernommen, siehe _run_regulation_cycle.
-        self._output_warning: str = ""
+        self._output_warning: Msg | None = None
         self._output_stall_actions: int = 0
         self._output_stall_last_ts: float = 0.0
         # Beginn der laufenden Verdachtsphase auf eine EUR/kWh-Preiseinheit;
@@ -501,6 +503,19 @@ class SolakonCoordinator:
         self.last_action = self._tr(key, **params)
         self.last_action_ts = time.time()
 
+    def _set_errors(self, msgs: list[Msg]) -> None:
+        """Setzt die Fehlerkette als Bausteine und als Text in der Instanzsprache."""
+        self.last_error_msgs = list(msgs)
+        self.last_error = translate_msgs(self.hass.config.language, msgs)
+
+    def status_texts(self, language: str) -> dict[str, str]:
+        """Letzte Aktion und Fehlerkette in `language`, für ein Panel mit eigener Sprache."""
+        return {
+            "last_action": (translate(language, self.last_action_key, **self.last_action_params)
+                            if self.last_action_key else self.last_action),
+            "last_error": translate_msgs(language, self.last_error_msgs),
+        }
+
     # ── Self-Adjusting Wait ──────────────────────────────────────────────────
 
     def _actual_vs(self, target: float, ac_charge_mode: bool = False) -> tuple[float, float]:
@@ -710,7 +725,7 @@ class SolakonCoordinator:
         """True, wenn die Entity zu einer Domain aus NUMERIC_DOMAINS gehört."""
         return entity_id.split(".", 1)[0] in NUMERIC_DOMAINS
 
-    def _sensor_usable(self, soft_errors: list[str], enabled: bool, sensor: str, err_prefix: str) -> bool:
+    def _sensor_usable(self, soft_errors: list[Msg], enabled: bool, sensor: str, err_prefix: str) -> bool:
         """True, wenn das Feature aktiviert und sein Sensor gesetzt, verfügbar und numerisch ist.
 
         Fehlt der Sensor, liegt er außerhalb NUMERIC_DOMAINS, ist er nicht verfügbar oder
@@ -721,25 +736,25 @@ class SolakonCoordinator:
         if not enabled:
             return False
         if not sensor:
-            self._add_soft_error(soft_errors, self._tr(f"{err_prefix}_no_sensor"))
+            self._add_soft_error(soft_errors, (f"{err_prefix}_no_sensor", {}))
             return False
         if not self._numeric_domain(sensor):
-            self._add_soft_error(soft_errors, self._tr("err_sensor_wrong_domain", sensor=sensor))
+            self._add_soft_error(soft_errors, ("err_sensor_wrong_domain", {"sensor": sensor}))
             return False
         state = self._valid_state(sensor)
         if state is None:
-            self._add_soft_error(soft_errors, self._tr(f"{err_prefix}_sensor_unavailable", sensor=sensor))
+            self._add_soft_error(soft_errors, (f"{err_prefix}_sensor_unavailable", {"sensor": sensor}))
             return False
         try:
             # float() statt state_as_number: "on" bleibt ohne Zahlenwert
             float(state.state)
         except (ValueError, TypeError):
-            self._add_soft_error(soft_errors, self._tr(f"{err_prefix}_sensor_not_numeric", sensor=sensor))
+            self._add_soft_error(soft_errors, (f"{err_prefix}_sensor_not_numeric", {"sensor": sensor}))
             return False
         return True
 
-    def _tariff_unit_warning(self, entity_id: str, price: float, cheap: float) -> str:
-        """Meldung, wenn der Preis-Sensor vermutlich €/kWh statt ct/kWh liefert, sonst "".
+    def _tariff_unit_warning(self, entity_id: str, price: float, cheap: float) -> Msg | None:
+        """Meldung, wenn der Preis-Sensor vermutlich €/kWh statt ct/kWh liefert, sonst None.
 
         Kriterium ist der Wert: ein Preis unter TARIFF_UNIT_SUSPECT_PRICE bei einer
         Günstig-Schwelle ab TARIFF_UNIT_SUSPECT_THRESHOLD ist in ct/kWh kaum erreichbar.
@@ -766,7 +781,7 @@ class SolakonCoordinator:
         if not euro_unit and now - self._tariff_unit_suspect_since < TARIFF_UNIT_SUSPECT_SECONDS:
             return ""
 
-        return self._tr("warn_tariff_unit", price=price, cheap=cheap)
+        return ("warn_tariff_unit", {"price": price, "cheap": cheap})
 
     # ── Modbus-Schreibbefehle (nur wenn regulation_enabled) ──────────────────
 
@@ -868,8 +883,8 @@ class SolakonCoordinator:
 
         actual, deviation = self._actual_vs(0)
         if deviation > tolerance and _confirmable():
-            self._output_warning = self._tr("warn_output_zero_unconfirmed", attempts=max_retries, actual=actual)
-            _LOGGER.error("Solakon: %s", self._output_warning)
+            self._output_warning = ("warn_output_zero_unconfirmed", {"attempts": max_retries, "actual": actual})
+            _LOGGER.error("Solakon: %s", self._tr("warn_output_zero_unconfirmed", attempts=max_retries, actual=actual))
 
     def _reset_output_stall_state(self) -> None:
         """Stillstandszähler zurücksetzen — Ausgang folgt dem Limit wieder oder ist
@@ -923,8 +938,9 @@ class SolakonCoordinator:
             self._set_last_action("act_output_rewritten", actual=actual, limit=limit)
             return
 
-        self._output_warning = self._tr("warn_output_stuck", actual=actual, limit=limit)
-        _LOGGER.error("Solakon: %s (Versuch %d)", self._output_warning, self._output_stall_actions)
+        self._output_warning = ("warn_output_stuck", {"actual": actual, "limit": limit})
+        _LOGGER.error("Solakon: %s (Versuch %d)", self._tr("warn_output_stuck", actual=actual, limit=limit),
+                      self._output_stall_actions)
         await self._transition(reset_integral=True, output=0, rest=True)
         self._set_last_action("act_output_recovery", actual=actual, limit=limit)
 
@@ -1101,7 +1117,7 @@ class SolakonCoordinator:
             return
 
         self._timer_toggled_in_cycle = False
-        self._output_warning = ""
+        self._output_warning = None
         self._cycle_blocked = False
 
         prev_flags = self._persisted_flags()
@@ -1113,7 +1129,7 @@ class SolakonCoordinator:
         if missing is not None:
             _LOGGER.debug("Solakon: Kernsensor %s ohne Zahlenwert, Zyklus übersprungen", missing)
             prev_error = self.last_error
-            self.last_error = self._tr("err_core_sensor", sensor=missing)
+            self._set_errors([("err_core_sensor", {"sensor": missing})])
             self._end_cycle(blocked=True, notify_on_change=self.last_error == prev_error)
             return
 
@@ -1159,7 +1175,7 @@ class SolakonCoordinator:
         # wegen fehlendem/ungültigem Sensor wirkungslos bleiben; wird als last_error
         # ins Panel gespiegelt. Angelegt vor _compute_distribution(), dessen
         # Modus-Degradation ebenfalls hier einfließt.
-        soft_errors: list[str] = []
+        soft_errors: list[Msg] = []
 
         error_share, allocated_power = self._compute_distribution(soc)
         self.allocated_power = allocated_power
@@ -1265,7 +1281,7 @@ class SolakonCoordinator:
                 self._add_soft_error(soft_errors, unit_warning)
 
         # Verkettet statt überschrieben
-        self.last_error = " • ".join(soft_errors)
+        self._set_errors(soft_errors)
 
         # Preisvergleiche für Falls und Entladesperre; HT beendet Tarif-Laden auch bei
         # abgeschaltetem Tarif, deshalb ohne Enable-Bedingung.
@@ -1370,7 +1386,7 @@ class SolakonCoordinator:
 
     async def _run_pi_phase(
         self, cs: CycleSettings, soc: float, mode: str, timer_val: float, error_share: float,
-        effective_hard: int, effective_hard_z1: int, ac_offset: float, soft_errors: list[str],
+        effective_hard: int, effective_hard_z1: int, ac_offset: float, soft_errors: list[Msg],
     ) -> None:
         """PI-Phase eines Zyklus in Modus '1' oder '3': Timeout-Reset, dann Zone-0-Festwert,
         AC-PI, Tarif-Festwert oder Standard-PI mit Stillstandsprüfung."""
@@ -1453,13 +1469,13 @@ class SolakonCoordinator:
                 else:
                     self._reset_output_stall_state()
 
-    def _add_soft_error(self, soft_errors: list[str], text: str) -> None:
-        """Meldung an die Fehlerkette hängen und `last_error` neu verketten."""
-        soft_errors.append(text)
-        self.last_error = " • ".join(soft_errors)
+    def _add_soft_error(self, soft_errors: list[Msg], msg: Msg) -> None:
+        """Baustein an die Fehlerkette hängen und `last_error` neu verketten."""
+        soft_errors.append(msg)
+        self._set_errors(soft_errors)
 
     def _end_cycle(
-        self, *, blocked: bool = False, error_key: str = "", soft_errors: list[str] | None = None,
+        self, *, blocked: bool = False, error_key: str = "", soft_errors: list[Msg] | None = None,
         display: tuple[float, int, int, str] | None = None, prev_flags: dict[str, bool] | None = None,
         notify_on_change: bool = False,
     ) -> None:
@@ -1471,7 +1487,7 @@ class SolakonCoordinator:
         `notify_on_change` benachrichtigt nur, wenn der Betriebszustand gewechselt hat.
         """
         if error_key:
-            self.last_error = self._tr(error_key)
+            self._set_errors([(error_key, {})])
         if blocked:
             self._cycle_blocked = True
         if soft_errors is not None and self._output_warning:
@@ -1796,7 +1812,7 @@ class SolakonCoordinator:
     def _degrade(self, mode: str, warn_key: str = "") -> None:
         """Tatsächlich angewandten Verteilungsmodus vermerken, mit Warnung bei `warn_key`."""
         if warn_key:
-            self._dist_warning = self._tr(warn_key)
+            self._dist_warning = (warn_key, {})
         self.dist_mode_effective = mode
 
     def _dist_cfg(self) -> dict:
@@ -1966,7 +1982,7 @@ class SolakonCoordinator:
         ungenutzter Spielraum wird an Instanzen mit Reserve weitergereicht.
         """
         active = self._discharge_pool()
-        self._dist_warning = ""
+        self._dist_warning = None
         if self.entry.entry_id not in active or len(active) <= 1:
             return (1.0, None) if self.entry.entry_id in active else (0.0, None)
 
