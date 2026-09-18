@@ -15,6 +15,10 @@ from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .i18n import Msg, translate, translate_msgs
+from .readings import (
+    NO_SENSOR, NOT_NUMERIC, UNAVAILABLE, UNIT_SCALE_KILO, UNIT_SCALE_KWH, UNIT_SCALE_W,
+    WRONG_DOMAIN, read_number, read_scaled, unit_of, valid_state,
+)
 from .const import (
     DOMAIN, STORAGE_VERSION, SETTINGS_DEFAULTS, DIST_DEFAULTS, DEVICE_MAX_POWER,
     CONF_GRID_SENSOR, CONF_ACTUAL_SENSOR, CONF_SOLAR_SENSOR,
@@ -52,11 +56,6 @@ def _clamp(value, lo, hi):
     """`value` auf [lo, hi] begrenzen."""
     return max(lo, min(hi, value))
 
-# Einheitenfaktoren je Zielgröße, Schlüssel kleingeschrieben; fehlende Einheit = Faktor 1.
-UNIT_SCALE_W = {"kw": 1000.0}
-UNIT_SCALE_KILO = {"kw": 1000.0, "kwh": 1000.0, "mwh": 1_000_000.0}
-UNIT_SCALE_KWH = {"wh": 0.001, "mwh": 1000.0}
-
 # Über Neustarts gespeicherte Zustandsflags: (Speicherschlüssel, Attribut, Default).
 PERSISTED_FLAGS = (
     ("cycle_active", "cycle_active", False),
@@ -66,8 +65,13 @@ PERSISTED_FLAGS = (
     ("solar_zero_entry_armed", "_solar_zero_entry_armed", True),
 )
 
-# Domains mit Zahlenzustand; nur sie werden als Zahl gelesen.
-NUMERIC_DOMAINS = ("sensor", "input_number", "number")
+# Fehlerschlüssel je Grund ohne Zahl, `{p}` ist das Präfix des Features.
+FEATURE_ERRORS = {
+    NO_SENSOR: "{p}_no_sensor",
+    WRONG_DOMAIN: "err_sensor_wrong_domain",
+    UNAVAILABLE: "{p}_sensor_unavailable",
+    NOT_NUMERIC: "{p}_sensor_not_numeric",
+}
 
 # Instanzübergreifend pflegbare Sensor-Vorgaben: (lokaler Settings-Schlüssel, globaler
 # Schlüssel der Verteilung). Lokal gewinnt, sonst der globale Wert.
@@ -635,41 +639,13 @@ class SolakonCoordinator:
 
     # ── State-Helpers ────────────────────────────────────────────────────────
 
-    def _valid_state(self, entity_id: str):
-        """State der Entity, oder None wenn sie fehlt oder unknown/unavailable ist."""
-        state = self.hass.states.get(entity_id)
-        if state is None or state.state in ("unknown", "unavailable"):
-            return None
-        return state
-
-    @staticmethod
-    def _unit(state) -> str:
-        """`unit_of_measurement` des States, getrimmt und kleingeschrieben; "" ohne State."""
-        return str(state.attributes.get("unit_of_measurement") or "").strip().lower() if state else ""
-
-    def _read_number(self, entity_id: str) -> tuple[float, str] | None:
-        """(Wert, Einheit); None bei ungültigem State, Domain außerhalb NUMERIC_DOMAINS oder ohne Zahl.
-
-        Liest mit float(): `on`/`off` und andere Texte sind keine Zahl.
-        """
-        state = self._valid_state(entity_id)
-        if state is None or not self._numeric_domain(entity_id):
-            return None
-        try:
-            return float(state.state), self._unit(state)
-        except (ValueError, TypeError):
-            return None
-
     def _read_scaled(self, entity_id: str, default: float, scale: dict[str, float]) -> float:
         """Zahl lesen und mit dem Faktor ihrer Einheit aus `scale` multiplizieren.
 
-        Einheiten ohne Eintrag bleiben unverändert; ungültiger State liefert `default`.
+        Einheiten ohne Eintrag bleiben unverändert; ohne Zahl `default`.
         """
-        read = self._read_number(entity_id)
-        if read is None:
-            return default
-        value, unit = read
-        return value * scale.get(unit, 1.0)
+        value = read_scaled(self.hass, entity_id, scale).value
+        return default if value is None else value
 
     def _flt(self, entity_id: str, default: float = 0.0) -> float:
         """Zahl ohne Einheitenumrechnung lesen."""
@@ -697,12 +673,12 @@ class SolakonCoordinator:
 
     def _str(self, entity_id: str) -> str:
         """State als String lesen, 'unknown' bei Fehler."""
-        state = self._valid_state(entity_id)
+        state = valid_state(self.hass, entity_id)
         return state.state if state else "unknown"
 
     def _entity_ok(self, entity_id: str) -> bool:
         """Prüft ob Entity verfügbar und nicht unknown/unavailable ist."""
-        return self._valid_state(entity_id) is not None
+        return valid_state(self.hass, entity_id) is not None
 
     # ── Globale Sensor-Vorgaben ───────────────────────────────────────────────
     # Entity-Picker sind instanzübergreifend im Verteilungs-Tab pflegbar, jede
@@ -722,38 +698,20 @@ class SolakonCoordinator:
         local, global_key = SENSOR_SOURCES[name]
         return str(self.settings[local]) or self._global_sensor(global_key)
 
-    @staticmethod
-    def _numeric_domain(entity_id: str) -> bool:
-        """True, wenn die Entity zu einer Domain aus NUMERIC_DOMAINS gehört."""
-        return entity_id.split(".", 1)[0] in NUMERIC_DOMAINS
+    def _feature_value(
+        self, soft_errors: list[Msg], enabled: bool, sensor: str, err_prefix: str, scale: dict[str, float],
+    ) -> float | None:
+        """Wert des Feature-Sensors in der Zieleinheit; None, wenn das Feature aus ist oder keine Zahl kommt.
 
-    def _sensor_usable(self, soft_errors: list[Msg], enabled: bool, sensor: str, err_prefix: str) -> bool:
-        """True, wenn das Feature aktiviert und sein Sensor gesetzt, verfügbar und numerisch ist.
-
-        Fehlt der Sensor, liegt er außerhalb NUMERIC_DOMAINS, ist er nicht verfügbar oder
-        ohne Zahlenwert (auch `on`/`off`), geht `<err_prefix>_no_sensor`,
-        `err_sensor_wrong_domain`, `<err_prefix>_sensor_unavailable` bzw.
-        `<err_prefix>_sensor_not_numeric` in die Fehlerkette.
+        Ohne Zahl geht der Fehlerschlüssel des Grundes aus FEATURE_ERRORS in die Fehlerkette.
         """
         if not enabled:
-            return False
-        if not sensor:
-            self._add_soft_error(soft_errors, (f"{err_prefix}_no_sensor", {}))
-            return False
-        if not self._numeric_domain(sensor):
-            self._add_soft_error(soft_errors, ("err_sensor_wrong_domain", {"sensor": sensor}))
-            return False
-        state = self._valid_state(sensor)
-        if state is None:
-            self._add_soft_error(soft_errors, (f"{err_prefix}_sensor_unavailable", {"sensor": sensor}))
-            return False
-        try:
-            # float() statt state_as_number: "on" bleibt ohne Zahlenwert
-            float(state.state)
-        except (ValueError, TypeError):
-            self._add_soft_error(soft_errors, (f"{err_prefix}_sensor_not_numeric", {"sensor": sensor}))
-            return False
-        return True
+            return None
+        reading = read_scaled(self.hass, sensor, scale)
+        if reading.reason:
+            params = {} if reading.reason == NO_SENSOR else {"sensor": sensor}
+            self._add_soft_error(soft_errors, (FEATURE_ERRORS[reading.reason].format(p=err_prefix), params))
+        return reading.value
 
     def _tariff_unit_warning(self, entity_id: str, price: float, cheap: float) -> Msg | None:
         """Meldung, wenn der Preis-Sensor vermutlich €/kWh statt ct/kWh liefert, sonst None.
@@ -765,7 +723,7 @@ class SolakonCoordinator:
         price >= 0. `unit_of_measurement` wirkt nur bestätigend — eine ct-Einheit
         unterdrückt die Meldung, eine €-Einheit macht sie sofort. Umgerechnet wird nichts.
         """
-        unit = self._unit(self.hass.states.get(entity_id))
+        unit = unit_of(self.hass.states.get(entity_id))
 
         if any(token in unit for token in ("ct", "cent", "öre", "ore")):
             self._tariff_unit_suspect_since = 0.0
@@ -1127,7 +1085,7 @@ class SolakonCoordinator:
         # ── 1. Sensor-Werte lesen ────────────────────────────────────────────
         # Pflichtsensoren müssen eine Zahl liefern
         missing = next((cfg[key] for key, _, required in CORE_SENSORS
-                        if required and self._read_number(cfg[key]) is None), None)
+                        if required and read_number(self.hass, cfg[key]).value is None), None)
         if missing is not None:
             _LOGGER.debug("Solakon: Kernsensor %s ohne Zahlenwert, Zyklus übersprungen", missing)
             prev_error = self.last_error
@@ -1207,10 +1165,11 @@ class SolakonCoordinator:
 
         # Forcierung nur solange die PV das Ausgangslimit übersteigt und der
         # SOC über der Zone-3-Schutzgrenze liegt.
-        self.forecast_surplus_forced = self._sensor_usable(
-            soft_errors, cs.surplus_forecast_enabled, pv_forecast_today_sensor, "err_surplus_forecast"
-        ) and (
-            self._flt_kwh_normalized(pv_forecast_today_sensor) >= cs.surplus_forecast_threshold
+        surplus_forecast = self._feature_value(
+            soft_errors, cs.surplus_forecast_enabled, pv_forecast_today_sensor, "err_surplus_forecast",
+            UNIT_SCALE_KWH)
+        self.forecast_surplus_forced = surplus_forecast is not None and (
+            surplus_forecast >= cs.surplus_forecast_threshold
             and solar > cs.hard_limit_z0
             and soc > cs.zone3_limit
         )
@@ -1219,25 +1178,25 @@ class SolakonCoordinator:
 
         # Sperrt nur den PV-Austritt aus Zone 0, solange die Vorhersage über
         # dem Ausgabelimit liegt. Der SOC-Austritt bleibt ungesperrt.
-        self.forecast_exit_lock = self._sensor_usable(
-            soft_errors, cs.surplus_lock_enabled, surplus_lock_sensor, "err_exit_lock"
-        ) and (
-            self._flt_kilo_normalized(surplus_lock_sensor) >= cs.surplus_lock_factor * cs.hard_limit_z0
+        surplus_lock = self._feature_value(
+            soft_errors, cs.surplus_lock_enabled, surplus_lock_sensor, "err_exit_lock", UNIT_SCALE_KILO)
+        self.forecast_exit_lock = surplus_lock is not None and (
+            surplus_lock >= cs.surplus_lock_factor * cs.hard_limit_z0
             and soc > cs.zone3_limit
         )
 
-        self.forecast_tariff_suppressed = self._sensor_usable(
-            soft_errors, cs.pv_forecast_enabled, pv_forecast_today_sensor, "err_pv_forecast"
-        ) and self._flt_kwh_normalized(pv_forecast_today_sensor) >= cs.pv_forecast_threshold
+        pv_forecast = self._feature_value(
+            soft_errors, cs.pv_forecast_enabled, pv_forecast_today_sensor, "err_pv_forecast", UNIT_SCALE_KWH)
+        self.forecast_tariff_suppressed = pv_forecast is not None and pv_forecast >= cs.pv_forecast_threshold
 
         # Zone-1-Nacht-Forcierung: erlaubt Entladung unter das normale
         # Zone-1-Limit, wenn der morgige PV-Ertrag die Nacht ohnehin wieder auffüllt.
         zone1_force_sensor = self._effective("zone1_force")
 
-        self.zone1_forced = self._sensor_usable(
-            soft_errors, cs.zone1_force_enabled, zone1_force_sensor, "err_zone1_force"
-        ) and (
-            self._flt_kwh_normalized(zone1_force_sensor) >= cs.zone1_force_threshold
+        zone1_force = self._feature_value(
+            soft_errors, cs.zone1_force_enabled, zone1_force_sensor, "err_zone1_force", UNIT_SCALE_KWH)
+        self.zone1_forced = zone1_force is not None and (
+            zone1_force >= cs.zone1_force_threshold
             and solar < cs.pv_reserve         # "gerade dunkel", ohne Nacht-Hysterese
             and soc > cs.zone1_force_min_soc  # eigener Floor, unabhängig von zone3_limit (Exit-Schwelle)
         )
@@ -1263,21 +1222,12 @@ class SolakonCoordinator:
 
         await self._sync_export_limit(max(self._setting(S_HARD_LIMIT_Z0, int), self._setting(S_HARD_LIMIT_Z1, int)))
 
-        # Preis vor der Fehlersammlung lesen: die Einheitenplausibilität geht als
+        # Preis ohne Einheitenumrechnung; die Einheitenplausibilität geht als
         # soft_error in dieselbe Meldungskette ein.
-        tariff_price = 0.0
-        tariff_price_valid = False
-        if cs.tariff_enabled and tariff_sensor:
-            # float() statt state_as_number: "on" bleibt als Preis ungültig
-            raw = self._valid_state(tariff_sensor)
-            if raw:
-                try:
-                    tariff_price = float(raw.state)
-                    tariff_price_valid = True
-                except (ValueError, TypeError):
-                    pass
-
-        if self._sensor_usable(soft_errors, cs.tariff_enabled, tariff_sensor, "err_tariff") and tariff_price_valid:
+        price = self._feature_value(soft_errors, cs.tariff_enabled, tariff_sensor, "err_tariff", {})
+        tariff_price_valid = price is not None
+        tariff_price = price if price is not None else 0.0
+        if tariff_price_valid:
             unit_warning = self._tariff_unit_warning(tariff_sensor, tariff_price, tariff_cheap)
             if unit_warning:
                 self._add_soft_error(soft_errors, unit_warning)
