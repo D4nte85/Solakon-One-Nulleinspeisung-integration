@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 import time
 from collections import deque, namedtuple
 from typing import Any, Callable
@@ -1709,7 +1710,8 @@ class SolakonCoordinator:
         surplus_active ist), und reicht dabei ungenutzten Spielraum kapp-limitierter
         Instanzen iterativ an die übrigen weiter (Wasserfüllverfahren) — terminiert
         garantiert, da pro Runde mindestens eine Instanz endgültig aus dem Rest-Pool
-        entfernt wird, sobald `newly_capped` nicht leer ist.
+        entfernt wird, sobald `newly_capped` nicht leer ist. Abgerundet, damit die
+        Summe `global_max` nicht übersteigt.
         """
         caps = {eid: c._setting(c._hard_limit_key, float) for eid, c in active.items()}
 
@@ -1736,7 +1738,7 @@ class SolakonCoordinator:
                 remaining_power -= caps[eid]
             remaining_ids -= set(newly_capped)
 
-        return {eid: round(v) for eid, v in allocations.items()}
+        return {eid: math.floor(v) for eid, v in allocations.items()}
 
     def _compute_ac_distribution(self, own_soc: float) -> float:
         """Fehler-Anteil unter gleichzeitig AC-ladenden Instanzen (Modus '3', `ac_charge_active`).

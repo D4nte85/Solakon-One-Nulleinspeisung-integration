@@ -18,6 +18,7 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 - Tarif: Ein Preis-Sensor außerhalb der Zahl-Domains (`sensor`, `input_number`, `number`) meldete „falsche Domain“, sein Wert wurde aber weiter als Preis genutzt. Jetzt bleibt die Tarif-Funktion dann aus, wie es die Meldung sagt.
 - Panel, Status-Tab und Übersicht: **Letzte Aktion** und **Fehlermeldungen** erschienen aus demselben Grund in der Sprache der HA-Instanz. Das Panel schickt seine Sprache jetzt beim Statusabruf mit, das Backend liefert beide Texte darin.
 - Verteilung, **SOC-Umschaltung**: Der Zustand (aktive Instanz, SOC bei Übernahme) galt für alle Netzgruppen gemeinsam. Liefen zwei Netzgruppen in diesem Modus, setzten sie ihn gegenseitig zurück, und die Rotation griff nie. Jetzt hat jede Netzgruppe ihren eigenen Zustand, ein gespeicherter alter Zustand wird für jede Gruppe übernommen. Nach einem Neustart ging außerdem verloren, ob gerade Zone 0 aktiv war. Das bleibt jetzt erhalten.
+- Verteilung: Die zugeteilten Leistungen wurden je Instanz gerundet und konnten zusammen die **Gesamtleistung** überschreiten, z. B. 3 × 267 W = 801 W bei 800 W. Sie werden jetzt abgerundet.
 
 ## [3.0.0-beta.3] – 2026-09-15
 
