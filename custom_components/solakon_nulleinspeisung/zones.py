@@ -144,7 +144,6 @@ def decide(inp: ZoneInputs) -> FallDecision | None:
     # Recovery einer aktiven Lade-Session ignoriert die Zone-3-Schwelle — Laden bleibt bei jedem SOC möglich
     tariff_lock_active = (
         inp.price_below_exp
-        and inp.price_at_least_cheap
         and not inp.ac_charge_active
         and not inp.tariff_charge_active
         and not inp.surplus_active

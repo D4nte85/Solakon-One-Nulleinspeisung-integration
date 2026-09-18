@@ -36,7 +36,7 @@
     },
     "tariff": {
       "summary": "Tarif-Arbitrage (Tibber, aWATTar …) — drei Preisstufen",
-      "text": "Günstig (Preis < Günstig-Schwelle): Tarif-Laden startet — feste Ladeleistung bis SOC-Ziel. Kein PI-Regler.\nMittel (Günstig ≤ Preis < Teuer-Schwelle): Discharge-Lock — Zone 1 und Zone 2 gesperrt (Output 0 W, Modus Disabled). Sobald der Preis die Teuer-Schwelle überschreitet, wird der Betrieb automatisch wiederhergestellt.\nTeuer (Preis ≥ Teuer-Schwelle): normale SOC-Logik, keine Einschränkung.\n\nTarif-Laden und AC-Laden sind voneinander unabhängige Module und blockieren sich gegenseitig über den Modus-Guard.\n\nPriorität: Tarif-Laden, Discharge-Lock und dessen Recovery-Sperre werden blockiert solange Überschuss-Einspeisung (Zone 0) aktiv ist.\n\nErfordert Preis-Sensor mit numerischem Wert in ct/kWh."
+      "text": "Günstig (Preis < Günstig-Schwelle): Tarif-Laden startet — feste Ladeleistung bis SOC-Ziel. Kein PI-Regler.\nMittel (Günstig ≤ Preis < Teuer-Schwelle): Discharge-Lock — Zone 1 und Zone 2 gesperrt (Output 0 W, Modus Disabled). Der Lock gilt unterhalb der Teuer-Schwelle, also auch bei günstigem Preis, wenn das Ladeziel erreicht ist. Sobald der Preis die Teuer-Schwelle überschreitet, wird der Betrieb automatisch wiederhergestellt.\nTeuer (Preis ≥ Teuer-Schwelle): normale SOC-Logik, keine Einschränkung.\n\nTarif-Laden und AC-Laden sind voneinander unabhängige Module und blockieren sich gegenseitig über den Modus-Guard.\n\nPriorität: Tarif-Laden, Discharge-Lock und dessen Recovery-Sperre werden blockiert solange Überschuss-Einspeisung (Zone 0) aktiv ist.\n\nErfordert Preis-Sensor mit numerischem Wert in ct/kWh."
     },
     "dynoff": {
       "summary": "Dynamischer Offset — automatisch aus Netz-Volatilität berechnet",
@@ -209,7 +209,7 @@
     },
     "tariff_enabled": {
       "l": "Tarif-Steuerung aktivieren",
-      "d": "Günstig (< Günstig-Schwelle): Tarif-Laden. Mittel (dazwischen): Discharge-Lock — Zone 1 und Zone 2 gesperrt. Teuer (≥ Teuer-Schwelle): normale SOC-Logik. Wird blockiert solange Überschuss-Einspeisung (Zone 0) aktiv ist. Unabhängig vom AC-Laden-Modul."
+      "d": "Günstig (< Günstig-Schwelle): Tarif-Laden. Unterhalb der Teuer-Schwelle (günstig und mittel): Discharge-Lock — Zone 1 und Zone 2 gesperrt. Teuer (≥ Teuer-Schwelle): normale SOC-Logik. Wird blockiert solange Überschuss-Einspeisung (Zone 0) aktiv ist. Unabhängig vom AC-Laden-Modul."
     },
     "tariff_price_sensor": {
       "l": "Preis-Sensor (optional lokal)",
@@ -220,7 +220,7 @@
     },
     "tariff_cheap_threshold": {
       "l": "Günstig-Schwelle (ct/kWh)",
-      "d": "Tarif-Laden startet wenn Preis diese Schwelle unterschreitet UND SOC < Ladeziel. Auch untere Grenze des Discharge-Locks."
+      "d": "Tarif-Laden startet wenn Preis diese Schwelle unterschreitet UND SOC < Ladeziel. Darunter gilt der Discharge-Lock weiter, sobald das Ladeziel erreicht ist."
     },
     "tariff_cheap_entity": {
       "l": "Günstig-Schwelle dynamisch (optional lokal)",
@@ -228,7 +228,7 @@
     },
     "tariff_exp_threshold": {
       "l": "Teuer-Schwelle (ct/kWh)",
-      "d": "Über dieser Schwelle: normale SOC-Logik, Discharge-Lock hebt sich. Dazwischen (Günstig ≤ Preis < Teuer): Discharge-Lock Zone 1 und Zone 2. Muss größer als Günstig-Schwelle sein."
+      "d": "Über dieser Schwelle: normale SOC-Logik, Discharge-Lock hebt sich. Darunter: Discharge-Lock Zone 1 und Zone 2. Muss größer als Günstig-Schwelle sein."
     },
     "tariff_exp_entity": {
       "l": "Teuer-Schwelle dynamisch (optional lokal)",
@@ -336,7 +336,7 @@
     "prio_rows": [
       ["1 (höchste)",   "☀️ Überschuss (Zone 0)",      "Tarif-Laden (GT), Discharge-Lock (TM), AC Laden (G)"],
       ["2",             "💹 Tarif-Laden (günstig)",     "AC Laden (via Modus '3'), Discharge-Lock"],
-      ["3",             "💹 Discharge-Lock (mittel)",   "Zone-1/2-Recovery (D), Zone-2-Start (E)"],
+      ["3",             "💹 Discharge-Lock (< teuer)", "Zone-1/2-Recovery (D), Zone-2-Start (E)"],
       ["4",             "⚡ AC Laden",                  "Tarif-Laden (via Modus '3'), Discharge-Lock"],
       ["5",             "🌙 Nachtabschaltung",           "Zone-2-Start (E)"],
       ["6 (niedrigste)","Zone 1 / Zone 2",              "—"]

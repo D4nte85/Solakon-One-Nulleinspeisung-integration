@@ -36,7 +36,7 @@
     },
     "tariff": {
       "summary": "Tariff Arbitrage (Tibber, aWATTar …) — three price tiers",
-      "text": "Cheap (price < cheap threshold): tariff charging starts — fixed charge power until SOC target. No PI controller.\nMedium (cheap ≤ price < expensive threshold): discharge-lock — Zone 1 and Zone 2 blocked (output 0 W, mode disabled). Once the price exceeds the expensive threshold, operation is automatically restored.\nExpensive (price ≥ expensive threshold): normal SOC logic, no restriction.\n\nTariff charging and AC charging are independent modules that mutually block each other via the mode guard.\n\nPriority: tariff charging, discharge-lock and its recovery block are suspended while surplus feed-in (Zone 0) is active.\n\nRequires a price sensor with a numeric value in ct/kWh."
+      "text": "Cheap (price < cheap threshold): tariff charging starts — fixed charge power until SOC target. No PI controller.\nMedium (cheap ≤ price < expensive threshold): discharge-lock — Zone 1 and Zone 2 blocked (output 0 W, mode disabled). The lock applies below the expensive threshold, so also at a cheap price once the charge target is reached. Once the price exceeds the expensive threshold, operation is automatically restored.\nExpensive (price ≥ expensive threshold): normal SOC logic, no restriction.\n\nTariff charging and AC charging are independent modules that mutually block each other via the mode guard.\n\nPriority: tariff charging, discharge-lock and its recovery block are suspended while surplus feed-in (Zone 0) is active.\n\nRequires a price sensor with a numeric value in ct/kWh."
     },
     "dynoff": {
       "summary": "Dynamic Offset — automatically calculated from grid volatility",
@@ -209,7 +209,7 @@
     },
     "tariff_enabled": {
       "l": "Enable Tariff Control",
-      "d": "Cheap (< cheap threshold): tariff charging. Medium (in between): discharge-lock — Zone 1 and Zone 2 blocked. Expensive (≥ expensive threshold): normal SOC logic. Blocked while surplus feed-in (Zone 0) is active. Independent of the AC charging module."
+      "d": "Cheap (< cheap threshold): tariff charging. Below the expensive threshold (cheap and medium): discharge-lock — Zone 1 and Zone 2 blocked. Expensive (≥ expensive threshold): normal SOC logic. Blocked while surplus feed-in (Zone 0) is active. Independent of the AC charging module."
     },
     "tariff_price_sensor": {
       "l": "Price Sensor (optional local)",
@@ -220,7 +220,7 @@
     },
     "tariff_cheap_threshold": {
       "l": "Cheap Threshold (ct/kWh)",
-      "d": "Tariff charging starts when price is below this threshold AND SOC < target. Also the lower bound of the discharge-lock."
+      "d": "Tariff charging starts when price is below this threshold AND SOC < target. Below it the discharge-lock still applies once the charge target is reached."
     },
     "tariff_cheap_entity": {
       "l": "Dynamic Cheap Threshold (optional local)",
@@ -228,7 +228,7 @@
     },
     "tariff_exp_threshold": {
       "l": "Expensive Threshold (ct/kWh)",
-      "d": "Above this threshold: normal SOC logic, discharge-lock lifts. In between (cheap ≤ price < expensive): discharge-lock Zone 1 and Zone 2. Must be greater than the cheap threshold."
+      "d": "Above this threshold: normal SOC logic, discharge-lock lifts. Below it: discharge-lock Zone 1 and Zone 2. Must be greater than the cheap threshold."
     },
     "tariff_exp_entity": {
       "l": "Dynamic Expensive Threshold (optional local)",
@@ -336,7 +336,7 @@
     "prio_rows": [
       ["1 (highest)",  "☀️ Surplus (Zone 0)",         "Tariff charge (GT), Discharge-lock (TM), AC charge (G)"],
       ["2",            "💹 Tariff charge (cheap)",     "AC charge (via mode '3'), Discharge-lock"],
-      ["3",            "💹 Discharge-lock (medium)",   "Zone-1/2-recovery (D), Zone-2-start (E)"],
+      ["3",            "💹 Discharge-lock (< expensive)", "Zone-1/2-recovery (D), Zone-2-start (E)"],
       ["4",            "⚡ AC Charge",                 "Tariff charge (via mode '3'), Discharge-lock"],
       ["5",            "🌙 Night Shutdown",             "Zone-2-start (E)"],
       ["6 (lowest)",   "Zone 1 / Zone 2",              "—"]
