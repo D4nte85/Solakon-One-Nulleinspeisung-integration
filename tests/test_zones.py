@@ -9,6 +9,7 @@ import pytest
 from tests import harness as h
 
 zones = importlib.import_module(h.PKG + ".zones")
+tariff = importlib.import_module(h.PKG + ".tariff")
 
 # Ruhe in Modus '0' bei SOC in Zone 2, Nacht, keine Session: kein Fall greift.
 BASE = zones.ZoneInputs(
@@ -16,8 +17,8 @@ BASE = zones.ZoneInputs(
     zone1_limit=60, zone3_limit=20,
     surplus_enabled=False, new_surplus=False,
     ac_enabled=False, ac_soc_target=90, ac_hysteresis=50, ac_offset=-50,
-    tariff_price=0.30, price_below_exp=False, price_below_cheap=False,
-    price_at_least_cheap=True, tariff_allows_discharge=True,
+    tariff=tariff.TariffState(price=0.30, cheap=0.20, exp=0.40, below_exp=False,
+                              below_cheap=False, at_least_cheap=True),
     tariff_soc=80, tariff_power=800,
     is_night=True, zone1_forced=False, self_adjust_tol=3,
     surplus_active=False, ac_charge_active=False, tariff_charge_active=False,
@@ -25,8 +26,12 @@ BASE = zones.ZoneInputs(
 )
 
 
+_TARIFF_KEYS = ("below_exp", "below_cheap", "at_least_cheap")
+
+
 def _decide(**kw):
-    return zones.decide(dataclasses.replace(BASE, **kw))
+    t = {k: kw.pop(k) for k in _TARIFF_KEYS if k in kw}
+    return zones.decide(dataclasses.replace(BASE, tariff=dataclasses.replace(BASE.tariff, **t), **kw))
 
 
 def test_base_trifft_keinen_fall():
@@ -40,12 +45,11 @@ def test_base_trifft_keinen_fall():
     (dict(zone1_forced=True), "A"),
     (dict(soc=15, cycle_active=True, mode="1", at_rest=False), "B"),
     (dict(soc=15, mode="1", at_rest=False), "C"),
-    (dict(cycle_active=True, tariff_allows_discharge=False), "D"),
-    (dict(price_below_cheap=True, price_below_exp=True, tariff_allows_discharge=False), "GT"),
+    (dict(cycle_active=True), "D"),
+    (dict(below_cheap=True, below_exp=True), "GT"),
     (dict(tariff_charge_active=True, mode="3", at_rest=False), "HT"),
-    (dict(price_below_exp=True, price_at_least_cheap=False, mode="1", at_rest=False,
-          tariff_allows_discharge=False), "TM"),
-    (dict(ac_enabled=True, grid=-200, mode="1", at_rest=True, tariff_allows_discharge=False), "G"),
+    (dict(below_exp=True, at_least_cheap=False, mode="1", at_rest=False), "TM"),
+    (dict(ac_enabled=True, grid=-200, mode="1", at_rest=True, below_exp=True), "G"),
     (dict(ac_charge_active=True, mode="3", at_rest=False, soc=95), "H"),
     (dict(ac_charge_active=True, mode="3", at_rest=False, grid=10, actual=3), "H"),
     (dict(mode="3", at_rest=False), "I"),
@@ -62,8 +66,8 @@ def test_je_fall_ein_treffer(kw, name):
     # B vor C: nur der aktive Zyklus trennt die beiden
     (dict(soc=15, cycle_active=True, mode="1", at_rest=False), "B"),
     # GT vor G: Tarif-Laden hat Vorrang vor AC-Laden
-    (dict(price_below_cheap=True, price_below_exp=True, ac_enabled=True, grid=-200,
-          mode="1", tariff_allows_discharge=False), "GT"),
+    (dict(below_cheap=True, below_exp=True, ac_enabled=True, grid=-200,
+          mode="1"), "GT"),
     # E vor F: tagsüber Zone 2, nicht Nachtabschaltung
     (dict(is_night=False, mode="0", at_rest=True), "E"),
 ])
@@ -93,7 +97,7 @@ def test_d_session_kehrt_unter_zone3_in_modus_3_zurueck():
 
 
 def test_d_durch_tarif_lock_gesperrt():
-    assert _decide(cycle_active=True, price_below_exp=True, tariff_allows_discharge=False) is None
+    assert _decide(cycle_active=True, below_exp=True) is None
 
 
 @pytest.mark.parametrize("cycle_active, rest", [(False, True), (True, False)])

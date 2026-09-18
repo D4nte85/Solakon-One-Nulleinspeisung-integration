@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from .const import MODE_AC_CHARGE, MODE_DISABLED, MODE_DISCHARGE
+from .tariff import TariffState
 
 
 @dataclass(frozen=True)
@@ -23,11 +24,7 @@ class ZoneInputs:
     ac_soc_target: float
     ac_hysteresis: float
     ac_offset: float
-    tariff_price: float | None
-    price_below_exp: bool
-    price_below_cheap: bool
-    price_at_least_cheap: bool
-    tariff_allows_discharge: bool
+    tariff: TariffState
     tariff_soc: float
     tariff_power: float
     is_night: bool
@@ -98,7 +95,7 @@ def decide(inp: ZoneInputs) -> FallDecision | None:
     zone1_forced = inp.zone1_forced
     if (
         not inp.ac_charge_active
-        and inp.tariff_allows_discharge
+        and inp.tariff.allows_discharge
         and not inp.tariff_charge_active
         and (soc > zone1 or zone1_forced)
         and not inp.cycle_active
@@ -142,13 +139,8 @@ def decide(inp: ZoneInputs) -> FallDecision | None:
     # ── Fall D: Recovery ─────────────────────────────────────────────────────
     # Tarif-Lock blockiert Recovery für normalen Discharge (ac/tariff_charge_active-Recovery bleibt erlaubt)
     # Recovery einer aktiven Lade-Session ignoriert die Zone-3-Schwelle — Laden bleibt bei jedem SOC möglich
-    tariff_lock_active = (
-        inp.price_below_exp
-        and not inp.ac_charge_active
-        and not inp.tariff_charge_active
-        and not inp.surplus_active
-    )
     charging_session_active = inp.ac_charge_active or inp.tariff_charge_active
+    tariff_lock_active = inp.tariff.discharge_locked(charging_session_active, inp.surplus_active)
     if (
         (inp.cycle_active or charging_session_active)
         and (mode not in (MODE_DISCHARGE, MODE_AC_CHARGE) or inp.at_rest)
@@ -162,7 +154,7 @@ def decide(inp: ZoneInputs) -> FallDecision | None:
     # ── Fall GT: Tarif-Laden Start ───────────────────────────────────────────
     # Überschuss-Einspeisung hat Vorrang — kein Tarif-Laden während Zone 0 aktiv
     if (
-        inp.price_below_cheap
+        inp.tariff.below_cheap
         and soc < inp.tariff_soc
         and not inp.tariff_charge_active
         and not inp.surplus_active
@@ -171,14 +163,14 @@ def decide(inp: ZoneInputs) -> FallDecision | None:
         return FallDecision("GT", {
             "flags": {"tariff_charge_active": True}, "output": inp.tariff_power,
             "ac_charge_mode": True, "timer_first": True, "mode": MODE_AC_CHARGE,
-        }, "act_fall_gt", {"price": inp.tariff_price})
+        }, "act_fall_gt", {"price": inp.tariff.price})
 
     # ── Fall HT: Tarif-Laden Ende ────────────────────────────────────────────
     if (
         inp.tariff_charge_active
         and (
             soc >= inp.tariff_soc
-            or inp.price_at_least_cheap
+            or inp.tariff.at_least_cheap
         )
     ):
         return _end_charge("HT", "tariff_charge_active", "act_fall_ht", inp.cycle_active)
@@ -186,16 +178,13 @@ def decide(inp: ZoneInputs) -> FallDecision | None:
     # ── Discharge-Lock (Preis < Teuer-Schwelle) ──────────────────────────────
     # Sperrt Zone 1 und Zone 2 solange Preis < teuer (günstig UND mittel).
     if (
-        inp.price_below_exp
-        and not inp.tariff_charge_active
-        and not inp.ac_charge_active
-        and not inp.surplus_active
+        tariff_lock_active
         and mode == MODE_DISCHARGE
         and not inp.at_rest
     ):
         return FallDecision("TM", {
             "reset_integral": True, "flags": {"cycle_active": False}, "output": 0, "rest": True,
-        }, "act_fall_tm", {"price": inp.tariff_price})
+        }, "act_fall_tm", {"price": inp.tariff.price})
 
     # ── Fall G: AC Laden Start ───────────────────────────────────────────────
     # Überschuss-Einspeisung hat Vorrang — kein AC Laden während Zone 0 aktiv
@@ -244,7 +233,7 @@ def decide(inp: ZoneInputs) -> FallDecision | None:
     if (
         not inp.ac_charge_active
         and not inp.tariff_charge_active
-        and inp.tariff_allows_discharge
+        and inp.tariff.allows_discharge
         and zone3 < soc <= zone1
         and not inp.cycle_active
         and (mode == MODE_DISABLED or inp.at_rest)

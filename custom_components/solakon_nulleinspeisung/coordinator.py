@@ -22,6 +22,7 @@ from .readings import (
     WRONG_DOMAIN, read_number, read_scaled, unit_of, valid_state,
 )
 from .group import NetGroup, Shares, group_for
+from .tariff import Tariff, forecast_suppressed
 from .zones import ZoneInputs, decide
 from .const import (
     DOMAIN, STORAGE_VERSION, SETTINGS_DEFAULTS, DIST_DEFAULTS, DEVICE_MAX_POWER,
@@ -30,7 +31,6 @@ from .const import (
     CONF_DISCHARGE_CURRENT, CONF_TIMEOUT_SET, CONF_MODE_SELECT, CONF_EXPORT_LIMIT,
     MODE_DISABLED, MODE_DISCHARGE, MODE_AC_CHARGE,
     OUTPUT_STALL_SECONDS, OUTPUT_STALL_DEVIATION,
-    TARIFF_UNIT_SUSPECT_PRICE, TARIFF_UNIT_SUSPECT_THRESHOLD, TARIFF_UNIT_SUSPECT_SECONDS,
     S_REGULATION_ENABLED,
     S_P_FACTOR, S_I_FACTOR, S_TOLERANCE, S_WAIT_TIME, S_STDDEV_WINDOW, S_STDDEV_TRIM_COUNT,
     S_ZONE1_LIMIT, S_ZONE3_LIMIT, S_DISCHARGE_MAX, S_HARD_LIMIT_Z0, S_HARD_LIMIT_Z1,
@@ -268,9 +268,8 @@ class SolakonCoordinator:
         self._output_warning: Msg | None = None
         self._output_stall_actions: int = 0
         self._output_stall_last_ts: float = 0.0
-        # Beginn der laufenden Verdachtsphase auf eine EUR/kWh-Preiseinheit;
-        # 0.0 solange der Preis zur ct/kWh-Schwelle passt.
-        self._tariff_unit_suspect_since: float = 0.0
+        # Tariflage je Zyklus; hält den Verdacht auf eine EUR/kWh-Preiseinheit über Zyklen.
+        self.tariff = Tariff()
         # Tatsächlich angewandter Verteilungs-Modus des letzten _all_shares()-Aufrufs
         # — kann vom konfigurierten distribution_mode abweichen (Degradation, siehe oben).
         self.dist_mode_effective: str = ""
@@ -725,36 +724,6 @@ class SolakonCoordinator:
             self._add_soft_error(soft_errors, (FEATURE_ERRORS[reading.reason].format(p=err_prefix), params))
         return reading.value
 
-    def _tariff_unit_warning(self, entity_id: str, price: float, cheap: float) -> Msg | None:
-        """Meldung, wenn der Preis-Sensor vermutlich €/kWh statt ct/kWh liefert, sonst None.
-
-        Kriterium ist der Wert: ein Preis unter TARIFF_UNIT_SUSPECT_PRICE bei einer
-        Günstig-Schwelle ab TARIFF_UNIT_SUSPECT_THRESHOLD ist in ct/kWh kaum erreichbar.
-        Einzelne Billigstunden und negative Börsenpreise bleiben ausgenommen: gemeldet
-        wird erst nach TARIFF_UNIT_SUSPECT_SECONDS ununterbrochenem Verdacht und nur bei
-        price >= 0. `unit_of_measurement` wirkt nur bestätigend — eine ct-Einheit
-        unterdrückt die Meldung, eine €-Einheit macht sie sofort. Umgerechnet wird nichts.
-        """
-        unit = unit_of(self.hass.states.get(entity_id))
-
-        if any(token in unit for token in ("ct", "cent", "öre", "ore")):
-            self._tariff_unit_suspect_since = 0.0
-            return ""
-
-        if not (cheap >= TARIFF_UNIT_SUSPECT_THRESHOLD and 0.0 <= price < TARIFF_UNIT_SUSPECT_PRICE):
-            self._tariff_unit_suspect_since = 0.0
-            return ""
-
-        now = time.time()
-        if not self._tariff_unit_suspect_since:
-            self._tariff_unit_suspect_since = now
-
-        euro_unit = any(token in unit for token in ("€", "eur"))
-        if not euro_unit and now - self._tariff_unit_suspect_since < TARIFF_UNIT_SUSPECT_SECONDS:
-            return ""
-
-        return ("warn_tariff_unit", {"price": price, "cheap": cheap})
-
     # ── Modbus-Schreibbefehle (nur wenn regulation_enabled) ──────────────────
 
     @property
@@ -1116,19 +1085,14 @@ class SolakonCoordinator:
         # Modus-Degradation ebenfalls hier einfließt.
         soft_errors: list[Msg] = []
 
-        # Tarif-Parameter; eine Schwellen-Entität ohne Zahl fällt auf den Settings-Wert zurück
+        # Schwellen-Entitäten des Tarifs; ohne Zahl gilt in der Tariflage der Settings-Wert
         tariff_sensor = self._effective("tariff")
-        tariff_cheap, tariff_exp = cs.tariff_cheap, cs.tariff_exp
         cheap_entity = self._effective("tariff_cheap")
         cheap = self._feature_value(
             soft_errors, cs.tariff_enabled and bool(cheap_entity), cheap_entity, "err_tariff_cheap", {})
-        if cheap is not None:
-            tariff_cheap = cheap
         exp_entity = self._effective("tariff_exp")
         exp = self._feature_value(
             soft_errors, cs.tariff_enabled and bool(exp_entity), exp_entity, "err_tariff_exp", {})
-        if exp is not None:
-            tariff_exp = exp
 
         self._dist_warning = None
         error_share, allocated_power, shares = self.group.distribution(self, soc)
@@ -1182,7 +1146,7 @@ class SolakonCoordinator:
 
         pv_forecast = self._feature_value(
             soft_errors, cs.pv_forecast_enabled, pv_forecast_today_sensor, "err_pv_forecast", UNIT_SCALE_KWH)
-        self.forecast_tariff_suppressed = pv_forecast is not None and pv_forecast >= cs.pv_forecast_threshold
+        self.forecast_tariff_suppressed = forecast_suppressed(pv_forecast, cs.pv_forecast_threshold)
 
         # Zone-1-Nacht-Forcierung: erlaubt Entladung unter das normale
         # Zone-1-Limit, wenn der morgige PV-Ertrag die Nacht ohnehin wieder auffüllt.
@@ -1195,8 +1159,6 @@ class SolakonCoordinator:
             and solar < cs.pv_reserve         # "gerade dunkel", ohne Nacht-Hysterese
             and soc > cs.zone1_force_min_soc  # eigener Floor, unabhängig von zone3_limit (Exit-Schwelle)
         )
-
-        effective_tariff_enabled = cs.tariff_enabled and bool(tariff_sensor) and not self.forecast_tariff_suppressed
 
         # ── 3. Validierung ───────────────────────────────────────────────────
         if cs.zone1_limit <= cs.zone3_limit:
@@ -1217,27 +1179,20 @@ class SolakonCoordinator:
 
         await self._sync_export_limit(max(self._setting(S_HARD_LIMIT_Z0, int), self._setting(S_HARD_LIMIT_Z1, int)))
 
-        # Preis ohne Einheitenumrechnung; die Einheitenplausibilität geht als
+        # Preis ohne Einheitenumrechnung; die Einheitenwarnung der Tariflage geht als
         # soft_error in dieselbe Meldungskette ein.
         price = self._feature_value(soft_errors, cs.tariff_enabled, tariff_sensor, "err_tariff", {})
-        tariff_price_valid = price is not None
-        tariff_price = price if price is not None else 0.0
-        if tariff_price_valid:
-            unit_warning = self._tariff_unit_warning(tariff_sensor, tariff_price, tariff_cheap)
-            if unit_warning:
-                self._add_soft_error(soft_errors, unit_warning)
+        tariff = self.tariff.assess(
+            enabled=cs.tariff_enabled and bool(tariff_sensor), suppressed=self.forecast_tariff_suppressed,
+            price=price, cheap_entity=cheap, cheap_setting=cs.tariff_cheap,
+            exp_entity=exp, exp_setting=cs.tariff_exp,
+            unit=unit_of(self.hass.states.get(tariff_sensor)) if price is not None else "", now=time.time(),
+        )
+        if tariff.unit_warning:
+            self._add_soft_error(soft_errors, tariff.unit_warning)
 
         # Verkettet statt überschrieben
         self._set_errors(soft_errors)
-
-        # Preisvergleiche für Falls und Entladesperre; HT beendet Tarif-Laden auch bei
-        # abgeschaltetem Tarif, deshalb ohne Enable-Bedingung.
-        tariff_price_usable = effective_tariff_enabled and tariff_price_valid
-        price_below_exp = tariff_price_usable and tariff_price < tariff_exp
-        price_below_cheap = tariff_price_usable and tariff_price < tariff_cheap
-        price_at_least_cheap = tariff_price_valid and tariff_price >= tariff_cheap
-        # Zone-1/2-Start (A, E): gesperrt nur bei gültigem Preis unter der Teuer-Schwelle.
-        tariff_allows_discharge = not price_below_exp
 
         # ── 4. Abgeleitete Variablen ─────────────────────────────────────────
         prev_actual = self._prev_actual
@@ -1298,25 +1253,17 @@ class SolakonCoordinator:
             surplus_enabled=cs.surplus_enabled, new_surplus=new_surplus,
             ac_enabled=cs.ac_enabled, ac_soc_target=cs.ac_soc_target,
             ac_hysteresis=cs.ac_hysteresis, ac_offset=ac_offset,
-            tariff_price=tariff_price, price_below_exp=price_below_exp,
-            price_below_cheap=price_below_cheap, price_at_least_cheap=price_at_least_cheap,
-            tariff_allows_discharge=tariff_allows_discharge,
-            tariff_soc=cs.tariff_soc, tariff_power=cs.tariff_power,
+            tariff=tariff, tariff_soc=cs.tariff_soc, tariff_power=cs.tariff_power,
             is_night=is_night, total_actual=total_actual,
             zone1_forced=self.zone1_forced,
         )
         if fall_executed:
             self.active_fall = fall_executed
 
-        # Zustand hinter Fall TM: die Sperrbedingung selbst, nicht ihr Auslöser.
-        # TM feuert nur beim Übergang aus Modus '1' heraus; die Sperre gilt aber
-        # weiter, solange der Preis unter der Teuer-Schwelle liegt und keine
-        # Lade-Session oder Zone 0 läuft — dieselbe Bedingung, die in den Fällen
-        # A und E den Wiedereintritt blockiert.
-        self.discharge_locked = (
-            price_below_exp
-            and not (self.tariff_charge_active or self.ac_charge_active or self.surplus_active)
-        )
+        # Zustand hinter Fall TM: die Sperre selbst mit den Flags nach den Falls,
+        # nicht ihr Auslöser.
+        self.discharge_locked = tariff.discharge_locked(
+            self.tariff_charge_active or self.ac_charge_active, self.surplus_active)
 
         # ── 6. Entladestrom mit Regelzustand abgleichen (vor dem PI-Gate) ────
         mode = self._str(cfg[CONF_MODE_SELECT])

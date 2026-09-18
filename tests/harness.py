@@ -297,8 +297,19 @@ def jsonable(value):
     return repr(value)
 
 
+# Zustände, die in ein Teilobjekt gewandert sind: Protokollschlüssel → Pfad am Coordinator.
+COORD_PATHS = {"_tariff_unit_suspect_since": "tariff.unit_suspect_since"}
+
+
+def _coord_attr(coord, name):
+    obj = coord
+    for part in COORD_PATHS.get(name, name).split("."):
+        obj = getattr(obj, part, _MISSING)
+    return obj
+
+
 def coord_state(coord) -> dict:
-    return {name: jsonable(getattr(coord, name, _MISSING)) for name in COORD_ATTRS}
+    return {name: jsonable(_coord_attr(coord, name)) for name in COORD_ATTRS}
 
 
 class LogCapture(logging.Handler):
