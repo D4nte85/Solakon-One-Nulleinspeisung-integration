@@ -55,6 +55,7 @@ verteilung: {}        # optional: Verteilungs-Config der Netzgruppe sensor.grid
 verteilung_netz: {}   # optional: Configs weiterer Netzgruppen, {sensor.grid_other: {...}}
 instanzen:
   - prefix: a         # erste Instanz immer a; weitere b, c …
+    netzsensor: sensor.grid   # optional; sensor.grid_other bildet eine zweite Netzgruppe (Wert wie netz)
     settings: {regulation_enabled: true, tariff_power: 2000}   # über SETTINGS_DEFAULTS
     flags: {cycle_active: false}                              # gespeicherte Zustandsflags
     sensoren: {soc: 40, modus: "1"}   # soc solar ist countdown leistung entladestrom timeout modus export kapazitaet

@@ -241,8 +241,6 @@ class SolakonCoordinator:
         self.last_output_ts: float = time.time()
         self.mode_label_ts: float = time.time()
 
-        # StdDev-Ringpuffer für Netz-Standardabweichung
-        self._grid_samples: deque[tuple[float, float]] = deque()  # (timestamp, value)
         self.grid_stddev: float = 0.0
         self.grid_stddev_raw: float = 0.0
 
@@ -574,6 +572,12 @@ class SolakonCoordinator:
         )
 
     # ── StdDev-Berechnung (Ringpuffer) ───────────────────────────────────────
+
+    @property
+    def _grid_samples(self) -> deque[tuple[float, float]]:
+        """StdDev-Ringpuffer (timestamp, value) der Netzgruppe, gefüllt vom Gruppen-Leader."""
+        buffers = self.hass.data.setdefault(f"{DOMAIN}_grid_samples", {})
+        return buffers.setdefault(self.entry.data.get(CONF_GRID_SENSOR, ""), deque())
 
     def _update_stddev(self, grid_value: float) -> None:
         """Neuen Grid-Messwert in Ringpuffer aufnehmen und StdDev berechnen."""
