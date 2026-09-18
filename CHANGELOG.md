@@ -5,6 +5,10 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+## [3.0.0-beta.4] – 2026-09-18
+
+> **Beta-Release.** Folgestand zu `3.0.0-beta.3`: Verteilung bei mehreren Instanzen und Netzgruppen, Panel-Texte in der Sprache des Benutzerprofils, Sensoren mit Text statt Zahl. Erscheint in HACS nur bei aktivierten Beta-Versionen.
+
 ### Geändert
 
 - README: Inhaltsverzeichnis am Anfang, verlinkt auf alle Abschnitte bis zur dritten Ebene.
