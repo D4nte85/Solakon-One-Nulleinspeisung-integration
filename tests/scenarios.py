@@ -225,6 +225,51 @@ def gen_cycle(rng, n_instances=1) -> dict:
     }
 
 
+def gen_multi(rng) -> dict:
+    """Netzgruppe mit 2–3 Instanzen, dazu gezielt die seltenen Gruppenlagen: Divergenzgrenze
+    und Rotation im `soc_switch`, mehrere Zone-0-Instanzen, Fremd-SOC nicht verfügbar,
+    Leaderwechsel durch Regelung aus und wieder an."""
+    spec = gen_cycle(rng, _pick(rng, [2, 3, 3]))
+    insts = spec["instances"]
+    group = [i for i in insts if i["grid_sensor"] == "sensor.grid"]
+    if _chance(rng, 0.5):
+        spec["has_dist_config"] = True
+        spec["dist"]["distribution_mode"] = "soc_switch"
+    if _chance(rng, 0.6):
+        for inst in group:
+            inst["settings"][C.S_REGULATION_ENABLED] = True
+            inst["states"][f"select.{inst['prefix']}_mode"] = {"state": "1"}
+            inst["states"][f"sensor.{inst['prefix']}_soc"] = {
+                "state": _pick(rng, [40, 55, 62, 70, 81]), "attrs": {"unit_of_measurement": "%"}}
+    if _chance(rng, 0.4):
+        leader = _pick(rng, group)
+        start = _pick(rng, [70.0, 90.0])
+        div = spec["dist"]["soc_switch_divergence"]
+        spec["soc_switch_state"] = {"active_id": f"entry_{leader['prefix']}", "start_soc": start,
+                                    "was_zone0": False}
+        leader["states"][f"sensor.{leader['prefix']}_soc"] = {
+            "state": start - div + _pick(rng, [0, 0, 1, -1]), "attrs": {"unit_of_measurement": "%"}}
+    if _chance(rng, 0.3):
+        for inst in group:
+            inst["flags"]["surplus_active"] = True
+            inst["drop_flags"] = [k for k in inst["drop_flags"] if k != "surplus_active"]
+    if len(group) > 1 and _chance(rng, 0.2):
+        other = _pick(rng, group[1:])
+        other["states"][f"sensor.{other['prefix']}_soc"] = {"state": "unavailable"}
+    if _chance(rng, 0.3):
+        first = min(group, key=lambda i: i["prefix"])
+        spec["steps"] = [
+            {"advance": 5, "set": _perturb(rng, "a") if i else {}, "who": "all"} for i in range(2)
+        ] + [
+            {"advance": 5, "set": _perturb(rng, "a"), "who": "all",
+             "changes_for": {first["prefix"]: {C.S_REGULATION_ENABLED: False}}},
+            {"advance": 5, "set": _perturb(rng, "a"), "who": "all"},
+            {"advance": 5, "set": _perturb(rng, "a"), "who": "all",
+             "changes_for": {first["prefix"]: {C.S_REGULATION_ENABLED: True}}},
+        ]
+    return spec
+
+
 def gen_stall(rng) -> dict:
     spec = gen_cycle(rng, 1)
     inst = spec["instances"][0]
@@ -339,7 +384,7 @@ def generate(kind: str) -> list[dict]:
         if kind == "cycle":
             spec = gen_cycle(rng, 1)
         elif kind == "multi":
-            spec = gen_cycle(rng, _pick(rng, [2, 2, 3]))
+            spec = gen_multi(rng)
         elif kind == "stall":
             spec = gen_stall(rng)
         elif kind == "tariff":
@@ -413,6 +458,8 @@ async def _run_cycle_spec(spec) -> dict:
         _apply_states(hass, step["set"])
         if "changes" in step:
             await coords["a"].async_update_settings(dict(step["changes"]))
+        for p, changes in step.get("changes_for", {}).items():
+            await coords[p].async_update_settings(dict(changes))
         notify = {p: 0 for p in coords}
         for p, c in coords.items():
             c._listeners = [lambda p=p: notify.__setitem__(p, notify[p] + 1)]

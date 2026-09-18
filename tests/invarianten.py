@@ -61,6 +61,7 @@ class Ctx:
     aus_seit: int | None = None                    # Schritt, in dem die Regelung abgeschaltet wurde
     abgeschaltet_jetzt: bool = False
     runde_vollstaendig: bool = True                # alle Instanzen haben in dieser Runde geregelt
+    geregelt: dict = field(default_factory=dict)   # prefix -> Regelung an, vor diesem Zyklus
 
     def e(self, key: str) -> str:
         return self.cfg[key]
@@ -350,11 +351,14 @@ def f1(c: Ctx):
     if not c.normal() or c.flags_vorher.get("ac_charge_active") or not c.flags["ac_charge_active"]:
         return None
     # Ist-Leistung vorzeichenrichtig: Entladen positiv, Laden negativ. Die eigene Instanz
-    # zählt immer, die übrigen nur in Modus '1'.
+    # zählt immer, die übrigen nur am selben Netzsensor, mit Regelung und in Modus '1'.
     netz = c.netz()
     summe = 0.0
     for p, (cfg, _flags, _nach) in c.alle.items():
-        if p == c.prefix or (c.vorher.get(cfg[C.CONF_MODE_SELECT]) or {}).get("state") == C.MODE_DISCHARGE:
+        if p == c.prefix or (
+            cfg[C.CONF_GRID_SENSOR] == c.e(C.CONF_GRID_SENSOR) and c.geregelt.get(p)
+            and (c.vorher.get(cfg[C.CONF_MODE_SELECT]) or {}).get("state") == C.MODE_DISCHARGE
+        ):
             summe += zahl(c.vorher, cfg[C.CONF_ACTUAL_SENSOR], True) or 0.0
     hyst = c.settings[C.S_AC_HYSTERESIS]
     if not netz + summe < -hyst:
@@ -668,12 +672,16 @@ async def _lauf(kind: str, spec: dict) -> list[Ctx]:
         scenarios._apply_states(hass, step["set"])
         hass.events = []
         abgeschaltet = set()
-        if "changes" in step:
-            war_an = coords["a"].settings[C.S_REGULATION_ENABLED]
-            await coords["a"].async_update_settings(dict(step["changes"]))
-            if war_an and not coords["a"].settings[C.S_REGULATION_ENABLED]:
-                aus_seit["a"] = idx
-                abgeschaltet.add("a")
+        aenderungen = [("a", step["changes"])] if "changes" in step else []
+        aenderungen += list(step.get("changes_for", {}).items())
+        for p, changes in aenderungen:
+            war_an = coords[p].settings[C.S_REGULATION_ENABLED]
+            await coords[p].async_update_settings(dict(changes))
+            if war_an and not coords[p].settings[C.S_REGULATION_ENABLED]:
+                aus_seit[p] = idx
+                abgeschaltet.add(p)
+            elif not war_an and coords[p].settings[C.S_REGULATION_ENABLED]:
+                aus_seit[p] = None
         ereignisse_aenderung = [e for e in hass.events if e[0] == "call"]
         targets = list(coords) if step["who"] == "all" else ["a"]
         runde = []
@@ -689,7 +697,8 @@ async def _lauf(kind: str, spec: dict) -> list[Ctx]:
             runde.append(Ctx(kind, spec["id"], idx, p, coord.entry.data, dict(coord.settings), vorher,
                              schnappschuss(hass), flags[p], neu, aufrufe,
                              dist=spec["dist"] if spec.get("has_dist_config") else None,
-                             aus_seit=aus_seit[p], abgeschaltet_jetzt=p in abgeschaltet))
+                             aus_seit=aus_seit[p], abgeschaltet_jetzt=p in abgeschaltet,
+                             geregelt={q: bool(c.settings[C.S_REGULATION_ENABLED]) for q, c in coords.items()}))
             flags[p] = neu
         nach = schnappschuss(hass)
         alle = {p: (coords[p].entry.data, flags[p], nach) for p in coords}

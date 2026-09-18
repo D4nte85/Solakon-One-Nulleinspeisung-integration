@@ -11,6 +11,7 @@ import pytest
 from tests import invarianten as inv
 
 OFFEN = {
+    "f3": "fix-2026-09-18-zuteilung-rundung-ueber-gesamtleistung, fix-2026-09-18-zuteilung-versatz-ueber-gesamtleistung",
 }
 
 
