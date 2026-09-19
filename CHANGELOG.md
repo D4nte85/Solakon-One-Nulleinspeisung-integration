@@ -3,6 +3,14 @@
 Alle nennenswerten Änderungen an der Solakon-ONE-Nulleinspeisung-Integration.
 Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [2.4.1] – 2026-09-19
+
+> Enthält alle Änderungen aus `2.4.1-beta.1` (unten) und den folgenden Fix.
+
+### Behoben
+
+- Verteilung beim AC-Laden (#38): Pool 2 gewichtete wie die Entladung nach SOC über der Zone-3-Schwelle, die Instanz mit dem höheren SOC lud stärker und die SOCs liefen auseinander. Gewichtet wird jetzt nach dem Platz bis zum Ladeziel (bei „Kapazitätsgewichtet“ in kWh). „SOC-Umschaltung“ wirkt im AC-Pool wie „SOC-gewichtet“.
+
 ## [2.4.1-beta.1] – 2026-09-12
 
 > **Beta-Release.** Fehlerbehebungen und ein interner Umbau der Textquellen; keine Breaking Changes gegenüber `2.4.0`. Erscheint in HACS nur bei aktivierten Beta-Versionen.
