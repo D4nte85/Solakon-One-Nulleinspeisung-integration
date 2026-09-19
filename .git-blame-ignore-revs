@@ -1,0 +1,7 @@
+# Reine Verschiebe-Commits ohne inhaltliche Änderung; git blame überspringt sie.
+# Lokal aktivieren: git config blame.ignoreRevsFile .git-blame-ignore-revs
+
+# Coordinator: Methoden nach Schichten geordnet
+8c996da39a91ac5d3fcc1d5764022df49e0fb86f
+# Module nach dem Layout-Standard geordnet
+ab1dbd7f5782f2bfbc8bd4aa80260a354d3f64b6
