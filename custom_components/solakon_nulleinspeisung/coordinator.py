@@ -314,141 +314,20 @@ class SolakonCoordinator:
         self.forecast_exit_lock: bool = False
         self.zone1_forced: bool = False
 
-    # ── Setup / Teardown ─────────────────────────────────────────────────────
+    # ── Lesen: Settings ──────────────────────────────────────────────────────
 
-    async def async_setup(self) -> None:
-        """Einstellungen laden, State-Listener starten."""
-        stored = await self._store.async_load()
-        if stored:
-            stored, reset = sanitize(stored, SETTINGS_SCHEMA)
-            self.settings = {**SETTINGS_DEFAULTS, **stored}
-            for key, attr, default in PERSISTED_FLAGS:
-                setattr(self, attr, bool(stored.get(key, default)))
-            if reset:
-                notify_reset(self.hass, f"{DOMAIN}_settings_reset_{self.entry.entry_id}", self.entry.title, reset)
-                await self._store.async_save(self._store_data())
-            _LOGGER.debug("Solakon: Einstellungen aus Speicher geladen")
-        else:
-            self.settings = SETTINGS_DEFAULTS.copy()
-            _LOGGER.info("Solakon: Standardwerte geladen")
+    def _setting(self, key: str, cast: Callable[[Any], Any]) -> Any:
+        """Setting typisiert lesen; `self.settings` ist stets mit SETTINGS_DEFAULTS gefüllt."""
+        return cast(self.settings[key])
 
-        cfg = self.entry.data
-        entities_to_track = [cfg.get(key, "") for key, triggers, _ in CORE_SENSORS if triggers]
-        entities_to_track = [e for e in entities_to_track if e]
+    @property
+    def _regulation_on(self) -> bool:
+        """Regelung aktiviert; Voraussetzung für jeden Schreibzugriff."""
+        return self._setting(S_REGULATION_ENABLED, bool)
 
-        if entities_to_track:
-            unsub = async_track_state_change_event(
-                self.hass, entities_to_track, self._on_state_change
-            )
-            self._unsub_trackers.append(unsub)
-
-        for name, _ in TRACKERS:
-            self._retrack(name)
-
-    async def async_shutdown(self) -> None:
-        """Listener abräumen."""
-        for unsub in self._unsub_trackers:
-            unsub()
-        self._unsub_trackers.clear()
-        for name, _ in TRACKERS:
-            self._untrack(name)
-    # ── Settings-Management ──────────────────────────────────────────────────
-
-    async def async_update_settings(self, changes: dict[str, Any]) -> None:
-        """Änderungen prüfen, übernehmen und speichern; InvalidSettings, wenn eine das Schema verletzt."""
-        if findings := check(changes, SETTINGS_SCHEMA):
-            raise InvalidSettings(findings)
-        turning_off = (
-            self._regulation_on
-            and S_REGULATION_ENABLED in changes
-            and not changes[S_REGULATION_ENABLED]
-        )
-        if turning_off:
-            # Aufräum-Sequenz solange regulation_enabled noch True ist,
-            # danach blockt der Guard alle Modbus-Schreibbefehle
-            async with self._lock:
-                _LOGGER.info("Solakon: Regelung wird deaktiviert — setze Output 0, Modus Disabled")
-                await self._transition(output=0, wait=False, timer=False)
-                await self._set_discharge(self._setting(S_DISCHARGE_MAX, float))
-                await self._transition(mode=MODE_DISABLED)
-                off_key = "disabled_regulation_off"
-                if self.mode_key != off_key:
-                    self.mode_label_ts = time.time()
-                self.mode_key = off_key
-                self.mode_label = self._tr(f"mode_{off_key}")
-
-        before = {name: self._tracker_input(name) for name, _ in TRACKERS}
-
-        if S_REST_IN_DISCHARGE in changes:
-            self.resting = False
-        self.settings.update(changes)
-        await self._store.async_save(self._store_data())
-        _LOGGER.info("Solakon: Einstellungen gespeichert")
-
-        for name, _ in TRACKERS:
-            if self._tracker_input(name) != before[name]:
-                self._retrack(name)
-
-        self.notify_listeners()
-
-        # Neuen Zustand sofort anwenden
-        if self._regulation_on:
-            self.request_regulation()
-
-    def schedule_save(self) -> None:
-        """Settings und Zustandsflags nach 5 s speichern."""
-        self._store.async_delay_save(self._store_data, 5)
-
-    def request_regulation(self) -> None:
-        """Regelzyklus als Task anstoßen."""
-        self.hass.async_create_task(self._async_regulate())
-
-    def apply_group_change(self) -> None:
-        """Nach geänderter Verteilung der Netzgruppe: Trigger neu anmelden, Regelzyklus anstoßen."""
-        self.update_sensor_trackers()
-        self.request_regulation()
-
-    def _tracker_input(self, name: str) -> tuple:
-        """Eingaben eines Triggers: Aktivierungswerte und Sensor bzw. Intervall."""
-        keys = dict(TRACKERS)[name]
-        target = self.settings[S_PERIODIC_INTERVAL] if name == "periodic" else self._effective(name)
-        return tuple(self.settings[k] for k in keys), target
-
-    def _untrack(self, name: str) -> None:
-        """Trigger `name` abmelden, falls registriert."""
-        unsub = self._tracker_unsubs.pop(name, None)
-        if unsub:
-            unsub()
-
-    def _retrack(self, name: str) -> None:
-        """Trigger `name` abmelden und neu registrieren, wenn aktiviert und Sensor gesetzt.
-
-        Der periodische Trigger läuft im Intervall S_PERIODIC_INTERVAL, mindestens 5 s.
-        """
-        self._untrack(name)
-        if not any(self.settings[k] for k in dict(TRACKERS)[name]):
-            return
-        if name == "periodic":
-            interval = max(5, self._setting(S_PERIODIC_INTERVAL, int))
-            self._tracker_unsubs[name] = async_track_time_interval(
-                self.hass, self._on_periodic, timedelta(seconds=interval)
-            )
-            return
-        sensor = self._effective(name)
-        if sensor:
-            self._tracker_unsubs[name] = async_track_state_change_event(
-                self.hass, [sensor], self._on_state_change
-            )
-
-    def update_sensor_trackers(self) -> None:
-        """Sensorgebundene Trigger neu registrieren, etwa nach geänderten globalen Vorgaben."""
-        for name, _ in TRACKERS:
-            if name != "periodic":
-                self._retrack(name)
-
-    def _persisted_flags(self) -> dict[str, bool]:
-        """Gespeicherte Zustandsflags unter ihrem Speicherschlüssel."""
-        return {key: getattr(self, attr) for key, attr, _ in PERSISTED_FLAGS}
+    def _cycle_settings(self) -> CycleSettings:
+        """Schnappschuss aller CYCLE_SETTINGS für einen Regelzyklus."""
+        return CycleSettings(*(self._setting(key, cast) for _, key, cast in CYCLE_SETTINGS))
 
     def _offset(self, zone: str) -> tuple[bool, Any, float]:
         """(dynamisch, statischer Settings-Wert, wirksamer Offset) der Zone aus OFFSET_SOURCES."""
@@ -456,6 +335,350 @@ class SolakonCoordinator:
         dynamic = bool(self.settings.get(enabled_key, False))
         static = self.settings.get(static_key)
         return dynamic, static, getattr(self, dyn_attr) if dynamic else static
+
+    # ── Lesen: Sensoren ──────────────────────────────────────────────────────
+
+    def _read_scaled(self, entity_id: str, default: float, scale: dict[str, float]) -> float:
+        """Zahl lesen und mit dem Faktor ihrer Einheit aus `scale` multiplizieren.
+
+        Einheiten ohne Eintrag bleiben unverändert; ohne Zahl `default`.
+        """
+        value = read_scaled(self.hass, entity_id, scale).value
+        return default if value is None else value
+
+    def _flt(self, entity_id: str, default: float = 0.0) -> float:
+        """Zahl ohne Einheitenumrechnung lesen."""
+        return self._read_scaled(entity_id, default, {})
+
+    def _flt_power(self, entity_id: str, default: float = 0.0) -> float:
+        """Leistung in W lesen (kW ×1000)."""
+        return self._read_scaled(entity_id, default, UNIT_SCALE_W)
+
+    def _flt_kwh_normalized(self, entity_id: str, default: float | None = 0.0) -> float | None:
+        """Energie in kWh lesen (Wh ÷1000, MWh ×1000).
+
+        Ohne erkannte Energie-Einheit (z. B. input_number ohne Einheit) bleibt der
+        Rohwert unverändert, wie es der kWh-Vertrag der Schwellenfelder vorsieht.
+        """
+        return self._read_scaled(entity_id, default, UNIT_SCALE_KWH)
+
+    def _str(self, entity_id: str) -> str:
+        """State als String lesen, 'unknown' bei Fehler."""
+        state = valid_state(self.hass, entity_id)
+        return state.state if state else "unknown"
+
+    def _entity_ok(self, entity_id: str) -> bool:
+        """Prüft ob Entity verfügbar und nicht unknown/unavailable ist."""
+        return valid_state(self.hass, entity_id) is not None
+
+    def _actual_updated_ts(self) -> float | None:
+        """`last_updated` des Ist-Sensors als Unix-Zeit, None ohne State."""
+        state = self.hass.states.get(self.entry.data.get(CONF_ACTUAL_SENSOR, ""))
+        return state.last_updated.timestamp() if state is not None else None
+
+    def _actual_polled_since_write(self) -> bool:
+        """True, wenn der Ist-Sensor seit dem letzten Schreibbefehl neu gepollt hat."""
+        updated = self._actual_updated_ts()
+        return updated is not None and updated >= self.last_output_ts
+
+    def _actual_vs(self, target: float, ac_charge_mode: bool = False) -> tuple[float, float]:
+        """(Ist-Leistung in W, Betrag ihrer Abweichung vom Sollwert).
+
+        Im AC-Lademodus meldet der Ist-Sensor negativ; verglichen wird dann gegen `-target`.
+        """
+        actual = self.actual_power()
+        return actual, abs(actual - (-target if ac_charge_mode else target))
+
+    # ── Lesen: Sensor-Vorgaben ───────────────────────────────────────────────
+    # Entity-Picker sind instanzübergreifend im Verteilungs-Tab pflegbar, jede
+    # Instanz kann optional lokal überschreiben. Lokal gewinnt, sonst globaler Wert.
+
+    def _global_sensor(self, key: str) -> str:
+        return str(self.group.dist_cfg().get(key, ""))
+
+    def _effective(self, name: str) -> str:
+        """Wirksamer Sensor aus SENSOR_SOURCES: lokaler Override, sonst globale Vorgabe.
+
+        `zone1_force` liest ab 12 Uhr die Vorhersage für morgen, davor die für heute
+        (`pv_forecast`) — derselbe Zieltag, nur der Sensor wechselt.
+        """
+        if name == "zone1_force" and dt_util.now().hour < 12:
+            name = "pv_forecast"
+        local, global_key = SENSOR_SOURCES[name]
+        return str(self.settings[local]) or self._global_sensor(global_key)
+
+    def _feature_value(
+        self, enabled: bool, sensor: str, err_prefix: str, scale: dict[str, float],
+    ) -> float | None:
+        """Wert des Feature-Sensors in der Zieleinheit; None, wenn das Feature aus ist oder keine Zahl kommt.
+
+        Ohne Zahl geht der Fehlerschlüssel des Grundes aus FEATURE_ERRORS in die Fehlerkette.
+        """
+        if not enabled:
+            return None
+        reading = read_scaled(self.hass, sensor, scale)
+        if reading.reason:
+            params = {} if reading.reason == NO_SENSOR else {"sensor": sensor}
+            self._messages.warn((FEATURE_ERRORS[reading.reason].format(p=err_prefix), params))
+        return reading.value
+
+    def _feature_values(self, cs: CycleSettings) -> dict[str, float | None]:
+        """Alle Werte aus FEATURE_READINGS nach Name, in Tabellenreihenfolge gelesen."""
+        values = {}
+        for name, source, enabled, err_prefix, scale, optional in FEATURE_READINGS:
+            sensor = self._effective(source)
+            on = getattr(cs, enabled) and (bool(sensor) or not optional)
+            values[name] = self._feature_value(on, sensor, err_prefix, scale)
+        return values
+
+    # ── Lesen: Netzgruppe ────────────────────────────────────────────────────
+
+    @property
+    def group(self) -> NetGroup:
+        """Netzgruppe dieser Instanz aus dem Register."""
+        return group_for(self.hass, self.grid_sensor)
+
+    @property
+    def _grid_samples(self) -> deque[tuple[float, float]]:
+        """StdDev-Ringpuffer (timestamp, value) der Netzgruppe, gefüllt vom Gruppen-Leader."""
+        return self.group.samples
+
+    @property
+    def member_id(self) -> str:
+        return self.entry.entry_id
+
+    @property
+    def grid_sensor(self) -> str:
+        return self.entry.data.get(CONF_GRID_SENSOR, "")
+
+    @property
+    def regulating(self) -> bool:
+        return self._regulation_on
+
+    def in_discharge_pool(self) -> bool:
+        """Regelung an, Modus '1' und nicht darin ruhend."""
+        if not self._regulation_on:
+            return False
+        mode = self._str(self.entry.data.get(CONF_MODE_SELECT, ""))
+        return mode == MODE_DISCHARGE and not self._at_rest(MODE_DISCHARGE)
+
+    def soc_reading(self) -> float | None:
+        """SOC-Sensor dieser Instanz; `None`, wenn er nicht verfügbar ist."""
+        soc_eid = self.entry.data.get(CONF_SOC_SENSOR, "")
+        if not self._entity_ok(soc_eid):
+            return None
+        return self._flt(soc_eid, 0)
+
+    def hard_limit(self) -> float:
+        """Hard-Limit der aktuellen Zone (Zone 0 bei Überschuss, sonst Zone 1/2), gedeckelt auf die Gerätegrenze."""
+        return float(power_limits(
+            hard_limit_z0=self._setting(S_HARD_LIMIT_Z0, int), hard_limit_z1=self._setting(S_HARD_LIMIT_Z1, int),
+            ac_power_limit=self._setting(S_AC_POWER_LIMIT, int), pv_reserve=self._setting(S_PV_RESERVE, int),
+            allocated=None,
+        ).zone_max(self.surplus_active))
+
+    def zone3_limit(self) -> float:
+        return self._setting(S_ZONE3_LIMIT, float)
+
+    def ac_soc_target(self) -> float:
+        return self._setting(S_AC_SOC_TARGET, float)
+
+    def capacity_kwh(self, entity_id: str) -> float | None:
+        return self._flt_kwh_normalized(entity_id, None)
+
+    def actual_power(self) -> float:
+        """Ist-Leistung in W."""
+        return self._flt_power(self.entry.data.get(CONF_ACTUAL_SENSOR, ""))
+
+    def output_setpoint(self) -> float:
+        """Gesetzte Ausgangsleistung."""
+        return self._flt(self.entry.data.get(CONF_ACTIVE_POWER, ""))
+
+    # ── Ableiten: Regelzustand ───────────────────────────────────────────────
+
+    @property
+    def _control_state(self) -> str:
+        """Regelzustand aus den Flags, erster zutreffender gewinnt:
+        surplus → tariff_charge → ac_charge → cycle → pv."""
+        if self.surplus_active:
+            return "surplus"
+        if self.tariff_charge_active:
+            return "tariff_charge"
+        if self.ac_charge_active:
+            return "ac_charge"
+        if self.cycle_active:
+            return "cycle"
+        return "pv"
+
+    @property
+    def _rest_mode(self) -> str:
+        """Modus des Ruhezustands: '1' mit aktivem `S_REST_IN_DISCHARGE`, sonst '0'."""
+        return MODE_DISCHARGE if self._setting(S_REST_IN_DISCHARGE, bool) else MODE_DISABLED
+
+    def _at_rest(self, mode: str) -> bool:
+        """True, wenn `mode` der Ruhemodus ist und die Instanz darin ruht.
+
+        Modus '0' wird nur vom Ruhezustand geschrieben und gilt stets als Ruhe;
+        in Modus '1' entscheidet das Flag `resting`.
+        """
+        return mode == self._rest_mode and (mode == MODE_DISABLED or self.resting)
+
+    def _required_discharge(self, discharge_max: int, mode: str) -> float:
+        """Entladestrom für den aktuellen Regelzustand laut DISCHARGE_BY_STATE.
+
+        Ohne Zyklus und Lade-Session gilt 0 A nur in Modus '1' (Zone 2, Ruhe in Modus 1);
+        in jedem anderen Modus `discharge_max`.
+        """
+        state = self._control_state
+        if state == "pv" and mode != MODE_DISCHARGE:
+            return float(discharge_max)
+        return DISCHARGE_BY_STATE.get(state, float(discharge_max))
+
+    def _persisted_flags(self) -> dict[str, bool]:
+        """Gespeicherte Zustandsflags unter ihrem Speicherschlüssel."""
+        return {key: getattr(self, attr) for key, attr, _ in PERSISTED_FLAGS}
+
+    def _store_data(self) -> dict:
+        return {**self.settings, **self._persisted_flags()}
+
+    # ── Ableiten: StdDev und dynamischer Offset ──────────────────────────────
+
+    def _update_stddev(self, grid_value: float) -> None:
+        """Neuen Grid-Messwert in Ringpuffer aufnehmen und StdDev berechnen."""
+        now = time.monotonic()
+        window = self._setting(S_STDDEV_WINDOW, int)
+        cutoff = now - window
+
+        self._grid_samples.append((now, grid_value))
+
+        while self._grid_samples and self._grid_samples[0][0] < cutoff:
+            self._grid_samples.popleft()
+
+        n = len(self._grid_samples)
+        if n < 2:
+            self.grid_stddev = 0.0
+            self.grid_stddev_raw = 0.0
+            return
+
+        values = [s[1] for s in self._grid_samples]
+        self.grid_stddev_raw = _stddev_of(values)
+
+        # Getrimmte StdDev: die `trim` größten und kleinsten Samples im Fenster
+        # ausschließen, bevor die Streuung berechnet wird.
+        trim = self._setting(S_STDDEV_TRIM_COUNT, int)
+        if trim > 0 and n - 2 * trim >= 2:  # Fallback: mind. 2 Kernwerte nötig, sonst ungetrimmt
+            core = sorted(values)[trim: n - trim]
+            self.grid_stddev = _stddev_of(core)
+        else:
+            self.grid_stddev = self.grid_stddev_raw
+
+    def _update_dynamic_offsets(self) -> None:
+        """Dynamische Offsets für alle drei Zonen berechnen."""
+        for attr, keys in DYN_OFFSETS:
+            args = (self._setting(key, cast) for key, cast in zip(keys, (int, int, float, float, bool)))
+            setattr(self, attr, dynamic_offset(self.grid_stddev, *args))
+
+    # ── Ableiten: Verteilung ─────────────────────────────────────────────────
+
+    def _apply_shares(self, shares: Shares | None) -> Msg | None:
+        """Angewandten Verteilungsmodus übernehmen; liefert die Degradierungswarnung dieser Rechnung."""
+        if shares is None:
+            return None
+        if shares.mode is not None:
+            self.dist_mode_effective = shares.mode
+        return (shares.warning, {}) if shares.warning else None
+
+    # ── Darstellen: Texte ────────────────────────────────────────────────────
+
+    def _tr(self, key: str, **params: object) -> str:
+        """Textbaustein in der Sprache der Home-Assistant-Instanz."""
+        return translate(self.hass.config.language, key, **params)
+
+    def _set_last_action(self, key: str, **params: object) -> None:
+        """Setzt Schlüssel, Parameter und Zeitstempel der letzten Aktion."""
+        self.last_action_key = key
+        self.last_action_params = params
+        self.last_action_ts = time.time()
+
+    @property
+    def last_action(self) -> str:
+        """Letzte Aktion in der Instanzsprache."""
+        return self.status_texts(self.hass.config.language)["last_action"]
+
+    @property
+    def last_error(self) -> str:
+        """Fehlerkette in der Instanzsprache."""
+        return self.status_texts(self.hass.config.language)["last_error"]
+
+    def status_texts(self, language: str) -> dict[str, str]:
+        """Letzte Aktion und Fehlerkette in `language`."""
+        return {
+            "last_action": (translate(language, self.last_action_key, **self.last_action_params)
+                            if self.last_action_key else ""),
+            "last_error": translate_msgs(language, self.last_error_msgs),
+        }
+
+    # ── Darstellen: Anzeigezustand ───────────────────────────────────────────
+
+    def _update_zone_display(
+        self, soc: float, zone1: int, zone3: int, mode: str
+    ) -> None:
+        """Zone-Label und Modus-Label für Panel-Anzeige aktualisieren."""
+        if soc <= zone3:
+            self.current_zone = 3
+        elif self.surplus_active:
+            self.current_zone = 0
+        elif self.cycle_active:
+            self.current_zone = 1
+        else:
+            self.current_zone = 2
+        self.zone_label = self._tr(f"zone_{self.current_zone}")
+
+        mode_map = {
+            MODE_DISABLED: "disabled",
+            MODE_DISCHARGE: "discharge",
+            MODE_AC_CHARGE: "ac_charge",
+        }
+        new_mode_key = mode_map.get(mode, "unknown")
+        if mode == MODE_DISCHARGE and self._at_rest(mode):
+            new_mode_key = "rest_discharge"
+        if new_mode_key != self.mode_key:
+            self.mode_label_ts = time.time()
+        self.mode_key = new_mode_key
+        # Beim unbekannten Modus den Rohwert an den Zustandstext anhängen.
+        self.mode_label = self._tr(f"mode_{new_mode_key}")
+        if new_mode_key == "unknown":
+            self.mode_label = f"{self.mode_label}: {mode}"
+        self._update_operating_state()
+
+    def _update_operating_state(self) -> bool:
+        """Betriebszustand aus den Zustandsflags ableiten; True bei Wechsel.
+
+        Erster zutreffender Zustand gewinnt, Reihenfolge wie in OPERATING_STATES.
+        Anders als `active_fall`, das den zuletzt ausgefuehrten Uebergang haelt,
+        beschreibt der Zustand, was gerade gilt.
+        """
+        control = self._control_state
+        if not self._regulation_on:
+            state = "disabled"
+        elif self._cycle_blocked:
+            state = "blocked"
+        elif control in ("surplus", "tariff_charge", "ac_charge"):
+            state = OPERATING_BY_STATE[control]
+        elif self.discharge_locked:
+            state = "discharge_locked"
+        elif self.is_night:
+            state = "night_off"
+        elif control == "pv" and self.current_zone == 3:
+            state = "safety_stop"
+        else:
+            state = OPERATING_BY_STATE[control]
+
+        if state == self.operating_state:
+            return False
+        self.operating_state = state
+        self.operating_state_ts = time.time()
+        return True
 
     def snapshot(self) -> dict[str, Any]:
         """Anzeigezustand unter internen Namen, ohne Live-Sensorwerte.
@@ -513,10 +736,7 @@ class SolakonCoordinator:
         pairs = (n if isinstance(n, tuple) else (n, n) for n in names)
         return {outer: snap[inner] for outer, inner in pairs}
 
-    def _store_data(self) -> dict:
-        return {**self.settings, **self._persisted_flags()}
-
-    # ── Entity-Listener-Pattern ──────────────────────────────────────────────
+    # ── Darstellen: Entity-Listener ──────────────────────────────────────────
 
     def register_entity_listener(self, cb: Callable[[], None]) -> None:
         self._listeners.append(cb)
@@ -532,238 +752,7 @@ class SolakonCoordinator:
             except Exception:
                 _LOGGER.exception("Solakon: Fehler in Entity-Listener")
 
-    @property
-    def integral(self) -> float:
-        return self.pi.integral
-
-    @integral.setter
-    def integral(self, value: float) -> None:
-        self.pi.integral = value
-
-    def reset_integral(self) -> None:
-        self.pi.reset()
-        self._set_last_action("act_integral_reset")
-        self.notify_listeners()
-
-    # ── Last-Action Setter ───────────────────────────────────────────────────
-
-    def _tr(self, key: str, **params: object) -> str:
-        """Textbaustein in der Sprache der Home-Assistant-Instanz."""
-        return translate(self.hass.config.language, key, **params)
-
-    def _set_last_action(self, key: str, **params: object) -> None:
-        """Setzt Schlüssel, Parameter und Zeitstempel der letzten Aktion."""
-        self.last_action_key = key
-        self.last_action_params = params
-        self.last_action_ts = time.time()
-
-    @property
-    def last_action(self) -> str:
-        """Letzte Aktion in der Instanzsprache."""
-        return self.status_texts(self.hass.config.language)["last_action"]
-
-    @property
-    def last_error(self) -> str:
-        """Fehlerkette in der Instanzsprache."""
-        return self.status_texts(self.hass.config.language)["last_error"]
-
-    def status_texts(self, language: str) -> dict[str, str]:
-        """Letzte Aktion und Fehlerkette in `language`."""
-        return {
-            "last_action": (translate(language, self.last_action_key, **self.last_action_params)
-                            if self.last_action_key else ""),
-            "last_error": translate_msgs(language, self.last_error_msgs),
-        }
-
-    # ── Self-Adjusting Wait ──────────────────────────────────────────────────
-
-    def _actual_vs(self, target: float, ac_charge_mode: bool = False) -> tuple[float, float]:
-        """(Ist-Leistung in W, Betrag ihrer Abweichung vom Sollwert).
-
-        Im AC-Lademodus meldet der Ist-Sensor negativ; verglichen wird dann gegen `-target`.
-        """
-        actual = self.actual_power()
-        return actual, abs(actual - (-target if ac_charge_mode else target))
-
-    def _actual_updated_ts(self) -> float | None:
-        """`last_updated` des Ist-Sensors als Unix-Zeit, None ohne State."""
-        state = self.hass.states.get(self.entry.data.get(CONF_ACTUAL_SENSOR, ""))
-        return state.last_updated.timestamp() if state is not None else None
-
-    def _actual_polled_since_write(self) -> bool:
-        """True, wenn der Ist-Sensor seit dem letzten Schreibbefehl neu gepollt hat."""
-        updated = self._actual_updated_ts()
-        return updated is not None and updated >= self.last_output_ts
-
-    async def _wait_for_target(self, target: float, ac_charge_mode: bool = False) -> None:
-        """Wartet bis actual_power den Zielwert erreicht, oder max wait_time."""
-        wait_max = self._setting(S_WAIT_TIME, float)
-
-        if not self.settings[S_SELF_ADJUST]:
-            await asyncio.sleep(wait_max)
-            return
-
-        tolerance = self._setting(S_SELF_ADJUST_TOL, float)
-        compare_target = -target if ac_charge_mode else target
-
-        await asyncio.sleep(1.0)
-
-        start = time.monotonic()
-        remaining = wait_max - 1.0
-
-        while remaining > 0:
-            actual, deviation = self._actual_vs(target, ac_charge_mode)
-            if deviation <= tolerance:
-                _LOGGER.debug(
-                    "Solakon: Zielwert erreicht (actual=%.0f, target=%.0f) nach %.1fs",
-                    actual, compare_target, time.monotonic() - start,
-                )
-                return
-            await asyncio.sleep(min(1.0, remaining))
-            remaining = wait_max - (time.monotonic() - start)
-
-        _LOGGER.debug(
-            "Solakon: Max-Wartezeit (%.0fs), actual=%.0f, target=%.0f",
-            wait_max, self._actual_vs(target)[0], compare_target,
-        )
-
-    # ── StdDev-Berechnung (Ringpuffer) ───────────────────────────────────────
-
-    @property
-    def _grid_samples(self) -> deque[tuple[float, float]]:
-        """StdDev-Ringpuffer (timestamp, value) der Netzgruppe, gefüllt vom Gruppen-Leader."""
-        return self.group.samples
-
-    def _update_stddev(self, grid_value: float) -> None:
-        """Neuen Grid-Messwert in Ringpuffer aufnehmen und StdDev berechnen."""
-        now = time.monotonic()
-        window = self._setting(S_STDDEV_WINDOW, int)
-        cutoff = now - window
-
-        self._grid_samples.append((now, grid_value))
-
-        while self._grid_samples and self._grid_samples[0][0] < cutoff:
-            self._grid_samples.popleft()
-
-        n = len(self._grid_samples)
-        if n < 2:
-            self.grid_stddev = 0.0
-            self.grid_stddev_raw = 0.0
-            return
-
-        values = [s[1] for s in self._grid_samples]
-        self.grid_stddev_raw = _stddev_of(values)
-
-        # Getrimmte StdDev: die `trim` größten und kleinsten Samples im Fenster
-        # ausschließen, bevor die Streuung berechnet wird.
-        trim = self._setting(S_STDDEV_TRIM_COUNT, int)
-        if trim > 0 and n - 2 * trim >= 2:  # Fallback: mind. 2 Kernwerte nötig, sonst ungetrimmt
-            core = sorted(values)[trim: n - trim]
-            self.grid_stddev = _stddev_of(core)
-        else:
-            self.grid_stddev = self.grid_stddev_raw
-
-    # ── Dynamic Offset-Berechnung ────────────────────────────────────────────
-
-    def _update_dynamic_offsets(self) -> None:
-        """Dynamische Offsets für alle drei Zonen berechnen."""
-        for attr, keys in DYN_OFFSETS:
-            args = (self._setting(key, cast) for key, cast in zip(keys, (int, int, float, float, bool)))
-            setattr(self, attr, dynamic_offset(self.grid_stddev, *args))
-
-    # ── Settings ─────────────────────────────────────────────────────────────
-
-    def _setting(self, key: str, cast: Callable[[Any], Any]) -> Any:
-        """Setting typisiert lesen; `self.settings` ist stets mit SETTINGS_DEFAULTS gefüllt."""
-        return cast(self.settings[key])
-
-    def _cycle_settings(self) -> CycleSettings:
-        """Schnappschuss aller CYCLE_SETTINGS für einen Regelzyklus."""
-        return CycleSettings(*(self._setting(key, cast) for _, key, cast in CYCLE_SETTINGS))
-
-    # ── State-Helpers ────────────────────────────────────────────────────────
-
-    def _read_scaled(self, entity_id: str, default: float, scale: dict[str, float]) -> float:
-        """Zahl lesen und mit dem Faktor ihrer Einheit aus `scale` multiplizieren.
-
-        Einheiten ohne Eintrag bleiben unverändert; ohne Zahl `default`.
-        """
-        value = read_scaled(self.hass, entity_id, scale).value
-        return default if value is None else value
-
-    def _flt(self, entity_id: str, default: float = 0.0) -> float:
-        """Zahl ohne Einheitenumrechnung lesen."""
-        return self._read_scaled(entity_id, default, {})
-
-    def _flt_power(self, entity_id: str, default: float = 0.0) -> float:
-        """Leistung in W lesen (kW ×1000)."""
-        return self._read_scaled(entity_id, default, UNIT_SCALE_W)
-
-    def _flt_kwh_normalized(self, entity_id: str, default: float | None = 0.0) -> float | None:
-        """Energie in kWh lesen (Wh ÷1000, MWh ×1000).
-
-        Ohne erkannte Energie-Einheit (z. B. input_number ohne Einheit) bleibt der
-        Rohwert unverändert, wie es der kWh-Vertrag der Schwellenfelder vorsieht.
-        """
-        return self._read_scaled(entity_id, default, UNIT_SCALE_KWH)
-
-    def _str(self, entity_id: str) -> str:
-        """State als String lesen, 'unknown' bei Fehler."""
-        state = valid_state(self.hass, entity_id)
-        return state.state if state else "unknown"
-
-    def _entity_ok(self, entity_id: str) -> bool:
-        """Prüft ob Entity verfügbar und nicht unknown/unavailable ist."""
-        return valid_state(self.hass, entity_id) is not None
-
-    # ── Globale Sensor-Vorgaben ───────────────────────────────────────────────
-    # Entity-Picker sind instanzübergreifend im Verteilungs-Tab pflegbar, jede
-    # Instanz kann optional lokal überschreiben. Lokal gewinnt, sonst globaler Wert.
-
-    def _global_sensor(self, key: str) -> str:
-        return str(self.group.dist_cfg().get(key, ""))
-
-    def _effective(self, name: str) -> str:
-        """Wirksamer Sensor aus SENSOR_SOURCES: lokaler Override, sonst globale Vorgabe.
-
-        `zone1_force` liest ab 12 Uhr die Vorhersage für morgen, davor die für heute
-        (`pv_forecast`) — derselbe Zieltag, nur der Sensor wechselt.
-        """
-        if name == "zone1_force" and dt_util.now().hour < 12:
-            name = "pv_forecast"
-        local, global_key = SENSOR_SOURCES[name]
-        return str(self.settings[local]) or self._global_sensor(global_key)
-
-    def _feature_value(
-        self, enabled: bool, sensor: str, err_prefix: str, scale: dict[str, float],
-    ) -> float | None:
-        """Wert des Feature-Sensors in der Zieleinheit; None, wenn das Feature aus ist oder keine Zahl kommt.
-
-        Ohne Zahl geht der Fehlerschlüssel des Grundes aus FEATURE_ERRORS in die Fehlerkette.
-        """
-        if not enabled:
-            return None
-        reading = read_scaled(self.hass, sensor, scale)
-        if reading.reason:
-            params = {} if reading.reason == NO_SENSOR else {"sensor": sensor}
-            self._messages.warn((FEATURE_ERRORS[reading.reason].format(p=err_prefix), params))
-        return reading.value
-
-    def _feature_values(self, cs: CycleSettings) -> dict[str, float | None]:
-        """Alle Werte aus FEATURE_READINGS nach Name, in Tabellenreihenfolge gelesen."""
-        values = {}
-        for name, source, enabled, err_prefix, scale, optional in FEATURE_READINGS:
-            sensor = self._effective(source)
-            on = getattr(cs, enabled) and (bool(sensor) or not optional)
-            values[name] = self._feature_value(on, sensor, err_prefix, scale)
-        return values
-
-    # ── Modbus-Schreibbefehle (nur wenn regulation_enabled) ──────────────────
-
-    @property
-    def _regulation_on(self) -> bool:
-        """Regelung aktiviert; Voraussetzung für jeden Schreibzugriff."""
-        return self._setting(S_REGULATION_ENABLED, bool)
+    # ── Schreiben: Gerät ─────────────────────────────────────────────────────
 
     async def _set_number(
         self, entity_id: str, value: float, only_if_changed: bool = False,
@@ -803,6 +792,62 @@ class SolakonCoordinator:
             _clamp(round(value), 0, DEVICE_MAX_POWER),
         )
         self.last_output_ts = time.time()
+
+    async def _set_discharge(self, amps: float) -> None:
+        """Entladestrom setzen — nur wenn aktueller Wert abweicht."""
+        await self._set_number(self.entry.data[CONF_DISCHARGE_CURRENT], amps, only_if_changed=True)
+
+    async def _sync_export_limit(self, target: int) -> None:
+        """grid_export_power_limit korrigieren wenn von Soll abgewichen — nur wenn Entity konfiguriert."""
+        export_entity = self.entry.data.get(CONF_EXPORT_LIMIT, "")
+        if not export_entity:
+            return
+        current = self._flt(export_entity, -1)
+        if await self._set_number(export_entity, target, only_if_changed=True, current=current):
+            _LOGGER.info("Solakon: Export-Limit korrigiert %d → %d W", int(current), target)
+
+    async def _timer_toggle(self) -> None:
+        """Timer-Wechsel 3598↔3599 — erzwingt sichere Modus-Übernahme."""
+        timer_eid = self.entry.data[CONF_TIMEOUT_SET]
+        current = self._flt(timer_eid, 3599)
+        new_val = 3598.0 if current >= 3599 else 3599.0
+        await self._set_number(timer_eid, new_val)
+        self._timer_toggled_in_cycle = True
+        await asyncio.sleep(1)
+
+    # ── Schreiben: Ausgangsleistung ──────────────────────────────────────────
+
+    async def _wait_for_target(self, target: float, ac_charge_mode: bool = False) -> None:
+        """Wartet bis actual_power den Zielwert erreicht, oder max wait_time."""
+        wait_max = self._setting(S_WAIT_TIME, float)
+
+        if not self.settings[S_SELF_ADJUST]:
+            await asyncio.sleep(wait_max)
+            return
+
+        tolerance = self._setting(S_SELF_ADJUST_TOL, float)
+        compare_target = -target if ac_charge_mode else target
+
+        await asyncio.sleep(1.0)
+
+        start = time.monotonic()
+        remaining = wait_max - 1.0
+
+        while remaining > 0:
+            actual, deviation = self._actual_vs(target, ac_charge_mode)
+            if deviation <= tolerance:
+                _LOGGER.debug(
+                    "Solakon: Zielwert erreicht (actual=%.0f, target=%.0f) nach %.1fs",
+                    actual, compare_target, time.monotonic() - start,
+                )
+                return
+            await asyncio.sleep(min(1.0, remaining))
+            remaining = wait_max - (time.monotonic() - start)
+
+        _LOGGER.debug(
+            "Solakon: Max-Wartezeit (%.0fs), actual=%.0f, target=%.0f",
+            wait_max, self._actual_vs(target)[0], compare_target,
+        )
 
     async def _set_output_and_wait(self, value: float, ac_charge_mode: bool = False) -> None:
         """Ausgangsleistung setzen und auf reale Konvergenz warten (_wait_for_target).
@@ -911,56 +956,28 @@ class SolakonCoordinator:
         await self._transition(reset_integral=True, output=0, rest=True)
         self._set_last_action("act_output_recovery", actual=actual, limit=limit)
 
-    async def _set_discharge(self, amps: float) -> None:
-        """Entladestrom setzen — nur wenn aktueller Wert abweicht."""
-        await self._set_number(self.entry.data[CONF_DISCHARGE_CURRENT], amps, only_if_changed=True)
+    async def _set_fixed_output(
+        self, target: float, current: float, action_key: str, ac_charge_mode: bool = False,
+    ) -> None:
+        """Fester Sollwert: schreibt nur bei Abweichung über 0,5 vom kommandierten Ist-Wert."""
+        if abs(current - target) > 0.5:
+            self._set_last_action(action_key, power=target)
+            await self._set_output_and_wait(target, ac_charge_mode=ac_charge_mode)
 
-    @property
-    def _control_state(self) -> str:
-        """Regelzustand aus den Flags, erster zutreffender gewinnt:
-        surplus → tariff_charge → ac_charge → cycle → pv."""
-        if self.surplus_active:
-            return "surplus"
-        if self.tariff_charge_active:
-            return "tariff_charge"
-        if self.ac_charge_active:
-            return "ac_charge"
-        if self.cycle_active:
-            return "cycle"
-        return "pv"
+    async def _pi_step(
+        self, grid: float, power_base: float, offset: float, limit: float, p_factor: float,
+        i_factor: float, share: float, current_power: float, action_key: str,
+        ac_charge_mode: bool = False,
+    ) -> None:
+        """Ein PI-Schritt: Sollwert aus Poolanteil berechnen, Aktion setzen, schreiben."""
+        new_pw = self.pi.calculate(
+            grid, power_base, offset, limit, p_factor, i_factor,
+            ac_charge_mode=ac_charge_mode, error_share=share,
+        )
+        self._set_last_action(action_key, frm=current_power, to=new_pw)
+        await self._set_output_and_wait(new_pw, ac_charge_mode=ac_charge_mode)
 
-    @property
-    def _rest_mode(self) -> str:
-        """Modus des Ruhezustands: '1' mit aktivem `S_REST_IN_DISCHARGE`, sonst '0'."""
-        return MODE_DISCHARGE if self._setting(S_REST_IN_DISCHARGE, bool) else MODE_DISABLED
-
-    def _at_rest(self, mode: str) -> bool:
-        """True, wenn `mode` der Ruhemodus ist und die Instanz darin ruht.
-
-        Modus '0' wird nur vom Ruhezustand geschrieben und gilt stets als Ruhe;
-        in Modus '1' entscheidet das Flag `resting`.
-        """
-        return mode == self._rest_mode and (mode == MODE_DISABLED or self.resting)
-
-    def _required_discharge(self, discharge_max: int, mode: str) -> float:
-        """Entladestrom für den aktuellen Regelzustand laut DISCHARGE_BY_STATE.
-
-        Ohne Zyklus und Lade-Session gilt 0 A nur in Modus '1' (Zone 2, Ruhe in Modus 1);
-        in jedem anderen Modus `discharge_max`.
-        """
-        state = self._control_state
-        if state == "pv" and mode != MODE_DISCHARGE:
-            return float(discharge_max)
-        return DISCHARGE_BY_STATE.get(state, float(discharge_max))
-
-    async def _sync_export_limit(self, target: int) -> None:
-        """grid_export_power_limit korrigieren wenn von Soll abgewichen — nur wenn Entity konfiguriert."""
-        export_entity = self.entry.data.get(CONF_EXPORT_LIMIT, "")
-        if not export_entity:
-            return
-        current = self._flt(export_entity, -1)
-        if await self._set_number(export_entity, target, only_if_changed=True, current=current):
-            _LOGGER.info("Solakon: Export-Limit korrigiert %d → %d W", int(current), target)
+    # ── Schreiben: Zustandsübergang und Integral ─────────────────────────────
 
     async def _transition(
         self, *, reset_integral: bool = False, flags: dict[str, bool] | None = None,
@@ -994,37 +1011,153 @@ class SolakonCoordinator:
             self.resting = rest
             await self._set_mode(mode)
 
-    async def _set_fixed_output(
-        self, target: float, current: float, action_key: str, ac_charge_mode: bool = False,
-    ) -> None:
-        """Fester Sollwert: schreibt nur bei Abweichung über 0,5 vom kommandierten Ist-Wert."""
-        if abs(current - target) > 0.5:
-            self._set_last_action(action_key, power=target)
-            await self._set_output_and_wait(target, ac_charge_mode=ac_charge_mode)
+    @property
+    def integral(self) -> float:
+        return self.pi.integral
 
-    async def _pi_step(
-        self, grid: float, power_base: float, offset: float, limit: float, p_factor: float,
-        i_factor: float, share: float, current_power: float, action_key: str,
-        ac_charge_mode: bool = False,
-    ) -> None:
-        """Ein PI-Schritt: Sollwert aus Poolanteil berechnen, Aktion setzen, schreiben."""
-        new_pw = self.pi.calculate(
-            grid, power_base, offset, limit, p_factor, i_factor,
-            ac_charge_mode=ac_charge_mode, error_share=share,
+    @integral.setter
+    def integral(self, value: float) -> None:
+        self.pi.integral = value
+
+    def reset_integral(self) -> None:
+        self.pi.reset()
+        self._set_last_action("act_integral_reset")
+        self.notify_listeners()
+
+    # ── Lebenszyklus: Setup und Settings ─────────────────────────────────────
+
+    async def async_setup(self) -> None:
+        """Einstellungen laden, State-Listener starten."""
+        stored = await self._store.async_load()
+        if stored:
+            stored, reset = sanitize(stored, SETTINGS_SCHEMA)
+            self.settings = {**SETTINGS_DEFAULTS, **stored}
+            for key, attr, default in PERSISTED_FLAGS:
+                setattr(self, attr, bool(stored.get(key, default)))
+            if reset:
+                notify_reset(self.hass, f"{DOMAIN}_settings_reset_{self.entry.entry_id}", self.entry.title, reset)
+                await self._store.async_save(self._store_data())
+            _LOGGER.debug("Solakon: Einstellungen aus Speicher geladen")
+        else:
+            self.settings = SETTINGS_DEFAULTS.copy()
+            _LOGGER.info("Solakon: Standardwerte geladen")
+
+        cfg = self.entry.data
+        entities_to_track = [cfg.get(key, "") for key, triggers, _ in CORE_SENSORS if triggers]
+        entities_to_track = [e for e in entities_to_track if e]
+
+        if entities_to_track:
+            unsub = async_track_state_change_event(
+                self.hass, entities_to_track, self._on_state_change
+            )
+            self._unsub_trackers.append(unsub)
+
+        for name, _ in TRACKERS:
+            self._retrack(name)
+
+    async def async_shutdown(self) -> None:
+        """Listener abräumen."""
+        for unsub in self._unsub_trackers:
+            unsub()
+        self._unsub_trackers.clear()
+        for name, _ in TRACKERS:
+            self._untrack(name)
+
+    async def async_update_settings(self, changes: dict[str, Any]) -> None:
+        """Änderungen prüfen, übernehmen und speichern; InvalidSettings, wenn eine das Schema verletzt."""
+        if findings := check(changes, SETTINGS_SCHEMA):
+            raise InvalidSettings(findings)
+        turning_off = (
+            self._regulation_on
+            and S_REGULATION_ENABLED in changes
+            and not changes[S_REGULATION_ENABLED]
         )
-        self._set_last_action(action_key, frm=current_power, to=new_pw)
-        await self._set_output_and_wait(new_pw, ac_charge_mode=ac_charge_mode)
+        if turning_off:
+            # Aufräum-Sequenz solange regulation_enabled noch True ist,
+            # danach blockt der Guard alle Modbus-Schreibbefehle
+            async with self._lock:
+                _LOGGER.info("Solakon: Regelung wird deaktiviert — setze Output 0, Modus Disabled")
+                await self._transition(output=0, wait=False, timer=False)
+                await self._set_discharge(self._setting(S_DISCHARGE_MAX, float))
+                await self._transition(mode=MODE_DISABLED)
+                off_key = "disabled_regulation_off"
+                if self.mode_key != off_key:
+                    self.mode_label_ts = time.time()
+                self.mode_key = off_key
+                self.mode_label = self._tr(f"mode_{off_key}")
 
-    async def _timer_toggle(self) -> None:
-        """Timer-Wechsel 3598↔3599 — erzwingt sichere Modus-Übernahme."""
-        timer_eid = self.entry.data[CONF_TIMEOUT_SET]
-        current = self._flt(timer_eid, 3599)
-        new_val = 3598.0 if current >= 3599 else 3599.0
-        await self._set_number(timer_eid, new_val)
-        self._timer_toggled_in_cycle = True
-        await asyncio.sleep(1)
+        before = {name: self._tracker_input(name) for name, _ in TRACKERS}
 
-    # ── Haupt-Trigger ────────────────────────────────────────────────────────
+        if S_REST_IN_DISCHARGE in changes:
+            self.resting = False
+        self.settings.update(changes)
+        await self._store.async_save(self._store_data())
+        _LOGGER.info("Solakon: Einstellungen gespeichert")
+
+        for name, _ in TRACKERS:
+            if self._tracker_input(name) != before[name]:
+                self._retrack(name)
+
+        self.notify_listeners()
+
+        # Neuen Zustand sofort anwenden
+        if self._regulation_on:
+            self.request_regulation()
+
+    def schedule_save(self) -> None:
+        """Settings und Zustandsflags nach 5 s speichern."""
+        self._store.async_delay_save(self._store_data, 5)
+
+    # ── Lebenszyklus: Trigger ────────────────────────────────────────────────
+
+    def _tracker_input(self, name: str) -> tuple:
+        """Eingaben eines Triggers: Aktivierungswerte und Sensor bzw. Intervall."""
+        keys = dict(TRACKERS)[name]
+        target = self.settings[S_PERIODIC_INTERVAL] if name == "periodic" else self._effective(name)
+        return tuple(self.settings[k] for k in keys), target
+
+    def _untrack(self, name: str) -> None:
+        """Trigger `name` abmelden, falls registriert."""
+        unsub = self._tracker_unsubs.pop(name, None)
+        if unsub:
+            unsub()
+
+    def _retrack(self, name: str) -> None:
+        """Trigger `name` abmelden und neu registrieren, wenn aktiviert und Sensor gesetzt.
+
+        Der periodische Trigger läuft im Intervall S_PERIODIC_INTERVAL, mindestens 5 s.
+        """
+        self._untrack(name)
+        if not any(self.settings[k] for k in dict(TRACKERS)[name]):
+            return
+        if name == "periodic":
+            interval = max(5, self._setting(S_PERIODIC_INTERVAL, int))
+            self._tracker_unsubs[name] = async_track_time_interval(
+                self.hass, self._on_periodic, timedelta(seconds=interval)
+            )
+            return
+        sensor = self._effective(name)
+        if sensor:
+            self._tracker_unsubs[name] = async_track_state_change_event(
+                self.hass, [sensor], self._on_state_change
+            )
+
+    def update_sensor_trackers(self) -> None:
+        """Sensorgebundene Trigger neu registrieren, etwa nach geänderten globalen Vorgaben."""
+        for name, _ in TRACKERS:
+            if name != "periodic":
+                self._retrack(name)
+
+    def apply_group_change(self) -> None:
+        """Nach geänderter Verteilung der Netzgruppe: Trigger neu anmelden, Regelzyklus anstoßen."""
+        self.update_sensor_trackers()
+        self.request_regulation()
+
+    def request_regulation(self) -> None:
+        """Regelzyklus als Task anstoßen."""
+        self.hass.async_create_task(self._async_regulate())
+
+    # ── Ausführung: Regelzyklus ──────────────────────────────────────────────
 
     @callback
     def _on_state_change(self, event: Event) -> None:
@@ -1044,8 +1177,6 @@ class SolakonCoordinator:
                 await self._run_regulation_cycle()
             except Exception:
                 _LOGGER.exception("Solakon: Fehler in Regelschleife")
-
-    # ── Regelzyklus ──────────────────────────────────────────────────────────
 
     async def _run_regulation_cycle(self) -> None:
         cfg = self.entry.data
@@ -1207,6 +1338,23 @@ class SolakonCoordinator:
         self._end_cycle(display=(soc, cs.zone1_limit, cs.zone3_limit, mode),
                         prev_flags=prev_flags)
 
+    async def _execute_falls(self, **v) -> str | None:
+        """Fall per `zones.decide` bestimmen, Übergang und Aktionstext ausführen, Kennung zurückgeben."""
+        d = decide(ZoneInputs(
+            **v,
+            self_adjust_tol=self._setting(S_SELF_ADJUST_TOL, float),
+            surplus_active=self.surplus_active,
+            ac_charge_active=self.ac_charge_active,
+            tariff_charge_active=self.tariff_charge_active,
+            cycle_active=self.cycle_active,
+            at_rest=self._at_rest(v["mode"]),
+        ))
+        if d is None:
+            return None
+        await self._transition(**d.transition)
+        self._set_last_action(d.action, **d.params)
+        return d.name
+
     async def _run_pi_phase(
         self, cs: CycleSettings, soc: float, mode: str, timer_val: float, error_share: float,
         limits: PowerLimits, ac_offset: float,
@@ -1296,150 +1444,3 @@ class SolakonCoordinator:
             self.schedule_save()
         if changed or not notify_on_change:
             self.notify_listeners()
-
-    # ── Falls (Zonenwechsel-Logik) ───────────────────────────────────────────
-
-    async def _execute_falls(self, **v) -> str | None:
-        """Fall per `zones.decide` bestimmen, Übergang und Aktionstext ausführen, Kennung zurückgeben."""
-        d = decide(ZoneInputs(
-            **v,
-            self_adjust_tol=self._setting(S_SELF_ADJUST_TOL, float),
-            surplus_active=self.surplus_active,
-            ac_charge_active=self.ac_charge_active,
-            tariff_charge_active=self.tariff_charge_active,
-            cycle_active=self.cycle_active,
-            at_rest=self._at_rest(v["mode"]),
-        ))
-        if d is None:
-            return None
-        await self._transition(**d.transition)
-        self._set_last_action(d.action, **d.params)
-        return d.name
-
-    # ── Netzgruppe: Lesefläche für group.Member ──────────────────────────────
-
-    @property
-    def group(self) -> NetGroup:
-        """Netzgruppe dieser Instanz aus dem Register."""
-        return group_for(self.hass, self.grid_sensor)
-
-    @property
-    def member_id(self) -> str:
-        return self.entry.entry_id
-
-    @property
-    def grid_sensor(self) -> str:
-        return self.entry.data.get(CONF_GRID_SENSOR, "")
-
-    @property
-    def regulating(self) -> bool:
-        return self._regulation_on
-
-    def in_discharge_pool(self) -> bool:
-        """Regelung an, Modus '1' und nicht darin ruhend."""
-        if not self._regulation_on:
-            return False
-        mode = self._str(self.entry.data.get(CONF_MODE_SELECT, ""))
-        return mode == MODE_DISCHARGE and not self._at_rest(MODE_DISCHARGE)
-
-    def soc_reading(self) -> float | None:
-        """SOC-Sensor dieser Instanz; `None`, wenn er nicht verfügbar ist."""
-        soc_eid = self.entry.data.get(CONF_SOC_SENSOR, "")
-        if not self._entity_ok(soc_eid):
-            return None
-        return self._flt(soc_eid, 0)
-
-    def hard_limit(self) -> float:
-        """Hard-Limit der aktuellen Zone (Zone 0 bei Überschuss, sonst Zone 1/2), gedeckelt auf die Gerätegrenze."""
-        return float(power_limits(
-            hard_limit_z0=self._setting(S_HARD_LIMIT_Z0, int), hard_limit_z1=self._setting(S_HARD_LIMIT_Z1, int),
-            ac_power_limit=self._setting(S_AC_POWER_LIMIT, int), pv_reserve=self._setting(S_PV_RESERVE, int),
-            allocated=None,
-        ).zone_max(self.surplus_active))
-
-    def zone3_limit(self) -> float:
-        return self._setting(S_ZONE3_LIMIT, float)
-
-    def ac_soc_target(self) -> float:
-        return self._setting(S_AC_SOC_TARGET, float)
-
-    def capacity_kwh(self, entity_id: str) -> float | None:
-        return self._flt_kwh_normalized(entity_id, None)
-
-    def actual_power(self) -> float:
-        """Ist-Leistung in W."""
-        return self._flt_power(self.entry.data.get(CONF_ACTUAL_SENSOR, ""))
-
-    def output_setpoint(self) -> float:
-        """Gesetzte Ausgangsleistung."""
-        return self._flt(self.entry.data.get(CONF_ACTIVE_POWER, ""))
-
-    def _apply_shares(self, shares: Shares | None) -> Msg | None:
-        """Angewandten Verteilungsmodus übernehmen; liefert die Degradierungswarnung dieser Rechnung."""
-        if shares is None:
-            return None
-        if shares.mode is not None:
-            self.dist_mode_effective = shares.mode
-        return (shares.warning, {}) if shares.warning else None
-
-    # ── Zonen-Display ────────────────────────────────────────────────────────
-
-    def _update_zone_display(
-        self, soc: float, zone1: int, zone3: int, mode: str
-    ) -> None:
-        """Zone-Label und Modus-Label für Panel-Anzeige aktualisieren."""
-        if soc <= zone3:
-            self.current_zone = 3
-        elif self.surplus_active:
-            self.current_zone = 0
-        elif self.cycle_active:
-            self.current_zone = 1
-        else:
-            self.current_zone = 2
-        self.zone_label = self._tr(f"zone_{self.current_zone}")
-
-        mode_map = {
-            MODE_DISABLED: "disabled",
-            MODE_DISCHARGE: "discharge",
-            MODE_AC_CHARGE: "ac_charge",
-        }
-        new_mode_key = mode_map.get(mode, "unknown")
-        if mode == MODE_DISCHARGE and self._at_rest(mode):
-            new_mode_key = "rest_discharge"
-        if new_mode_key != self.mode_key:
-            self.mode_label_ts = time.time()
-        self.mode_key = new_mode_key
-        # Beim unbekannten Modus den Rohwert an den Zustandstext anhängen.
-        self.mode_label = self._tr(f"mode_{new_mode_key}")
-        if new_mode_key == "unknown":
-            self.mode_label = f"{self.mode_label}: {mode}"
-        self._update_operating_state()
-
-    def _update_operating_state(self) -> bool:
-        """Betriebszustand aus den Zustandsflags ableiten; True bei Wechsel.
-
-        Erster zutreffender Zustand gewinnt, Reihenfolge wie in OPERATING_STATES.
-        Anders als `active_fall`, das den zuletzt ausgefuehrten Uebergang haelt,
-        beschreibt der Zustand, was gerade gilt.
-        """
-        control = self._control_state
-        if not self._regulation_on:
-            state = "disabled"
-        elif self._cycle_blocked:
-            state = "blocked"
-        elif control in ("surplus", "tariff_charge", "ac_charge"):
-            state = OPERATING_BY_STATE[control]
-        elif self.discharge_locked:
-            state = "discharge_locked"
-        elif self.is_night:
-            state = "night_off"
-        elif control == "pv" and self.current_zone == 3:
-            state = "safety_stop"
-        else:
-            state = OPERATING_BY_STATE[control]
-
-        if state == self.operating_state:
-            return False
-        self.operating_state = state
-        self.operating_state_ts = time.time()
-        return True
