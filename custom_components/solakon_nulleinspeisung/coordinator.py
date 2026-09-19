@@ -84,6 +84,18 @@ SENSOR_SOURCES = {
     "zone1_force": (S_ZONE1_FORCE_SENSOR, "global_pv_forecast_tomorrow_sensor"),
 }
 
+# Sensorgebundene Werte des Regelzyklus: (Name, SENSOR_SOURCES-Schlüssel, Enable-Feld
+# in CycleSettings, Fehlerpräfix, Einheitenskala, Entität optional). Ohne optionale
+# Entität wird nicht gelesen und nichts gemeldet.
+FEATURE_READINGS = (
+    ("cheap", "tariff_cheap", "tariff_enabled", "err_tariff_cheap", {}, True),
+    ("exp", "tariff_exp", "tariff_enabled", "err_tariff_exp", {}, True),
+    ("surplus_forecast", "pv_forecast", "surplus_forecast_enabled", "err_surplus_forecast", UNIT_SCALE_KWH, False),
+    ("surplus_lock", "surplus_lock", "surplus_lock_enabled", "err_exit_lock", UNIT_SCALE_KILO, False),
+    ("pv_forecast", "pv_forecast", "pv_forecast_enabled", "err_pv_forecast", UNIT_SCALE_KWH, False),
+    ("zone1_force", "zone1_force", "zone1_force_enabled", "err_zone1_force", UNIT_SCALE_KWH, False),
+)
+
 # Dynamische Offsets: (Attribut, (Min, Max, Rauschen, Faktor, Negativ)).
 DYN_OFFSETS = (
     ("dyn_offset_z1", (S_DYN_Z1_MIN, S_DYN_Z1_MAX, S_DYN_Z1_NOISE, S_DYN_Z1_FACTOR, S_DYN_Z1_NEGATIVE)),
@@ -723,6 +735,15 @@ class SolakonCoordinator:
             self._add_soft_error(soft_errors, (FEATURE_ERRORS[reading.reason].format(p=err_prefix), params))
         return reading.value
 
+    def _feature_values(self, cs: CycleSettings, soft_errors: list[Msg]) -> dict[str, float | None]:
+        """Alle Werte aus FEATURE_READINGS nach Name, in Tabellenreihenfolge gelesen."""
+        values = {}
+        for name, source, enabled, err_prefix, scale, optional in FEATURE_READINGS:
+            sensor = self._effective(source)
+            on = getattr(cs, enabled) and (bool(sensor) or not optional)
+            values[name] = self._feature_value(soft_errors, on, sensor, err_prefix, scale)
+        return values
+
     # ── Modbus-Schreibbefehle (nur wenn regulation_enabled) ──────────────────
 
     @property
@@ -1083,14 +1104,8 @@ class SolakonCoordinator:
         # Modus-Degradation ebenfalls hier einfließt.
         soft_errors: list[Msg] = []
 
-        # Schwellen-Entitäten des Tarifs; ohne Zahl gilt in der Tariflage der Settings-Wert
         tariff_sensor = self._effective("tariff")
-        cheap_entity = self._effective("tariff_cheap")
-        cheap = self._feature_value(
-            soft_errors, cs.tariff_enabled and bool(cheap_entity), cheap_entity, "err_tariff_cheap", {})
-        exp_entity = self._effective("tariff_exp")
-        exp = self._feature_value(
-            soft_errors, cs.tariff_enabled and bool(exp_entity), exp_entity, "err_tariff_exp", {})
+        feature = self._feature_values(cs, soft_errors)
 
         self._dist_warning = None
         error_share, allocated_power, shares = self.group.distribution(self, soc)
@@ -1116,42 +1131,28 @@ class SolakonCoordinator:
             effective_by_key[self._hard_limit_key], solar
         ) - actual)
 
-        # Gemergtes Feld: beide Features lesen denselben "PV-Ertrag heute"-Sensor
-        # (lokaler Override oder globaler Verteilungs-Tab-Wert).
-        pv_forecast_today_sensor = self._effective("pv_forecast")
-
         # Forcierung nur solange die PV das Ausgangslimit übersteigt und der
         # SOC über der Zone-3-Schutzgrenze liegt.
-        surplus_forecast = self._feature_value(
-            soft_errors, cs.surplus_forecast_enabled, pv_forecast_today_sensor, "err_surplus_forecast",
-            UNIT_SCALE_KWH)
+        surplus_forecast = feature["surplus_forecast"]
         self.forecast_surplus_forced = surplus_forecast is not None and (
             surplus_forecast >= cs.surplus_forecast_threshold
             and solar > cs.hard_limit_z0
             and soc > cs.zone3_limit
         )
 
-        surplus_lock_sensor = self._effective("surplus_lock")
-
         # Sperrt nur den PV-Austritt aus Zone 0, solange die Vorhersage über
         # dem Ausgabelimit liegt. Der SOC-Austritt bleibt ungesperrt.
-        surplus_lock = self._feature_value(
-            soft_errors, cs.surplus_lock_enabled, surplus_lock_sensor, "err_exit_lock", UNIT_SCALE_KILO)
+        surplus_lock = feature["surplus_lock"]
         self.forecast_exit_lock = surplus_lock is not None and (
             surplus_lock >= cs.surplus_lock_factor * cs.hard_limit_z0
             and soc > cs.zone3_limit
         )
 
-        pv_forecast = self._feature_value(
-            soft_errors, cs.pv_forecast_enabled, pv_forecast_today_sensor, "err_pv_forecast", UNIT_SCALE_KWH)
-        self.forecast_tariff_suppressed = forecast_suppressed(pv_forecast, cs.pv_forecast_threshold)
+        self.forecast_tariff_suppressed = forecast_suppressed(feature["pv_forecast"], cs.pv_forecast_threshold)
 
         # Zone-1-Nacht-Forcierung: erlaubt Entladung unter das normale
         # Zone-1-Limit, wenn der morgige PV-Ertrag die Nacht ohnehin wieder auffüllt.
-        zone1_force_sensor = self._effective("zone1_force")
-
-        zone1_force = self._feature_value(
-            soft_errors, cs.zone1_force_enabled, zone1_force_sensor, "err_zone1_force", UNIT_SCALE_KWH)
+        zone1_force = feature["zone1_force"]
         self.zone1_forced = zone1_force is not None and (
             zone1_force >= cs.zone1_force_threshold
             and solar < cs.pv_reserve         # "gerade dunkel", ohne Nacht-Hysterese
@@ -1182,8 +1183,8 @@ class SolakonCoordinator:
         price = self._feature_value(soft_errors, cs.tariff_enabled, tariff_sensor, "err_tariff", {})
         tariff = self.tariff.assess(
             enabled=cs.tariff_enabled and bool(tariff_sensor), suppressed=self.forecast_tariff_suppressed,
-            price=price, cheap_entity=cheap, cheap_setting=cs.tariff_cheap,
-            exp_entity=exp, exp_setting=cs.tariff_exp,
+            price=price, cheap_entity=feature["cheap"], cheap_setting=cs.tariff_cheap,
+            exp_entity=feature["exp"], exp_setting=cs.tariff_exp,
             unit=unit_of(self.hass.states.get(tariff_sensor)) if price is not None else "", now=time.time(),
         )
         if tariff.unit_warning:
