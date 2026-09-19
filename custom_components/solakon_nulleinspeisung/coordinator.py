@@ -131,11 +131,6 @@ CYCLE_SETTINGS = (
     ("i_factor", S_I_FACTOR, float),
     ("pv_reserve", S_PV_RESERVE, int),
     ("discharge_max", S_DISCHARGE_MAX, int),
-    ("dyn_z1_enabled", S_DYN_Z1_ENABLED, bool),
-    ("dyn_z2_enabled", S_DYN_Z2_ENABLED, bool),
-    ("dyn_ac_enabled", S_DYN_AC_ENABLED, bool),
-    ("offset_1", S_OFFSET_1, float),
-    ("offset_2", S_OFFSET_2, float),
     ("surplus_enabled", S_SURPLUS_ENABLED, bool),
     ("surplus_threshold", S_SURPLUS_SOC_THRESHOLD, int),
     ("surplus_soc_hyst", S_SURPLUS_SOC_HYST, int),
@@ -144,7 +139,6 @@ CYCLE_SETTINGS = (
     ("ac_soc_target", S_AC_SOC_TARGET, int),
     ("ac_power_limit", S_AC_POWER_LIMIT, int),
     ("ac_hysteresis", S_AC_HYSTERESIS, int),
-    ("ac_offset", S_AC_OFFSET, float),
     ("ac_p", S_AC_P_FACTOR, float),
     ("ac_i", S_AC_I_FACTOR, float),
     ("tariff_enabled", S_TARIFF_ENABLED, bool),
@@ -409,6 +403,13 @@ class SolakonCoordinator:
         """Gespeicherte Zustandsflags unter ihrem Speicherschlüssel."""
         return {key: getattr(self, attr) for key, attr, _ in PERSISTED_FLAGS}
 
+    def _offset(self, zone: str) -> tuple[bool, Any, float]:
+        """(dynamisch, statischer Settings-Wert, wirksamer Offset) der Zone aus OFFSET_SOURCES."""
+        enabled_key, static_key, dyn_attr = OFFSET_SOURCES[zone]
+        dynamic = bool(self.settings.get(enabled_key, False))
+        static = self.settings.get(static_key)
+        return dynamic, static, getattr(self, dyn_attr) if dynamic else static
+
     def snapshot(self) -> dict[str, Any]:
         """Anzeigezustand unter internen Namen, ohne Live-Sensorwerte.
 
@@ -416,15 +417,13 @@ class SolakonCoordinator:
         Kapazität in kWh aus dem Verteilungs-Sensor der Instanz, None ohne gültigen Wert.
         """
         offset_zone = "ac" if self.ac_charge_active else "z1" if self.cycle_active else "z2"
-        enabled_key, static_key, dyn_attr = OFFSET_SOURCES[offset_zone]
-        offset_dynamic = bool(self.settings.get(enabled_key, False))
-        offset_static = self.settings.get(static_key)
+        offset_dynamic, offset_static, offset_value = self._offset(offset_zone)
         cap_sensor = str(self.group.dist_cfg().get(f"inst_{self.entry.entry_id}_capacity_sensor", ""))
         return {
             "offset_zone": offset_zone,
             "offset_dynamic": offset_dynamic,
             "offset_static": offset_static,
-            "offset_value": getattr(self, dyn_attr) if offset_dynamic else offset_static,
+            "offset_value": offset_value,
             "capacity_kwh": self._flt_kwh_normalized(cap_sensor, None) if cap_sensor else None,
             "current_zone": self.current_zone,
             "zone_label": self.zone_label,
@@ -1076,8 +1075,7 @@ class SolakonCoordinator:
         # ── 2. Settings auslesen ─────────────────────────────────────────────
         cs = self._cycle_settings()
 
-        # Offsets: pro Zone dynamisch oder statisch
-        ac_offset = self.dyn_offset_ac if cs.dyn_ac_enabled else cs.ac_offset
+        ac_offset = float(self._offset("ac")[2])
 
         # Sammelt Meldungen zu Sensor-gated Features, die trotz aktivem Enable-Flag
         # wegen fehlendem/ungültigem Sensor wirkungslos bleiben; wird als last_error
@@ -1297,9 +1295,7 @@ class SolakonCoordinator:
         else:
             dynamic_max = min(effective_hard_z1, max(0, solar - cs.pv_reserve))
 
-        offset_1 = self.dyn_offset_z1 if cs.dyn_z1_enabled else cs.offset_1
-        offset_2 = self.dyn_offset_z2 if cs.dyn_z2_enabled else cs.offset_2
-        target_offset = offset_1 if self.cycle_active else offset_2
+        target_offset = float(self._offset("z1" if self.cycle_active else "z2")[2])
 
         # ── 9. Timeout-Reset ─────────────────────────────────────────────────
         # Entfällt wenn ein Fall in diesem Zyklus bereits getoggelt hat
