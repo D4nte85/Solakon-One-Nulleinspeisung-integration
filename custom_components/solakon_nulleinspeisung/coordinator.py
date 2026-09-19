@@ -1382,8 +1382,8 @@ class SolakonCoordinator:
         return self._flt(soc_eid, 0)
 
     def hard_limit(self) -> float:
-        """Hard-Limit der aktuellen Zone (Zone 0 bei Überschuss, sonst Zone 1/2)."""
-        return self._setting(self._hard_limit_key, float)
+        """Hard-Limit der aktuellen Zone (Zone 0 bei Überschuss, sonst Zone 1/2), gedeckelt auf die Gerätegrenze."""
+        return float(min(self._setting(self._hard_limit_key, float), DEVICE_MAX_POWER))
 
     def zone3_limit(self) -> float:
         return self._setting(S_ZONE3_LIMIT, float)

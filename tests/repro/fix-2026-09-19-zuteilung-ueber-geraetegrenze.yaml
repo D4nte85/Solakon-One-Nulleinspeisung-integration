@@ -1,0 +1,22 @@
+titel: Die Netzgruppe teilt einer Instanz mehr als die Gerätegrenze zu, der Rest geht verloren
+bezug: fix-2026-09-19-zuteilung-ueber-geraetegrenze
+offen: false
+netz: 300
+verteilung: {distribution_mode: soc, global_max_power: 2000}
+instanzen:
+  - prefix: a
+    settings: {regulation_enabled: true, hard_limit_z1: 1500}
+    sensoren: {soc: 90, modus: "1"}
+  - prefix: b
+    settings: {regulation_enabled: true}
+    sensoren: {soc: 30, modus: "1"}
+schritte:
+  - nach: 0
+    wer: all
+  - nach: 5
+    wer: all
+erwartet:
+  - instanz: a
+    zustand: {allocated_power: 1200}
+  - instanz: b
+    zustand: {allocated_power: 800}
