@@ -1,0 +1,33 @@
+titel: Die Verteilungswarnung steht doppelt in der Fehlerkette, wenn die Instanz AC-lädt
+bezug: fix-2026-09-19-verteilungswarnung-doppelt-ac-laden
+offen: false
+netz: -300
+verteilung:
+  distribution_mode: capacity
+  global_max_power: 1600
+  inst_entry_a_capacity_sensor: sensor.a_capacity
+  inst_entry_b_capacity_sensor: sensor.b_capacity
+  inst_entry_c_capacity_sensor: sensor.c_capacity
+instanzen:
+  # a steht in Modus 1 und startet AC-Laden (Fall G); ihre Kapazität fehlt.
+  - prefix: a
+    settings: {regulation_enabled: true, ac_enabled: true}
+    sensoren: {soc: 50, modus: "1", leistung: 0, ist: 0, kapazitaet: null}
+  # b lädt schon AC, bildet mit a den AC-Pool.
+  - prefix: b
+    settings: {regulation_enabled: true}
+    flags: {ac_charge_active: true}
+    sensoren: {soc: 50, modus: "3"}
+  # c entlädt, bildet vor den Falls mit a den Entlade-Pool.
+  - prefix: c
+    settings: {regulation_enabled: true}
+    sensoren: {soc: 50, modus: "1"}
+schritte:
+  - nach: 0
+    wer: a
+erwartet:
+  # Je eine Warnung aus der Entlade-Verteilung und aus dem AC-Anteil, unterscheidbar.
+  - instanz: a
+    zustand:
+      active_fall: G
+      last_error_msgs: [[warn_dist_capacity_sensor, {}], [warn_ac_dist_capacity_sensor, {}]]

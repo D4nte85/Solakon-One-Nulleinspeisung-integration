@@ -40,6 +40,14 @@ class Shares:
     warning: str = ""
 
 
+# Warnschlüssel bei Rückfall des Verteilungsmodus, je Grund: (Entlade-Pool, AC-Pool).
+DIST_WARNINGS = {
+    "soc_switch": ("warn_dist_soc_switch_sensor", "warn_ac_dist_soc_switch_sensor"),
+    "capacity": ("warn_dist_capacity_sensor", "warn_ac_dist_capacity_sensor"),
+    "soc": ("warn_dist_soc_sensor", "warn_ac_dist_soc_sensor"),
+}
+
+
 def group_for(hass: Any, grid_sensor: str) -> NetGroup:
     """Netzgruppe zum Netzsensor aus dem Register in `hass.data`, bei Bedarf angelegt."""
     groups = hass.data.setdefault(f"{DOMAIN}_groups", {})
@@ -111,11 +119,12 @@ class NetGroup:
             socs[eid] = soc
         return socs
 
-    def all_shares(self, active: dict[str, Member], me: Member, own_soc: float) -> Shares:
+    def all_shares(self, active: dict[str, Member], me: Member, own_soc: float, ac: bool = False) -> Shares:
         """Anteile aller Mitglieder in `active` nach Verteilungsmodus.
 
         Fehlt ein Fremdsensor (SOC oder Kapazität), weicht der Modus aus: capacity → soc,
-        soc/soc_switch → equal; `Shares.mode` und `Shares.warning` tragen das.
+        soc/soc_switch → equal; `Shares.mode` und `Shares.warning` tragen das. Der
+        Warnschlüssel kommt aus DIST_WARNINGS, mit `ac` der des AC-Pools.
         """
         n = len(active)
         if n == 0:
@@ -128,14 +137,17 @@ class NetGroup:
             return Shares({eid: 1.0 for eid in active}, effective)
 
         equal = {eid: 1.0 / n for eid in active}
+
+        def to_equal(reason: str) -> Shares:
+            """Rückfall auf Gleichverteilung mit dem Warnschlüssel des Grundes."""
+            return Shares(equal, "equal", DIST_WARNINGS[reason][ac])
+
         if mode == "equal":
             return Shares(equal, effective)
 
         if mode == "soc_switch":
             shares = self.soc_switch_shares(active, me, own_soc)
-            if shares is None:
-                return Shares(equal, "equal", "warn_dist_soc_switch_sensor")
-            return Shares(shares, effective)
+            return Shares(shares, effective) if shares is not None else to_equal("soc_switch")
 
         # Modus "soc" und unbekannte Modi: reine SOC-Prozentpunkt-Gewichtung.
         caps = {eid: 1.0 for eid in active}
@@ -149,13 +161,13 @@ class NetGroup:
             # Sobald eine Kapazität fehlt, zählen alle neutral 1.0 (reine SOC-Gewichtung).
             measured = {eid: _cap_kwh(eid, m) for eid, m in active.items()}
             if any(cap is None for cap in measured.values()):
-                effective, warning = "soc", "warn_dist_capacity_sensor"
+                effective, warning = "soc", DIST_WARNINGS["capacity"][ac]
             else:
                 caps = measured
 
         socs = self.socs(active, me, own_soc)
         if socs is None:
-            return Shares(equal, "equal", "warn_dist_soc_sensor")
+            return to_equal("soc")
 
         # SOC-Gewichte: nutzbare kWh (mode "capacity") bzw. nutzbare SOC-% (mode "soc")
         soc_weights = {
@@ -294,5 +306,5 @@ class NetGroup:
         active = self.ac_pool()
         if me.member_id not in active:
             return 0.0, None
-        shares = self.all_shares(active, me, own_soc)
+        shares = self.all_shares(active, me, own_soc, ac=True)
         return shares.values.get(me.member_id, 0.0), shares

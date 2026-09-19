@@ -272,6 +272,18 @@ _TEXTS: dict[str, dict[str, str]] = {
         "de": "Verteilung: SOC-Sensor einer anderen Instanz nicht verfügbar — auf Gleichverteilung zurückgefallen",
         "en": "Distribution: SOC sensor of another instance unavailable — fell back to equal distribution",
     },
+    "warn_ac_dist_soc_switch_sensor": {
+        "de": "AC-Verteilung (SOC-Switch): SOC-Sensor einer Instanz nicht verfügbar — auf Gleichverteilung zurückgefallen",
+        "en": "AC distribution (SOC switch): SOC sensor of one instance unavailable — fell back to equal distribution",
+    },
+    "warn_ac_dist_capacity_sensor": {
+        "de": "AC-Verteilung: Kapazitätssensor einer Instanz nicht verfügbar — auf SOC-Gewichtung zurückgefallen",
+        "en": "AC distribution: capacity sensor of one instance unavailable — fell back to SOC weighting",
+    },
+    "warn_ac_dist_soc_sensor": {
+        "de": "AC-Verteilung: SOC-Sensor einer anderen Instanz nicht verfügbar — auf Gleichverteilung zurückgefallen",
+        "en": "AC distribution: SOC sensor of another instance unavailable — fell back to equal distribution",
+    },
     "warn_tariff_unit": {
         "de": "Tarif: Preis {price:g} passt nicht zur Günstig-Schwelle {cheap:g} ct/kWh — Sensor liefert vermutlich €/kWh",
         "en": "Tariff: price {price:g} does not match the cheap threshold {cheap:g} ct/kWh — sensor probably reports €/kWh",

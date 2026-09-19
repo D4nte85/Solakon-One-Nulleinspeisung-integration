@@ -11,7 +11,6 @@ import pytest
 from tests import invarianten as inv
 
 OFFEN = {
-    "c5": "fix-2026-09-19-verteilungswarnung-doppelt-ac-laden",
 }
 
 

@@ -173,6 +173,19 @@ def test_kapazitaet_fehlt_soc_gewichtung_mit_warnung():
     assert s.values == pytest.approx({"a": 30 / 90, "b": 60 / 90})
 
 
+@pytest.mark.parametrize("dist, soc_b, warnungen", [
+    ({"distribution_mode": "capacity", "inst_a_capacity_sensor": "sensor.ka"}, 80.0,
+     ("warn_dist_capacity_sensor", "warn_ac_dist_capacity_sensor")),
+    ({"distribution_mode": "soc"}, None, ("warn_dist_soc_sensor", "warn_ac_dist_soc_sensor")),
+    ({"distribution_mode": "soc_switch"}, None,
+     ("warn_dist_soc_switch_sensor", "warn_ac_dist_soc_switch_sensor")),
+])
+def test_warnschluessel_je_pool(dist, soc_b, warnungen):
+    a, b = M("a", capacity={"sensor.ka": 2.0}), M("b", soc=soc_b)
+    _, g = _group(a, b, dist=dist)
+    assert tuple(g.all_shares({"a": a, "b": b}, a, 50, ac=ac).warning for ac in (False, True)) == warnungen
+
+
 def test_kapazitaet_fehlt_und_soc_ohne_gewicht_behaelt_warnung():
     dist = {"distribution_mode": "capacity"}
     a, b = M("a"), M("b", soc=5.0)
