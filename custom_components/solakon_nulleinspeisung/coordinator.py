@@ -68,7 +68,7 @@ PERSISTED_FLAGS = (
 # Fehlerschlüssel je Grund ohne Zahl, `{p}` ist das Präfix des Features.
 FEATURE_ERRORS = {
     NO_SENSOR: "{p}_no_sensor",
-    WRONG_DOMAIN: "err_sensor_wrong_domain",
+    WRONG_DOMAIN: "{p}_sensor_wrong_domain",
     UNAVAILABLE: "{p}_sensor_unavailable",
     NOT_NUMERIC: "{p}_sensor_not_numeric",
 }

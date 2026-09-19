@@ -11,6 +11,7 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 - Lieferte eine Tarifschwellen-Entität (günstig oder teuer) keine Zahl, galt still der eingestellte Wert. Bei aktiver Tarif-Funktion meldet `last_error` das jetzt mit der Entität; der eingestellte Wert gilt weiter.
 - Lag der Preis unter der Günstig-Schwelle und war das Tarif-Ladeziel erreicht, holte die Recovery (Fall D) eine gestoppte Entladung zurück, obwohl der Discharge-Lock (Fall TM) sie im nächsten Zyklus wieder stoppte. Die Sperre der Recovery gilt jetzt wie der Lock für alles unterhalb der Teuer-Schwelle. Die Panel-Texte beschreiben den Lock entsprechend.
 - Verteilung: Fiel der Verteilungsmodus mangels Fremdsensor zurück, stand die Warnung zweimal in `last_error`, wenn die Instanz nicht AC-lud. Die Anteilsrechnung für AC-Laden übernahm die Warnung der Entlade-Verteilung erneut. Jede Rechnung meldet jetzt nur ihre eigene Warnung.
+- Hatte ein Feature-Sensor die falsche Domain (z. B. `input_boolean`), nannte die Meldung kein Feature. Lasen zwei Features dieselbe Entität, etwa Surplus-Forecast und PV-Vorhersage den PV-Vorhersage-Sensor, stand zweimal derselbe Text in `last_error`. Die Meldung nennt jetzt das Feature und die Folge, wie bei „nicht verfügbar“ und „kein Zahlenwert“.
 
 ## [3.0.0-beta.4] – 2026-09-18
 

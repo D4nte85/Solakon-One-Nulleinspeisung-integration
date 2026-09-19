@@ -158,6 +158,10 @@ _TEXTS: dict[str, dict[str, str]] = {
         "de": "Surplus-Forecast: Sensor {sensor!r} liefert keinen Zahlenwert — Funktion inaktiv",
         "en": "Surplus forecast: sensor {sensor!r} has no numeric value — function inactive",
     },
+    "err_surplus_forecast_sensor_wrong_domain": {
+        "de": "Surplus-Forecast: Sensor {sensor!r} liefert keinen Zahlenwert (erlaubt sind sensor, input_number, number) — Funktion inaktiv",
+        "en": "Surplus forecast: sensor {sensor!r} has no numeric value (allowed are sensor, input_number, number) — function inactive",
+    },
     "err_exit_lock_no_sensor": {
         "de": "Austritts-Sperre: Kein Leistungs-Vorhersage-Sensor konfiguriert — Funktion inaktiv",
         "en": "Exit lock: no power forecast sensor configured — function inactive",
@@ -169,6 +173,10 @@ _TEXTS: dict[str, dict[str, str]] = {
     "err_exit_lock_sensor_not_numeric": {
         "de": "Austritts-Sperre: Sensor {sensor!r} liefert keinen Zahlenwert — Funktion inaktiv",
         "en": "Exit lock: sensor {sensor!r} has no numeric value — function inactive",
+    },
+    "err_exit_lock_sensor_wrong_domain": {
+        "de": "Austritts-Sperre: Sensor {sensor!r} liefert keinen Zahlenwert (erlaubt sind sensor, input_number, number) — Funktion inaktiv",
+        "en": "Exit lock: sensor {sensor!r} has no numeric value (allowed are sensor, input_number, number) — function inactive",
     },
     "err_pv_forecast_no_sensor": {
         "de": "PV-Vorhersage: Kein Sensor konfiguriert — Funktion inaktiv",
@@ -182,6 +190,10 @@ _TEXTS: dict[str, dict[str, str]] = {
         "de": "PV-Vorhersage: Sensor {sensor!r} liefert keinen Zahlenwert — Funktion inaktiv",
         "en": "PV forecast: sensor {sensor!r} has no numeric value — function inactive",
     },
+    "err_pv_forecast_sensor_wrong_domain": {
+        "de": "PV-Vorhersage: Sensor {sensor!r} liefert keinen Zahlenwert (erlaubt sind sensor, input_number, number) — Funktion inaktiv",
+        "en": "PV forecast: sensor {sensor!r} has no numeric value (allowed are sensor, input_number, number) — function inactive",
+    },
     "err_zone1_force_no_sensor": {
         "de": "Zone-1-Forcierung: Kein PV-Vorhersage-Sensor konfiguriert — Funktion inaktiv",
         "en": "Zone 1 forcing: no PV forecast sensor configured — function inactive",
@@ -194,13 +206,13 @@ _TEXTS: dict[str, dict[str, str]] = {
         "de": "Zone-1-Forcierung: Sensor {sensor!r} liefert keinen Zahlenwert — Funktion inaktiv",
         "en": "Zone 1 forcing: sensor {sensor!r} has no numeric value — function inactive",
     },
+    "err_zone1_force_sensor_wrong_domain": {
+        "de": "Zone-1-Forcierung: Sensor {sensor!r} liefert keinen Zahlenwert (erlaubt sind sensor, input_number, number) — Funktion inaktiv",
+        "en": "Zone 1 forcing: sensor {sensor!r} has no numeric value (allowed are sensor, input_number, number) — function inactive",
+    },
     "err_tariff_no_sensor": {
         "de": "Tarif: Kein Preis-Sensor konfiguriert — Tarif-Funktion inaktiv",
         "en": "Tariff: no price sensor configured — tariff function inactive",
-    },
-    "err_sensor_wrong_domain": {
-        "de": "Entität {sensor!r} liefert keinen Zahlenwert — erlaubt sind sensor, input_number, number",
-        "en": "Entity {sensor!r} has no numeric state — allowed are sensor, input_number, number",
     },
     "err_tariff_sensor_unavailable": {
         "de": "Tarif: Preis-Sensor {sensor!r} nicht verfügbar",
@@ -210,6 +222,10 @@ _TEXTS: dict[str, dict[str, str]] = {
         "de": "Tarif: Preis-Sensor {sensor!r} liefert keinen Zahlenwert — Tarif-Funktion inaktiv",
         "en": "Tariff: price sensor {sensor!r} has no numeric value — tariff function inactive",
     },
+    "err_tariff_sensor_wrong_domain": {
+        "de": "Tarif: Preis-Sensor {sensor!r} liefert keinen Zahlenwert (erlaubt sind sensor, input_number, number) — Tarif-Funktion inaktiv",
+        "en": "Tariff: price sensor {sensor!r} has no numeric value (allowed are sensor, input_number, number) — tariff function inactive",
+    },
     "err_tariff_cheap_sensor_unavailable": {
         "de": "Tarif: Günstig-Schwelle {sensor!r} nicht verfügbar — es gilt der Wert aus den Einstellungen",
         "en": "Tariff: cheap threshold {sensor!r} unavailable — the value from the settings applies",
@@ -218,6 +234,10 @@ _TEXTS: dict[str, dict[str, str]] = {
         "de": "Tarif: Günstig-Schwelle {sensor!r} liefert keinen Zahlenwert — es gilt der Wert aus den Einstellungen",
         "en": "Tariff: cheap threshold {sensor!r} has no numeric value — the value from the settings applies",
     },
+    "err_tariff_cheap_sensor_wrong_domain": {
+        "de": "Tarif: Günstig-Schwelle {sensor!r} liefert keinen Zahlenwert (erlaubt sind sensor, input_number, number) — es gilt der Wert aus den Einstellungen",
+        "en": "Tariff: cheap threshold {sensor!r} has no numeric value (allowed are sensor, input_number, number) — the value from the settings applies",
+    },
     "err_tariff_exp_sensor_unavailable": {
         "de": "Tarif: Teuer-Schwelle {sensor!r} nicht verfügbar — es gilt der Wert aus den Einstellungen",
         "en": "Tariff: expensive threshold {sensor!r} unavailable — the value from the settings applies",
@@ -225,6 +245,10 @@ _TEXTS: dict[str, dict[str, str]] = {
     "err_tariff_exp_sensor_not_numeric": {
         "de": "Tarif: Teuer-Schwelle {sensor!r} liefert keinen Zahlenwert — es gilt der Wert aus den Einstellungen",
         "en": "Tariff: expensive threshold {sensor!r} has no numeric value — the value from the settings applies",
+    },
+    "err_tariff_exp_sensor_wrong_domain": {
+        "de": "Tarif: Teuer-Schwelle {sensor!r} liefert keinen Zahlenwert (erlaubt sind sensor, input_number, number) — es gilt der Wert aus den Einstellungen",
+        "en": "Tariff: expensive threshold {sensor!r} has no numeric value (allowed are sensor, input_number, number) — the value from the settings applies",
     },
 
     # ── Warnungen aus Ausgangs-, Verteilungs- und Tarifprüfung ───────────────

@@ -1,0 +1,15 @@
+titel: Eine Entität mit falscher Domain für zwei Features meldet zweimal denselben Text ohne Feature
+bezug: fix-2026-09-19-falsche-domain-meldung-ohne-feature
+offen: false
+# PV-Vorhersage-Sensor aus input_boolean, gelesen von Surplus-Forecast und PV-Vorhersage.
+netz: 300
+sensoren:
+  input_boolean.pv_today: "on"
+instanzen:
+  - prefix: a
+    settings: {regulation_enabled: true, surplus_forecast_enabled: true, pv_forecast_enabled: true, pv_forecast_sensor: input_boolean.pv_today}
+    sensoren: {soc: 50, modus: "1"}
+schritte:
+  - nach: 0
+erwartet:
+  - zustand: {last_error: "Surplus-Forecast: Sensor 'input_boolean.pv_today' liefert keinen Zahlenwert (erlaubt sind sensor, input_number, number) — Funktion inaktiv • PV-Vorhersage: Sensor 'input_boolean.pv_today' liefert keinen Zahlenwert (erlaubt sind sensor, input_number, number) — Funktion inaktiv"}
