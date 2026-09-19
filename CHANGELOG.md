@@ -9,7 +9,7 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ### Geändert
 
-- **Eine Energierichtung je Netzgruppe (#39):** Solange eine Instanz AC- oder Tarif-lädt, gilt für jede andere Instanz derselben Netzgruppe in Zone 1 das Output-Limit von Zone 2 (`PV − Reserve`). Ihre Batterie entlädt nicht, PV wird weiter eingespeist, der Zone-1-Zyklus läuft weiter. Bisher prüfte nur der Eintritt ins AC-Laden die Entladung der Schwester-Instanzen. Danach deckte deren PI-Regler die Ladeleistung als Hausverbrauch, und der AC-PI wertete diese Entladung als Überschuss. Je nach Lage von AC-Offset und Offset 1 blieb das Umpumpen stehen oder schaukelte sich auf. Das Tarif-Laden deckelt Zone 1 der übrigen Instanzen auch ohne dort eingerichteten Tarif. Neue Aktion: „Zone 1: Batterieentladung gesperrt — Schwesterinstanz lädt“.
+- **Eine Energierichtung je Netzgruppe (#39):** Solange eine Instanz AC- oder Tarif-lädt, gilt für jede andere Instanz derselben Netzgruppe in Zone 1 das Output-Limit von Zone 2 (`PV − Reserve`). Ihre Batterie entlädt nicht, PV wird weiter eingespeist, der Zone-1-Zyklus läuft weiter. Bisher prüfte nur der Eintritt ins AC-Laden die Entladung der Schwester-Instanzen. Danach deckte deren PI-Regler die Ladeleistung als Hausverbrauch, und der AC-PI wertete diese Entladung als Überschuss. Je nach Lage von AC-Offset und Offset 1 blieb das Umpumpen stehen oder schaukelte sich auf. Das Tarif-Laden läuft weiter immer durch, die übrigen Instanzen speisen währenddessen in Zone 1 nur Solarstrom ein. Neue Aktion: „Zone 1: Batterieentladung gesperrt — Schwesterinstanz lädt“.
 
 ## [3.0.0] – 2026-09-19
 

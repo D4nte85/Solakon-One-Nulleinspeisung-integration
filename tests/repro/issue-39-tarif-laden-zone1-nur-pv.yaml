@@ -1,4 +1,4 @@
-titel: Tarif-Laden einer Instanz deckelt die Zone-1-Entladung der Schwester auf PV
+titel: Tarif-Laden läuft durch, die Schwester speist in Zone 1 nur PV ein
 bezug: issue-39-ac-laden-schwester-entladung
 # a lädt per Tarif (feste 800 W aus dem Netz), b entlädt in Zone 1 mit 600 W bei 300 W PV.
 # Der Deckel von b ist PV minus Reserve; die Batterie von b liefert nichts mehr.

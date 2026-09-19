@@ -176,7 +176,7 @@ Instanzen einer Netzgruppe laden oder entladen, nie beides zugleich. Solange ein
 
 Ohne diese Sperre regeln beide Instanzen auf denselben Netzsensor: die entladende deckt die Ladeleistung der anderen als Hausverbrauch, die ladende wertet diese Entladung als Überschuss. Je nach Lage von AC-Offset und Offset 1 bleibt das Umpumpen stehen oder schaukelt sich bis an die Grenzen auf.
 
-Eine laufende Richtung wird nicht verdrängt: AC Laden startet nur bei Überschuss ohne die Entladung der Schwester-Instanzen (`ΣOutput_entladend`, siehe [AC Laden](#-ac-laden)). Ausnahme ist das Tarif-Laden — es deckelt Zone 1 der übrigen Instanzen auch dann, wenn dort kein Tarif eingerichtet ist.
+AC Laden startet nur bei Überschuss ohne die Entladung der Schwester-Instanzen (`ΣOutput_entladend`, siehe [AC Laden](#-ac-laden)). Tarif-Laden startet und läuft immer. Solange es läuft, speisen die übrigen Instanzen in Zone 1 nur Solarstrom ein, ihre Batterie deckt die Tarif-Ladeleistung nicht.
 
 ### Leistungsverteilung konfigurieren
 
@@ -440,7 +440,7 @@ Optionale Tarif-Arbitrage für dynamische Stromtarife (Tibber, aWATTar …). **W
 
 Drei Preisstufen: **Günstig** (Preis < Günstig-Schwelle): Tarif-Laden mit fester Leistung bis SOC-Ziel — wenn das Ladeziel bereits erreicht ist, greift stattdessen der Discharge-Lock. **Mittel** (Günstig ≤ Preis < Teuer): Discharge-Lock — Zone 1 und Zone 2 gesperrt (Output 0 W, Modus Disabled). Der Discharge-Lock gilt für **beide** Stufen (günstig + mittel), also alles unterhalb der Teuer-Schwelle. Wenn der Preis die Teuer-Schwelle überschreitet, wird der Betrieb automatisch wiederhergestellt. **Teuer** (Preis ≥ Teuer-Schwelle): normale SOC-Logik, keine Einschränkung.
 
-Im Multi-Instanz-Betrieb entlädt während des Tarif-Ladens keine andere Instanz derselben Netzgruppe aus der Batterie, auch ohne eigenen Tarif — siehe [Eine Energierichtung je Netzgruppe](#eine-energierichtung-je-netzgruppe).
+Im Multi-Instanz-Betrieb läuft das Tarif-Laden immer durch. Die übrigen Instanzen derselben Netzgruppe speisen währenddessen in Zone 1 nur Solarstrom ein, ihre Batterie entlädt nicht — siehe [Eine Energierichtung je Netzgruppe](#eine-energierichtung-je-netzgruppe).
 
 | Parameter | Beschreibung | Empfehlung |
 |-----------|-------------|------------|
