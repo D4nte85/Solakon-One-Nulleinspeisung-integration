@@ -22,6 +22,7 @@ from .readings import (
     WRONG_DOMAIN, read_number, read_scaled, unit_of, valid_state,
 )
 from .group import NetGroup, Shares, group_for
+from .limits import PowerLimits, power_limits
 from .tariff import Tariff, forecast_suppressed
 from .zones import SurplusState, ZoneInputs, decide, forecast_flags, surplus_and_night
 from .const import (
@@ -934,11 +935,6 @@ class SolakonCoordinator:
         """
         return mode == self._rest_mode and (mode == MODE_DISABLED or self.resting)
 
-    @property
-    def _hard_limit_key(self) -> str:
-        """Settings-Schlüssel des geltenden Hard-Limits: Zone 0 bei Surplus, sonst Zone 1/2."""
-        return S_HARD_LIMIT_Z0 if self.surplus_active else S_HARD_LIMIT_Z1
-
     def _required_discharge(self, discharge_max: int, mode: str) -> float:
         """Entladestrom für den aktuellen Regelzustand laut DISCHARGE_BY_STATE.
 
@@ -1106,23 +1102,16 @@ class SolakonCoordinator:
         self.allocated_power = allocated_power
         if dist_warning := self._apply_shares(shares):
             self._add_soft_error(soft_errors, dist_warning)
-        # Panel-Limits gegen Geraetegrenze und zugeteilte Leistung gedeckelt.
-        def cap(limit: int) -> int:
-            if allocated_power is None:
-                return int(min(limit, DEVICE_MAX_POWER))
-            return int(min(int(allocated_power), limit, DEVICE_MAX_POWER))
-
-        effective_hard = cap(cs.hard_limit_z0)
-        effective_hard_z1 = cap(cs.hard_limit_z1)
-        effective_by_key = {S_HARD_LIMIT_Z0: effective_hard, S_HARD_LIMIT_Z1: effective_hard_z1}
+        limits = power_limits(
+            hard_limit_z0=cs.hard_limit_z0, hard_limit_z1=cs.hard_limit_z1,
+            ac_power_limit=cs.ac_power_limit, pv_reserve=cs.pv_reserve, allocated=allocated_power,
+        )
 
         # Verwertbarer PV-Überschuss: Luft zwischen dem aktuellen Output und dem
         # Minimum aus geltendem Hard-Limit und aktueller PV-Leistung, geklemmt auf ≥0.
         # Nutzt die Zone des vorherigen Zyklus — self.surplus_active ist hier noch
         # nicht aktualisiert.
-        self.surplus_power = max(0.0, min(
-            effective_by_key[self._hard_limit_key], solar
-        ) - actual)
+        self.surplus_power = max(0.0, min(limits.zone_max(self.surplus_active), solar) - actual)
 
         forecast = forecast_flags(
             surplus_forecast=feature["surplus_forecast"], surplus_lock=feature["surplus_lock"],
@@ -1154,7 +1143,7 @@ class SolakonCoordinator:
             self._end_cycle(blocked=True, error_key="err_mode_select")
             return
 
-        await self._sync_export_limit(max(self._setting(S_HARD_LIMIT_Z0, int), self._setting(S_HARD_LIMIT_Z1, int)))
+        await self._sync_export_limit(limits.export)
 
         # Preis ohne Einheitenumrechnung; die Einheitenwarnung der Tariflage geht als
         # soft_error in dieselbe Meldungskette ein.
@@ -1219,8 +1208,7 @@ class SolakonCoordinator:
 
         # ── 7. PI-Gate ───────────────────────────────────────────────────────
         if mode in (MODE_DISCHARGE, MODE_AC_CHARGE):
-            await self._run_pi_phase(cs, soc, mode, timer_val, error_share, effective_hard,
-                                     effective_hard_z1, ac_offset, soft_errors)
+            await self._run_pi_phase(cs, soc, mode, timer_val, error_share, limits, ac_offset, soft_errors)
 
         # ── 10. Display + Flag-Persistenz ────────────────────────────────────
         self._end_cycle(soft_errors=soft_errors, display=(soc, cs.zone1_limit, cs.zone3_limit, mode),
@@ -1228,7 +1216,7 @@ class SolakonCoordinator:
 
     async def _run_pi_phase(
         self, cs: CycleSettings, soc: float, mode: str, timer_val: float, error_share: float,
-        effective_hard: int, effective_hard_z1: int, ac_offset: float, soft_errors: list[Msg],
+        limits: PowerLimits, ac_offset: float, soft_errors: list[Msg],
     ) -> None:
         """PI-Phase eines Zyklus in Modus '1' oder '3': Timeout-Reset, dann Zone-0-Festwert,
         AC-PI, Tarif-Festwert oder Standard-PI mit Stillstandsprüfung."""
@@ -1238,12 +1226,7 @@ class SolakonCoordinator:
         grid = self._flt_power(cfg[CONF_GRID_SENSOR])
         solar = self._flt_power(cfg[CONF_SOLAR_SENSOR])
 
-        if mode == MODE_AC_CHARGE:
-            dynamic_max = int(min(cs.ac_power_limit, DEVICE_MAX_POWER))
-        elif self.cycle_active:
-            dynamic_max = effective_hard_z1
-        else:
-            dynamic_max = min(effective_hard_z1, max(0, solar - cs.pv_reserve))
+        dynamic_max = limits.pi_max(mode, self.cycle_active, solar)
 
         target_offset = float(self._offset("z1" if self.cycle_active else "z2")[2])
 
@@ -1266,7 +1249,7 @@ class SolakonCoordinator:
 
         # ── PI-Pfade ─────────────────────────────────────────────────────────
         if self.surplus_active:
-            await self._set_fixed_output(effective_hard, current_power, "act_zone0_output")
+            await self._set_fixed_output(limits.zone0, current_power, "act_zone0_output")
 
         elif self.ac_charge_active:
             if self.pi.gate_ac(grid, ac_offset, cs.tolerance) == STEP:
@@ -1274,7 +1257,7 @@ class SolakonCoordinator:
                     grid,
                     self.group.pool_sum(self.group.ac_pool(), self, current_power,
                                         lambda m: m.output_setpoint()) * ac_error_share,
-                    ac_offset, cs.ac_power_limit, cs.ac_p, cs.ac_i, ac_error_share, current_power,
+                    ac_offset, limits.ac, cs.ac_p, cs.ac_i, ac_error_share, current_power,
                     "act_ac_pi", ac_charge_mode=True,
                 )
 
@@ -1383,7 +1366,11 @@ class SolakonCoordinator:
 
     def hard_limit(self) -> float:
         """Hard-Limit der aktuellen Zone (Zone 0 bei Überschuss, sonst Zone 1/2), gedeckelt auf die Gerätegrenze."""
-        return float(min(self._setting(self._hard_limit_key, float), DEVICE_MAX_POWER))
+        return float(power_limits(
+            hard_limit_z0=self._setting(S_HARD_LIMIT_Z0, int), hard_limit_z1=self._setting(S_HARD_LIMIT_Z1, int),
+            ac_power_limit=self._setting(S_AC_POWER_LIMIT, int), pv_reserve=self._setting(S_PV_RESERVE, int),
+            allocated=None,
+        ).zone_max(self.surplus_active))
 
     def zone3_limit(self) -> float:
         return self._setting(S_ZONE3_LIMIT, float)
