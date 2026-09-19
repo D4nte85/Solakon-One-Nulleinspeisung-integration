@@ -197,7 +197,10 @@ def _stddev_of(values: list[float]) -> float:
 def dynamic_offset(
     stddev: float, min_off: int, max_off: int, noise: float, factor: float, negative: bool,
 ) -> float:
-    """Offset = clamp(min + max(0, (StdDev − Rausch) × Faktor), min, max)."""
+    """Offset = clamp(min + max(0, (StdDev − Rausch) × Faktor), min, max), mit `negative` negiert.
+
+    Bei `min_off >= max_off` oder negativer StdDev gilt `min_off`.
+    """
     if min_off >= max_off:
         result = min_off
     elif stddev < 0:
@@ -258,13 +261,13 @@ class SolakonCoordinator:
         # Dunkelheit mit Hysterese: an unter PV-Ladereserve, aus ab Reserve + Hysterese.
         self._dark: bool = False
         # Entladung durch den Tarif gesperrt (Preis unter Teuer-Schwelle, keine
-        # Lade-Session, kein Ueberschuss) — der Zustand hinter Fall TM.
+        # Lade-Session, kein Überschuss) — der Zustand hinter Fall TM.
         self.discharge_locked: bool = False
-        # Zusammengefasster Betriebszustand fuer Panel und Sensor; "" bis zum
-        # ersten Zyklus. Schluessel aus OPERATING_STATES.
+        # Zusammengefasster Betriebszustand für Panel und Sensor; "" bis zum
+        # ersten Zyklus. Schlüssel aus OPERATING_STATES.
         self.operating_state: str = ""
         self.operating_state_ts: float = time.time()
-        # Zyklus an einem Guard abgebrochen (Kernsensor fehlt, SOC-Limits ungueltig)
+        # Zyklus an einem Guard abgebrochen (Kernsensor fehlt, SOC-Limits ungültig)
         self._cycle_blocked: bool = False
 
         # Zeitstempel
@@ -390,10 +393,9 @@ class SolakonCoordinator:
         return actual, abs(actual - (-target if ac_charge_mode else target))
 
     # ── Lesen: Sensor-Vorgaben ───────────────────────────────────────────────
-    # Entity-Picker sind instanzübergreifend im Verteilungs-Tab pflegbar, jede
-    # Instanz kann optional lokal überschreiben. Lokal gewinnt, sonst globaler Wert.
 
     def _global_sensor(self, key: str) -> str:
+        """Globale Vorgabe `key` aus dem Verteilungs-Tab der Netzgruppe; leer ohne Eintrag."""
         return str(self.group.dist_cfg().get(key, ""))
 
     def _effective(self, name: str) -> str:
@@ -445,14 +447,17 @@ class SolakonCoordinator:
 
     @property
     def member_id(self) -> str:
+        """Kennung in der Netzgruppe: die entry_id."""
         return self.entry.entry_id
 
     @property
     def grid_sensor(self) -> str:
+        """Netzsensor der Instanz; er bestimmt die Netzgruppe."""
         return self.entry.data.get(CONF_GRID_SENSOR, "")
 
     @property
     def regulating(self) -> bool:
+        """Regelung aktiviert."""
         return self._regulation_on
 
     def in_discharge_pool(self) -> bool:
@@ -478,12 +483,15 @@ class SolakonCoordinator:
         ).zone_max(self.surplus_active))
 
     def zone3_limit(self) -> float:
+        """SOC-Grenze der Zone 3 in % aus den Settings."""
         return self._setting(S_ZONE3_LIMIT, float)
 
     def ac_soc_target(self) -> float:
+        """SOC-Ziel des AC-Ladens in % aus den Settings."""
         return self._setting(S_AC_SOC_TARGET, float)
 
     def capacity_kwh(self, entity_id: str) -> float | None:
+        """Kapazität aus `entity_id` in kWh; None ohne Zahl."""
         return self._flt_kwh_normalized(entity_id, None)
 
     def actual_power(self) -> float:
@@ -498,8 +506,7 @@ class SolakonCoordinator:
 
     @property
     def _control_state(self) -> str:
-        """Regelzustand aus den Flags, erster zutreffender gewinnt:
-        surplus → tariff_charge → ac_charge → cycle → pv."""
+        """Regelzustand aus den Flags; es gilt surplus → tariff_charge → ac_charge → cycle → pv."""
         if self.surplus_active:
             return "surplus"
         if self.tariff_charge_active:
@@ -539,6 +546,7 @@ class SolakonCoordinator:
         return {key: getattr(self, attr) for key, attr, _ in PERSISTED_FLAGS}
 
     def _store_data(self) -> dict:
+        """Speicherinhalt: Settings plus gespeicherte Zustandsflags."""
         return {**self.settings, **self._persisted_flags()}
 
     # ── Ableiten: StdDev und dynamischer Offset ──────────────────────────────
@@ -655,7 +663,7 @@ class SolakonCoordinator:
         """Betriebszustand aus den Zustandsflags ableiten; True bei Wechsel.
 
         Erster zutreffender Zustand gewinnt, Reihenfolge wie in OPERATING_STATES.
-        Anders als `active_fall`, das den zuletzt ausgefuehrten Uebergang haelt,
+        Anders als `active_fall`, das den zuletzt ausgeführten Übergang hält,
         beschreibt der Zustand, was gerade gilt.
         """
         control = self._control_state
@@ -739,13 +747,16 @@ class SolakonCoordinator:
     # ── Darstellen: Entity-Listener ──────────────────────────────────────────
 
     def register_entity_listener(self, cb: Callable[[], None]) -> None:
+        """Callback anmelden, den `notify_listeners` aufruft."""
         self._listeners.append(cb)
 
     def unregister_entity_listener(self, cb: Callable[[], None]) -> None:
+        """Callback abmelden; ein unbekannter Callback wird ignoriert."""
         if cb in self._listeners:
             self._listeners.remove(cb)
 
     def notify_listeners(self) -> None:
+        """Alle Callbacks aufrufen; eine Exception wird geloggt, die übrigen laufen weiter."""
         for cb in list(self._listeners):
             try:
                 cb()
@@ -786,7 +797,10 @@ class SolakonCoordinator:
         )
 
     async def _set_output(self, value: float) -> None:
-        """Ausgangsleistung setzen, geklemmt auf 0 bis DEVICE_MAX_POWER."""
+        """Ausgangsleistung setzen, geklemmt auf 0 bis DEVICE_MAX_POWER.
+
+        `last_output_ts` wird auch gesetzt, wenn der Guard den Schreibbefehl unterdrückt.
+        """
         await self._set_number(
             self.entry.data[CONF_ACTIVE_POWER],
             _clamp(round(value), 0, DEVICE_MAX_POWER),
@@ -818,7 +832,10 @@ class SolakonCoordinator:
     # ── Schreiben: Ausgangsleistung ──────────────────────────────────────────
 
     async def _wait_for_target(self, target: float, ac_charge_mode: bool = False) -> None:
-        """Wartet bis actual_power den Zielwert erreicht, oder max wait_time."""
+        """Wartet, bis die Ist-Leistung den Zielwert erreicht, höchstens `S_WAIT_TIME` Sekunden.
+
+        Ohne `S_SELF_ADJUST` wird die volle Wartezeit abgewartet.
+        """
         wait_max = self._setting(S_WAIT_TIME, float)
 
         if not self.settings[S_SELF_ADJUST]:
@@ -867,15 +884,13 @@ class SolakonCoordinator:
             await self._confirm_zero_output(ac_charge_mode)
 
     async def _confirm_zero_output(self, ac_charge_mode: bool, max_retries: int = 2) -> None:
-        """Bestätigt, dass die Ausgangsleistung real auf 0 gefallen ist — unabhängig
-        von S_SELF_ADJUST, das `_wait_for_target()` sonst gar nicht nachprüfen lässt.
-        Schreibt bei fehlender Konvergenz bis zu `max_retries`-mal erneut und meldet
-        nach Ausschöpfung als Schreibwarnung in der Fehlerkette.
+        """Bestätigt, dass die Ausgangsleistung real auf 0 gefallen ist, auch ohne S_SELF_ADJUST.
 
-        CONF_ACTUAL_SENSOR stammt aus einer fremden Integration mit eigenem
-        Poll-Intervall (1–300 s). Ein Read, der älter ist als unser letzter
-        Schreibbefehl, belegt weder Erfolg noch Fehlschlag; dann unterbleibt nur
-        die Warnung, Schreib- und Retry-Verhalten bleibt gleich.
+        Schreibt bei fehlender Konvergenz bis zu `max_retries`-mal erneut und meldet
+        danach eine Schreibwarnung in der Fehlerkette. CONF_ACTUAL_SENSOR pollt in einem
+        fremden Intervall (1–300 s): ein Wert, der älter ist als der letzte Schreibbefehl,
+        belegt weder Erfolg noch Fehlschlag; dann unterbleibt nur die Warnung, Schreib-
+        und Retry-Verhalten bleibt gleich.
         """
         actual_eid = self.entry.data.get(CONF_ACTUAL_SENSOR, "")
         if not self._entity_ok(actual_eid):
@@ -901,8 +916,7 @@ class SolakonCoordinator:
             _LOGGER.error("Solakon: %s", self._tr("warn_output_zero_unconfirmed", attempts=max_retries, actual=actual))
 
     def _reset_output_stall_state(self) -> None:
-        """Stillstandszähler zurücksetzen — Ausgang folgt dem Limit wieder oder ist
-        nicht prüfbar."""
+        """Stillstandszähler zurücksetzen: der Ausgang folgt dem Limit oder ist nicht prüfbar."""
         self._output_stall_actions = 0
         self._output_stall_last_ts = 0.0
 
@@ -1013,13 +1027,16 @@ class SolakonCoordinator:
 
     @property
     def integral(self) -> float:
+        """Integralanteil des PI-Reglers."""
         return self.pi.integral
 
     @integral.setter
     def integral(self, value: float) -> None:
+        """Integralanteil des PI-Reglers setzen."""
         self.pi.integral = value
 
     def reset_integral(self) -> None:
+        """Integral nullen, als letzte Aktion vermerken, Listener benachrichtigen."""
         self.pi.reset()
         self._set_last_action("act_integral_reset")
         self.notify_listeners()
@@ -1027,7 +1044,11 @@ class SolakonCoordinator:
     # ── Lebenszyklus: Setup und Settings ─────────────────────────────────────
 
     async def async_setup(self) -> None:
-        """Einstellungen laden, State-Listener starten."""
+        """Settings und Zustandsflags laden, Trigger registrieren.
+
+        Gespeicherte Werte, die das Schema verletzen, werden durch den Standard ersetzt,
+        zurückgespeichert und per Benachrichtigung gemeldet.
+        """
         stored = await self._store.async_load()
         if stored:
             stored, reset = sanitize(stored, SETTINGS_SCHEMA)
@@ -1161,15 +1182,19 @@ class SolakonCoordinator:
 
     @callback
     def _on_state_change(self, event: Event) -> None:
+        """Zustandsänderung eines Trigger-Sensors: Regelzyklus anstoßen."""
         self.request_regulation()
 
     @callback
     def _on_periodic(self, _now: object) -> None:
-        # Periodischer Fallback-Trigger der Regelschleife.
+        """Periodischer Trigger: Regelzyklus anstoßen."""
         self.request_regulation()
 
     async def _async_regulate(self) -> None:
-        """Komplette Regelschleife."""
+        """Regelzyklus unter dem Lock; läuft bereits einer, entfällt dieser Aufruf.
+
+        Eine Exception wird geloggt und beendet nur diesen Zyklus.
+        """
         if self._lock.locked():
             return
         async with self._lock:
@@ -1179,6 +1204,13 @@ class SolakonCoordinator:
                 _LOGGER.exception("Solakon: Fehler in Regelschleife")
 
     async def _run_regulation_cycle(self) -> None:
+        """Ein Regelzyklus, aufgerufen unter dem Lock von `_async_regulate`.
+
+        Liest die Sensoren, rechnet Verteilung, Grenzen, Prognoseflags und Tariflage, führt
+        den fälligen Fall aus, gleicht den Entladestrom ab und regelt in Modus '1' oder '3'
+        die Ausgangsleistung. Regelung aus, ein Kernsensor ohne Zahl oder ungültige
+        Settings beenden den Zyklus vorzeitig über `_end_cycle`.
+        """
         cfg = self.entry.data
 
         # ── 0. Regelung aktiv? ───────────────────────────────────────────────
@@ -1192,7 +1224,7 @@ class SolakonCoordinator:
 
         prev_flags = self._persisted_flags()
 
-        # ── 1. Sensor-Werte lesen ────────────────────────────────────────────
+        # ── 1. Kernsensoren lesen ────────────────────────────────────────────
         # Pflichtsensoren müssen eine Zahl liefern
         missing = next((cfg[key] for key, _, required in CORE_SENSORS
                         if required and read_number(self.hass, cfg[key]).value is None), None)
@@ -1209,7 +1241,7 @@ class SolakonCoordinator:
         mode = self._str(cfg[CONF_MODE_SELECT])
         timer_val = self._flt(cfg[CONF_TIMEOUT_COUNTDOWN])
 
-        # ── 1b. StdDev aktualisieren + dynamische Offsets berechnen ──────────
+        # ── 2. StdDev und dynamische Offsets ─────────────────────────────────
         # StdDev ist eine Eigenschaft der Netzgruppe, nicht der einzelnen Instanz:
         # nur der Gruppen-Leader pflegt den Ringpuffer, alle Instanzen übernehmen
         # seinen Wert.
@@ -1221,7 +1253,7 @@ class SolakonCoordinator:
         if any(self.settings[k] for k in (S_DYN_Z1_ENABLED, S_DYN_Z2_ENABLED, S_DYN_AC_ENABLED)):
             self._update_dynamic_offsets()
 
-        # ── 2. Settings auslesen ─────────────────────────────────────────────
+        # ── 3. Settings und Feature-Sensoren ─────────────────────────────────
         cs = self._cycle_settings()
 
         ac_offset = float(self._offset("ac")[2])
@@ -1229,6 +1261,7 @@ class SolakonCoordinator:
         tariff_sensor = self._effective("tariff")
         feature = self._feature_values(cs)
 
+        # ── 4. Verteilung und Leistungsgrenzen ───────────────────────────────
         error_share, allocated_power, shares = self.group.distribution(self, soc)
         self.allocated_power = allocated_power
         if dist_warning := self._apply_shares(shares):
@@ -1244,6 +1277,7 @@ class SolakonCoordinator:
         # nicht aktualisiert.
         self.surplus_power = max(0.0, min(limits.zone_max(self.surplus_active), solar) - actual)
 
+        # ── 5. Prognoseflags ─────────────────────────────────────────────────
         forecast = forecast_flags(
             surplus_forecast=feature["surplus_forecast"], surplus_lock=feature["surplus_lock"],
             zone1_force=feature["zone1_force"], solar=solar, soc=soc,
@@ -1257,7 +1291,7 @@ class SolakonCoordinator:
         self.forecast_tariff_suppressed = forecast_suppressed(feature["pv_forecast"], cs.pv_forecast_threshold)
         self.zone1_forced = forecast.zone1_forced
 
-        # ── 3. Validierung ───────────────────────────────────────────────────
+        # ── 6. Validierung ───────────────────────────────────────────────────
         invalid = next((key for failed, key in (
             (cs.zone1_limit <= cs.zone3_limit, "err_soc_zone1_zone3"),
             (cs.surplus_enabled and cs.surplus_threshold <= cs.zone1_limit, "err_soc_surplus_zone1"),
@@ -1270,6 +1304,7 @@ class SolakonCoordinator:
             self._end_cycle(blocked=True)
             return
 
+        # ── 7. Export-Limit und Tariflage ────────────────────────────────────
         await self._sync_export_limit(limits.export)
 
         # Preis ohne Einheitenumrechnung; die Einheitenwarnung der Tariflage geht als
@@ -1284,7 +1319,7 @@ class SolakonCoordinator:
         if tariff.unit_warning:
             self._messages.warn(tariff.unit_warning)
 
-        # ── 4. Abgeleitete Variablen ─────────────────────────────────────────
+        # ── 8. Überschuss und Nacht ──────────────────────────────────────────
         prev_actual = self._prev_actual
         self._prev_actual = actual
 
@@ -1307,7 +1342,7 @@ class SolakonCoordinator:
         is_night = stage.is_night
         self.is_night = is_night
 
-        # ── 5. Falls / Zonenwechsel ──────────────────────────────────────────
+        # ── 9. Falls / Zonenwechsel ──────────────────────────────────────────
         fall_executed = await self._execute_falls(
             soc=soc, grid=grid, actual=actual, mode=mode,
             zone1_limit=cs.zone1_limit, zone3_limit=cs.zone3_limit,
@@ -1326,15 +1361,15 @@ class SolakonCoordinator:
         self.discharge_locked = tariff.discharge_locked(
             self.tariff_charge_active or self.ac_charge_active, self.surplus_active)
 
-        # ── 6. Entladestrom mit Regelzustand abgleichen (vor dem PI-Gate) ────
+        # ── 10. Entladestrom mit Regelzustand abgleichen ─────────────────────
         mode = self._str(cfg[CONF_MODE_SELECT])
         await self._set_discharge(self._required_discharge(cs.discharge_max, mode))
 
-        # ── 7. PI-Gate ───────────────────────────────────────────────────────
+        # ── 11. PI-Phase (Modus '1' und '3') ─────────────────────────────────
         if mode in (MODE_DISCHARGE, MODE_AC_CHARGE):
             await self._run_pi_phase(cs, soc, mode, timer_val, error_share, limits, ac_offset)
 
-        # ── 10. Display + Flag-Persistenz ────────────────────────────────────
+        # ── 12. Anzeige und Flag-Speicherung ─────────────────────────────────
         self._end_cycle(display=(soc, cs.zone1_limit, cs.zone3_limit, mode),
                         prev_flags=prev_flags)
 
@@ -1359,11 +1394,14 @@ class SolakonCoordinator:
         self, cs: CycleSettings, soc: float, mode: str, timer_val: float, error_share: float,
         limits: PowerLimits, ac_offset: float,
     ) -> None:
-        """PI-Phase eines Zyklus in Modus '1' oder '3': Timeout-Reset, dann Zone-0-Festwert,
-        AC-PI, Tarif-Festwert oder Standard-PI mit Stillstandsprüfung."""
+        """PI-Phase in Modus '1' oder '3': Timeout-Reset, dann ein Pfad je Regelzustand.
+
+        Pfade: Zone-0-Festwert, AC-PI, Tarif-Festwert oder Entlade-PI mit Stillstandsprüfung.
+        Im Ruhemodus endet die Phase nach dem Timeout-Reset.
+        """
         cfg = self.entry.data
 
-        # ── 6b. Frische Werte nach Falls ─────────────────────────────────────
+        # ── 11a. Frische Werte nach den Falls ────────────────────────────────
         grid = self._flt_power(cfg[CONF_GRID_SENSOR])
         solar = self._flt_power(cfg[CONF_SOLAR_SENSOR])
 
@@ -1371,7 +1409,7 @@ class SolakonCoordinator:
 
         target_offset = float(self._offset("z1" if self.cycle_active else "z2")[2])
 
-        # ── 9. Timeout-Reset ─────────────────────────────────────────────────
+        # ── 11b. Timeout-Reset ───────────────────────────────────────────────
         # Entfällt wenn ein Fall in diesem Zyklus bereits getoggelt hat
         if timer_val < 120 and not self._timer_toggled_in_cycle and self._entity_ok(cfg[CONF_TIMEOUT_COUNTDOWN]):
             await self._timer_toggle()
@@ -1388,7 +1426,7 @@ class SolakonCoordinator:
         if dist_warning := self._apply_shares(shares):
             self._messages.warn(dist_warning)
 
-        # ── PI-Pfade ─────────────────────────────────────────────────────────
+        # ── 11c. PI-Pfade ────────────────────────────────────────────────────
         if self.surplus_active:
             await self._set_fixed_output(limits.zone0, current_power, "act_zone0_output")
 

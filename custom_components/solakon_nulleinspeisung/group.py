@@ -71,10 +71,12 @@ def _socs(active: dict[str, Member], me: Member, own_soc: float) -> dict[str, fl
 
 
 def waterfill(active: dict[str, Member], shares: dict[str, float], global_max: float) -> dict[str, float]:
-    """Verteilt `global_max` nach `shares`, gekappt am Hard-Limit jedes Mitglieds; der
-    Rest gekappter Mitglieder geht iterativ an die übrigen. Terminiert, weil jede Runde
+    """Verteilt `global_max` nach `shares`, gekappt am Hard-Limit jedes Mitglieds.
+
+    Der Rest gekappter Mitglieder geht iterativ an die übrigen; terminiert, weil jede Runde
     mindestens ein Mitglied endgültig zuteilt. Abgerundet, damit die Summe `global_max`
-    nicht übersteigt."""
+    nicht übersteigt.
+    """
     caps = {eid: m.hard_limit() for eid, m in active.items()}
 
     remaining_ids = set(shares.keys())
