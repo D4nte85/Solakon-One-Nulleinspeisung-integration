@@ -66,6 +66,12 @@ def test_zone2_pv_minus_reserve(solar, erwartet):
     assert _limits().pi_max(const.MODE_DISCHARGE, cycle_active=False, solar=solar) == erwartet
 
 
+@pytest.mark.parametrize("solar, erwartet", [(0.0, 0), (300.0, 250.0), (2000.0, 600)])
+def test_zone1_bei_ladender_schwester_wie_zone2(solar, erwartet):
+    lim = _limits()
+    assert lim.pi_max(const.MODE_DISCHARGE, cycle_active=True, solar=solar, sister_charging=True) == erwartet
+
+
 def test_zone2_durch_zuteilung_gedeckelt():
     lim = _limits(allocated=300.0)
     assert lim.pi_max(const.MODE_DISCHARGE, cycle_active=False, solar=2000.0) == 300

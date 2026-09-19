@@ -1405,7 +1405,10 @@ class SolakonCoordinator:
         grid = self._flt_power(cfg[CONF_GRID_SENSOR])
         solar = self._flt_power(cfg[CONF_SOLAR_SENSOR])
 
-        dynamic_max = limits.pi_max(mode, self.cycle_active, solar)
+        # Eine Energierichtung je Netzgruppe: lädt eine Schwester, entlädt Zone 1 nur PV.
+        sister_charging = self.group.sister_charging(self)
+        capped = sister_charging and self.cycle_active and mode == MODE_DISCHARGE
+        dynamic_max = limits.pi_max(mode, self.cycle_active, solar, sister_charging)
 
         target_offset = float(self._offset("z1" if self.cycle_active else "z2")[2])
 
@@ -1451,12 +1454,14 @@ class SolakonCoordinator:
                     pool_sum(self.group.discharge_pool(), self, current_power,
                                         lambda m: m.output_setpoint()) * error_share,
                     target_offset, dynamic_max, cs.p_factor, cs.i_factor, error_share, current_power,
-                    "act_pi",
+                    "act_pi_sister_charging" if capped else "act_pi",
                 )
             elif gate == SATURATED:
                 await self._check_output_stall(dynamic_max)
             else:
                 self._reset_output_stall_state()
+            if capped and gate != STEP and self.last_action_key != "act_zone1_sister_charging":
+                self._set_last_action("act_zone1_sister_charging")
 
     def _end_cycle(
         self, *, blocked: bool = False,

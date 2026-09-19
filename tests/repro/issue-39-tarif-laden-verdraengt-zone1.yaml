@@ -1,0 +1,21 @@
+titel: Tarif-Laden einer Instanz deckelt die Zone-1-Entladung der Schwester auf PV
+bezug: issue-39-ac-laden-schwester-entladung
+# a lädt per Tarif (feste 800 W aus dem Netz), b entlädt in Zone 1 mit 600 W bei 300 W PV.
+# Der Deckel von b ist PV minus Reserve; die Batterie von b liefert nichts mehr.
+netz: 900
+instanzen:
+  - prefix: a
+    settings: {regulation_enabled: true}
+    flags: {tariff_charge_active: true}
+    sensoren: {soc: 50, modus: "3", leistung: 800, ist: -800}
+  - prefix: b
+    settings: {regulation_enabled: true, pv_reserve: 50}
+    flags: {cycle_active: true}
+    sensoren: {soc: 80, modus: "1", leistung: 600, ist: 600, solar: 300}
+schritte:
+  - nach: 0
+    wer: all
+erwartet:
+  - aufruf: {entity: b.leistung, wert: 250}
+  - instanz: b
+    zustand: {last_action_key: act_pi_sister_charging}

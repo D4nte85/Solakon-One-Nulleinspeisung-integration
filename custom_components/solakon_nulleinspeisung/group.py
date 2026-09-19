@@ -22,6 +22,7 @@ class Member(Protocol):
 
     surplus_active: bool
     ac_charge_active: bool
+    tariff_charge_active: bool
     allocated_power: float | None
 
     @property
@@ -146,6 +147,12 @@ class NetGroup:
     def ac_pool(self) -> dict[str, Member]:
         """Regelnde Mitglieder mit aktivem AC-Laden."""
         return self.pool(lambda m: m.regulating and m.ac_charge_active)
+
+    def sister_charging(self, me: Member) -> bool:
+        """Ein anderes regelndes Mitglied lädt (AC oder Tarif)."""
+        return bool(self.pool(
+            lambda m: m is not me and m.regulating and (m.ac_charge_active or m.tariff_charge_active)
+        ))
 
     def dist_cfg(self) -> dict:
         """Verteilungs-Config dieser Gruppe, mit Defaults aufgefüllt."""

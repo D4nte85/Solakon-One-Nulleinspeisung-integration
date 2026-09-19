@@ -62,6 +62,14 @@ _TEXTS: dict[str, dict[str, str]] = {
         "de": "PI: {frm:.0f} → {to:.0f} W",
         "en": "PI: {frm:.0f} → {to:.0f} W",
     },
+    "act_pi_sister_charging": {
+        "de": "Zone 1: Batterieentladung gesperrt — Schwesterinstanz lädt (PI: {frm:.0f} → {to:.0f} W)",
+        "en": "Zone 1: battery discharge blocked — sister instance charging (PI: {frm:.0f} → {to:.0f} W)",
+    },
+    "act_zone1_sister_charging": {
+        "de": "Zone 1: Batterieentladung gesperrt — Schwesterinstanz lädt",
+        "en": "Zone 1: battery discharge blocked — sister instance charging",
+    },
     "act_surplus_on": {
         "de": "Zone 0: Surplus aktiviert",
         "en": "Zone 0: surplus activated",

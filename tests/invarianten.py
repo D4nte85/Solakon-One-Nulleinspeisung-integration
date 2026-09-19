@@ -62,6 +62,7 @@ class Ctx:
     abgeschaltet_jetzt: bool = False
     runde_vollstaendig: bool = True                # alle Instanzen haben in dieser Runde geregelt
     geregelt: dict = field(default_factory=dict)   # prefix -> Regelung an, vor diesem Zyklus
+    laedt: dict = field(default_factory=dict)      # prefix -> AC- oder Tarif-Laden aktiv, vor diesem Zyklus
 
     def e(self, key: str) -> str:
         return self.cfg[key]
@@ -647,6 +648,23 @@ def k5(c: Ctx):
         return f"Export-Limit {ist} statt {soll}"
 
 
+def k6(c: Ctx):
+    if not c.normal() or c.aus_seit is not None:
+        return None
+    f = c.flags
+    if not f["cycle_active"] or f["surplus_active"] or c.lade_session() or f["resting"] or c.modus() != C.MODE_DISCHARGE:
+        return None
+    if not any(p != c.prefix and cfg[C.CONF_GRID_SENSOR] == c.e(C.CONF_GRID_SENSOR)
+               and c.geregelt.get(p) and c.laedt.get(p) for p, (cfg, _fl, _nach) in c.alle.items()):
+        return None
+    pv = c.pv()
+    if pv is None:
+        return None
+    grenze = max(0.0, pv - c.settings[C.S_PV_RESERVE])
+    if (c.leistung() or 0) > grenze + 1e-6:
+        return f"Zone 1 bei ladender Schwester: Output {c.leistung()} W > PV {pv} − Reserve {c.settings[C.S_PV_RESERVE]}"
+
+
 # Regeln, die erst nach dem Übergang gelten: der erste zutreffende Fall gewinnt, der
 # gewollte Zustand stellt sich ein bis zwei Läufe später ein.
 VERZOEGERT = {"b1", "d3", "e1", "h2"}
@@ -707,7 +725,8 @@ async def _lauf(kind: str, spec: dict) -> list[Ctx]:
                              schnappschuss(hass), flags[p], neu, aufrufe,
                              dist=spec["dist"] if spec.get("has_dist_config") else None,
                              aus_seit=aus_seit[p], abgeschaltet_jetzt=p in abgeschaltet,
-                             geregelt={q: bool(c.settings[C.S_REGULATION_ENABLED]) for q, c in coords.items()}))
+                             geregelt={q: bool(c.settings[C.S_REGULATION_ENABLED]) for q, c in coords.items()},
+                             laedt={q: bool(c.ac_charge_active or c.tariff_charge_active) for q, c in coords.items()}))
             flags[p] = neu
         nach = schnappschuss(hass)
         alle = {p: (coords[p].entry.data, flags[p], nach) for p in coords}

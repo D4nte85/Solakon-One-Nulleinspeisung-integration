@@ -1,0 +1,32 @@
+titel: AC-Laden lädt weiter aus der Entladung einer Schwesterinstanz
+bezug: issue-39-ac-laden-schwester-entladung
+# Nach dem Eintritt: a lädt AC (56 W), b entlädt in Zone 1 (194 W), Netz -67 W, keine PV.
+# Ohne b gäbe es keinen Überschuss (-67 + 194 = +127 W). ac_offset über offset_1:
+# ohne Kopplung erhöhen beide PI-Regler, b deckt die Ladeleistung von a.
+netz: -67
+instanzen:
+  - prefix: a
+    settings: {regulation_enabled: true, ac_enabled: true, ac_soc_target: 100, ac_offset: -30}
+    flags: {ac_charge_active: true}
+    sensoren: {soc: 94, modus: "3", leistung: 56, ist: -56}
+  - prefix: b
+    settings: {regulation_enabled: true, ac_enabled: true, ac_soc_target: 100, offset_1: -100}
+    flags: {cycle_active: true}
+    sensoren: {soc: 96, modus: "1", leistung: 194, ist: 194, solar: 0}
+schritte:
+  - nach: 0
+    wer: all
+  # b steht auf 0 W, das Netz zeigt den Bezug ohne die Entladung von b.
+  - nach: 5
+    setzen: {netz: 127}
+    wer: all
+erwartet:
+  - schritt: 1
+    aufruf: {entity: b.leistung, wert_max: 0}
+  - schritt: 1
+    instanz: b
+    zustand: {last_action_key: act_pi_sister_charging}
+  - schritt: 2
+    aufruf: {entity: a.leistung, wert_max: 55}
+  - schritt: alle
+    kein_aufruf: {entity: b.leistung, wert_min: 1}

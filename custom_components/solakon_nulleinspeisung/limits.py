@@ -25,11 +25,14 @@ class PowerLimits:
         """Hard-Limit der aktuellen Zone: Zone 0 bei Überschuss, sonst Zone 1/2."""
         return self.zone0 if surplus_active else self.zone12
 
-    def pi_max(self, mode: str, cycle_active: bool, solar: float) -> float:
-        """Obergrenze des PI: AC-Grenze in Modus '3', Zone-1/2-Limit mit Zyklus, sonst zusätzlich PV minus Reserve."""
+    def pi_max(self, mode: str, cycle_active: bool, solar: float, sister_charging: bool = False) -> float:
+        """Obergrenze des PI: AC-Grenze in Modus '3', Zone-1/2-Limit mit Zyklus, sonst zusätzlich PV minus Reserve.
+
+        Lädt eine Schwesterinstanz, gilt auch mit Zyklus der Deckel PV minus Reserve.
+        """
         if mode == MODE_AC_CHARGE:
             return self.ac
-        if cycle_active:
+        if cycle_active and not sister_charging:
             return self.zone12
         return min(self.zone12, max(0, solar - self.pv_reserve))
 

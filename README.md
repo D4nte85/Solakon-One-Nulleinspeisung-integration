@@ -29,6 +29,7 @@ Die Integration regelt die Ausgangsleistung des Wechselrichters über einen **PI
 - [Multi-Instancing](#multi-instancing)
   - [Netzgruppen (mehrere Smartmeter)](#netzgruppen-mehrere-smartmeter)
   - [Automatische Fehleraufteilung und Leistungsverteilung](#automatische-fehleraufteilung-und-leistungsverteilung)
+  - [Eine Energierichtung je Netzgruppe](#eine-energierichtung-je-netzgruppe)
   - [Leistungsverteilung konfigurieren](#leistungsverteilung-konfigurieren)
 - [Voraussetzungen](#voraussetzungen)
 - [Installation](#installation)
@@ -86,7 +87,7 @@ Das Verhalten wird abhängig vom Batterie-Ladestand in vier Zonen eingeteilt:
 | Zone | Bedingung | Modus | Max. Entladestrom | Regelziel | Besonderheiten |
 |------|-----------|-------|-------------------|-----------|----------------|
 | **Zone 0** | SOC ≥ Export-Schwelle UND PV-Überschuss | `'1'` | 2 A (Stabilitätspuffer) | Hard Limit Z0 | Optional. PI-Integral eingefroren. SOC- und PV-Hysterese verhindern Flackern. |
-| **Zone 1** | SOC > Zone-1-Schwelle | `'1'` | Konfigurierter Maximalwert | 0 W + Offset 1 | Läuft bis Zone-3-Schwelle — kein Yo-Yo-Effekt. Auch nachts aktiv. |
+| **Zone 1** | SOC > Zone-1-Schwelle | `'1'` | Konfigurierter Maximalwert | 0 W + Offset 1 | Läuft bis Zone-3-Schwelle — kein Yo-Yo-Effekt. Auch nachts aktiv. Lädt eine andere Instanz derselben Netzgruppe, gilt das Output-Limit von Zone 2 ([Eine Energierichtung je Netzgruppe](#eine-energierichtung-je-netzgruppe)). |
 | **Zone 2** | Zone-3 < SOC ≤ Zone-1 | `'1'` | 0 A | 0 W + Offset 2 | Output-Limit: `min(Hard-Limit Z1, max(0, PV − Reserve))`. Optional: Nachtabschaltung. |
 | **Zone 3** | SOC ≤ Zone-3-Schwelle | `'0'` (Disabled), außer AC Laden aktiv → `'3'` | Max. Entladestrom (AC Laden: 0 A) | — | Output = 0 W. Vollständiger Batterieschutz. AC Laden bleibt möglich. |
 
@@ -168,6 +169,14 @@ power_base_i = (Σ kommandierte Leistung aller Instanzen in Pool 1) × error_sha
 neuer_output_i = power_base_i + PI-Korrektur
 ```
 Dadurch gleicht sich die Aufteilung zwischen den Instanzen bei jedem Stelleingriff automatisch wieder an die Gewichtung `w_i` an, statt eine einmal entstandene Schieflage (z. B. durch zeitversetzte Rückkehr aus einem Zonenwechsel) über beliebig viele Zyklen fortzuschreiben. Im Einzelbetrieb (`error_share = 1,0`, nur eine Instanz im Pool) ist `power_base_i` identisch zum eigenen kommandierten Wert — kein Unterschied zum bisherigen Verhalten.
+
+### Eine Energierichtung je Netzgruppe
+
+Instanzen einer Netzgruppe laden oder entladen, nie beides zugleich. Solange eine Instanz lädt (AC Laden oder Tarif-Laden), gilt für jede andere Instanz der Gruppe in Zone 1 das Output-Limit von Zone 2: `min(Hard-Limit Z1, max(0, PV − Reserve))`. Ihre Batterie entlädt dann nicht, PV wird weiter eingespeist. Der Zone-1-Zyklus bleibt aktiv; endet das Laden, gilt wieder das volle Limit, ohne neuen Start. Status und letzte Aktion zeigen „Zone 1: Batterieentladung gesperrt — Schwesterinstanz lädt“.
+
+Ohne diese Sperre regeln beide Instanzen auf denselben Netzsensor: die entladende deckt die Ladeleistung der anderen als Hausverbrauch, die ladende wertet diese Entladung als Überschuss. Je nach Lage von AC-Offset und Offset 1 bleibt das Umpumpen stehen oder schaukelt sich bis an die Grenzen auf.
+
+Eine laufende Richtung wird nicht verdrängt: AC Laden startet nur bei Überschuss ohne die Entladung der Schwester-Instanzen (`ΣOutput_entladend`, siehe [AC Laden](#-ac-laden)). Ausnahme ist das Tarif-Laden — es deckelt Zone 1 der übrigen Instanzen auch dann, wenn dort kein Tarif eingerichtet ist.
 
 ### Leistungsverteilung konfigurieren
 
@@ -396,6 +405,8 @@ Optionales Laden bei erkanntem externem Überschuss. Aktiv in Zone 1 und Zone 2.
 
 > Der Modus-Guard `≠ '3'` verhindert einen Re-Eintritt wenn AC Laden bereits aktiv ist. `ΣOutput_entladend` ist im Einzelbetrieb der eigene Output, im Multi-Instanz-Betrieb der eigene Output plus der Output aller Schwester-Instanzen, die in Modus `'1'` entladen (nicht ruhend) — sonst würde eine Instanz die Entladung einer Schwester-Instanz als externen Netzüberschuss werten und aus dem Netz genau das nachladen, was die Schwester gerade einspeist.
 
+> Nach dem Eintritt deckelt jede andere Instanz der Netzgruppe ihre Zone-1-Entladung auf PV − Reserve, solange diese Instanz lädt — siehe [Eine Energierichtung je Netzgruppe](#eine-energierichtung-je-netzgruppe).
+
 **Abbruch-Bedingung:** Modus = `'3'` UND `ac_charge_active` UND kein Tarif-Laden UND (SOC ≥ Ladeziel ODER (Grid ≥ ac_offset + Hysterese UND |eigener Output| ≤ Toleranz))
 
 > Der `|Output| ≤ Toleranz`-Guard verhindert Fehlauslösung während der PI noch aktiv regelt. `actual_power_sensor` folgt derselben Vorzeichenkonvention wie der Netzsensor (positiv = Bezug, negativ = Einspeisung) — während aktivem AC-Laden ist er durchgehend deutlich negativ (Größenordnung der tatsächlichen Ladeleistung, nicht nur Rauschen nahe 0). Der frühere einseitige `≤ 0`-Vergleich war dadurch praktisch die gesamte Ladedauer erfüllt, unabhängig von der Ladeleistung. Das symmetrische Toleranzband (Einstellung „Selbstjustierung", Standard 2 W, dieselbe wie bei der PI-Konvergenzprüfung) verlangt stattdessen, dass die Ladeleistung tatsächlich auf nahe null heruntergeregelt ist, bevor der Grid-Zweig greift.
@@ -428,6 +439,8 @@ Einzelbetrieb bzw. nur eine ladende Instanz: identisch zum eigenen kommandierten
 Optionale Tarif-Arbitrage für dynamische Stromtarife (Tibber, aWATTar …). **Wird blockiert solange Überschuss-Einspeisung (Zone 0) aktiv ist.**
 
 Drei Preisstufen: **Günstig** (Preis < Günstig-Schwelle): Tarif-Laden mit fester Leistung bis SOC-Ziel — wenn das Ladeziel bereits erreicht ist, greift stattdessen der Discharge-Lock. **Mittel** (Günstig ≤ Preis < Teuer): Discharge-Lock — Zone 1 und Zone 2 gesperrt (Output 0 W, Modus Disabled). Der Discharge-Lock gilt für **beide** Stufen (günstig + mittel), also alles unterhalb der Teuer-Schwelle. Wenn der Preis die Teuer-Schwelle überschreitet, wird der Betrieb automatisch wiederhergestellt. **Teuer** (Preis ≥ Teuer-Schwelle): normale SOC-Logik, keine Einschränkung.
+
+Im Multi-Instanz-Betrieb entlädt während des Tarif-Ladens keine andere Instanz derselben Netzgruppe aus der Batterie, auch ohne eigenen Tarif — siehe [Eine Energierichtung je Netzgruppe](#eine-energierichtung-je-netzgruppe).
 
 | Parameter | Beschreibung | Empfehlung |
 |-----------|-------------|------------|
@@ -548,6 +561,7 @@ Die Regellogik arbeitet mit einer geordneten Liste von Falls. Die Reihenfolge is
 - Fall E ist gegen den Tarif-Block (Preis < Teuer) geblockt — verhindert, dass Zone 2 bei gesperrter Entladung neu startet.
 - Falls GT und G sind gegen aktiven Überschuss geblockt — Zone-0-Einspeisung hat absoluten Vorrang vor Tarif-Laden und AC Laden.
 - Fall G verwendet `ΣOutput_entladend` (eigener Output plus alle in Modus `'1'` entladenden Schwester-Instanzen, Einzelbetrieb = eigener Output) statt des Eigenanteils — sonst würde eine Instanz die Entladung einer Schwester-Instanz als externen Netzüberschuss werten und daraufhin genau diese Menge aus dem Netz nachladen (Batterie-zu-Batterie-Umpumpen im Multi-Instanz-Betrieb).
+- Nach dem Eintritt verhindert das Output-Limit der übrigen Instanzen das Umpumpen: solange eine Instanz der Netzgruppe AC- oder Tarif-lädt, gilt in Zone 1 das Limit von Zone 2 (PV − Reserve).
 
 ---
 
@@ -700,6 +714,9 @@ Instanzen werden automatisch nach ihrem Netz-Leistungssensor in [Netzgruppen](#n
 
 **Mein Netz-Leistungssensor lässt sich bei der Einrichtung nicht auswählen**
 Die Auswahl filtert auf `device_class: power`. Template- und Hilfssensoren, die erst eine Summe bilden (z. B. die drei Phasen eines Shelly 3EM), tragen diese Geräteklasse häufig nicht und erscheinen deshalb nicht in der Liste. Im Template-Sensor `device_class: power` und `unit_of_measurement: W` ergänzen, danach ist er auswählbar.
+
+**Zone 1 aktiv, aber die Instanz entlädt nicht („Batterieentladung gesperrt — Schwesterinstanz lädt“)**
+Eine andere Instanz am selben Netzsensor lädt gerade (AC Laden oder Tarif-Laden). Bis dahin speist diese Instanz nur PV − Reserve ein, damit keine Batterie die andere lädt. Endet das Laden, entlädt sie wieder normal.
 
 **Panel öffnet sich, zeigt aber keine Werte an**
 Integration neu laden (Einstellungen → Geräte & Dienste → Solakon → drei Punkte → Neu laden). Falls das Problem bleibt, HA-Protokoll auf Fehler der Domain `solakon_nulleinspeisung` prüfen.
