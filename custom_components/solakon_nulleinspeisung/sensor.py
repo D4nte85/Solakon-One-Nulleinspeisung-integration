@@ -80,10 +80,12 @@ class OperatingStateSensor(CoordinatorSensor):
 
     @property
     def icon(self) -> str:
+        """Icon zum aktuellen Betriebszustand."""
         return _STATE_ICONS.get(self._coordinator.operating_state, "mdi:state-machine")
 
     @property
     def extra_state_attributes(self) -> dict:
+        """Zustandsattribute, `changed_at` als ISO-Zeitstempel."""
         attrs = self._coordinator.snapshot_view(OPERATING_STATE_ATTRS)
         attrs["changed_at"] = dt_util.utc_from_timestamp(attrs["changed_at"]).isoformat()
         return attrs
@@ -96,10 +98,12 @@ class ZoneSensor(CoordinatorSensor):
 
     @property
     def icon(self) -> str:
+        """Icon zur aktuellen Zone."""
         return _ZONE_ICONS.get(self._coordinator.current_zone, "mdi:layers")
 
     @property
     def extra_state_attributes(self) -> dict:
+        """Zonenattribute aus dem Snapshot."""
         return self._coordinator.snapshot_view(ZONE_ATTRS)
 
 
@@ -109,6 +113,7 @@ class LastActionSensor(CoordinatorSensor):
 
     @property
     def extra_state_attributes(self) -> dict:
+        """Übersetzungsschlüssel und Parameter der letzten Aktion."""
         return {
             "action_key": self._coordinator.last_action_key,
             **self._coordinator.last_action_params,
@@ -125,6 +130,7 @@ class GridStdDevSensor(CoordinatorSensor):
 
     @property
     def extra_state_attributes(self) -> dict:
+        """Fensterparameter und Rohwert; bei dynamischem Offset zusätzlich die drei Offsets."""
         s = self._coordinator.settings
         dyn = any(s.get(k, False) for k in ("dyn_z1_enabled", "dyn_z2_enabled", "dyn_ac_enabled"))
         attrs = {
@@ -144,6 +150,7 @@ class GridStdDevSensor(CoordinatorSensor):
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, add: AddEntitiesCallback
 ) -> None:
+    """Sensoren der Instanz anlegen."""
     coord: SolakonCoordinator = hass.data[DOMAIN][entry.entry_id]
     add([
         OperatingStateSensor(coord),

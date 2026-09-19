@@ -20,12 +20,14 @@ class DiagBoolSensor(SolakonEntity, BinarySensorEntity):
 
     @property
     def is_on(self) -> bool:
+        """Wahrheitswert des Coordinator-Attributs."""
         return bool(getattr(self._coordinator, self._attr, False))
 
 
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, add: AddEntitiesCallback
 ) -> None:
+    """Diagnose-Binärsensoren der Instanz anlegen."""
     coord: SolakonCoordinator = hass.data[DOMAIN][entry.entry_id]
     add([
         DiagBoolSensor(coord, "cycle_active",               "mdi:battery-arrow-up"),

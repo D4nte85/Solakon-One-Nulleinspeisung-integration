@@ -38,6 +38,7 @@ ENTITY_FIELDS = (
 
 
 def _get_defaults(hass: HomeAssistant) -> dict:
+    """Geräte-Defaults der Entitätsfelder in der Sprache der HA-Instanz (en, sonst de)."""
     lang = hass.config.language or "de"
     return REQUIRED_ENTITY_DEFAULTS_EN if lang.startswith("en") else REQUIRED_ENTITY_DEFAULTS_DE
 
@@ -67,6 +68,7 @@ class SolakonOptionsFlow(config_entries.OptionsFlow):
     async def async_step_init(
         self, user_input: dict | None = None
     ) -> FlowResult:
+        """Entitäten-Zuweisung ändern; Abbruch, wenn der Modus-Select schon vergeben ist."""
         if user_input is not None:
             if _mode_select_taken(
                 self.hass, user_input.get(CONF_MODE_SELECT, ""), self.config_entry.entry_id,
@@ -92,6 +94,7 @@ class SolakonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_user(
         self, user_input: dict | None = None
     ) -> FlowResult:
+        """Neue Instanz anlegen; Abbruch, wenn der Modus-Select schon vergeben ist."""
         if user_input is not None:
             if _mode_select_taken(self.hass, user_input.get(CONF_MODE_SELECT, "")):
                 return self.async_abort(reason="already_configured")
@@ -114,4 +117,5 @@ class SolakonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def async_get_options_flow(
         entry: config_entries.ConfigEntry,
     ) -> "SolakonOptionsFlow":
+        """OptionsFlow für die Entitäten-Zuweisung."""
         return SolakonOptionsFlow()

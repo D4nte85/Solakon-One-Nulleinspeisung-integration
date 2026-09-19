@@ -28,10 +28,13 @@ class SolakonEntity(Entity):
         }
 
     async def async_added_to_hass(self) -> None:
+        """Beim Coordinator als Listener anmelden."""
         self._coordinator.register_entity_listener(self._on_update)
 
     async def async_will_remove_from_hass(self) -> None:
+        """Beim Coordinator abmelden."""
         self._coordinator.unregister_entity_listener(self._on_update)
 
     def _on_update(self) -> None:
+        """Zustand nach HA schreiben."""
         self.async_write_ha_state()

@@ -74,6 +74,7 @@ def _coord_or_error(hass: HomeAssistant, connection: websocket_api.ActiveConnect
 async def _ws_get_all_instances(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
 ) -> None:
+    """WS: alle Instanzen mit Name und Netzsensor, nach Name sortiert."""
     instances = []
     for entry_id, coord in hass.data.get(DOMAIN, {}).items():
         name = coord.entry.data.get(CONF_INSTANCE_NAME) or coord.entry.title or entry_id
@@ -94,6 +95,7 @@ async def _ws_get_all_instances(
 async def _ws_get_config(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
 ) -> None:
+    """WS: Settings der Instanz `entry_id`."""
     if (coord := _coord_or_error(hass, connection, msg)) is None:
         return
     connection.send_result(msg["id"], coord.settings)
@@ -109,6 +111,7 @@ async def _ws_get_config(
 async def _ws_save_config(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
 ) -> None:
+    """WS: Settings-Änderungen übernehmen; ungültige Werte als Befundliste zurück."""
     if (coord := _coord_or_error(hass, connection, msg)) is None:
         return
     try:
@@ -128,6 +131,7 @@ async def _ws_save_config(
 async def _ws_get_status(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
 ) -> None:
+    """WS: Zustand der Instanz; mit `language` Aktion und Fehlerkette in dieser Sprache."""
     if (coord := _coord_or_error(hass, connection, msg)) is None:
         return
 
@@ -152,6 +156,7 @@ async def _ws_get_status(
 async def _ws_reset_integral(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
 ) -> None:
+    """WS: PI-Integral der Instanz auf 0 setzen."""
     if (coord := _coord_or_error(hass, connection, msg)) is None:
         return
     async with coord._lock:
@@ -169,6 +174,7 @@ async def _ws_reset_integral(
 async def _ws_set_cycle(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
 ) -> None:
+    """WS: Entladezyklus setzen, Integral nullen und sofort einen Regelzyklus anstoßen."""
     if (coord := _coord_or_error(hass, connection, msg)) is None:
         return
     async with coord._lock:
@@ -188,6 +194,7 @@ async def _ws_set_cycle(
 async def _ws_get_distribution_config(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
 ) -> None:
+    """WS: Verteilungs-Einstellungen der Netzgruppe `grid_sensor`; Defaults ohne Store."""
     store = group_store.store_for(hass)
     data = DIST_DEFAULTS.copy() if store is None else store.dist_view(msg["grid_sensor"])
     connection.send_result(msg["id"], {"distribution": data})
@@ -203,6 +210,7 @@ async def _ws_get_distribution_config(
 async def _ws_save_distribution_config(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
 ) -> None:
+    """WS: Verteilungs-Einstellungen speichern und die Mitglieder der Gruppe neu anbinden."""
     store = _get_or_error(
         connection, msg, group_store.store_for(hass),
         "not_ready", "Distribution-Store nicht initialisiert",
@@ -245,6 +253,7 @@ WS_COMMANDS = (
 # ── Setup / Teardown ─────────────────────────────────────────────────────────
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
+    """Panel-Skript und Übersetzungsdateien als statische Pfade ausliefern."""
     frontend_dir = Path(__file__).parent / "frontend"
     translations_dir = Path(__file__).parent / "translations"
     # Übersetzungsdateien für das Panel ausliefern: Zustandstexte, Entitätsnamen.
@@ -264,6 +273,7 @@ async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> Non
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Coordinator anlegen, WS-Commands und Panel einmalig registrieren, Plattformen laden."""
     from .coordinator import SolakonCoordinator
 
     # Gruppen-Stores vor dem Coordinator laden: seine Trigger lesen globale Sensoren der Verteilung.
@@ -313,6 +323,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Instanz beenden; mit der letzten Instanz auch Panel und globale Daten entfernen."""
     from homeassistant.components.frontend import async_remove_panel
 
     coord = hass.data.get(DOMAIN, {}).get(entry.entry_id)
@@ -335,6 +346,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Store der Instanz löschen; mit der letzten Instanz auch die Gruppen-Stores."""
     store = Store(hass, STORAGE_VERSION, f"{DOMAIN}_{entry.entry_id}")
     await store.async_remove()
 

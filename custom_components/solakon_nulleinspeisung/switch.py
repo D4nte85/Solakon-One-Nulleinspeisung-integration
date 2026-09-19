@@ -21,17 +21,21 @@ class RegulationSwitch(SolakonEntity, SwitchEntity):
 
     @property
     def is_on(self) -> bool:
+        """True, wenn die Regelung schreiben darf."""
         return bool(self._coordinator.settings.get(S_REGULATION_ENABLED, False))
 
     async def async_turn_on(self, **kwargs: object) -> None:
+        """Regelung einschalten."""
         await self._coordinator.async_update_settings({S_REGULATION_ENABLED: True})
 
     async def async_turn_off(self, **kwargs: object) -> None:
+        """Regelung ausschalten."""
         await self._coordinator.async_update_settings({S_REGULATION_ENABLED: False})
 
 
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, add: AddEntitiesCallback
 ) -> None:
+    """Hauptschalter der Instanz anlegen."""
     coord: SolakonCoordinator = hass.data[DOMAIN][entry.entry_id]
     add([RegulationSwitch(coord)])

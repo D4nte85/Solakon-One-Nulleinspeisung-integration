@@ -40,6 +40,7 @@ def power_limits(
 ) -> PowerLimits:
     """Grenzen aus den Panel-Werten und der zugeteilten Leistung; `None` ohne Zuteilung."""
     def cap(limit: int) -> int:
+        """`limit` gedeckelt auf Gerätemaximum und, falls vorhanden, auf die Zuteilung."""
         if allocated is None:
             return int(min(limit, DEVICE_MAX_POWER))
         return int(min(int(allocated), limit, DEVICE_MAX_POWER))

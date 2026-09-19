@@ -191,6 +191,7 @@ class NetGroup:
         caps = {eid: 1.0 for eid in active}
         if mode == "capacity":
             def _cap_kwh(eid: str, m: Member) -> float | None:
+                """Kapazität der Instanz in kWh; None ohne Sensor oder ohne gültigen Wert."""
                 cap_s = str(dist.get(f"inst_{eid}_capacity_sensor", ""))
                 if not cap_s:
                     return None
@@ -209,6 +210,7 @@ class NetGroup:
 
         # SOC-Gewichte: nutzbare bzw. fehlende kWh (mode "capacity"), sonst SOC-Punkte
         def headroom(eid: str, m: Member) -> float:
+            """Gewichtungsbasis in SOC-Punkten: Abstand zum AC-Ziel bzw. zur Zone-3-Grenze."""
             if ac:
                 return m.ac_soc_target() - socs[eid]
             return socs[eid] - m.zone3_limit()
