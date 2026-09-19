@@ -23,7 +23,7 @@ from .readings import (
 )
 from .group import NetGroup, Shares, group_for
 from .tariff import Tariff, forecast_suppressed
-from .zones import ZoneInputs, decide
+from .zones import SurplusState, ZoneInputs, decide, forecast_flags, surplus_and_night
 from .const import (
     DOMAIN, STORAGE_VERSION, SETTINGS_DEFAULTS, DIST_DEFAULTS, DEVICE_MAX_POWER,
     CONF_GRID_SENSOR, CONF_ACTUAL_SENSOR, CONF_SOLAR_SENSOR,
@@ -1124,33 +1124,18 @@ class SolakonCoordinator:
             effective_by_key[self._hard_limit_key], solar
         ) - actual)
 
-        # Forcierung nur solange die PV das Ausgangslimit übersteigt und der
-        # SOC über der Zone-3-Schutzgrenze liegt.
-        surplus_forecast = feature["surplus_forecast"]
-        self.forecast_surplus_forced = surplus_forecast is not None and (
-            surplus_forecast >= cs.surplus_forecast_threshold
-            and solar > cs.hard_limit_z0
-            and soc > cs.zone3_limit
+        forecast = forecast_flags(
+            surplus_forecast=feature["surplus_forecast"], surplus_lock=feature["surplus_lock"],
+            zone1_force=feature["zone1_force"], solar=solar, soc=soc,
+            surplus_forecast_threshold=cs.surplus_forecast_threshold, hard_limit_z0=cs.hard_limit_z0,
+            zone3_limit=cs.zone3_limit, surplus_lock_factor=cs.surplus_lock_factor,
+            zone1_force_threshold=cs.zone1_force_threshold, pv_reserve=cs.pv_reserve,
+            zone1_force_min_soc=cs.zone1_force_min_soc,
         )
-
-        # Sperrt nur den PV-Austritt aus Zone 0, solange die Vorhersage über
-        # dem Ausgabelimit liegt. Der SOC-Austritt bleibt ungesperrt.
-        surplus_lock = feature["surplus_lock"]
-        self.forecast_exit_lock = surplus_lock is not None and (
-            surplus_lock >= cs.surplus_lock_factor * cs.hard_limit_z0
-            and soc > cs.zone3_limit
-        )
-
+        self.forecast_surplus_forced = forecast.surplus_forced
+        self.forecast_exit_lock = forecast.exit_lock
         self.forecast_tariff_suppressed = forecast_suppressed(feature["pv_forecast"], cs.pv_forecast_threshold)
-
-        # Zone-1-Nacht-Forcierung: erlaubt Entladung unter das normale
-        # Zone-1-Limit, wenn der morgige PV-Ertrag die Nacht ohnehin wieder auffüllt.
-        zone1_force = feature["zone1_force"]
-        self.zone1_forced = zone1_force is not None and (
-            zone1_force >= cs.zone1_force_threshold
-            and solar < cs.pv_reserve         # "gerade dunkel", ohne Nacht-Hysterese
-            and soc > cs.zone1_force_min_soc  # eigener Floor, unabhängig von zone3_limit (Exit-Schwelle)
-        )
+        self.zone1_forced = forecast.zone1_forced
 
         # ── 3. Validierung ───────────────────────────────────────────────────
         if cs.zone1_limit <= cs.zone3_limit:
@@ -1193,49 +1178,20 @@ class SolakonCoordinator:
         total_actual = self.group.pool_sum(self.group.discharge_pool(), self, actual,
                                            lambda m: m.actual_power())
 
-        if cs.surplus_enabled:
-            if solar > 0:
-                self._solar_zero_entry_armed = True
-
-            # Lastanteil dieser Instanz für Ein- und Austritt: (Σactual + grid) × error_share.
-            consumption_share = (total_actual + grid) * error_share
-            pv_hyst_share = cs.surplus_pv_hyst * error_share
-
-            normal_entry = (
-                soc >= cs.surplus_threshold
-                and (
-                    solar > (consumption_share + pv_hyst_share)
-                    or (
-                        solar == 0
-                        and actual == 0
-                        and prev_actual == 0
-                        and self._solar_zero_entry_armed
-                    )
-                )
-            )
-            # Forcierung ist bereits an solar > hard_limit_z0 gekoppelt → SOC-unabhängiger Eintritt.
-            surplus_entry = normal_entry or self.forecast_surplus_forced
-
-            # Austritt: bei aktiver Forcierung gesperrt (SOC- und Verbrauchsterm ausgeklammert),
-            # sonst normal über SOC- oder Verbrauchsschwelle. Der Exit-Lock sperrt nur den
-            # Verbrauchsterm — der SOC-Austritt greift immer.
-            soc_exit = soc < (cs.surplus_threshold - cs.surplus_soc_hyst)
-            power_exit = solar <= (consumption_share - pv_hyst_share) and not self.forecast_exit_lock
-            surplus_exit = not self.forecast_surplus_forced and (soc_exit or power_exit)
-            if self.surplus_active:
-                new_surplus = not surplus_exit
-                if surplus_exit and solar == 0:
-                    self._solar_zero_entry_armed = False
-            else:
-                new_surplus = surplus_entry
-        else:
-            new_surplus = False
-
-        if solar < cs.pv_reserve:
-            self._dark = True
-        elif solar >= cs.pv_reserve + cs.night_hysteresis:
-            self._dark = False
-        is_night = cs.night_enabled and self._dark and not self.cycle_active
+        stage = surplus_and_night(
+            state=SurplusState(self._solar_zero_entry_armed, self._dark),
+            surplus_enabled=cs.surplus_enabled, surplus_active=self.surplus_active,
+            cycle_active=self.cycle_active, forced=self.forecast_surplus_forced,
+            exit_lock=self.forecast_exit_lock, solar=solar, soc=soc, actual=actual,
+            prev_actual=prev_actual, total_actual=total_actual, grid=grid, error_share=error_share,
+            surplus_threshold=cs.surplus_threshold, surplus_soc_hyst=cs.surplus_soc_hyst,
+            surplus_pv_hyst=cs.surplus_pv_hyst, pv_reserve=cs.pv_reserve,
+            night_hysteresis=cs.night_hysteresis, night_enabled=cs.night_enabled,
+        )
+        self._solar_zero_entry_armed = stage.state.armed
+        self._dark = stage.state.dark
+        new_surplus = stage.new_surplus
+        is_night = stage.is_night
         self.is_night = is_night
 
         # ── 5. Falls / Zonenwechsel ──────────────────────────────────────────

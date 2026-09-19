@@ -110,3 +110,137 @@ def test_end_charge_ruhe_nur_ohne_zyklus(cycle_active, rest):
 
 def test_h_bleibt_bei_selbstregelung_ausserhalb_der_toleranz():
     assert _decide(ac_charge_active=True, mode="3", at_rest=False, grid=10, actual=5) is None
+
+
+# ── Vorstufe: Prognoseflags ──────────────────────────────────────────────────
+
+FC = dict(
+    surplus_forecast=None, surplus_lock=None, zone1_force=None, solar=0, soc=50,
+    surplus_forecast_threshold=15, hard_limit_z0=800, zone3_limit=20, surplus_lock_factor=1.5,
+    zone1_force_threshold=10, pv_reserve=50, zone1_force_min_soc=30,
+)
+
+
+def _flags(**kw):
+    return zones.forecast_flags(**{**FC, **kw})
+
+
+def test_prognoseflags_ohne_werte_aus():
+    assert _flags() == zones.ForecastFlags(False, False, False)
+
+
+@pytest.mark.parametrize("kw, erwartet", [
+    (dict(surplus_forecast=15, solar=801, soc=21), True),
+    (dict(surplus_forecast=14.9, solar=801, soc=21), False),
+    (dict(surplus_forecast=15, solar=800, soc=21), False),
+    (dict(surplus_forecast=15, solar=801, soc=20), False),
+])
+def test_zone0_forcierung_grenzen(kw, erwartet):
+    assert _flags(**kw).surplus_forced is erwartet
+
+
+@pytest.mark.parametrize("kw, erwartet", [
+    (dict(surplus_lock=1200, soc=21), True),
+    (dict(surplus_lock=1199, soc=21), False),
+    (dict(surplus_lock=1200, soc=20), False),
+])
+def test_austritts_sperre_grenzen(kw, erwartet):
+    assert _flags(**kw).exit_lock is erwartet
+
+
+@pytest.mark.parametrize("kw, erwartet", [
+    (dict(zone1_force=10, solar=49, soc=31), True),
+    (dict(zone1_force=9.9, solar=49, soc=31), False),
+    (dict(zone1_force=10, solar=50, soc=31), False),
+    (dict(zone1_force=10, solar=49, soc=30), False),
+])
+def test_zone1_forcierung_grenzen(kw, erwartet):
+    assert _flags(**kw).zone1_forced is erwartet
+
+
+# ── Vorstufe: Überschuss und Nacht ───────────────────────────────────────────
+
+# Nicht in Zone 0, PV 0, PV-0-Eintritt scharf, hell, Lastanteil 0.
+SN = dict(
+    state=zones.SurplusState(armed=True, dark=False), surplus_enabled=True,
+    surplus_active=False, cycle_active=False, forced=False, exit_lock=False,
+    solar=0, soc=95, actual=0, prev_actual=0, total_actual=0, grid=0, error_share=1.0,
+    surplus_threshold=90, surplus_soc_hyst=2, surplus_pv_hyst=50,
+    pv_reserve=50, night_hysteresis=20, night_enabled=True,
+)
+
+
+def _sn(**kw):
+    return zones.surplus_and_night(**{**SN, **kw})
+
+
+@pytest.mark.parametrize("kw, erwartet", [
+    # Eintritt über Lastanteil + PV-Hysterese: 200 + 100 + 50 = 350
+    (dict(solar=351, total_actual=200, grid=100), True),
+    (dict(solar=350, total_actual=200, grid=100), False),
+    (dict(solar=351, total_actual=200, grid=100, soc=89), False),
+    # Eintritt bei PV 0 nur scharf und ohne Ausgang in diesem und dem vorigen Zyklus
+    (dict(), True),
+    (dict(state=zones.SurplusState(armed=False, dark=False)), False),
+    (dict(actual=5), False),
+    (dict(prev_actual=5), False),
+    # Forcierung tritt SOC-unabhängig ein
+    (dict(forced=True, soc=30), True),
+    (dict(surplus_enabled=False), False),
+])
+def test_ueberschuss_eintritt(kw, erwartet):
+    assert _sn(**kw).new_surplus is erwartet
+
+
+@pytest.mark.parametrize("kw, erwartet", [
+    # SOC-Austritt unter Schwelle − Hysterese (88)
+    (dict(soc=87, solar=1000), False),
+    (dict(soc=88, solar=1000), True),
+    # Verbrauchsaustritt: PV ≤ Lastanteil − PV-Hysterese (300 − 50)
+    (dict(solar=250, total_actual=200, grid=100), False),
+    (dict(solar=251, total_actual=200, grid=100), True),
+    # Exit-Lock sperrt nur den Verbrauchsterm (Issue #7)
+    (dict(solar=250, total_actual=200, grid=100, exit_lock=True), True),
+    (dict(soc=87, solar=1000, exit_lock=True), False),
+    # Forcierung sperrt den ganzen Austritt
+    (dict(soc=50, forced=True), True),
+])
+def test_ueberschuss_austritt(kw, erwartet):
+    assert _sn(surplus_active=True, **kw).new_surplus is erwartet
+
+
+def test_pv0_eintritt_erst_nach_pv_wieder_scharf():
+    """Issue #17: nach dem Austritt bei PV 0 kein Wiedereintritt, bis PV > 0 war."""
+    r = _sn(surplus_active=True, soc=87)
+    assert (r.new_surplus, r.state.armed) == (False, False)
+    r = _sn(state=r.state)
+    assert (r.new_surplus, r.state.armed) == (False, False)
+    r = _sn(state=r.state, solar=10)
+    assert (r.new_surplus, r.state.armed) == (False, True)
+    assert _sn(state=r.state).new_surplus is True
+
+
+def test_austritt_mit_pv_laesst_eintritt_scharf():
+    r = _sn(surplus_active=True, soc=87, solar=10)
+    assert (r.new_surplus, r.state.armed) == (False, True)
+
+
+def test_ohne_ueberschuss_bleibt_scharf_unveraendert():
+    assert _sn(surplus_enabled=False, solar=10, state=zones.SurplusState(False, False)).state.armed is False
+
+
+def test_nacht_hysterese_band():
+    r = _sn(solar=49)
+    assert (r.state.dark, r.is_night) == (True, True)
+    r = _sn(state=r.state, solar=69)
+    assert (r.state.dark, r.is_night) == (True, True)
+    r = _sn(state=r.state, solar=70)
+    assert (r.state.dark, r.is_night) == (False, False)
+    r = _sn(state=r.state, solar=50)
+    assert (r.state.dark, r.is_night) == (False, False)
+
+
+@pytest.mark.parametrize("kw", [dict(cycle_active=True), dict(night_enabled=False)])
+def test_nacht_unterdrueckt(kw):
+    r = _sn(solar=0, **kw)
+    assert (r.state.dark, r.is_night) == (True, False)

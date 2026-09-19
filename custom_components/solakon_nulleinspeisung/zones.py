@@ -55,6 +55,120 @@ def _end_charge(name: str, flag: str, action_key: str, cycle_active: bool) -> Fa
     }, action_key)
 
 
+@dataclass(frozen=True)
+class ForecastFlags:
+    """Prognoselage eines Zyklus: Zone-0-Forcierung, Austritts-Sperre, Zone-1-Nacht-Forcierung."""
+
+    surplus_forced: bool
+    exit_lock: bool
+    zone1_forced: bool
+
+
+def forecast_flags(
+    *, surplus_forecast: float | None, surplus_lock: float | None, zone1_force: float | None,
+    solar: float, soc: float, surplus_forecast_threshold: float, hard_limit_z0: float,
+    zone3_limit: float, surplus_lock_factor: float, zone1_force_threshold: float,
+    pv_reserve: float, zone1_force_min_soc: float,
+) -> ForecastFlags:
+    """Prognoseflags aus den Prognosewerten; ein fehlender Wert (None) setzt sein Flag nicht."""
+    # Forcierung nur solange die PV das Ausgangslimit übersteigt und der
+    # SOC über der Zone-3-Schutzgrenze liegt.
+    surplus_forced = surplus_forecast is not None and (
+        surplus_forecast >= surplus_forecast_threshold
+        and solar > hard_limit_z0
+        and soc > zone3_limit
+    )
+
+    # Sperrt nur den PV-Austritt aus Zone 0, solange die Vorhersage über
+    # dem Ausgabelimit liegt. Der SOC-Austritt bleibt ungesperrt.
+    exit_lock = surplus_lock is not None and (
+        surplus_lock >= surplus_lock_factor * hard_limit_z0
+        and soc > zone3_limit
+    )
+
+    # Zone-1-Nacht-Forcierung: erlaubt Entladung unter das normale
+    # Zone-1-Limit, wenn der morgige PV-Ertrag die Nacht ohnehin wieder auffüllt.
+    zone1_forced = zone1_force is not None and (
+        zone1_force >= zone1_force_threshold
+        and solar < pv_reserve         # "gerade dunkel", ohne Nacht-Hysterese
+        and soc > zone1_force_min_soc  # eigener Floor, unabhängig von zone3_limit (Exit-Schwelle)
+    )
+    return ForecastFlags(surplus_forced, exit_lock, zone1_forced)
+
+
+@dataclass(frozen=True)
+class SurplusState:
+    """Hysteresezustand zwischen Zyklen: PV-0-Eintritt scharf, Dunkelheit."""
+
+    armed: bool
+    dark: bool
+
+
+@dataclass(frozen=True)
+class SurplusNight:
+    """Ergebnis der Vorstufe: Zone 0 in diesem Zyklus, Nacht, neuer Hysteresezustand."""
+
+    new_surplus: bool
+    is_night: bool
+    state: SurplusState
+
+
+def surplus_and_night(
+    *, state: SurplusState, surplus_enabled: bool, surplus_active: bool, cycle_active: bool,
+    forced: bool, exit_lock: bool, solar: float, soc: float, actual: float, prev_actual: float,
+    total_actual: float, grid: float, error_share: float, surplus_threshold: float,
+    surplus_soc_hyst: float, surplus_pv_hyst: float, pv_reserve: float,
+    night_hysteresis: float, night_enabled: bool,
+) -> SurplusNight:
+    """Überschuss-Ein- und -Austritt und Nacht-Hysterese aus Messwerten und bisherigem Zustand."""
+    armed = state.armed
+    if surplus_enabled:
+        if solar > 0:
+            armed = True
+
+        # Lastanteil dieser Instanz für Ein- und Austritt: (Σactual + grid) × error_share.
+        consumption_share = (total_actual + grid) * error_share
+        pv_hyst_share = surplus_pv_hyst * error_share
+
+        normal_entry = (
+            soc >= surplus_threshold
+            and (
+                solar > (consumption_share + pv_hyst_share)
+                or (
+                    solar == 0
+                    and actual == 0
+                    and prev_actual == 0
+                    and armed
+                )
+            )
+        )
+        # Forcierung ist bereits an solar > hard_limit_z0 gekoppelt → SOC-unabhängiger Eintritt.
+        surplus_entry = normal_entry or forced
+
+        # Austritt: bei aktiver Forcierung gesperrt (SOC- und Verbrauchsterm ausgeklammert),
+        # sonst normal über SOC- oder Verbrauchsschwelle. Der Exit-Lock sperrt nur den
+        # Verbrauchsterm — der SOC-Austritt greift immer.
+        soc_exit = soc < (surplus_threshold - surplus_soc_hyst)
+        power_exit = solar <= (consumption_share - pv_hyst_share) and not exit_lock
+        surplus_exit = not forced and (soc_exit or power_exit)
+        if surplus_active:
+            new_surplus = not surplus_exit
+            if surplus_exit and solar == 0:
+                armed = False
+        else:
+            new_surplus = surplus_entry
+    else:
+        new_surplus = False
+
+    dark = state.dark
+    if solar < pv_reserve:
+        dark = True
+    elif solar >= pv_reserve + night_hysteresis:
+        dark = False
+    is_night = night_enabled and dark and not cycle_active
+    return SurplusNight(new_surplus, is_night, SurplusState(armed, dark))
+
+
 def decide(inp: ZoneInputs) -> FallDecision | None:
     """Prüft alle Falls in Reihenfolge; der erste Treffer gewinnt, sonst None."""
     soc = inp.soc
