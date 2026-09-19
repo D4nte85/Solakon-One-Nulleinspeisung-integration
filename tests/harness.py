@@ -271,7 +271,7 @@ COORD_ATTRS = (
     "is_night", "discharge_locked", "operating_state", "operating_state_ts",
     "_cycle_blocked", "last_output_ts", "mode_label_ts",
     "grid_stddev", "grid_stddev_raw", "dyn_offset_z1", "dyn_offset_z2", "dyn_offset_ac",
-    "allocated_power", "surplus_power", "_dist_warning", "_output_warning",
+    "allocated_power", "surplus_power", "_output_warning",
     "_output_stall_actions", "_output_stall_last_ts", "_tariff_unit_suspect_since",
     "dist_mode_effective", "_prev_actual", "_solar_zero_entry_armed",
     "_timer_toggled_in_cycle",

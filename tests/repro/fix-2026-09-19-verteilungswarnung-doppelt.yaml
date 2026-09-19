@@ -1,0 +1,19 @@
+titel: Die Verteilungswarnung steht doppelt in der Fehlerkette, wenn die Instanz nicht AC-lädt
+bezug: fix-2026-09-19-verteilungswarnung-doppelt
+offen: false
+netz: 300
+verteilung: {distribution_mode: soc_switch, soc_switch_divergence: 5, global_max_power: 800}
+instanzen:
+  - prefix: a
+    settings: {regulation_enabled: true}
+    sensoren: {soc: 80, modus: "1"}
+  - prefix: b
+    settings: {regulation_enabled: true}
+    sensoren: {soc: null, modus: "1"}
+schritte:
+  - nach: 0
+    wer: all
+erwartet:
+  # Einmal aus der Entlade-Verteilung; ac_share liefert ohne AC-Pool keine eigene Warnung.
+  - instanz: a
+    zustand: {last_error: "Verteilung (SOC-Switch): SOC-Sensor einer Instanz nicht verfügbar — auf Gleichverteilung zurückgefallen"}

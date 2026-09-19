@@ -262,12 +262,7 @@ class SolakonCoordinator:
         # Verwertbarer PV-Überschuss: Luft zwischen aktuellem Output und dem
         # Minimum aus Hard-Limit und aktueller PV-Leistung.
         self.surplus_power: float = 0.0
-        # Transienter Warnkanal: von _all_shares() gesetzt wenn der Verteilungsmodus
-        # wegen eines fehlenden/ungültigen Fremdinstanz-Sensors degradiert (z. B.
-        # capacity → soc, soc/soc_switch → equal) — wird im selben Zyklus sofort
-        # nach dem jeweiligen Aufruf in soft_errors übernommen, siehe _run_regulation_cycle.
-        self._dist_warning: Msg | None = None
-        # Analog zu _dist_warning: von _confirm_zero_output() gesetzt wenn eine
+        # Transienter Warnkanal: von _confirm_zero_output() gesetzt wenn eine
         # sicherheitskritische Output-Nullung (Fall-Übergänge, PI-Ziel 0) trotz
         # Retries nicht bestätigt werden konnte — sofort im selben Zyklus nach dem
         # jeweiligen Aufruf in soft_errors übernommen, siehe _run_regulation_cycle.
@@ -1107,12 +1102,10 @@ class SolakonCoordinator:
         tariff_sensor = self._effective("tariff")
         feature = self._feature_values(cs, soft_errors)
 
-        self._dist_warning = None
         error_share, allocated_power, shares = self.group.distribution(self, soc)
-        self._apply_shares(shares)
         self.allocated_power = allocated_power
-        if self._dist_warning:
-            self._add_soft_error(soft_errors, self._dist_warning)
+        if dist_warning := self._apply_shares(shares):
+            self._add_soft_error(soft_errors, dist_warning)
         # Panel-Limits gegen Geraetegrenze und zugeteilte Leistung gedeckelt.
         def cap(limit: int) -> int:
             if allocated_power is None:
@@ -1312,9 +1305,8 @@ class SolakonCoordinator:
 
         # Eigener Pool für AC-Laden, nach den Falls berechnet.
         ac_error_share, shares = self.group.ac_share(self, soc)
-        self._apply_shares(shares)
-        if self._dist_warning:
-            self._add_soft_error(soft_errors, self._dist_warning)
+        if dist_warning := self._apply_shares(shares):
+            self._add_soft_error(soft_errors, dist_warning)
 
         # ── PI-Pfade ─────────────────────────────────────────────────────────
         if self.surplus_active:
@@ -1451,14 +1443,13 @@ class SolakonCoordinator:
         """Gesetzte Ausgangsleistung."""
         return self._flt(self.entry.data.get(CONF_ACTIVE_POWER, ""))
 
-    def _apply_shares(self, shares: Shares | None) -> None:
-        """Angewandten Verteilungsmodus und Warnung aus einer Anteilsrechnung übernehmen."""
+    def _apply_shares(self, shares: Shares | None) -> Msg | None:
+        """Angewandten Verteilungsmodus übernehmen; liefert die Degradierungswarnung dieser Rechnung."""
         if shares is None:
-            return
-        if shares.warning:
-            self._dist_warning = (shares.warning, {})
+            return None
         if shares.mode is not None:
             self.dist_mode_effective = shares.mode
+        return (shares.warning, {}) if shares.warning else None
 
     # ── Zonen-Display ────────────────────────────────────────────────────────
 
