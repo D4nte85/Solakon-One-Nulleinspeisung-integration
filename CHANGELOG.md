@@ -3,7 +3,23 @@
 Alle nennenswerten Änderungen an der Solakon-ONE-Nulleinspeisung-Integration.
 Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
-## [Unreleased]
+## [3.0.0] – 2026-09-19
+
+> **Größte Änderung dieser Version ist der fast vollständige Umbau der Codebasis.** Dazu kommen der zentrale Ruhezustand, die Verteilung über mehrere Netzgruppen, Panel-Texte in der Sprache des Benutzerprofils und über 20 Fehlerbehebungen. Enthält alle Änderungen aus `3.0.0-beta.1` bis `3.0.0-beta.4` (unten) und die folgenden. Wer von `2.4.x` kommt, liest zuerst *Upgrade von 2.4.x*.
+
+### Upgrade von 2.4.x
+
+- **Vor dem Update ein Backup anlegen.** Der Speicher der SOC-Umschaltung steigt von Version 1 auf 2 und wird beim ersten Start migriert. `2.4.x` kann ihn danach nicht mehr lesen; ein Rückschritt ist nur über das Backup vorgesehen.
+- Zahlenwerte kommen nur noch aus Entitäten der Domains `sensor`, `input_number` und `number`. Eine Tarifschwelle aus einer anderen Domain fällt auf den eingestellten Wert zurück, ein Feature-Sensor anderer Domain meldet die falsche Domain.
+- Sensoren mit einem Text wie `on` oder `off` gelten als „keine Zahl“, nicht mehr als 1 oder 0. Liefert ein Pflichtsensor so einen Text, überspringt die Regelung den Zyklus mit Meldung. Der Leistungssollwert des Geräts ist jetzt ebenfalls Pflichtsensor.
+- Gespeicherte Settings außerhalb der harten Grenzen (siehe *Geändert*) fallen beim ersten Laden auf den Standard, eine HA-Benachrichtigung nennt sie.
+- Neu in den Einstellungen: **Hysterese Einschalten** der Nachtabschaltung (Standard 0, Verhalten unverändert) und im Debug-Tab **Ruhezustand in Modus 1** (Standard aus).
+
+### Umbau
+
+- Der Regelzyklus steht nicht mehr in einem Block im Coordinator (vorher rund 2100 Zeilen). Die Logik liegt in eigenen Modulen: `readings.py` (Sensorwerte lesen), `zones.py` (Zonenentscheidung), `pi.py` (PI-Regler), `limits.py` (Leistungsgrenzen), `tariff.py` (Tariflage), `messages.py` (Meldungen), `schema.py` (Settings-Prüfung), `group.py` und `group_store.py` (Netzgruppe, Verteilung und ihr gespeicherter Zustand). Der Coordinator liest, ruft sie in fester Reihenfolge auf und schreibt.
+- WebSocket-Handler, Sensoren, Config-Flow und Panel sind auf gemeinsame Funktionen zurückgeführt, Zustandstexte und Entitätsnamen stehen nur noch in `translations/`.
+- Das Verhalten ist über den Umbau hinweg mit Charakterisierungstests über Zufallsszenarien, Invarianten der Verhaltensregeln, Reproduktionsszenarien je Fehlervorgang und einem Render-Vergleich des Panels abgesichert.
 
 ### Geändert
 
@@ -11,15 +27,22 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ### Behoben
 
-- Verteilung beim AC-Laden (#38): Pool 2 gewichtete wie die Entladung nach SOC über der Zone-3-Schwelle, die Instanz mit dem höheren SOC lud stärker und die SOCs liefen auseinander. Gewichtet wird jetzt nach dem Platz bis zum Ladeziel (bei „Kapazitätsgewichtet“ in kWh). „SOC-Umschaltung“ wirkt im AC-Pool wie „SOC-gewichtet“ und verstellt die Rotation der Entladung nicht mehr.
+- Verteilung beim AC-Laden (#38, bereits in `2.4.1`): Pool 2 gewichtete wie die Entladung nach SOC über der Zone-3-Schwelle, die Instanz mit dem höheren SOC lud stärker und die SOCs liefen auseinander. Gewichtet wird jetzt nach dem Platz bis zum Ladeziel (bei „Kapazitätsgewichtet“ in kWh). „SOC-Umschaltung“ wirkt im AC-Pool wie „SOC-gewichtet“ und verstellt die Rotation der Entladung nicht mehr.
 - Lieferte der Leistungssollwert des Geräts keine Zahl, rechnete der PI-Regler von 0 W aus und schrieb einen falschen Sprung, ohne Meldung. Der Sollwert ist jetzt Pflichtsensor: Ohne Zahl überspringt die Regelung den Zyklus mit Meldung, wie bei Netz, PV, Ist-Leistung und SOC.
 - Lieferte eine Tarifschwellen-Entität (günstig oder teuer) keine Zahl, galt still der eingestellte Wert. Bei aktiver Tarif-Funktion meldet `last_error` das jetzt mit der Entität; der eingestellte Wert gilt weiter.
 - Lag der Preis unter der Günstig-Schwelle und war das Tarif-Ladeziel erreicht, holte die Recovery (Fall D) eine gestoppte Entladung zurück, obwohl der Discharge-Lock (Fall TM) sie im nächsten Zyklus wieder stoppte. Die Sperre der Recovery gilt jetzt wie der Lock für alles unterhalb der Teuer-Schwelle. Die Panel-Texte beschreiben den Lock entsprechend.
-- Verteilung: Fiel der Verteilungsmodus mangels Fremdsensor zurück, stand die Warnung zweimal in `last_error`, wenn die Instanz nicht AC-lud. Die Anteilsrechnung für AC-Laden übernahm die Warnung der Entlade-Verteilung erneut. Jede Rechnung meldet jetzt nur ihre eigene Warnung.
-- Verteilung: Im Zyklus, in dem eine Instanz AC-Laden startet, rechnet sie Entlade-Verteilung und AC-Anteil. Fiel dabei der Verteilungsmodus mangels Fremdsensor zurück, meldeten beide Rechnungen dieselbe Warnung, und sie stand zweimal in `last_error`. Die Warnung des AC-Anteils beginnt jetzt mit „AC-Verteilung“.
+- Verteilung: Fiel der Verteilungsmodus mangels Fremdsensor zurück, stand die Warnung zweimal in `last_error` — ohne AC-Laden, weil die Anteilsrechnung für AC-Laden die Warnung der Entlade-Verteilung übernahm, und im Startzyklus des AC-Ladens, weil beide Rechnungen dieselbe Warnung meldeten. Jede Rechnung meldet jetzt nur ihre eigene, die des AC-Anteils beginnt mit „AC-Verteilung“.
 - Hatte ein Feature-Sensor die falsche Domain (z. B. `input_boolean`), nannte die Meldung kein Feature. Lasen zwei Features dieselbe Entität, etwa Surplus-Forecast und PV-Vorhersage den PV-Vorhersage-Sensor, stand zweimal derselbe Text in `last_error`. Die Meldung nennt jetzt das Feature und die Folge, wie bei „nicht verfügbar“ und „kein Zahlenwert“.
 - Verteilung: Lag das Hard-Limit einer Instanz über der Gerätegrenze von 1200 W (nur über die WebSocket-API speicherbar, nicht über das Panel), teilte die Netzgruppe ihr bis zu diesem Wert zu. Die Instanz regelte trotzdem nur bis 1200 W, der Rest ging keiner anderen Instanz zu. Die Gruppe rechnet jetzt mit dem auf 1200 W gedeckelten Hard-Limit.
 - Nutzte eine Instanz einen globalen Sensor aus dem Verteilungs-Tab (Tarifpreis, PV-Prognose, Überschuss-Sperre), löste dessen Änderung nach einem HA-Neustart keinen Regelzyklus aus. Die Instanz meldete ihre Trigger an, bevor die Verteilungseinstellungen geladen waren, bei parallelem Setup auch die weiteren Instanzen. Jetzt wird zuerst geladen, und jede Instanz wartet auf das Ende des Ladens.
+
+## [2.4.1] – 2026-09-19
+
+> Nebenrelease auf Basis von `2.4.1-beta.1` (unten), neben der 3.0-Reihe. Enthält dessen Änderungen und den folgenden Fix, der auch in `3.0.0` steckt.
+
+### Behoben
+
+- Verteilung beim AC-Laden (#38): Pool 2 gewichtete wie die Entladung nach SOC über der Zone-3-Schwelle, die Instanz mit dem höheren SOC lud stärker und die SOCs liefen auseinander. Gewichtet wird jetzt nach dem Platz bis zum Ladeziel (bei „Kapazitätsgewichtet“ in kWh). „SOC-Umschaltung“ wirkt im AC-Pool wie „SOC-gewichtet“.
 
 ## [3.0.0-beta.4] – 2026-09-18
 
