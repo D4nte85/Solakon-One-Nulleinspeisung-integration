@@ -101,6 +101,10 @@ SOC-gewichtet        w_i = nutzbar_i / Σ nutzbar_j
 Kapazitätsgewichtet  wie SOC-gewichtet, zusätzlich × Kapazität_kWh_i
 SOC-Umschaltung      genau eine Instanz aktiv (w_i = 1), alle anderen 0
 
+# Pool 2 (AC Laden): Platz bis zum Ladeziel statt SOC über Zone 3
+                     nutzbar_i = max(0, AC-Ladeziel_i − SOC_i) / 100
+                     SOC-Umschaltung wirkt hier wie SOC-gewichtet
+
 # Daraus je Instanz:
 allocated_power_i = wasserfüll(total_power, {w_i}, {hard_limit_i})
 error_share_i     = w_i        → Anteil am Netzfehler im PI-Regler
@@ -110,7 +114,7 @@ error_share_i     = w_i        → Anteil am Netzfehler im PI-Regler
 
 **SOC-Umschaltung:** Die aktive Instanz entlädt exklusiv, bis ihr SOC seit Übernahme um die Divergenz-Schwelle gefallen ist — dann übernimmt die Instanz mit dem höchsten verbleibenden SOC (nie zweimal in Folge dieselbe). Der Zustand übersteht HA-Neustarts. Zone 0 hat Vorrang: eine Instanz in Überschuss-Einspeisung übernimmt sofort die Führung, mehrere teilen sich gleichmäßig. Beim Verlassen von Zone 0 wird die Rotations-Baseline auf den aktuellen SOC neu verankert.
 
-**Zwei getrennte Pools:** Pool 1 sind die Instanzen in Modus `'1'` (Nulleinspeisung), Pool 2 die mit aktivem AC Laden. Pool 2 bekommt nur einen eigenen `error_share`, kein `allocated_power` — die AC-Ladeleistung bleibt unabhängig vom Hard-Limit. Eine Instanz in Modus `'0'` trägt zu keinem Pool bei (`error_share = 0`, `allocated_power = None`, statisches Hard-Limit gilt). Bei nur einer aktiven Instanz je Pool ist `w_i = 1,0`.
+**Zwei getrennte Pools:** Pool 1 sind die Instanzen in Modus `'1'` (Nulleinspeisung), Pool 2 die mit aktivem AC Laden. Pool 2 bekommt nur einen eigenen `error_share`, kein `allocated_power` — die AC-Ladeleistung bleibt unabhängig vom Hard-Limit. Gewichtet wird dort nach dem Platz bis zum Ladeziel: die Instanz mit dem niedrigeren SOC lädt stärker, die SOCs laufen beim Laden zusammen. Eine Instanz in Modus `'0'` trägt zu keinem Pool bei (`error_share = 0`, `allocated_power = None`, statisches Hard-Limit gilt). Bei nur einer aktiven Instanz je Pool ist `w_i = 1,0`.
 
 > **Batteriekapazität (kWh):** Nur bei Verteilungs-Modus „Kapazitätsgewichtet" relevant. Fehlt der Sensor bei irgendeiner aktiven Instanz, wird die Kapazität für alle neutral (1.0) gewertet — die Gewichtung entspricht dann „SOC-gewichtet". Sinnvoll wenn die Instanzen Batterien unterschiedlicher Kapazität steuern.
 
