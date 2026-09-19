@@ -26,6 +26,7 @@ class Member(Protocol):
     def soc_reading(self) -> float | None: ...
     def hard_limit(self) -> float: ...
     def zone3_limit(self) -> float: ...
+    def ac_soc_target(self) -> float: ...
     def capacity_kwh(self, entity_id: str) -> float | None: ...
     def actual_power(self) -> float: ...
     def output_setpoint(self) -> float: ...
@@ -41,8 +42,9 @@ class Shares:
 
 
 # Warnschlüssel bei Rückfall des Verteilungsmodus, je Grund: (Entlade-Pool, AC-Pool).
+# soc_switch kommt nur im Entlade-Pool vor.
 DIST_WARNINGS = {
-    "soc_switch": ("warn_dist_soc_switch_sensor", "warn_ac_dist_soc_switch_sensor"),
+    "soc_switch": ("warn_dist_soc_switch_sensor", ""),
     "capacity": ("warn_dist_capacity_sensor", "warn_ac_dist_capacity_sensor"),
     "soc": ("warn_dist_soc_sensor", "warn_ac_dist_soc_sensor"),
 }
@@ -122,15 +124,19 @@ class NetGroup:
     def all_shares(self, active: dict[str, Member], me: Member, own_soc: float, ac: bool = False) -> Shares:
         """Anteile aller Mitglieder in `active` nach Verteilungsmodus.
 
-        Fehlt ein Fremdsensor (SOC oder Kapazität), weicht der Modus aus: capacity → soc,
-        soc/soc_switch → equal; `Shares.mode` und `Shares.warning` tragen das. Der
-        Warnschlüssel kommt aus DIST_WARNINGS, mit `ac` der des AC-Pools.
+        Gewicht im Entlade-Pool ist der SOC über der Zone-3-Grenze, mit `ac` der Platz bis
+        zum Ladeziel; `soc_switch` wirkt im AC-Pool wie `soc`. Fehlt ein Fremdsensor (SOC
+        oder Kapazität), weicht der Modus aus: capacity → soc, soc/soc_switch → equal;
+        `Shares.mode` und `Shares.warning` tragen das. Der Warnschlüssel kommt aus
+        DIST_WARNINGS, mit `ac` der des AC-Pools.
         """
         n = len(active)
         if n == 0:
             return Shares({})
         dist = self.dist_cfg()
         mode = effective = dist["distribution_mode"]
+        if ac and mode == "soc_switch":
+            mode = effective = "soc"
         warning = ""
 
         if n <= 1:
@@ -169,9 +175,14 @@ class NetGroup:
         if socs is None:
             return to_equal("soc")
 
-        # SOC-Gewichte: nutzbare kWh (mode "capacity") bzw. nutzbare SOC-% (mode "soc")
+        # SOC-Gewichte: nutzbare bzw. fehlende kWh (mode "capacity"), sonst SOC-Punkte
+        def headroom(eid: str, m: Member) -> float:
+            if ac:
+                return m.ac_soc_target() - socs[eid]
+            return socs[eid] - m.zone3_limit()
+
         soc_weights = {
-            eid: max(0.0, (socs[eid] - m.zone3_limit()) / 100.0 * caps[eid])
+            eid: max(0.0, headroom(eid, m) / 100.0 * caps[eid])
             for eid, m in active.items()
         }
         total_soc = sum(soc_weights.values())

@@ -1361,6 +1361,9 @@ class SolakonCoordinator:
     def zone3_limit(self) -> float:
         return self._setting(S_ZONE3_LIMIT, float)
 
+    def ac_soc_target(self) -> float:
+        return self._setting(S_AC_SOC_TARGET, float)
+
     def capacity_kwh(self, entity_id: str) -> float | None:
         return self._flt_kwh_normalized(entity_id, None)
 

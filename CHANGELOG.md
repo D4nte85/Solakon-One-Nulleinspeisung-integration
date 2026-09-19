@@ -11,6 +11,7 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ### Behoben
 
+- Verteilung beim AC-Laden (#38): Pool 2 gewichtete wie die Entladung nach SOC über der Zone-3-Schwelle, die Instanz mit dem höheren SOC lud stärker und die SOCs liefen auseinander. Gewichtet wird jetzt nach dem Platz bis zum Ladeziel (bei „Kapazitätsgewichtet“ in kWh). „SOC-Umschaltung“ wirkt im AC-Pool wie „SOC-gewichtet“ und verstellt die Rotation der Entladung nicht mehr.
 - Lieferte der Leistungssollwert des Geräts keine Zahl, rechnete der PI-Regler von 0 W aus und schrieb einen falschen Sprung, ohne Meldung. Der Sollwert ist jetzt Pflichtsensor: Ohne Zahl überspringt die Regelung den Zyklus mit Meldung, wie bei Netz, PV, Ist-Leistung und SOC.
 - Lieferte eine Tarifschwellen-Entität (günstig oder teuer) keine Zahl, galt still der eingestellte Wert. Bei aktiver Tarif-Funktion meldet `last_error` das jetzt mit der Entität; der eingestellte Wert gilt weiter.
 - Lag der Preis unter der Günstig-Schwelle und war das Tarif-Ladeziel erreicht, holte die Recovery (Fall D) eine gestoppte Entladung zurück, obwohl der Discharge-Lock (Fall TM) sie im nächsten Zyklus wieder stoppte. Die Sperre der Recovery gilt jetzt wie der Lock für alles unterhalb der Teuer-Schwelle. Die Panel-Texte beschreiben den Lock entsprechend.

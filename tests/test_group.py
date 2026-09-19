@@ -26,6 +26,7 @@ class M:
     soc: float | None = 50.0
     limit: float = 800.0
     zone3: float = 20.0
+    ac_target: float = 90.0
     capacity: dict = field(default_factory=dict)
     actual: float = 0.0
     setpoint: float = 0.0
@@ -43,6 +44,9 @@ class M:
 
     def zone3_limit(self):
         return self.zone3
+
+    def ac_soc_target(self):
+        return self.ac_target
 
     def capacity_kwh(self, entity_id):
         return self.capacity.get(entity_id)
@@ -178,12 +182,43 @@ def test_kapazitaet_fehlt_soc_gewichtung_mit_warnung():
      ("warn_dist_capacity_sensor", "warn_ac_dist_capacity_sensor")),
     ({"distribution_mode": "soc"}, None, ("warn_dist_soc_sensor", "warn_ac_dist_soc_sensor")),
     ({"distribution_mode": "soc_switch"}, None,
-     ("warn_dist_soc_switch_sensor", "warn_ac_dist_soc_switch_sensor")),
+     ("warn_dist_soc_switch_sensor", "warn_ac_dist_soc_sensor")),
 ])
 def test_warnschluessel_je_pool(dist, soc_b, warnungen):
     a, b = M("a", capacity={"sensor.ka": 2.0}), M("b", soc=soc_b)
     _, g = _group(a, b, dist=dist)
     assert tuple(g.all_shares({"a": a, "b": b}, a, 50, ac=ac).warning for ac in (False, True)) == warnungen
+
+
+def test_ac_pool_gewichtet_nach_platz_bis_ladeziel():
+    a, b = M("a", ac_target=90.0), M("b", soc=30.0, ac_target=80.0)
+    _, g = _group(a, b, dist={"distribution_mode": "soc"})
+    s = g.all_shares({"a": a, "b": b}, a, 80, ac=True)
+    assert s.values == pytest.approx({"a": 10 / 60, "b": 50 / 60})
+
+
+def test_ac_pool_kapazitaet_gewichtet_fehlende_kwh():
+    dist = {"distribution_mode": "capacity",
+            "inst_a_capacity_sensor": "sensor.ka", "inst_b_capacity_sensor": "sensor.kb"}
+    a, b = M("a", capacity={"sensor.ka": 4.0}), M("b", soc=50.0, capacity={"sensor.kb": 2.0})
+    _, g = _group(a, b, dist=dist)
+    s = g.all_shares({"a": a, "b": b}, a, 70, ac=True)
+    assert s.values == pytest.approx({"a": 0.8 / 1.6, "b": 0.8 / 1.6})
+
+
+def test_ac_pool_soc_switch_wirkt_wie_soc_ohne_rotationszustand():
+    a, b = M("a"), M("b", soc=30.0)
+    hass, g = _group(a, b, dist=SWITCH)
+    s = g.all_shares({"a": a, "b": b}, a, 80, ac=True)
+    assert s.mode == "soc"
+    assert s.values == pytest.approx({"a": 10 / 70, "b": 60 / 70})
+    assert f"{DOMAIN}_soc_switch_state" not in hass.data
+
+
+def test_ac_pool_ueber_ladeziel_ohne_gewicht():
+    a, b = M("a"), M("b", soc=95.0)
+    _, g = _group(a, b, dist={"distribution_mode": "soc"})
+    assert g.all_shares({"a": a, "b": b}, a, 60, ac=True).values == pytest.approx({"a": 1.0, "b": 0.0})
 
 
 def test_kapazitaet_fehlt_und_soc_ohne_gewicht_behaelt_warnung():

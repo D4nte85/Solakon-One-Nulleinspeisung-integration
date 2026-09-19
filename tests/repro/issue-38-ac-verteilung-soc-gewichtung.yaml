@@ -1,0 +1,21 @@
+titel: AC-Laden-Verteilung nutzt dieselbe SOC-Gewichtung wie Nulleinspeisung
+bezug: issue-38-ac-verteilung-soc-gewichtung
+# a (SOC 80) und b (SOC 30) laden gleichzeitig AC, je 400 W kommandiert; Überschuss 600 W.
+netz: -600
+verteilung:
+  distribution_mode: soc
+instanzen:
+  - prefix: a
+    settings: {regulation_enabled: true, ac_enabled: true}
+    flags: {ac_charge_active: true}
+    sensoren: {soc: 80, modus: "3", leistung: 400, ist: 400}
+  - prefix: b
+    settings: {regulation_enabled: true, ac_enabled: true}
+    flags: {ac_charge_active: true}
+    sensoren: {soc: 30, modus: "3", leistung: 400, ist: 400}
+schritte:
+  - nach: 0
+    wer: a
+erwartet:
+  # a hat den kleineren Platz bis zum Ladeziel (10 gegen 60 Punkte) und bekommt den kleineren Anteil.
+  - aufruf: {entity: a.leistung, wert_max: 400}
