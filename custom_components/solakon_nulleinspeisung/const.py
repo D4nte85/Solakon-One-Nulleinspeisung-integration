@@ -211,6 +211,17 @@ S_DYN_AC_NOISE    = "dyn_ac_noise"
 S_DYN_AC_FACTOR   = "dyn_ac_factor"
 S_DYN_AC_NEGATIVE = "dyn_ac_negative"
 
+# Harte Grenzen (min, max) je Gruppe; None heißt offen.
+POWER = (0, DEVICE_MAX_POWER)
+CURRENT = (0, DEVICE_MAX_CURRENT)
+PERCENT = (0, 100)
+AMOUNT = (0, None)
+POSITIVE = (1, None)
+SIGNED = (None, None)
+
+DIST_MODES = ("equal", "soc", "capacity", "soc_switch")
+
+
 class Field(NamedTuple):
     """Ein Setting: Standardwert, Typ, harte Grenzen und Anzeigebereich des Panels.
 
@@ -225,14 +236,6 @@ class Field(NamedTuple):
     ui: tuple[float, float, float] | None = None
     choices: tuple[str, ...] = ()
 
-
-# Harte Grenzen (min, max) je Gruppe; None heißt offen.
-POWER = (0, DEVICE_MAX_POWER)
-CURRENT = (0, DEVICE_MAX_CURRENT)
-PERCENT = (0, 100)
-AMOUNT = (0, None)
-POSITIVE = (1, None)
-SIGNED = (None, None)
 
 
 def _int(default: int, hard: tuple, lo: int, hi: int, step: int) -> Field:
@@ -337,8 +340,6 @@ SETTINGS_SCHEMA: dict[str, Field] = {
     **_dyn_offset("ac"),
 }
 SETTINGS_DEFAULTS: dict = {key: field.default for key, field in SETTINGS_SCHEMA.items()}
-
-DIST_MODES = ("equal", "soc", "capacity", "soc_switch")
 
 DIST_SCHEMA: dict[str, Field] = {
     "global_max_power":  _int(800, AMOUNT, 0, 9600, 10),

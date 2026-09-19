@@ -11,6 +11,18 @@ from .coordinator import SolakonCoordinator
 from .entity_base import SolakonEntity
 
 
+class DiagBoolSensor(SolakonEntity, BinarySensorEntity):
+    """Zeigt internen Coordinator-Zustand als read-only Binärsensor an."""
+
+    def __init__(self, coord: SolakonCoordinator, attr: str, icon: str) -> None:
+        super().__init__(coord, attr, translation_key=attr, icon=icon)
+        self._attr = attr
+
+    @property
+    def is_on(self) -> bool:
+        return bool(getattr(self._coordinator, self._attr, False))
+
+
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, add: AddEntitiesCallback
 ) -> None:
@@ -26,15 +38,3 @@ async def async_setup_entry(
         DiagBoolSensor(coord, "forecast_exit_lock",         "mdi:weather-cloudy-clock"),
         DiagBoolSensor(coord, "zone1_forced",               "mdi:weather-night-partly-cloudy"),
     ])
-
-
-class DiagBoolSensor(SolakonEntity, BinarySensorEntity):
-    """Zeigt internen Coordinator-Zustand als read-only Binärsensor an."""
-
-    def __init__(self, coord: SolakonCoordinator, attr: str, icon: str) -> None:
-        super().__init__(coord, attr, translation_key=attr, icon=icon)
-        self._attr = attr
-
-    @property
-    def is_on(self) -> bool:
-        return bool(getattr(self._coordinator, self._attr, False))

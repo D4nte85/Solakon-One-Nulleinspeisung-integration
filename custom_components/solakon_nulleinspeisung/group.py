@@ -121,7 +121,7 @@ class NetGroup:
         self._soc_switch = soc_switch
         self._on_soc_switch_change = on_soc_switch_change
 
-    # ── Mitglieder und Pools ─────────────────────────────────────────────────
+    # ── Lesen: Mitglieder, Pools, Verteilungs-Config ─────────────────────────
 
     def members(self) -> dict[str, Member]:
         """Instanzen mit diesem Netzsensor, in Reihenfolge der Registrierung."""
@@ -147,11 +147,11 @@ class NetGroup:
         """Regelnde Mitglieder mit aktivem AC-Laden."""
         return self.pool(lambda m: m.regulating and m.ac_charge_active)
 
-    # ── Verteilung ───────────────────────────────────────────────────────────
-
     def dist_cfg(self) -> dict:
         """Verteilungs-Config dieser Gruppe, mit Defaults aufgefüllt."""
         return {**DIST_DEFAULTS, **(self.dist or {})}
+
+    # ── Ableiten: Verteilung ─────────────────────────────────────────────────
 
     def all_shares(self, active: dict[str, Member], me: Member, own_soc: float, ac: bool = False) -> Shares:
         """Anteile aller Mitglieder in `active` nach Verteilungsmodus.

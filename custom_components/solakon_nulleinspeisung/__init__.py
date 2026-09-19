@@ -30,6 +30,20 @@ _LOGGER = logging.getLogger(__name__)
 DATA_KEYS = ("panel_registered", "ws_registered", *group_store.DATA_KEYS)
 PANEL_JS_URL = f"/{DOMAIN}/panel.js"
 
+# Schlüssel des WS-Status: Name im Panel oder Paar (Panel, Schnappschuss).
+WS_STATUS_KEYS = (
+    ("zone", "current_zone"), "zone_label", "mode_key", "mode_label", "last_action", "last_action_ts",
+    "last_output_ts", "mode_label_ts", "last_error", "integral",
+    "cycle_active", "surplus_active", ("ac_charge", "ac_charge_active"),
+    ("tariff_charge", "tariff_charge_active"), "regulation_enabled",
+    ("stddev", "grid_stddev"), ("stddev_raw", "grid_stddev_raw"),
+    "dyn_z1_enabled", "dyn_z2_enabled", "dyn_ac_enabled",
+    ("dyn_z1", "dyn_offset_z1"), ("dyn_z2", "dyn_offset_z2"), ("dyn_ac", "dyn_offset_ac"),
+    "active_fall", "operating_state", "discharge_locked", "dist_mode_effective", "is_night",
+    "forecast_tariff_suppressed", "forecast_surplus_forced", "forecast_exit_lock", "allocated_power",
+    "offset_zone", "offset_dynamic", "offset_static", "offset_value", "capacity_kwh",
+)
+
 
 # ── WebSocket Commands ───────────────────────────────────────────────────────
 
@@ -105,21 +119,6 @@ async def _ws_save_config(
     connection.send_result(msg["id"], {"success": True})
 
 
-# Schlüssel des WS-Status: Name im Panel oder Paar (Panel, Schnappschuss).
-WS_STATUS_KEYS = (
-    ("zone", "current_zone"), "zone_label", "mode_key", "mode_label", "last_action", "last_action_ts",
-    "last_output_ts", "mode_label_ts", "last_error", "integral",
-    "cycle_active", "surplus_active", ("ac_charge", "ac_charge_active"),
-    ("tariff_charge", "tariff_charge_active"), "regulation_enabled",
-    ("stddev", "grid_stddev"), ("stddev_raw", "grid_stddev_raw"),
-    "dyn_z1_enabled", "dyn_z2_enabled", "dyn_ac_enabled",
-    ("dyn_z1", "dyn_offset_z1"), ("dyn_z2", "dyn_offset_z2"), ("dyn_ac", "dyn_offset_ac"),
-    "active_fall", "operating_state", "discharge_locked", "dist_mode_effective", "is_night",
-    "forecast_tariff_suppressed", "forecast_surplus_forced", "forecast_exit_lock", "allocated_power",
-    "offset_zone", "offset_dynamic", "offset_static", "offset_value", "capacity_kwh",
-)
-
-
 @websocket_api.websocket_command({
     vol.Required("type"):     f"{DOMAIN}/get_status",
     vol.Required("entry_id"): str,
@@ -179,109 +178,6 @@ async def _ws_set_cycle(
         coord.notify_listeners()
     coord.request_regulation()
     connection.send_result(msg["id"], {"success": True})
-
-
-# ── Setup / Teardown ─────────────────────────────────────────────────────────
-
-async def async_setup(hass: HomeAssistant, config: dict) -> bool:
-    frontend_dir = Path(__file__).parent / "frontend"
-    translations_dir = Path(__file__).parent / "translations"
-    # Übersetzungsdateien für das Panel ausliefern: Zustandstexte, Entitätsnamen.
-    await hass.http.async_register_static_paths([
-        StaticPathConfig(PANEL_JS_URL,               str(frontend_dir / "solakon-panel.js"), False),
-        StaticPathConfig(f"/{DOMAIN}/panel.de.json", str(frontend_dir / "panel.de.json"),    False),
-        StaticPathConfig(f"/{DOMAIN}/panel.en.json", str(frontend_dir / "panel.en.json"),    False),
-        StaticPathConfig(f"/{DOMAIN}/entity.de.json", str(translations_dir / "de.json"),     False),
-        StaticPathConfig(f"/{DOMAIN}/entity.en.json", str(translations_dir / "en.json"),     False),
-    ])
-    return True
-
-
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    from .coordinator import SolakonCoordinator
-
-    # Gruppen-Stores vor dem Coordinator laden: seine Trigger lesen globale Sensoren der Verteilung.
-    await group_store.async_load(hass)
-
-    try:
-        coordinator = SolakonCoordinator(hass, entry)
-        await coordinator.async_setup()
-    except Exception as ex:
-        raise ConfigEntryNotReady(f"Solakon: Setup fehlgeschlagen: {ex}") from ex
-
-    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
-
-    # Eintrag neu laden wenn die Entitäten-Zuweisung im OptionsFlow geändert wurde
-    entry.async_on_unload(entry.add_update_listener(_async_update_listener))
-
-    # WebSocket-Commands nur einmal registrieren
-    if not hass.data.get(f"{DOMAIN}_ws_registered"):
-        for handler in WS_COMMANDS:
-            websocket_api.async_register_command(hass, handler)
-        hass.data[f"{DOMAIN}_ws_registered"] = True
-
-    # Panel nur einmal registrieren — kein entry_id in config
-    if not hass.data.get(f"{DOMAIN}_panel_registered"):
-        await panel_custom.async_register_panel(
-            hass,
-            webcomponent_name="solakon-panel",
-            sidebar_title="Solakon ONE",
-            sidebar_icon="mdi:solar-power",
-            frontend_url_path=DOMAIN,
-            # Versionierte URL erzwingt einen frischen Browser-Fetch bei jedem Update.
-            module_url=f"{PANEL_JS_URL}?v={VERSION}",
-            config={},
-            require_admin=False,
-        )
-        hass.data[f"{DOMAIN}_panel_registered"] = True
-
-    try:
-        await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    except Exception as ex:
-        coord = hass.data[DOMAIN].pop(entry.entry_id, None)
-        if coord:
-            await coord.async_shutdown()
-        raise ConfigEntryNotReady(f"Solakon: Platform-Setup fehlgeschlagen: {ex}") from ex
-
-    return True
-
-
-async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Eintrag neu laden wenn die Entitäten-Zuweisung (entry.data) geändert wurde."""
-    await hass.config_entries.async_reload(entry.entry_id)
-
-
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    from homeassistant.components.frontend import async_remove_panel
-
-    coord = hass.data.get(DOMAIN, {}).get(entry.entry_id)
-    if coord:
-        await coord.async_shutdown()
-
-    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-
-    if unload_ok:
-        hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
-
-        # Panel + Store nur entfernen wenn keine Instanz mehr läuft
-        if not hass.data.get(DOMAIN):
-            async_remove_panel(hass, DOMAIN)
-            hass.data.pop(DOMAIN, None)
-            for key in DATA_KEYS:
-                hass.data.pop(f"{DOMAIN}_{key}", None)
-
-    return unload_ok
-
-
-async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    store = Store(hass, STORAGE_VERSION, f"{DOMAIN}_{entry.entry_id}")
-    await store.async_remove()
-
-    # Home Assistant traegt den Entry vor diesem Aufruf aus der Registrierung aus.
-    # Ist danach keiner mehr uebrig, werden auch die instanzuebergreifenden Stores
-    # entfernt; bei weiteren Instanzen bleiben sie bestehen.
-    if not hass.config_entries.async_entries(DOMAIN):
-        await group_store.async_remove(hass)
 
 
 @websocket_api.websocket_command({
@@ -344,3 +240,106 @@ WS_COMMANDS = (
     _ws_get_all_instances, _ws_get_config, _ws_save_config, _ws_get_status, _ws_get_schema,
     _ws_reset_integral, _ws_set_cycle, _ws_get_distribution_config, _ws_save_distribution_config,
 )
+
+
+# ── Setup / Teardown ─────────────────────────────────────────────────────────
+
+async def async_setup(hass: HomeAssistant, config: dict) -> bool:
+    frontend_dir = Path(__file__).parent / "frontend"
+    translations_dir = Path(__file__).parent / "translations"
+    # Übersetzungsdateien für das Panel ausliefern: Zustandstexte, Entitätsnamen.
+    await hass.http.async_register_static_paths([
+        StaticPathConfig(PANEL_JS_URL,               str(frontend_dir / "solakon-panel.js"), False),
+        StaticPathConfig(f"/{DOMAIN}/panel.de.json", str(frontend_dir / "panel.de.json"),    False),
+        StaticPathConfig(f"/{DOMAIN}/panel.en.json", str(frontend_dir / "panel.en.json"),    False),
+        StaticPathConfig(f"/{DOMAIN}/entity.de.json", str(translations_dir / "de.json"),     False),
+        StaticPathConfig(f"/{DOMAIN}/entity.en.json", str(translations_dir / "en.json"),     False),
+    ])
+    return True
+
+
+async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Eintrag neu laden wenn die Entitäten-Zuweisung (entry.data) geändert wurde."""
+    await hass.config_entries.async_reload(entry.entry_id)
+
+
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    from .coordinator import SolakonCoordinator
+
+    # Gruppen-Stores vor dem Coordinator laden: seine Trigger lesen globale Sensoren der Verteilung.
+    await group_store.async_load(hass)
+
+    try:
+        coordinator = SolakonCoordinator(hass, entry)
+        await coordinator.async_setup()
+    except Exception as ex:
+        raise ConfigEntryNotReady(f"Solakon: Setup fehlgeschlagen: {ex}") from ex
+
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
+
+    # Eintrag neu laden wenn die Entitäten-Zuweisung im OptionsFlow geändert wurde
+    entry.async_on_unload(entry.add_update_listener(_async_update_listener))
+
+    # WebSocket-Commands nur einmal registrieren
+    if not hass.data.get(f"{DOMAIN}_ws_registered"):
+        for handler in WS_COMMANDS:
+            websocket_api.async_register_command(hass, handler)
+        hass.data[f"{DOMAIN}_ws_registered"] = True
+
+    # Panel nur einmal registrieren — kein entry_id in config
+    if not hass.data.get(f"{DOMAIN}_panel_registered"):
+        await panel_custom.async_register_panel(
+            hass,
+            webcomponent_name="solakon-panel",
+            sidebar_title="Solakon ONE",
+            sidebar_icon="mdi:solar-power",
+            frontend_url_path=DOMAIN,
+            # Versionierte URL erzwingt einen frischen Browser-Fetch bei jedem Update.
+            module_url=f"{PANEL_JS_URL}?v={VERSION}",
+            config={},
+            require_admin=False,
+        )
+        hass.data[f"{DOMAIN}_panel_registered"] = True
+
+    try:
+        await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    except Exception as ex:
+        coord = hass.data[DOMAIN].pop(entry.entry_id, None)
+        if coord:
+            await coord.async_shutdown()
+        raise ConfigEntryNotReady(f"Solakon: Platform-Setup fehlgeschlagen: {ex}") from ex
+
+    return True
+
+
+async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    from homeassistant.components.frontend import async_remove_panel
+
+    coord = hass.data.get(DOMAIN, {}).get(entry.entry_id)
+    if coord:
+        await coord.async_shutdown()
+
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+
+    if unload_ok:
+        hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
+
+        # Panel + Store nur entfernen wenn keine Instanz mehr läuft
+        if not hass.data.get(DOMAIN):
+            async_remove_panel(hass, DOMAIN)
+            hass.data.pop(DOMAIN, None)
+            for key in DATA_KEYS:
+                hass.data.pop(f"{DOMAIN}_{key}", None)
+
+    return unload_ok
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    store = Store(hass, STORAGE_VERSION, f"{DOMAIN}_{entry.entry_id}")
+    await store.async_remove()
+
+    # Home Assistant traegt den Entry vor diesem Aufruf aus der Registrierung aus.
+    # Ist danach keiner mehr uebrig, werden auch die instanzuebergreifenden Stores
+    # entfernt; bei weiteren Instanzen bleiben sie bestehen.
+    if not hass.config_entries.async_entries(DOMAIN):
+        await group_store.async_remove(hass)

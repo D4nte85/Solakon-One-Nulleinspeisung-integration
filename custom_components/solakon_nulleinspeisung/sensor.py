@@ -28,28 +28,6 @@ _ZONE_ICONS = {
     3: "mdi:battery-off-outline",
 }
 
-
-async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, add: AddEntitiesCallback
-) -> None:
-    coord: SolakonCoordinator = hass.data[DOMAIN][entry.entry_id]
-    add([
-        OperatingStateSensor(coord),
-        ZoneSensor(coord),
-        CoordinatorSensor(coord, "mode_label", lambda c: c.mode_key,
-                          icon="mdi:information-outline", **_enum(MODE_KEYS), **DIAG),
-        LastActionSensor(coord),
-        GridStdDevSensor(coord),
-        CoordinatorSensor(coord, "active_fall", lambda c: c.active_fall or None,
-                          icon="mdi:state-machine", **_enum(FALL_KEYS), **DIAG),
-        CoordinatorSensor(coord, "integral", lambda c: round(c.integral, 1),
-                          icon="mdi:chart-bell-curve", suggested_display_precision=1, **POWER, **DIAG),
-        # Für Automationen gedacht (z. B. Zusatzverbraucher schalten), daher keine Diagnose-Entität.
-        CoordinatorSensor(coord, "surplus_power", lambda c: round(c.surplus_power, 0),
-                          icon="mdi:transmission-tower-export", suggested_display_precision=0, **POWER),
-    ])
-
-
 _STATE_ICONS = {
     "disabled":         "mdi:power-off",
     "blocked":          "mdi:alert-circle-outline",
@@ -161,3 +139,24 @@ class GridStdDevSensor(CoordinatorSensor):
             attrs["dyn_offset_z2"] = self._coordinator.dyn_offset_z2
             attrs["dyn_offset_ac"] = self._coordinator.dyn_offset_ac
         return attrs
+
+
+async def async_setup_entry(
+    hass: HomeAssistant, entry: ConfigEntry, add: AddEntitiesCallback
+) -> None:
+    coord: SolakonCoordinator = hass.data[DOMAIN][entry.entry_id]
+    add([
+        OperatingStateSensor(coord),
+        ZoneSensor(coord),
+        CoordinatorSensor(coord, "mode_label", lambda c: c.mode_key,
+                          icon="mdi:information-outline", **_enum(MODE_KEYS), **DIAG),
+        LastActionSensor(coord),
+        GridStdDevSensor(coord),
+        CoordinatorSensor(coord, "active_fall", lambda c: c.active_fall or None,
+                          icon="mdi:state-machine", **_enum(FALL_KEYS), **DIAG),
+        CoordinatorSensor(coord, "integral", lambda c: round(c.integral, 1),
+                          icon="mdi:chart-bell-curve", suggested_display_precision=1, **POWER, **DIAG),
+        # Für Automationen gedacht (z. B. Zusatzverbraucher schalten), daher keine Diagnose-Entität.
+        CoordinatorSensor(coord, "surplus_power", lambda c: round(c.surplus_power, 0),
+                          icon="mdi:transmission-tower-export", suggested_display_precision=0, **POWER),
+    ])

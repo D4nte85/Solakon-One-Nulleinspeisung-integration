@@ -22,11 +22,6 @@ from .const import (
 )
 
 
-def _get_defaults(hass: HomeAssistant) -> dict:
-    lang = hass.config.language or "de"
-    return REQUIRED_ENTITY_DEFAULTS_EN if lang.startswith("en") else REQUIRED_ENTITY_DEFAULTS_DE
-
-
 # Entitätsfelder: (Schlüssel, Domain, device_class, Pflicht).
 ENTITY_FIELDS = (
     (CONF_GRID_SENSOR, "sensor", "power", True),
@@ -40,6 +35,11 @@ ENTITY_FIELDS = (
     (CONF_MODE_SELECT, "select", None, True),
     (CONF_EXPORT_LIMIT, "number", None, False),
 )
+
+
+def _get_defaults(hass: HomeAssistant) -> dict:
+    lang = hass.config.language or "de"
+    return REQUIRED_ENTITY_DEFAULTS_EN if lang.startswith("en") else REQUIRED_ENTITY_DEFAULTS_DE
 
 
 def _schema(current: dict, defaults: dict) -> vol.Schema:
@@ -61,6 +61,29 @@ def _mode_select_taken(hass: HomeAssistant, value: str, exclude_entry_id: str | 
         entry.entry_id != exclude_entry_id and entry.data.get(CONF_MODE_SELECT) == value
         for entry in hass.config_entries.async_entries(DOMAIN)
     )
+
+
+class SolakonOptionsFlow(config_entries.OptionsFlow):
+    async def async_step_init(
+        self, user_input: dict | None = None
+    ) -> FlowResult:
+        if user_input is not None:
+            if _mode_select_taken(
+                self.hass, user_input.get(CONF_MODE_SELECT, ""), self.config_entry.entry_id,
+            ):
+                return self.async_abort(reason="already_configured")
+            # Entitäten-Zuweisung liegt in entry.data, nicht in entry.options.
+            self.hass.config_entries.async_update_entry(
+                self.config_entry,
+                data={**self.config_entry.data, **user_input},
+            )
+            return self.async_create_entry(title="", data={})
+
+        defaults = _get_defaults(self.hass)
+        return self.async_show_form(
+            step_id="init",
+            data_schema=_schema(self.config_entry.data, defaults),
+        )
 
 
 class SolakonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -92,26 +115,3 @@ class SolakonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         entry: config_entries.ConfigEntry,
     ) -> "SolakonOptionsFlow":
         return SolakonOptionsFlow()
-
-
-class SolakonOptionsFlow(config_entries.OptionsFlow):
-    async def async_step_init(
-        self, user_input: dict | None = None
-    ) -> FlowResult:
-        if user_input is not None:
-            if _mode_select_taken(
-                self.hass, user_input.get(CONF_MODE_SELECT, ""), self.config_entry.entry_id,
-            ):
-                return self.async_abort(reason="already_configured")
-            # Entitäten-Zuweisung liegt in entry.data, nicht in entry.options.
-            self.hass.config_entries.async_update_entry(
-                self.config_entry,
-                data={**self.config_entry.data, **user_input},
-            )
-            return self.async_create_entry(title="", data={})
-
-        defaults = _get_defaults(self.hass)
-        return self.async_show_form(
-            step_id="init",
-            data_schema=_schema(self.config_entry.data, defaults),
-        )

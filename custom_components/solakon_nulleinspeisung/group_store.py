@@ -22,6 +22,32 @@ STORAGE_KEY_SOC_SWITCH     = f"{DOMAIN}_soc_switch_state"
 DATA_KEYS = ("group_store", "group_store_loaded", "groups")
 
 
+def _grid_groups(hass: HomeAssistant) -> set[str]:
+    """Netzsensoren aller Einträge, einer je Netzgruppe."""
+    return {e.data.get(CONF_GRID_SENSOR, "") for e in hass.config_entries.async_entries(DOMAIN)}
+
+
+def _soc_switch_group_state(stored: dict) -> dict:
+    """Laufzeitzustand einer Netzgruppe im Modus `soc_switch` aus dem gespeicherten Stand."""
+    return {
+        "active_id": stored.get("active_id"),
+        "start_soc": stored.get("start_soc"),
+        "was_zone0": bool(stored.get("was_zone0", False)),
+    }
+
+
+def _migrate_dist_mode(cfg: dict) -> dict:
+    """Bildet das alte `capacity_weighting`-Bool auf den Drei-Wert-`distribution_mode` ab."""
+    if "capacity_weighting" not in cfg:
+        return cfg
+    migrated = dict(cfg)
+    if migrated.pop("capacity_weighting", False):
+        migrated["distribution_mode"] = "capacity"
+    elif migrated.get("distribution_mode") == "weighted":
+        migrated["distribution_mode"] = "soc"
+    return migrated
+
+
 class SolakonDistStore(Store):
     """Verteilungs-Store mit Schemamigration."""
 
@@ -48,32 +74,6 @@ class SolakonSocSwitchStore(Store):
         if old_major_version >= 2 or not old_data:
             return old_data
         return {gk: dict(old_data) for gk in _grid_groups(self.hass)}
-
-
-def _grid_groups(hass: HomeAssistant) -> set[str]:
-    """Netzsensoren aller Einträge, einer je Netzgruppe."""
-    return {e.data.get(CONF_GRID_SENSOR, "") for e in hass.config_entries.async_entries(DOMAIN)}
-
-
-def _soc_switch_group_state(stored: dict) -> dict:
-    """Laufzeitzustand einer Netzgruppe im Modus `soc_switch` aus dem gespeicherten Stand."""
-    return {
-        "active_id": stored.get("active_id"),
-        "start_soc": stored.get("start_soc"),
-        "was_zone0": bool(stored.get("was_zone0", False)),
-    }
-
-
-def _migrate_dist_mode(cfg: dict) -> dict:
-    """Bildet das alte `capacity_weighting`-Bool auf den Drei-Wert-`distribution_mode` ab."""
-    if "capacity_weighting" not in cfg:
-        return cfg
-    migrated = dict(cfg)
-    if migrated.pop("capacity_weighting", False):
-        migrated["distribution_mode"] = "capacity"
-    elif migrated.get("distribution_mode") == "weighted":
-        migrated["distribution_mode"] = "soc"
-    return migrated
 
 
 class GroupStore:

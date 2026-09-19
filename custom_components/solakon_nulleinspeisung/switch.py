@@ -11,13 +11,6 @@ from .coordinator import SolakonCoordinator
 from .entity_base import SolakonEntity
 
 
-async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, add: AddEntitiesCallback
-) -> None:
-    coord: SolakonCoordinator = hass.data[DOMAIN][entry.entry_id]
-    add([RegulationSwitch(coord)])
-
-
 class RegulationSwitch(SolakonEntity, SwitchEntity):
     """Hauptschalter — aktiviert/deaktiviert den Schreibteil der Regelung."""
     _attr_translation_key = "regulation_enabled"
@@ -35,3 +28,10 @@ class RegulationSwitch(SolakonEntity, SwitchEntity):
 
     async def async_turn_off(self, **kwargs: object) -> None:
         await self._coordinator.async_update_settings({S_REGULATION_ENABLED: False})
+
+
+async def async_setup_entry(
+    hass: HomeAssistant, entry: ConfigEntry, add: AddEntitiesCallback
+) -> None:
+    coord: SolakonCoordinator = hass.data[DOMAIN][entry.entry_id]
+    add([RegulationSwitch(coord)])
