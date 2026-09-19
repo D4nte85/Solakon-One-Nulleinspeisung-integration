@@ -50,24 +50,21 @@ DIST_WARNINGS = {
 }
 
 
-def group_for(hass: Any, grid_sensor: str) -> NetGroup:
-    """Netzgruppe zum Netzsensor aus dem Register in `hass.data`, bei Bedarf angelegt."""
-    groups = hass.data.setdefault(f"{DOMAIN}_groups", {})
-    group = groups.get(grid_sensor)
-    if group is None:
-        group = groups[grid_sensor] = NetGroup(hass, grid_sensor)
-    return group
-
-
 class NetGroup:
     """Alle Instanzen an einem Netzsensor. Mitglieder werden bei jedem Aufruf neu bestimmt,
-    Anteile je Aufruf neu gerechnet; gehalten werden nur StdDev-Puffer und Zugang zum
-    `soc_switch`-Zustand."""
+    Anteile je Aufruf neu gerechnet; gehalten werden StdDev-Puffer, gespeicherte Verteilung
+    und `soc_switch`-Zustand. Änderungen am `soc_switch`-Zustand gehen an `on_soc_switch_change`."""
 
-    def __init__(self, hass: Any, grid_sensor: str) -> None:
+    def __init__(
+        self, hass: Any, grid_sensor: str, dist: dict | None = None, soc_switch: dict | None = None,
+        on_soc_switch_change: Callable[[dict], None] | None = None,
+    ) -> None:
         self.hass = hass
         self.grid_sensor = grid_sensor
         self.samples: deque[tuple[float, float]] = deque()
+        self.dist = dist
+        self._soc_switch = soc_switch
+        self._on_soc_switch_change = on_soc_switch_change
 
     # ── Mitglieder und Pools ─────────────────────────────────────────────────
 
@@ -105,8 +102,7 @@ class NetGroup:
 
     def dist_cfg(self) -> dict:
         """Verteilungs-Config dieser Gruppe, mit Defaults aufgefüllt."""
-        all_groups = self.hass.data.get(f"{DOMAIN}_dist_config") or {}
-        return {**DIST_DEFAULTS, **all_groups.get(self.grid_sensor, {})}
+        return {**DIST_DEFAULTS, **(self.dist or {})}
 
     def socs(self, active: dict[str, Member], me: Member, own_soc: float) -> dict[str, float] | None:
         """SOC je Mitglied in `active`, eigener Wert `own_soc`; `None` beim ersten nicht verfügbaren."""
@@ -191,11 +187,10 @@ class NetGroup:
         return Shares({eid: w / total_soc for eid, w in soc_weights.items()}, effective, warning)
 
     def soc_switch_state(self) -> dict:
-        """Laufzeitzustand des Modus `soc_switch` dieser Gruppe, persistiert über den Store."""
-        all_states = self.hass.data.setdefault(f"{DOMAIN}_soc_switch_state", {})
-        return all_states.setdefault(
-            self.grid_sensor, {"active_id": None, "start_soc": None, "was_zone0": False},
-        )
+        """Laufzeitzustand des Modus `soc_switch` dieser Gruppe, bei Bedarf angelegt."""
+        if self._soc_switch is None:
+            self._soc_switch = {"active_id": None, "start_soc": None, "was_zone0": False}
+        return self._soc_switch
 
     def soc_switch_shares(self, active: dict[str, Member], me: Member, own_soc: float) -> dict[str, float] | None:
         """Anteile für Modus `soc_switch`; `None`, wenn ein Fremd-SOC unsicher ist.
@@ -252,11 +247,8 @@ class NetGroup:
 
         if changed:
             state["active_id"] = active_id
-            store = self.hass.data.get(f"{DOMAIN}_soc_switch_store")
-            if store is not None:
-                all_states = self.hass.data[f"{DOMAIN}_soc_switch_state"]
-                snapshot = {gk: dict(st) for gk, st in all_states.items()}
-                store.async_delay_save(lambda: snapshot, 2)
+            if self._on_soc_switch_change is not None:
+                self._on_soc_switch_change(state)
 
         return result
 

@@ -58,32 +58,15 @@ class M:
         return self.setpoint
 
 
-class Store:
-    def __init__(self):
-        self.saved = []
-
-    def async_delay_save(self, fn, delay):
-        self.saved.append(fn())
-
-
 class Hass:
-    def __init__(self, *members, dist=None, store=None):
+    def __init__(self, *members):
         self.data = {DOMAIN: {m.member_id: m for m in members}}
-        if dist is not None:
-            self.data[f"{DOMAIN}_dist_config"] = {"sensor.grid": dist}
-        if store is not None:
-            self.data[f"{DOMAIN}_soc_switch_store"] = store
 
 
-def _group(*members, **kw):
-    hass = Hass(*members, **kw)
-    return hass, group.group_for(hass, "sensor.grid")
-
-
-def test_register_eine_gruppe_je_netzsensor():
-    hass = Hass()
-    assert group.group_for(hass, "sensor.grid") is group.group_for(hass, "sensor.grid")
-    assert group.group_for(hass, "sensor.grid") is not group.group_for(hass, "sensor.other")
+def _group(*members, dist=None, soc_switch=None, on_change=None):
+    hass = Hass(*members)
+    return hass, group.NetGroup(hass, "sensor.grid", dist=dist, soc_switch=soc_switch,
+                                on_soc_switch_change=on_change)
 
 
 def test_mitglieder_nur_am_eigenen_netzsensor():
@@ -208,11 +191,11 @@ def test_ac_pool_kapazitaet_gewichtet_fehlende_kwh():
 
 def test_ac_pool_soc_switch_wirkt_wie_soc_ohne_rotationszustand():
     a, b = M("a"), M("b", soc=30.0)
-    hass, g = _group(a, b, dist=SWITCH)
+    _, g = _group(a, b, dist=SWITCH)
     s = g.all_shares({"a": a, "b": b}, a, 80, ac=True)
     assert s.mode == "soc"
     assert s.values == pytest.approx({"a": 10 / 70, "b": 60 / 70})
-    assert f"{DOMAIN}_soc_switch_state" not in hass.data
+    assert g._soc_switch is None
 
 
 def test_ac_pool_ueber_ladeziel_ohne_gewicht():
@@ -233,24 +216,22 @@ SWITCH = {"distribution_mode": "soc_switch", "soc_switch_divergence": 5}
 
 
 def test_soc_switch_start_beim_hoechsten_soc_und_speichert():
-    store = Store()
+    changes = []
     a, b = M("a"), M("b", soc=70.0)
-    hass, g = _group(a, b, dist=SWITCH, store=store)
+    _, g = _group(a, b, dist=SWITCH, on_change=lambda st: changes.append(dict(st)))
     assert g.all_shares({"a": a, "b": b}, a, 50).values == {"a": 0.0, "b": 1.0}
-    assert hass.data[f"{DOMAIN}_soc_switch_state"]["sensor.grid"] == {
-        "active_id": "b", "start_soc": 70.0, "was_zone0": False}
-    assert store.saved == [{"sensor.grid": {"active_id": "b", "start_soc": 70.0, "was_zone0": False}}]
+    assert g.soc_switch_state() == {"active_id": "b", "start_soc": 70.0, "was_zone0": False}
+    assert changes == [{"active_id": "b", "start_soc": 70.0, "was_zone0": False}]
 
 
-def _switch_state(hass, **state):
-    hass.data[f"{DOMAIN}_soc_switch_state"] = {"sensor.grid": {"was_zone0": False, **state}}
+def _switch_state(**state):
+    return {"was_zone0": False, **state}
 
 
 @pytest.mark.parametrize("soc_b, aktiv", [(66.0, "b"), (65.0, "c"), (64.0, "c")])
 def test_soc_switch_divergenz_grenze_und_rotation_zum_hoechsten(soc_b, aktiv):
     a, b, c = M("a", soc=30.0), M("b", soc=soc_b), M("c", soc=60.0)
-    hass, g = _group(a, b, c, dist=SWITCH)
-    _switch_state(hass, active_id="b", start_soc=70.0)
+    _, g = _group(a, b, c, dist=SWITCH, soc_switch=_switch_state(active_id="b", start_soc=70.0))
     shares = g.soc_switch_shares({"a": a, "b": b, "c": c}, a, 30.0)
     assert shares == {k: (1.0 if k == aktiv else 0.0) for k in "abc"}
 
@@ -263,25 +244,13 @@ def test_soc_switch_mehrere_zone0_gleichmaessig():
 
 def test_soc_switch_zone0_uebernimmt_und_verlassen_verankert_neu():
     a, b = M("a"), M("b", soc=90.0, surplus_active=True)
-    hass, g = _group(a, b, dist=SWITCH)
-    _switch_state(hass, active_id="a", start_soc=80.0)
+    _, g = _group(a, b, dist=SWITCH, soc_switch=_switch_state(active_id="a", start_soc=80.0))
     assert g.soc_switch_shares({"a": a, "b": b}, a, 50) == {"a": 0.0, "b": 1.0}
-    state = hass.data[f"{DOMAIN}_soc_switch_state"]["sensor.grid"]
+    state = g.soc_switch_state()
     assert state == {"active_id": "b", "start_soc": 90.0, "was_zone0": True}
     b.surplus_active, b.soc = False, 88.0
     assert g.soc_switch_shares({"a": a, "b": b}, a, 50) == {"a": 0.0, "b": 1.0}
     assert state == {"active_id": "b", "start_soc": 88.0, "was_zone0": False}
-
-
-def test_soc_switch_zustand_je_gruppe():
-    a, b, x = M("a"), M("b", soc=70.0), M("x", grid_sensor="sensor.other", soc=90.0)
-    hass, g = _group(a, b, x, dist=SWITCH)
-    hass.data[f"{DOMAIN}_dist_config"]["sensor.other"] = SWITCH
-    other = group.group_for(hass, "sensor.other")
-    g.soc_switch_shares({"a": a, "b": b}, a, 50)
-    other.soc_switch_shares({"x": x}, x, 90.0)
-    states = hass.data[f"{DOMAIN}_soc_switch_state"]
-    assert states["sensor.grid"]["active_id"] == "b" and states["sensor.other"]["active_id"] == "x"
 
 
 def test_soc_switch_fremd_soc_fehlt():

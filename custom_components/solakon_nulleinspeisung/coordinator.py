@@ -21,7 +21,8 @@ from .readings import (
     NO_SENSOR, NOT_NUMERIC, UNAVAILABLE, UNIT_SCALE_KILO, UNIT_SCALE_KWH, UNIT_SCALE_W,
     WRONG_DOMAIN, read_number, read_scaled, unit_of, valid_state,
 )
-from .group import NetGroup, Shares, group_for
+from .group import NetGroup, Shares
+from .group_store import group_for
 from .limits import PowerLimits, power_limits
 from .messages import CycleMessages
 from .schema import InvalidSettings, check, notify_reset, sanitize
@@ -371,7 +372,20 @@ class SolakonCoordinator:
 
         # Neuen Zustand sofort anwenden
         if self._regulation_on:
-            self.hass.async_create_task(self._async_regulate())
+            self.request_regulation()
+
+    def schedule_save(self) -> None:
+        """Settings und Zustandsflags nach 5 s speichern."""
+        self._store.async_delay_save(self._store_data, 5)
+
+    def request_regulation(self) -> None:
+        """Regelzyklus als Task anstoßen."""
+        self.hass.async_create_task(self._async_regulate())
+
+    def apply_group_change(self) -> None:
+        """Nach geänderter Verteilung der Netzgruppe: Trigger neu anmelden, Regelzyklus anstoßen."""
+        self.update_sensor_trackers()
+        self.request_regulation()
 
     def _tracker_input(self, name: str) -> tuple:
         """Eingaben eines Triggers: Aktivierungswerte und Sensor bzw. Intervall."""
@@ -1029,12 +1043,12 @@ class SolakonCoordinator:
 
     @callback
     def _on_state_change(self, event: Event) -> None:
-        self.hass.async_create_task(self._async_regulate())
+        self.request_regulation()
 
     @callback
     def _on_periodic(self, _now: object) -> None:
         # Periodischer Fallback-Trigger der Regelschleife.
-        self.hass.async_create_task(self._async_regulate())
+        self.request_regulation()
 
     async def _async_regulate(self) -> None:
         """Komplette Regelschleife."""
@@ -1294,7 +1308,7 @@ class SolakonCoordinator:
         else:
             changed = self._update_operating_state()
         if prev_flags is not None and self._persisted_flags() != prev_flags:
-            self._store.async_delay_save(self._store_data, 5)
+            self.schedule_save()
         if changed or not notify_on_change:
             self.notify_listeners()
 

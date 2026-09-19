@@ -32,6 +32,7 @@ sensor_mod = importlib.import_module(PKG + ".sensor")
 binary_mod = importlib.import_module(PKG + ".binary_sensor")
 switch_mod = importlib.import_module(PKG + ".switch")
 config_flow_mod = importlib.import_module(PKG + ".config_flow")
+group_store_mod = importlib.import_module(PKG + ".group_store")
 
 DOMAIN = const.DOMAIN
 
@@ -295,6 +296,26 @@ def jsonable(value):
     if hasattr(value, "value") and not callable(value.value):
         return jsonable(value.value)
     return repr(value)
+
+
+def install_groups(hass, dist=None, soc_switch=None, dist_store=None, soc_switch_store=None):
+    """Speicher der Netzgruppen ohne Setup in `hass.data` legen."""
+    store = group_store_mod.GroupStore(hass, dist_store, soc_switch_store, dist, soc_switch)
+    hass.data[f"{const.DOMAIN}_group_store"] = store
+    return store
+
+
+def groups_state(hass):
+    """Gruppenzustand für Aufzeichnungen: {Netzsensor: {"dist": …, "soc_switch": …}}, ohne Speicher None."""
+    store = group_store_mod.store_for(hass)
+    if store is None:
+        return None
+    out: dict = {}
+    for grid, cfg in store.dist.items():
+        out.setdefault(grid, {})["dist"] = cfg
+    for grid, state in store.soc_switch.items():
+        out.setdefault(grid, {})["soc_switch"] = state
+    return jsonable(out)
 
 
 # Zustände, die in ein Teilobjekt gewandert sind: Protokollschlüssel → Pfad am Coordinator.

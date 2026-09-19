@@ -150,7 +150,7 @@ def test_ws_save_config_antwortet_mit_befunden():
 
 def test_ws_save_distribution_config_weist_ab():
     hass = h.FakeHass("de")
-    hass.data[f"{C.DOMAIN}_dist_store"] = h.ha_stubs.Store(hass, 2, "dist")
+    h.install_groups(hass, dist_store=h.ha_stubs.Store(hass, 2, "dist"))
     sent = _ws(h.integration._ws_save_distribution_config, hass,
                grid_sensor="sensor.grid", distribution={"distribution_mode": "weighted"})
     assert sent[0][:3] == ("error", 1, "invalid_settings")
@@ -159,10 +159,10 @@ def test_ws_save_distribution_config_weist_ab():
 
 def test_verteilung_beim_laden_zurueckgesetzt():
     hass = h.FakeHass("en")
-    hass.data[f"{C.DOMAIN}_dist_store"] = h.ha_stubs.Store(hass, 2, "dist")
+    store = h.install_groups(hass, dist_store=h.ha_stubs.Store(hass, 2, "dist"))
     stored = {"sensor.grid": {"global_max_power": -5, "inst_entry_a_capacity_sensor": "sensor.a"},
               "sensor.other": {"global_max_power": 1000}}
-    groups = h.integration._sanitize_dist(hass, stored)
+    groups = store._sanitize_dist(stored)
     assert groups["sensor.grid"] == {"global_max_power": 800, "inst_entry_a_capacity_sensor": "sensor.a"}
     assert groups["sensor.other"] == stored["sensor.other"]
     notify = [e for e in hass.events if e[0] == "notify"]

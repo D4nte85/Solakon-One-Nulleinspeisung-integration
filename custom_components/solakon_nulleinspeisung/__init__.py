@@ -1,7 +1,6 @@
 """Solakon ONE Nulleinspeisung — HACS custom integration."""
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 from pathlib import Path
@@ -20,78 +19,16 @@ from .const import (
     DOMAIN, PLATFORMS, S_REGULATION_ENABLED,
     CONF_INSTANCE_NAME,
     CONF_GRID_SENSOR, CONF_ACTUAL_SENSOR, CONF_SOLAR_SENSOR, CONF_SOC_SENSOR,
-    STORAGE_VERSION, DIST_DEFAULTS, DIST_INST_FIELDS, DIST_SCHEMA, SETTINGS_SCHEMA, VERSION,
+    STORAGE_VERSION, DIST_DEFAULTS, DIST_SCHEMA, SETTINGS_SCHEMA, VERSION,
 )
-from .i18n import translate
-from .schema import InvalidSettings, check, notify_reset, sanitize
-
-STORAGE_VERSION_DIST = 2
-STORAGE_KEY_DIST     = f"{DOMAIN}_distribution"
-
-STORAGE_VERSION_SOC_SWITCH = 2
-STORAGE_KEY_SOC_SWITCH     = f"{DOMAIN}_soc_switch_state"
+from . import group_store
+from .schema import InvalidSettings
 
 _LOGGER = logging.getLogger(__name__)
 
 # Integrationsweite `hass.data`-Schlüssel (ohne DOMAIN-Präfix), entfernt mit der letzten Instanz.
-DATA_KEYS = ("dist_store", "dist_store_loaded", "dist_config", "soc_switch_store",
-             "soc_switch_store_loaded", "soc_switch_state", "groups",
-             "panel_registered", "ws_registered")
+DATA_KEYS = ("panel_registered", "ws_registered", *group_store.DATA_KEYS)
 PANEL_JS_URL = f"/{DOMAIN}/panel.js"
-
-
-class SolakonDistStore(Store):
-    """Verteilungs-Store mit Schemamigration."""
-
-    async def _async_migrate_func(
-        self, old_major_version: int, old_minor_version: int, old_data: dict
-    ) -> dict:
-        """Hebt Version 1 auf 2: flache Form verschachteln, Zwei-Feld-Modus auflösen."""
-        if old_major_version >= 2 or not old_data:
-            return old_data
-
-        if "distribution_mode" in old_data or "global_max_power" in old_data:
-            flat = _migrate_dist_mode(old_data)
-            return {gk: dict(flat) for gk in _grid_groups(self.hass)}
-        return {gk: _migrate_dist_mode(cfg) for gk, cfg in old_data.items()}
-
-
-class SolakonSocSwitchStore(Store):
-    """SOC-Switch-Store mit Schemamigration."""
-
-    async def _async_migrate_func(
-        self, old_major_version: int, old_minor_version: int, old_data: dict
-    ) -> dict:
-        """Hebt Version 1 auf 2: der flache Zustand gilt für jede vorhandene Netzgruppe."""
-        if old_major_version >= 2 or not old_data:
-            return old_data
-        return {gk: dict(old_data) for gk in _grid_groups(self.hass)}
-
-
-def _grid_groups(hass: HomeAssistant) -> set[str]:
-    """Netzsensoren aller Einträge, einer je Netzgruppe."""
-    return {e.data.get(CONF_GRID_SENSOR, "") for e in hass.config_entries.async_entries(DOMAIN)}
-
-
-def _soc_switch_group_state(stored: dict) -> dict:
-    """Laufzeitzustand einer Netzgruppe im Modus `soc_switch` aus dem gespeicherten Stand."""
-    return {
-        "active_id": stored.get("active_id"),
-        "start_soc": stored.get("start_soc"),
-        "was_zone0": bool(stored.get("was_zone0", False)),
-    }
-
-
-def _migrate_dist_mode(cfg: dict) -> dict:
-    """Bildet das alte `capacity_weighting`-Bool auf den Drei-Wert-`distribution_mode` ab."""
-    if "capacity_weighting" not in cfg:
-        return cfg
-    migrated = dict(cfg)
-    if migrated.pop("capacity_weighting", False):
-        migrated["distribution_mode"] = "capacity"
-    elif migrated.get("distribution_mode") == "weighted":
-        migrated["distribution_mode"] = "soc"
-    return migrated
 
 
 # ── WebSocket Commands ───────────────────────────────────────────────────────
@@ -238,11 +175,9 @@ async def _ws_set_cycle(
     async with coord._lock:
         coord.cycle_active = msg["active"]
         coord.integral = 0.0
-        # Flag persistieren (Teil von _store_data)
-        coord._store.async_delay_save(coord._store_data, 5)
+        coord.schedule_save()
         coord.notify_listeners()
-    # Neuen Zustand sofort anwenden
-    hass.async_create_task(coord._async_regulate())
+    coord.request_regulation()
     connection.send_result(msg["id"], {"success": True})
 
 
@@ -265,23 +200,8 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     from .coordinator import SolakonCoordinator
 
-    # Distribution-Store einmalig anlegen + Config in synchron lesbaren Cache laden.
-    # Cache ist nach grid_power_sensor verschachtelt ({gruppe: {...DIST_DEFAULTS...}})
-    # — jede Netzgruppe hat unabhängige Verteilungs-Einstellungen.
-    await _ensure_store(
-        hass, "dist_store", "dist_config",
-        lambda: SolakonDistStore(hass, STORAGE_VERSION_DIST, STORAGE_KEY_DIST), {},
-        lambda stored: _sanitize_dist(hass, stored),
-    )
-
-    # SOC-Switch-Laufzeitzustand (Modus `soc_switch`) — eigener Store, getrennt
-    # von _dist_store, nach grid_power_sensor verschachtelt wie die Verteilungs-Config
-    await _ensure_store(
-        hass, "soc_switch_store", "soc_switch_state",
-        lambda: SolakonSocSwitchStore(hass, STORAGE_VERSION_SOC_SWITCH, STORAGE_KEY_SOC_SWITCH),
-        {},
-        lambda stored: {gk: _soc_switch_group_state(st) for gk, st in stored.items()},
-    )
+    # Gruppen-Stores vor dem Coordinator laden: seine Trigger lesen globale Sensoren der Verteilung.
+    await group_store.async_load(hass)
 
     try:
         coordinator = SolakonCoordinator(hass, entry)
@@ -331,40 +251,6 @@ async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> Non
     await hass.config_entries.async_reload(entry.entry_id)
 
 
-def _sanitize_dist(hass: HomeAssistant, stored: dict) -> dict:
-    """Verteilungs-Config je Netzgruppe gegen DIST_SCHEMA prüfen; Zurückgesetztes melden und speichern."""
-    groups = {}
-    for grid, cfg in stored.items():
-        groups[grid], reset = sanitize(cfg, DIST_SCHEMA, DIST_INST_FIELDS)
-        if reset:
-            scope = translate(hass.config.language, "dist_scope", grid=grid)
-            notify_reset(hass, f"{DOMAIN}_dist_reset_{grid}", scope, reset)
-    if groups != stored:
-        hass.data[f"{DOMAIN}_dist_store"].async_delay_save(lambda: groups, 0)
-    return groups
-
-
-async def _ensure_store(
-    hass: HomeAssistant, store_key: str, data_key: str, make_store, empty: dict, from_stored,
-) -> None:
-    """Store unter `<DOMAIN>_<store_key>` einmalig anlegen und in `<DOMAIN>_<data_key>` laden.
-
-    Weitere Aufrufer warten auf das Ende desselben Ladevorgangs. `empty` steht im
-    Cache, falls das Laden fehlschlägt; sonst ersetzt `from_stored(geladen or {})` ihn.
-    """
-    if hass.data.get(f"{DOMAIN}_{store_key}"):
-        await hass.data[f"{DOMAIN}_{store_key}_loaded"].wait()
-        return
-    loaded = hass.data[f"{DOMAIN}_{store_key}_loaded"] = asyncio.Event()
-    store = make_store()
-    hass.data[f"{DOMAIN}_{store_key}"] = store
-    hass.data[f"{DOMAIN}_{data_key}"] = empty
-    try:
-        hass.data[f"{DOMAIN}_{data_key}"] = from_stored(await store.async_load() or {})
-    finally:
-        loaded.set()
-
-
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     from homeassistant.components.frontend import async_remove_panel
 
@@ -395,8 +281,7 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     # Ist danach keiner mehr uebrig, werden auch die instanzuebergreifenden Stores
     # entfernt; bei weiteren Instanzen bleiben sie bestehen.
     if not hass.config_entries.async_entries(DOMAIN):
-        await SolakonDistStore(hass, STORAGE_VERSION_DIST, STORAGE_KEY_DIST).async_remove()
-        await Store(hass, STORAGE_VERSION_SOC_SWITCH, STORAGE_KEY_SOC_SWITCH).async_remove()
+        await group_store.async_remove(hass)
 
 
 @websocket_api.websocket_command({
@@ -407,12 +292,8 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
 async def _ws_get_distribution_config(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
 ) -> None:
-    store = hass.data.get(f"{DOMAIN}_dist_store")
-    if store is None:
-        connection.send_result(msg["id"], {"distribution": DIST_DEFAULTS.copy()})
-        return
-    stored = await store.async_load() or {}
-    data = {**DIST_DEFAULTS, **stored.get(msg["grid_sensor"], {})}
+    store = group_store.store_for(hass)
+    data = DIST_DEFAULTS.copy() if store is None else store.dist_view(msg["grid_sensor"])
     connection.send_result(msg["id"], {"distribution": data})
 
 
@@ -427,32 +308,19 @@ async def _ws_save_distribution_config(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
 ) -> None:
     store = _get_or_error(
-        connection, msg, hass.data.get(f"{DOMAIN}_dist_store"),
+        connection, msg, group_store.store_for(hass),
         "not_ready", "Distribution-Store nicht initialisiert",
     )
     if store is None:
         return
-    if findings := check(msg["distribution"], DIST_SCHEMA, DIST_INST_FIELDS):
+    if findings := await store.save_dist(msg["grid_sensor"], msg["distribution"]):
         _send_invalid(connection, msg, findings)
         return
 
-    group_key = msg["grid_sensor"]
-    all_groups = await store.async_load() or {}
-    all_groups[group_key] = msg["distribution"]
-
-    await store.async_save(all_groups)
-    hass.data[f"{DOMAIN}_dist_config"] = all_groups
-
-    # Neue Verteilung sofort auf die Instanzen dieser Gruppe anwenden, andere
-    # Gruppen bleiben unberührt. Lock-geschützt, parallele Läufe werden verworfen.
-    # Globale Sensor-Felder (PV-Vorhersage heute/morgen, Austritts-Sperre, Tarif)
-    # ändern die effektiv wirksame Sensor-Entität einer Instanz ohne Änderung ihrer
-    # eigenen Settings — Listener werden deshalb hier neu registriert.
-    for coord in hass.data.get(DOMAIN, {}).values():
-        if coord.entry.data.get(CONF_GRID_SENSOR, "") != group_key:
-            continue
-        coord.update_sensor_trackers()
-        hass.async_create_task(coord._async_regulate())
+    # Globale Sensor-Felder ändern den wirksamen Sensor einer Instanz ohne Änderung
+    # ihrer Settings; die Mitglieder melden ihre Trigger deshalb neu an.
+    for coord in group_store.group_for(hass, msg["grid_sensor"]).members().values():
+        coord.apply_group_change()
 
     connection.send_result(msg["id"], {"success": True})
 

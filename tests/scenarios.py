@@ -433,11 +433,13 @@ def _setup_env(spec):
     _DtState.now = datetime(2026, 9, 13, spec["hour"], 0, tzinfo=timezone.utc)
     hass = h.FakeHass(spec["language"])
     logs = h.capture_logs()
-    if spec["has_dist_config"]:
-        hass.data[f"{C.DOMAIN}_dist_config"] = {"sensor.grid": spec["dist"], **spec.get("dist_other", {})}
-    if spec["soc_switch_state"] is not None:
-        hass.data[f"{C.DOMAIN}_soc_switch_state"] = {"sensor.grid": dict(spec["soc_switch_state"])}
-        hass.data[f"{C.DOMAIN}_soc_switch_store"] = h.ha_stubs.Store(hass, 1, "soc_switch")
+    switch = spec["soc_switch_state"]
+    h.install_groups(
+        hass,
+        dist={"sensor.grid": spec["dist"], **spec.get("dist_other", {})} if spec["has_dist_config"] else None,
+        soc_switch=None if switch is None else {"sensor.grid": dict(switch)},
+        soc_switch_store=None if switch is None else h.ha_stubs.Store(hass, 1, "soc_switch"),
+    )
     _apply_states(hass, {"sensor.grid": spec["grid"], "sensor.grid_other": spec["grid"]})
     _apply_states(hass, spec["shared"])
     coords = {}
@@ -488,7 +490,7 @@ async def _run_cycle_spec(spec) -> dict:
             "events": hass.events,
             "notify": notify,
             "state": {p: h.coord_state(c) for p, c in coords.items()},
-            "soc_switch_state": h.jsonable(hass.data.get(f"{C.DOMAIN}_soc_switch_state")),
+            "groups": h.groups_state(hass),
         })
     primary = coords["a"]
     rec["ws_status"] = await h.ws_status(hass, primary.entry.entry_id)
@@ -513,7 +515,7 @@ async def _run_settings_spec(spec) -> dict:
            "settings": h.jsonable(coord.settings), "rejected": rejected}
     if spec["dist_save"]:
         hass.events = []
-        hass.data[f"{C.DOMAIN}_dist_store"] = h.ha_stubs.Store(hass, 2, "dist")
+        h.group_store_mod.store_for(hass)._dist_store = h.ha_stubs.Store(hass, 2, "dist")
         conn = ActiveConnection()
         await h.integration._ws_save_distribution_config(
             hass, conn, {"id": 7, "grid_sensor": "sensor.grid", "distribution": spec["dist"]})
@@ -543,8 +545,7 @@ async def _run_wiring() -> dict:
         await mod.async_setup_entry(hass, e)
     rec["setup"] = hass.events
     rec["data_keys"] = sorted(k for k in hass.data)
-    rec["dist_config"] = h.jsonable(hass.data.get(f"{C.DOMAIN}_dist_config"))
-    rec["soc_switch_state"] = h.jsonable(hass.data.get(f"{C.DOMAIN}_soc_switch_state"))
+    rec["groups"] = h.groups_state(hass)
     rec["entities_static"] = [h.entity_state(e, static=True)
                               for e in h.build_entities(hass, hass.data[C.DOMAIN]["entry_a"])]
 
@@ -577,11 +578,11 @@ async def _run_wiring() -> dict:
                     "coords": {e: h.coord_state(c) for e, c in hass.data.get(C.DOMAIN, {}).items()}}
     for name in ("get_dist", "save_dist"):
         handler, extra = handlers[name]
-        store = hass.data.pop(f"{C.DOMAIN}_dist_store")
+        store = hass.data.pop(f"{C.DOMAIN}_group_store")
         conn = ActiveConnection()
         await handler(hass, conn, {"id": 4, **extra})
         ws[name + "_no_store"] = h.jsonable(conn.sent)
-        hass.data[f"{C.DOMAIN}_dist_store"] = store
+        hass.data[f"{C.DOMAIN}_group_store"] = store
     rec["ws"] = ws
 
     hass.events = []
@@ -596,7 +597,7 @@ async def _run_wiring() -> dict:
 
     # Migrationen
     mig = {}
-    dist_store = mod.SolakonDistStore(hass, 2, "x")
+    dist_store = h.group_store_mod.SolakonDistStore(hass, 2, "x")
     hass.config_entries.entries = entries
     for name, data in {
         "flat": {"distribution_mode": "weighted", "capacity_weighting": False, "global_max_power": 900},
@@ -605,7 +606,7 @@ async def _run_wiring() -> dict:
         "empty": {},
     }.items():
         mig["dist_" + name] = h.jsonable(await dist_store._async_migrate_func(1, 0, dict(data)))
-    soc_switch_store = mod.SolakonSocSwitchStore(hass, 2, "z")
+    soc_switch_store = h.group_store_mod.SolakonSocSwitchStore(hass, 2, "z")
     for name, data in {"v1": {"active_id": "entry_b", "start_soc": 55}, "empty": {}}.items():
         mig["soc_switch_" + name] = h.jsonable(await soc_switch_store._async_migrate_func(1, 0, dict(data)))
     settings_store = h.coordinator_mod.SolakonSettingsStore(hass, 2, "y")
