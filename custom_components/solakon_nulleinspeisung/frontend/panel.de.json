@@ -423,6 +423,12 @@
     "rest_discharge_off": "✅ Ruhezustand in Modus 0",
     "dist_saved":       "✅ Verteilung gespeichert"
   },
+  "errors": {
+    "range":    "{label}: nur {min} bis {max} erlaubt",
+    "type":     "{label}: ungültiger Wert",
+    "integer":  "{label}: nur ganze Zahlen",
+    "unknown":  "{label}: unbekannte Einstellung"
+  },
   "dist": {
     "single_instance_note": "Leistungsverteilung wird nur bei mehreren Instanzen benötigt.",
     "loading":            "Lade…",

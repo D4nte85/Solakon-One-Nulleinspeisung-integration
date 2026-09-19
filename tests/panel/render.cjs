@@ -163,6 +163,15 @@ async function run(scenario, lang) {
   click(sr.getElementById("reg-bar")); await shot("err/reg");
   const pi = [...sr.querySelectorAll(".tab")].find(t => t.dataset.id === "pi");
   if (pi) { click(pi); const inp = sr.querySelector('#content input[type="number"]'); inp.value = "3"; fire(inp, "change"); click(sr.querySelector("#save-bar button")); await shot("err/pi-save"); }
+  // Abgewiesene Settings: Befunde als JSON im Fehlertext
+  const kaputtWS = p._hass.callWS;
+  p._hass.callWS = () => Promise.reject(Object.assign(new Error(JSON.stringify([
+    { key: "hard_limit_z0", reason: "range", min: 100, max: 1200 },
+    { key: "zone1_limit", reason: "integer", min: 0, max: 100 },
+    { key: "soc_switch_divergence", reason: "range", min: 1, max: 50 },
+    { key: "gibt_es_nicht", reason: "unknown", min: null, max: null }])), { code: "invalid_settings" }));
+  if (pi) { click(sr.querySelector("#save-bar button")); await shot("err/pi-invalid"); }
+  p._hass.callWS = kaputtWS;
   const dist = instTabs().find(t => t.textContent.includes("⚖"));
   if (dist) { click(dist); await settle(); const sel = sr.querySelector('#content select'); if (sel) { sel.value = "soc"; fire(sel, "change"); await settle(); click([...sr.querySelectorAll("#content button")].pop()); await shot("err/dist-save"); } }
   p._hass.callWS = okWS;

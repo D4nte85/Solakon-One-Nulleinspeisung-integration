@@ -423,6 +423,12 @@
     "rest_discharge_off": "✅ Idle state in mode 0",
     "dist_saved":      "✅ Distribution saved"
   },
+  "errors": {
+    "range":    "{label}: only {min} to {max} allowed",
+    "type":     "{label}: invalid value",
+    "integer":  "{label}: whole numbers only",
+    "unknown":  "{label}: unknown setting"
+  },
   "dist": {
     "single_instance_note": "Power distribution is only needed with multiple instances.",
     "tab_lbl":            "⚖️ Distribution",

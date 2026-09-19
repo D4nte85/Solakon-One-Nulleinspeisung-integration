@@ -26,7 +26,8 @@ const TABS = [
 ];
 
 // Verteilungsmodi in Anzeigereihenfolge; Text je Modus unter `dist.mode_<modus>`.
-const DIST_MODES = ["equal", "soc", "capacity", "soc_switch"];
+// Beschriftung der Verteilungsfelder in den Panel-Texten, für Fehlermeldungen.
+const DIST_LABELS = { global_max_power: "global_max_lbl", soc_switch_divergence: "soc_switch_divergence_lbl" };
 
 // Tab icons — not translated
 const TAB_ICONS = {
@@ -42,11 +43,11 @@ const TAB_ICONS = {
   debug:    "🔧",
 };
 
-// Sensorgebundenes Feature: Schalter, Sensorhinweis, dann das Schwellenfeld `<prefix>_<k>` mit seinen Grenzen.
-const sensorFeatureFields = (prefix, { k, ...limits }) => [
+// Sensorgebundenes Feature: Schalter, Sensorhinweis, dann das Schwellenfeld `<prefix>_<k>`.
+const sensorFeatureFields = (prefix, k) => [
   { k: `${prefix}_enabled`,     t: "bool" },
   { k: `${prefix}_sensor_note`, t: "note" },
-  { k: `${prefix}_${k}`,        t: "num", ...limits },
+  { k: `${prefix}_${k}`,        t: "num" },
 ];
 
 // Spaltenkarte eines dynamischen Offsets mit den Feldern `dyn_<prefix>_*`.
@@ -54,39 +55,39 @@ const dynOffSection = (tk, prefix, icon, color) => ({
   tk, icon, color,
   fields: [
     { k: `dyn_${prefix}_enabled`,  t: "bool" },
-    { k: `dyn_${prefix}_min`,      t: "num", min: 0,   max: 500,  step: 1   },
-    { k: `dyn_${prefix}_max`,      t: "num", min: 50,  max: 1000, step: 10  },
-    { k: `dyn_${prefix}_noise`,    t: "num", min: 0,   max: 100,  step: 1   },
-    { k: `dyn_${prefix}_factor`,   t: "num", min: 0.5, max: 5,    step: 0.1 },
+    { k: `dyn_${prefix}_min`,      t: "num" },
+    { k: `dyn_${prefix}_max`,      t: "num" },
+    { k: `dyn_${prefix}_noise`,    t: "num" },
+    { k: `dyn_${prefix}_factor`,   t: "num" },
     { k: `dyn_${prefix}_negative`, t: "bool" },
   ],
 });
 
-// Layout: field keys + numeric constraints only — labels/descriptions in translation files
+// Layout: Feldschlüssel und Darstellungsart. Grenzen liefert get_schema, Texte die Übersetzungsdateien.
 const TAB_LAYOUT = {
   pi: {
     cols: [
       {
         tk: "pi_ctrl", icon: "🎛️", color: "#0891b2",
         fields: [
-          { k: "p_factor",  t: "num", min: 0.1, max: 5,   step: 0.1  },
-          { k: "i_factor",  t: "num", min: 0,   max: 0.5, step: 0.01 },
-          { k: "tolerance", t: "num", min: 0,   max: 200, step: 1    },
-          { k: "wait_time", t: "num", min: 0,   max: 30,  step: 1    },
+          { k: "p_factor",  t: "num" },
+          { k: "i_factor",  t: "num" },
+          { k: "tolerance", t: "num" },
+          { k: "wait_time", t: "num" },
         ],
       },
       {
         tk: "pi_saw", icon: "🎯", color: "#7c3aed",
         fields: [
           { k: "self_adjust_enabled",   t: "bool" },
-          { k: "self_adjust_tolerance", t: "num", min: 1, max: 50, step: 1 },
+          { k: "self_adjust_tolerance", t: "num" },
         ],
       },
       {
         tk: "periodic", icon: "⏱️", color: "#475569",
         fields: [
           { k: "periodic_enabled",  t: "bool" },
-          { k: "periodic_interval", t: "num", min: 5, max: 300, step: 5 },
+          { k: "periodic_interval", t: "num" },
         ],
       },
     ],
@@ -97,31 +98,31 @@ const TAB_LAYOUT = {
       {
         tk: "zones_soc", icon: "🔋", color: "#0891b2",
         fields: [
-          { k: "zone1_limit", t: "num", min: 0,  max: 100, step: 1  },
-          { k: "zone3_limit", t: "num", min: 0,  max: 100, step: 1  },
-          { k: "pv_reserve",  t: "num", min: 0,  max: 500, step: 10 },
+          { k: "zone1_limit", t: "num" },
+          { k: "zone3_limit", t: "num" },
+          { k: "pv_reserve",  t: "num" },
         ],
       },
       {
         tk: "zones_power", icon: "⚙️", color: "#b45309",
         fields: [
-          { k: "hard_limit_z0",            t: "num",    min: 100, max: 1200, step: 50 },
-          { k: "hard_limit_z1",            t: "num",    min: 100, max: 1200, step: 50 },
-          { k: "discharge_max",            t: "num",    min: 1,   max: 100,  step: 1  },
+          { k: "hard_limit_z0",            t: "num" },
+          { k: "hard_limit_z1",            t: "num" },
+          { k: "discharge_max",            t: "num" },
         ],
       },
       {
         tk: "zones_offsets", icon: "🎯", color: "#7c3aed",
         fields: [
-          { k: "offset_1", t: "num", min: -200, max: 300, step: 1 },
-          { k: "offset_2", t: "num", min: -200, max: 300, step: 1 },
+          { k: "offset_1", t: "num" },
+          { k: "offset_2", t: "num" },
         ],
       },
       {
         tk: "zones_force", icon: "🌙", color: "#4338ca",
         fields: [
-          ...sensorFeatureFields("zone1_force", { k: "threshold", min: 0, max: 50, step: 0.5 }),
-          { k: "zone1_force_min_soc",      t: "num", min: 0, max: 100, step: 1 },
+          ...sensorFeatureFields("zone1_force", "threshold"),
+          { k: "zone1_force_min_soc",      t: "num" },
         ],
       },
     ],
@@ -152,23 +153,23 @@ const TAB_LAYOUT = {
       {
         tk: "surplus_soc", icon: "🔋", color: "#0891b2",
         fields: [
-          { k: "surplus_soc_threshold", t: "num", min: 0,   max: 100, step: 1 },
-          { k: "surplus_soc_hyst",      t: "num", min: 1,   max: 20,  step: 1 },
+          { k: "surplus_soc_threshold", t: "num" },
+          { k: "surplus_soc_hyst",      t: "num" },
         ],
       },
       {
         tk: "surplus_pv", icon: "☀️", color: "#f59e0b",
         fields: [
-          { k: "surplus_pv_hyst", t: "num", min: 10, max: 200, step: 10 },
+          { k: "surplus_pv_hyst", t: "num" },
         ],
       },
       {
         tk: "surplus_forecast", icon: "🌤️", color: "#65a30d",
-        fields: sensorFeatureFields("surplus_forecast", { k: "threshold", min: 0, max: 100, step: 0.5 }),
+        fields: sensorFeatureFields("surplus_forecast", "threshold"),
       },
       {
         tk: "surplus_lock", icon: "⛅", color: "#dc2626",
-        fields: sensorFeatureFields("surplus_lock", { k: "factor", min: 1.0, max: 3.0, step: 0.1 }),
+        fields: sensorFeatureFields("surplus_lock", "factor"),
       },
     ],
   },
@@ -182,17 +183,17 @@ const TAB_LAYOUT = {
       {
         tk: "ac_entry", icon: "⚡", color: "#7c3aed",
         fields: [
-          { k: "ac_soc_target",  t: "num", min: 0,   max: 100,  step: 1   },
-          { k: "ac_power_limit", t: "num", min: 100, max: 1200, step: 50  },
-          { k: "ac_hysteresis",  t: "num", min: 10,  max: 500,  step: 10  },
-          { k: "ac_offset",      t: "num", min: -500,max: 200,  step: 5   },
+          { k: "ac_soc_target",  t: "num" },
+          { k: "ac_power_limit", t: "num" },
+          { k: "ac_hysteresis",  t: "num" },
+          { k: "ac_offset",      t: "num" },
         ],
       },
       {
         tk: "ac_pi", icon: "🎛️", color: "#0891b2",
         fields: [
-          { k: "ac_p_factor", t: "num", min: 0.1, max: 3,   step: 0.1  },
-          { k: "ac_i_factor", t: "num", min: 0,   max: 0.5, step: 0.01 },
+          { k: "ac_p_factor", t: "num" },
+          { k: "ac_i_factor", t: "num" },
         ],
       },
     ],
@@ -208,29 +209,29 @@ const TAB_LAYOUT = {
       {
         tk: "tariff_thresholds", icon: "💹", color: "#0891b2",
         fields: [
-          { k: "tariff_cheap_threshold",     t: "num", min: 0, max: 100, step: 0.5 },
-          { k: "tariff_exp_threshold",       t: "num", min: 0, max: 100, step: 0.5 },
+          { k: "tariff_cheap_threshold",     t: "num" },
+          { k: "tariff_exp_threshold",       t: "num" },
           { k: "tariff_dynamic_entities_note", t: "note" },
         ],
       },
       {
         tk: "tariff_charge", icon: "🔋", color: "#16a34a",
         fields: [
-          { k: "tariff_soc_target", t: "num", min: 0,   max: 100,  step: 1  },
-          { k: "tariff_power",      t: "num", min: 100, max: 1200, step: 50 },
+          { k: "tariff_soc_target", t: "num" },
+          { k: "tariff_power",      t: "num" },
         ],
       },
       {
         tk: "tariff_forecast", icon: "☀️", color: "#f59e0b",
-        fields: sensorFeatureFields("pv_forecast", { k: "threshold", min: 0, max: 50, step: 0.5 }),
+        fields: sensorFeatureFields("pv_forecast", "threshold"),
       },
     ],
   },
 
   dynoff: {
     top: [
-      { k: "stddev_window",     t: "num", min: 30, max: 300, step: 10 },
-      { k: "stddev_trim_count", t: "num", min: 0,  max: 10,  step: 1  },
+      { k: "stddev_window",     t: "num" },
+      { k: "stddev_trim_count", t: "num" },
     ],
     cols: [
       dynOffSection("dynoff_z1", "z1", "⚡", "#16a34a"),
@@ -242,7 +243,7 @@ const TAB_LAYOUT = {
   night: {
     top: [
       { k: "night_enabled", t: "bool" },
-      { k: "night_hysteresis", t: "num", min: 0, max: 500, step: 10 },
+      { k: "night_hysteresis", t: "num" },
     ],
   },
 };
@@ -291,6 +292,8 @@ class SolakonPanel extends HTMLElement {
     this._activeGroup     = null;
     // Verteilungs-Config je Netzgruppe: {groupKey: ConfigBuffer}
     this._dist           = {};
+    // Typ, Bereich und Schrittweite je Schlüssel, aus get_schema
+    this._schema         = { settings: {}, distribution: {} };
   }
 
   set panel(val) {
@@ -380,7 +383,15 @@ class SolakonPanel extends HTMLElement {
 
   // ── Multi-Instance Methoden ───────────────────────────────────────────────
 
+  // Schema einmal je Panel laden; ohne Antwort bleiben die Felder ohne Grenzen.
+  async _loadSchema() {
+    try {
+      this._schema = await this._hass.callWS({ type: `${DOMAIN}/get_schema` });
+    } catch (_) { /* Felder ohne Grenzen */ }
+  }
+
   async _loadInstances() {
+    await this._loadSchema();
     try {
       const res = await this._hass.callWS({ type: `${DOMAIN}/get_all_instances` });
       this._instances = res.instances || [];
@@ -447,9 +458,18 @@ class SolakonPanel extends HTMLElement {
     return this._groups.find(g => g.key === this._activeGroup);
   }
 
+  // Verteilungsmodi aus dem Schema, in Anzeigereihenfolge.
+  _distModes() { return this._schema.distribution.distribution_mode?.choices || []; }
+
   _modeLabel(mode) {
     const dt = this._t.dist || {};
-    return (DIST_MODES.includes(mode) && dt[`mode_${mode}`]) || mode;
+    return (this._distModes().includes(mode) && dt[`mode_${mode}`]) || mode;
+  }
+
+  // Attribute min, max und step eines Zahlenfelds aus dem Anzeigebereich des Schemas.
+  _numAttrs(field) {
+    const ui = field?.ui || [];
+    return ["min", "max", "step"].map((a, i) => ui[i] != null ? `${a}="${ui[i]}"` : "").filter(Boolean).join(" ");
   }
 
   // Zeigt den konfigurierten Modus, ergänzt um den tatsächlich angewandten,
@@ -1091,7 +1111,7 @@ ${this._textsMissing ? `
       });
     } else if (f.t === "num") {
       div = this._htmlEl(this._fieldHtml(label, desc,
-        `<input type="number" min="${f.min}" max="${f.max}" step="${f.step}" value="${cur ?? f.min}"/>`));
+        `<input type="number" ${this._numAttrs(this._schema.settings[f.k])} value="${cur ?? this._schema.settings[f.k]?.ui?.[0]}"/>`));
       div.querySelector("input").addEventListener("change", (e) => {
         this._cfg.set(f.k, parseFloat(e.target.value));
         this._updateSaveBar();
@@ -1384,8 +1404,19 @@ ${this._textsMissing ? `
   async _wsAction(fn, onError) {
     try { return await fn(); } catch (e) {
       onError?.();
-      this._showToast("❌ " + e.message, true);
+      this._showToast("❌ " + this._errorText(e), true);
     }
+  }
+
+  // Fehlertext: abgewiesene Settings je Befund mit Feldbezeichnung, sonst die Meldung.
+  _errorText(e) {
+    if (e.code !== "invalid_settings") return e.message;
+    const errors = this._t.errors || {};
+    const dt = this._t.dist || {};
+    return JSON.parse(e.message).map(({ key, reason, min, max }) => {
+      const label = this._t.fields?.[key]?.l || dt[DIST_LABELS[key]] || key;
+      return (errors[reason] || reason).replace("{label}", label).replace("{min}", min).replace("{max}", max);
+    }).join(" • ");
   }
 
   _showToast(msg, err = false) {
@@ -1572,11 +1603,11 @@ ${this._textsMissing ? `
     c.innerHTML = `
       ${groupsNote}
       ${this._cardHtml("#0891b2", dt.global_hdr || "", this._fieldHtml(dt.global_max_lbl || "", dt.global_max_desc || "",
-        `<input type="number" min="0" max="9600" step="10" value="${globalMax}" data-dist-key="global_max_power"/>`),
+        `<input type="number" ${this._numAttrs(this._schema.distribution.global_max_power)} value="${globalMax}" data-dist-key="global_max_power"/>`),
         { extraClass: "top-item" })}
 
       ${this._cardHtml("#7c3aed", dt.mode_hdr || "", this._fieldHtml(dt.mode_lbl || "", (dt.mode_desc || "").replace(/\n/g, "<br>"),
-        `<select data-dist-key="distribution_mode">${DIST_MODES.map(m =>
+        `<select data-dist-key="distribution_mode">${this._distModes().map(m =>
           `<option value="${m}"${mode === m ? " selected" : ""}>${dt[`mode_${m}`] || ""}</option>`).join("")}</select>`),
         { extraClass: "top-item" })}
 
@@ -1584,7 +1615,7 @@ ${this._textsMissing ? `
         { extraClass: "top-item", style: mode !== "capacity" ? "opacity:.4;pointer-events:none" : "" })}
 
       ${this._cardHtml("#ea580c", dt.soc_switch_hdr || "", this._fieldHtml(dt.soc_switch_divergence_lbl || "", dt.soc_switch_divergence_desc || "",
-        `<input type="number" min="1" max="50" step="1" value="${socSwitchDiv}" data-dist-key="soc_switch_divergence"/>`),
+        `<input type="number" ${this._numAttrs(this._schema.distribution.soc_switch_divergence)} value="${socSwitchDiv}" data-dist-key="soc_switch_divergence"/>`),
         { extraClass: "top-item", style: mode !== "soc_switch" ? "opacity:.4;pointer-events:none" : "" })}
 
       ${this._cardHtml("#0284c7", dt.global_sensors_hdr || "", `<div class="desc" style="margin-bottom:8px">${dt.global_sensors_desc || ""}</div>${globalSensorCards}`,

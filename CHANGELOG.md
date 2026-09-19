@@ -7,7 +7,7 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ### Geändert
 
-- Settings und Verteilung werden beim Speichern gegen harte Grenzen geprüft: Typ, ganze Zahl, Leistung 0–1200 W, Entladestrom 0–40 A, Prozentwerte 0–100, Beträge und Faktoren nicht negativ, keine unbekannten Schlüssel. Abgewiesen wird die ganze Änderung. Gespeicherte Werte, die diese Grenzen verletzen, fallen beim Laden auf den Standard, eine HA-Benachrichtigung nennt sie. Kommazahlen in Ganzzahlfeldern werden beim Laden wie bisher abgeschnitten.
+- Settings und Verteilung werden beim Speichern gegen harte Grenzen geprüft: Typ, ganze Zahl, Leistung 0–1200 W, Entladestrom 0–40 A, Prozentwerte 0–100, Beträge und Faktoren nicht negativ, keine unbekannten Schlüssel. Abgewiesen wird die ganze Änderung. Gespeicherte Werte, die diese Grenzen verletzen, fallen beim Laden auf den Standard, eine HA-Benachrichtigung nennt sie. Kommazahlen in Ganzzahlfeldern werden beim Laden wie bisher abgeschnitten. Das Panel nennt je Feld den Grund. Die Bereiche seiner Zahlenfelder bleiben Anzeige und kommen jetzt aus dem Backend.
 
 ### Behoben
 
