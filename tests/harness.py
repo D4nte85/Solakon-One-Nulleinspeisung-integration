@@ -298,7 +298,8 @@ def jsonable(value):
 
 
 # Zustände, die in ein Teilobjekt gewandert sind: Protokollschlüssel → Pfad am Coordinator.
-COORD_PATHS = {"_tariff_unit_suspect_since": "tariff.unit_suspect_since"}
+COORD_PATHS = {"_tariff_unit_suspect_since": "tariff.unit_suspect_since",
+               "_output_warning": "_messages.hardware_msg"}
 
 
 def _coord_attr(coord, name):

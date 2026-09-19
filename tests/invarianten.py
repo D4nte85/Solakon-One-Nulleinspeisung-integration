@@ -555,6 +555,13 @@ def c4(c: Ctx):
             return f"Abschalten ändert {k}: {c.flags_vorher.get(k)} → {c.flags[k]}"
 
 
+def c5(c: Ctx):
+    msgs = [repr(m) for m in c.flags["last_error_msgs"]]
+    doppelt = sorted({m for m in msgs if msgs.count(m) > 1})
+    if doppelt:
+        return f"Meldung mehrfach in der Fehlerkette: {', '.join(doppelt)}"
+
+
 def k1(c: Ctx):
     zug = c.flags["allocated_power"]
     if zug is None or not c.normal():

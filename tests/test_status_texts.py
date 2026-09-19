@@ -28,9 +28,9 @@ def _status(hass, **extra) -> dict:
 def test_panelsprache_ueberschreibt_instanzsprache():
     hass, coord = _coord("en")
     coord._set_last_action("act_fall_a", soc=55)
-    errors = []
-    coord._add_soft_error(errors, ("err_tariff_sensor_unavailable", {"sensor": "sensor.preis"}))
-    coord._add_soft_error(errors, ("warn_dist_soc_sensor", {}))
+    coord._messages.warn(("err_tariff_sensor_unavailable", {"sensor": "sensor.preis"}))
+    coord._messages.warn(("warn_dist_soc_sensor", {}))
+    coord._end_cycle()
 
     ohne = _status(hass)
     assert ohne["last_action"] == "Case A: Zone 1 start (SOC 55%)"

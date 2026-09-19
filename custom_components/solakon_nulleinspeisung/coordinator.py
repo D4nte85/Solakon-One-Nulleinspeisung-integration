@@ -23,6 +23,7 @@ from .readings import (
 )
 from .group import NetGroup, Shares, group_for
 from .limits import PowerLimits, power_limits
+from .messages import CycleMessages
 from .tariff import Tariff, forecast_suppressed
 from .zones import SurplusState, ZoneInputs, decide, forecast_flags, surplus_and_night
 from .const import (
@@ -216,10 +217,8 @@ class SolakonCoordinator:
         self.zone_label: str = translate(hass.config.language, "zone_init")
         self.mode_key: str = "waiting"
         self.mode_label: str = translate(hass.config.language, "mode_waiting")
-        self.last_action: str = ""
         self.last_action_key: str = ""
         self.last_action_params: dict = {}
-        self.last_error: str = ""
         # Bausteine von last_error als (Schlüssel, Parameter), für andere Sprachen.
         self.last_error_msgs: list[Msg] = []
         self.pi = PIController()
@@ -263,17 +262,14 @@ class SolakonCoordinator:
         # Verwertbarer PV-Überschuss: Luft zwischen aktuellem Output und dem
         # Minimum aus Hard-Limit und aktueller PV-Leistung.
         self.surplus_power: float = 0.0
-        # Transienter Warnkanal: von _confirm_zero_output() gesetzt wenn eine
-        # sicherheitskritische Output-Nullung (Fall-Übergänge, PI-Ziel 0) trotz
-        # Retries nicht bestätigt werden konnte — sofort im selben Zyklus nach dem
-        # jeweiligen Aufruf in soft_errors übernommen, siehe _run_regulation_cycle.
-        self._output_warning: Msg | None = None
+        # Meldungen des laufenden Zyklus, von _end_cycle nach last_error_msgs übernommen.
+        self._messages = CycleMessages()
         self._output_stall_actions: int = 0
         self._output_stall_last_ts: float = 0.0
         # Tariflage je Zyklus; hält den Verdacht auf eine EUR/kWh-Preiseinheit über Zyklen.
         self.tariff = Tariff()
-        # Tatsächlich angewandter Verteilungs-Modus des letzten _all_shares()-Aufrufs
-        # — kann vom konfigurierten distribution_mode abweichen (Degradation, siehe oben).
+        # Zuletzt angewandter Verteilungsmodus aus _apply_shares(); weicht bei
+        # Degradation vom konfigurierten distribution_mode ab.
         self.dist_mode_effective: str = ""
 
         # Vorheriger actual-Wert (für Surplus-Einstiegs-Entprellung)
@@ -513,22 +509,26 @@ class SolakonCoordinator:
         return translate(self.hass.config.language, key, **params)
 
     def _set_last_action(self, key: str, **params: object) -> None:
-        """Setzt Schlüssel, Parameter und gerenderten Text der letzten Aktion."""
+        """Setzt Schlüssel, Parameter und Zeitstempel der letzten Aktion."""
         self.last_action_key = key
         self.last_action_params = params
-        self.last_action = self._tr(key, **params)
         self.last_action_ts = time.time()
 
-    def _set_errors(self, msgs: list[Msg]) -> None:
-        """Setzt die Fehlerkette als Bausteine und als Text in der Instanzsprache."""
-        self.last_error_msgs = list(msgs)
-        self.last_error = translate_msgs(self.hass.config.language, msgs)
+    @property
+    def last_action(self) -> str:
+        """Letzte Aktion in der Instanzsprache."""
+        return self.status_texts(self.hass.config.language)["last_action"]
+
+    @property
+    def last_error(self) -> str:
+        """Fehlerkette in der Instanzsprache."""
+        return self.status_texts(self.hass.config.language)["last_error"]
 
     def status_texts(self, language: str) -> dict[str, str]:
-        """Letzte Aktion und Fehlerkette in `language`, für ein Panel mit eigener Sprache."""
+        """Letzte Aktion und Fehlerkette in `language`."""
         return {
             "last_action": (translate(language, self.last_action_key, **self.last_action_params)
-                            if self.last_action_key else self.last_action),
+                            if self.last_action_key else ""),
             "last_error": translate_msgs(language, self.last_error_msgs),
         }
 
@@ -717,7 +717,7 @@ class SolakonCoordinator:
         return str(self.settings[local]) or self._global_sensor(global_key)
 
     def _feature_value(
-        self, soft_errors: list[Msg], enabled: bool, sensor: str, err_prefix: str, scale: dict[str, float],
+        self, enabled: bool, sensor: str, err_prefix: str, scale: dict[str, float],
     ) -> float | None:
         """Wert des Feature-Sensors in der Zieleinheit; None, wenn das Feature aus ist oder keine Zahl kommt.
 
@@ -728,16 +728,16 @@ class SolakonCoordinator:
         reading = read_scaled(self.hass, sensor, scale)
         if reading.reason:
             params = {} if reading.reason == NO_SENSOR else {"sensor": sensor}
-            self._add_soft_error(soft_errors, (FEATURE_ERRORS[reading.reason].format(p=err_prefix), params))
+            self._messages.warn((FEATURE_ERRORS[reading.reason].format(p=err_prefix), params))
         return reading.value
 
-    def _feature_values(self, cs: CycleSettings, soft_errors: list[Msg]) -> dict[str, float | None]:
+    def _feature_values(self, cs: CycleSettings) -> dict[str, float | None]:
         """Alle Werte aus FEATURE_READINGS nach Name, in Tabellenreihenfolge gelesen."""
         values = {}
         for name, source, enabled, err_prefix, scale, optional in FEATURE_READINGS:
             sensor = self._effective(source)
             on = getattr(cs, enabled) and (bool(sensor) or not optional)
-            values[name] = self._feature_value(soft_errors, on, sensor, err_prefix, scale)
+            values[name] = self._feature_value(on, sensor, err_prefix, scale)
         return values
 
     # ── Modbus-Schreibbefehle (nur wenn regulation_enabled) ──────────────────
@@ -807,7 +807,7 @@ class SolakonCoordinator:
         """Bestätigt, dass die Ausgangsleistung real auf 0 gefallen ist — unabhängig
         von S_SELF_ADJUST, das `_wait_for_target()` sonst gar nicht nachprüfen lässt.
         Schreibt bei fehlender Konvergenz bis zu `max_retries`-mal erneut und meldet
-        nach Ausschöpfung über `_output_warning` einen sichtbaren Fehler.
+        nach Ausschöpfung als Schreibwarnung in der Fehlerkette.
 
         CONF_ACTUAL_SENSOR stammt aus einer fremden Integration mit eigenem
         Poll-Intervall (1–300 s). Ein Read, der älter ist als unser letzter
@@ -840,7 +840,7 @@ class SolakonCoordinator:
 
         actual, deviation = self._actual_vs(0)
         if deviation > tolerance and _confirmable():
-            self._output_warning = ("warn_output_zero_unconfirmed", {"attempts": max_retries, "actual": actual})
+            self._messages.hardware(("warn_output_zero_unconfirmed", {"attempts": max_retries, "actual": actual}))
             _LOGGER.error("Solakon: %s", self._tr("warn_output_zero_unconfirmed", attempts=max_retries, actual=actual))
 
     def _reset_output_stall_state(self) -> None:
@@ -893,7 +893,7 @@ class SolakonCoordinator:
             self._set_last_action("act_output_rewritten", actual=actual, limit=limit)
             return
 
-        self._output_warning = ("warn_output_stuck", {"actual": actual, "limit": limit})
+        self._messages.hardware(("warn_output_stuck", {"actual": actual, "limit": limit}))
         _LOGGER.error("Solakon: %s (Versuch %d)", self._tr("warn_output_stuck", actual=actual, limit=limit),
                       self._output_stall_actions)
         await self._transition(reset_integral=True, output=0, rest=True)
@@ -1049,7 +1049,7 @@ class SolakonCoordinator:
             return
 
         self._timer_toggled_in_cycle = False
-        self._output_warning = None
+        self._messages = CycleMessages()
         self._cycle_blocked = False
 
         prev_flags = self._persisted_flags()
@@ -1060,9 +1060,8 @@ class SolakonCoordinator:
                         if required and read_number(self.hass, cfg[key]).value is None), None)
         if missing is not None:
             _LOGGER.debug("Solakon: Kernsensor %s ohne Zahlenwert, Zyklus übersprungen", missing)
-            prev_error = self.last_error
-            self._set_errors([("err_core_sensor", {"sensor": missing})])
-            self._end_cycle(blocked=True, notify_on_change=self.last_error == prev_error)
+            self._messages.fail(("err_core_sensor", {"sensor": missing}))
+            self._end_cycle(blocked=True, notify_on_change=self._messages.msgs == self.last_error_msgs)
             return
 
         soc = self._flt(cfg[CONF_SOC_SENSOR])
@@ -1089,19 +1088,13 @@ class SolakonCoordinator:
 
         ac_offset = float(self._offset("ac")[2])
 
-        # Sammelt Meldungen zu Sensor-gated Features, die trotz aktivem Enable-Flag
-        # wegen fehlendem/ungültigem Sensor wirkungslos bleiben; wird als last_error
-        # ins Panel gespiegelt. Angelegt vor der Verteilungsrechnung, deren
-        # Modus-Degradation ebenfalls hier einfließt.
-        soft_errors: list[Msg] = []
-
         tariff_sensor = self._effective("tariff")
-        feature = self._feature_values(cs, soft_errors)
+        feature = self._feature_values(cs)
 
         error_share, allocated_power, shares = self.group.distribution(self, soc)
         self.allocated_power = allocated_power
         if dist_warning := self._apply_shares(shares):
-            self._add_soft_error(soft_errors, dist_warning)
+            self._messages.warn(dist_warning)
         limits = power_limits(
             hard_limit_z0=cs.hard_limit_z0, hard_limit_z1=cs.hard_limit_z1,
             ac_power_limit=cs.ac_power_limit, pv_reserve=cs.pv_reserve, allocated=allocated_power,
@@ -1127,27 +1120,23 @@ class SolakonCoordinator:
         self.zone1_forced = forecast.zone1_forced
 
         # ── 3. Validierung ───────────────────────────────────────────────────
-        if cs.zone1_limit <= cs.zone3_limit:
-            self._end_cycle(blocked=True, error_key="err_soc_zone1_zone3")
-            return
-
-        if cs.surplus_enabled and cs.surplus_threshold <= cs.zone1_limit:
-            self._end_cycle(blocked=True, error_key="err_soc_surplus_zone1")
-            return
-
-        if cs.zone1_force_enabled and not (cs.zone3_limit < cs.zone1_force_min_soc < cs.zone1_limit):
-            self._end_cycle(blocked=True, error_key="err_soc_zone1_force")
-            return
-
-        if not self._entity_ok(cfg[CONF_MODE_SELECT]):
-            self._end_cycle(blocked=True, error_key="err_mode_select")
+        invalid = next((key for failed, key in (
+            (cs.zone1_limit <= cs.zone3_limit, "err_soc_zone1_zone3"),
+            (cs.surplus_enabled and cs.surplus_threshold <= cs.zone1_limit, "err_soc_surplus_zone1"),
+            (cs.zone1_force_enabled and not (cs.zone3_limit < cs.zone1_force_min_soc < cs.zone1_limit),
+             "err_soc_zone1_force"),
+            (not self._entity_ok(cfg[CONF_MODE_SELECT]), "err_mode_select"),
+        ) if failed), None)
+        if invalid:
+            self._messages.fail((invalid, {}))
+            self._end_cycle(blocked=True)
             return
 
         await self._sync_export_limit(limits.export)
 
         # Preis ohne Einheitenumrechnung; die Einheitenwarnung der Tariflage geht als
-        # soft_error in dieselbe Meldungskette ein.
-        price = self._feature_value(soft_errors, cs.tariff_enabled, tariff_sensor, "err_tariff", {})
+        # weicher Fehler in dieselbe Meldungskette ein.
+        price = self._feature_value(cs.tariff_enabled, tariff_sensor, "err_tariff", {})
         tariff = self.tariff.assess(
             enabled=cs.tariff_enabled and bool(tariff_sensor), suppressed=self.forecast_tariff_suppressed,
             price=price, cheap_entity=feature["cheap"], cheap_setting=cs.tariff_cheap,
@@ -1155,10 +1144,7 @@ class SolakonCoordinator:
             unit=unit_of(self.hass.states.get(tariff_sensor)) if price is not None else "", now=time.time(),
         )
         if tariff.unit_warning:
-            self._add_soft_error(soft_errors, tariff.unit_warning)
-
-        # Verkettet statt überschrieben
-        self._set_errors(soft_errors)
+            self._messages.warn(tariff.unit_warning)
 
         # ── 4. Abgeleitete Variablen ─────────────────────────────────────────
         prev_actual = self._prev_actual
@@ -1208,15 +1194,15 @@ class SolakonCoordinator:
 
         # ── 7. PI-Gate ───────────────────────────────────────────────────────
         if mode in (MODE_DISCHARGE, MODE_AC_CHARGE):
-            await self._run_pi_phase(cs, soc, mode, timer_val, error_share, limits, ac_offset, soft_errors)
+            await self._run_pi_phase(cs, soc, mode, timer_val, error_share, limits, ac_offset)
 
         # ── 10. Display + Flag-Persistenz ────────────────────────────────────
-        self._end_cycle(soft_errors=soft_errors, display=(soc, cs.zone1_limit, cs.zone3_limit, mode),
+        self._end_cycle(display=(soc, cs.zone1_limit, cs.zone3_limit, mode),
                         prev_flags=prev_flags)
 
     async def _run_pi_phase(
         self, cs: CycleSettings, soc: float, mode: str, timer_val: float, error_share: float,
-        limits: PowerLimits, ac_offset: float, soft_errors: list[Msg],
+        limits: PowerLimits, ac_offset: float,
     ) -> None:
         """PI-Phase eines Zyklus in Modus '1' oder '3': Timeout-Reset, dann Zone-0-Festwert,
         AC-PI, Tarif-Festwert oder Standard-PI mit Stillstandsprüfung."""
@@ -1245,7 +1231,7 @@ class SolakonCoordinator:
         # Eigener Pool für AC-Laden, nach den Falls berechnet.
         ac_error_share, shares = self.group.ac_share(self, soc)
         if dist_warning := self._apply_shares(shares):
-            self._add_soft_error(soft_errors, dist_warning)
+            self._messages.warn(dist_warning)
 
         # ── PI-Pfade ─────────────────────────────────────────────────────────
         if self.surplus_active:
@@ -1279,29 +1265,21 @@ class SolakonCoordinator:
             else:
                 self._reset_output_stall_state()
 
-    def _add_soft_error(self, soft_errors: list[Msg], msg: Msg) -> None:
-        """Baustein an die Fehlerkette hängen und `last_error` neu verketten."""
-        soft_errors.append(msg)
-        self._set_errors(soft_errors)
-
     def _end_cycle(
-        self, *, blocked: bool = False, error_key: str = "", soft_errors: list[Msg] | None = None,
+        self, *, blocked: bool = False,
         display: tuple[float, int, int, str] | None = None, prev_flags: dict[str, bool] | None = None,
         notify_on_change: bool = False,
     ) -> None:
         """Zyklus abschließen: Fehler, Anzeige, Flag-Speicherung, Benachrichtigung.
 
-        `error_key` ersetzt `last_error`, `soft_errors` erhält eine offene Output-Warnung.
+        Übernimmt die Meldungen des Zyklus nach `last_error_msgs`.
         `display` (soc, zone1, zone3, mode) zieht Zonen- und Modusanzeige nach, sonst nur
         den Betriebszustand. Mit `prev_flags` wird bei geänderten Flags verzögert gespeichert.
         `notify_on_change` benachrichtigt nur, wenn der Betriebszustand gewechselt hat.
         """
-        if error_key:
-            self._set_errors([(error_key, {})])
+        self.last_error_msgs = self._messages.msgs
         if blocked:
             self._cycle_blocked = True
-        if soft_errors is not None and self._output_warning:
-            self._add_soft_error(soft_errors, self._output_warning)
         if display is not None:
             self._update_zone_display(*display)
             changed = True
