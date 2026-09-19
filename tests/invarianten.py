@@ -351,13 +351,15 @@ def f1(c: Ctx):
     if not c.normal() or c.flags_vorher.get("ac_charge_active") or not c.flags["ac_charge_active"]:
         return None
     # Ist-Leistung vorzeichenrichtig: Entladen positiv, Laden negativ. Die eigene Instanz
-    # zählt immer, die übrigen nur am selben Netzsensor, mit Regelung und in Modus '1'.
+    # zählt immer, die übrigen nur am selben Netzsensor, mit Regelung, in Modus '1' und
+    # nicht ruhend.
     netz = c.netz()
     summe = 0.0
-    for p, (cfg, _flags, _nach) in c.alle.items():
+    for p, (cfg, fl, _nach) in c.alle.items():
         if p == c.prefix or (
             cfg[C.CONF_GRID_SENSOR] == c.e(C.CONF_GRID_SENSOR) and c.geregelt.get(p)
             and (c.vorher.get(cfg[C.CONF_MODE_SELECT]) or {}).get("state") == C.MODE_DISCHARGE
+            and not fl.get("resting")
         ):
             summe += zahl(c.vorher, cfg[C.CONF_ACTUAL_SENSOR], True) or 0.0
     hyst = c.settings[C.S_AC_HYSTERESIS]
@@ -597,7 +599,7 @@ def k3(c: Ctx):
             continue  # andere Netzgruppe, eigener Pool
         if (c.vorher.get(cfg[C.CONF_MODE_SELECT]) or {}).get("state") != C.MODE_DISCHARGE:
             continue
-        if _fl.get("operating_state") == "disabled":
+        if _fl.get("operating_state") == "disabled" or _fl.get("resting"):
             continue
         kap = c.dist.get(f"inst_entry_{p}_capacity_sensor")
 

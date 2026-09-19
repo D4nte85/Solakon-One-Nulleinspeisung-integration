@@ -1,6 +1,7 @@
 """Solakon ONE Nulleinspeisung — HACS custom integration."""
 from __future__ import annotations
 
+import json
 import logging
 from pathlib import Path
 from typing import Any
@@ -18,8 +19,10 @@ from .const import (
     DOMAIN, PLATFORMS, S_REGULATION_ENABLED,
     CONF_INSTANCE_NAME,
     CONF_GRID_SENSOR, CONF_ACTUAL_SENSOR, CONF_SOLAR_SENSOR, CONF_SOC_SENSOR,
-    STORAGE_VERSION, DIST_DEFAULTS, VERSION,
+    STORAGE_VERSION, DIST_DEFAULTS, DIST_INST_FIELDS, DIST_SCHEMA, SETTINGS_SCHEMA, VERSION,
 )
+from .i18n import translate
+from .schema import InvalidSettings, check, notify_reset, sanitize
 
 STORAGE_VERSION_DIST = 2
 STORAGE_KEY_DIST     = f"{DOMAIN}_distribution"
@@ -98,6 +101,11 @@ def _get_or_error(connection: websocket_api.ActiveConnection, msg: dict, value: 
     return value
 
 
+def _send_invalid(connection: websocket_api.ActiveConnection, msg: dict, findings: list[dict]) -> None:
+    """Abgewiesene Änderungen als Fehler `invalid_settings`, Befunde als JSON im Text."""
+    connection.send_error(msg["id"], "invalid_settings", json.dumps(findings))
+
+
 def _coord_or_error(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict) -> Any:
     """Coordinator zu `msg["entry_id"]`, sonst Fehler `not_found` und None."""
     return _get_or_error(
@@ -150,7 +158,11 @@ async def _ws_save_config(
 ) -> None:
     if (coord := _coord_or_error(hass, connection, msg)) is None:
         return
-    await coord.async_update_settings(msg["changes"])
+    try:
+        await coord.async_update_settings(msg["changes"])
+    except InvalidSettings as err:
+        _send_invalid(connection, msg, err.findings)
+        return
     connection.send_result(msg["id"], {"success": True})
 
 
@@ -267,7 +279,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # — jede Netzgruppe hat unabhängige Verteilungs-Einstellungen.
     await _ensure_store(
         hass, "dist_store", "dist_config",
-        lambda: SolakonDistStore(hass, STORAGE_VERSION_DIST, STORAGE_KEY_DIST), {}, lambda stored: stored,
+        lambda: SolakonDistStore(hass, STORAGE_VERSION_DIST, STORAGE_KEY_DIST), {},
+        lambda stored: _sanitize_dist(hass, stored),
     )
 
     # SOC-Switch-Laufzeitzustand (Modus `soc_switch`) — eigener Store, getrennt
@@ -314,6 +327,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Eintrag neu laden wenn die Entitäten-Zuweisung (entry.data) geändert wurde."""
     await hass.config_entries.async_reload(entry.entry_id)
+
+
+def _sanitize_dist(hass: HomeAssistant, stored: dict) -> dict:
+    """Verteilungs-Config je Netzgruppe gegen DIST_SCHEMA prüfen; Zurückgesetztes melden und speichern."""
+    groups = {}
+    for grid, cfg in stored.items():
+        groups[grid], reset = sanitize(cfg, DIST_SCHEMA, DIST_INST_FIELDS)
+        if reset:
+            scope = translate(hass.config.language, "dist_scope", grid=grid)
+            notify_reset(hass, f"{DOMAIN}_dist_reset_{grid}", scope, reset)
+    if groups != stored:
+        hass.data[f"{DOMAIN}_dist_store"].async_delay_save(lambda: groups, 0)
+    return groups
 
 
 async def _ensure_store(
@@ -399,6 +425,9 @@ async def _ws_save_distribution_config(
     )
     if store is None:
         return
+    if findings := check(msg["distribution"], DIST_SCHEMA, DIST_INST_FIELDS):
+        _send_invalid(connection, msg, findings)
+        return
 
     group_key = msg["grid_sensor"]
     all_groups = await store.async_load() or {}
@@ -421,8 +450,22 @@ async def _ws_save_distribution_config(
     connection.send_result(msg["id"], {"success": True})
 
 
+@websocket_api.websocket_command({
+    vol.Required("type"): f"{DOMAIN}/get_schema",
+})
+@websocket_api.async_response
+async def _ws_get_schema(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """WS: Typ, Bereich und Schrittweite aller Settings und der Verteilung."""
+    connection.send_result(msg["id"], {
+        "settings":     {key: field._asdict() for key, field in SETTINGS_SCHEMA.items()},
+        "distribution": {key: field._asdict() for key, field in DIST_SCHEMA.items()},
+    })
+
+
 # Beim ersten Setup registrierte WebSocket-Commands.
 WS_COMMANDS = (
-    _ws_get_all_instances, _ws_get_config, _ws_save_config, _ws_get_status,
+    _ws_get_all_instances, _ws_get_config, _ws_save_config, _ws_get_status, _ws_get_schema,
     _ws_reset_integral, _ws_set_cycle, _ws_get_distribution_config, _ws_save_distribution_config,
 )

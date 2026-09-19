@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 
 from tests import geraet, harness as h
 from tests.ha_stubs import ActiveConnection, _DtState
+from custom_components.solakon_nulleinspeisung.schema import InvalidSettings
 
 C = h.const
 # Literal statt Konstante, damit die Referenz auch vom Stand ohne das Setting erzeugbar ist.
@@ -41,6 +42,15 @@ def _sensor(rng, value, units, p_unavailable=0.04):
         value = round(value / 1000.0, 3)
     attrs = {} if unit is None else {"unit_of_measurement": unit}
     return {"state": value, "attrs": attrs}
+
+
+# Werte, die das Schema verletzen: beim Speichern abgewiesen, beim Laden zurückgesetzt
+# (Kommazahl im Ganzzahlfeld: abgeschnitten).
+INVALID_SETTINGS = [
+    (C.S_SURPLUS_PV_HYST, -10), (C.S_AC_POWER_LIMIT, 1500), (C.S_TARIFF_POWER, 2000),
+    (C.S_DYN_Z1_MAX, -20), (C.S_ZONE1_LIMIT, 150), (C.S_ZONE1_LIMIT, 50.5), (C.S_P_FACTOR, None),
+    (C.S_TOLERANCE, "15"), (C.S_SURPLUS_ENABLED, 1), (C.S_PERIODIC_INTERVAL, 0),
+]
 
 
 def gen_settings(rng) -> dict:
@@ -77,7 +87,7 @@ def gen_settings(rng) -> dict:
 
     s[C.S_AC_ENABLED] = _chance(rng, 0.45)
     s[C.S_AC_SOC_TARGET] = _pick(rng, [90, 60])
-    s[C.S_AC_POWER_LIMIT] = _pick(rng, [800, 1500, 300])
+    s[C.S_AC_POWER_LIMIT] = _pick(rng, [800, 1200, 300])
     s[C.S_AC_HYSTERESIS] = _pick(rng, [50, 10])
     s[C.S_AC_OFFSET] = _pick(rng, [-50, 0])
     s[C.S_AC_I_FACTOR] = _pick(rng, [0.0, 0.1])
@@ -86,7 +96,7 @@ def gen_settings(rng) -> dict:
     s[C.S_TARIFF_CHEAP_THRESHOLD] = _pick(rng, [10.0, 20.0, 0.1])
     s[C.S_TARIFF_EXP_THRESHOLD] = _pick(rng, [25.0, 30.0])
     s[C.S_TARIFF_SOC_TARGET] = _pick(rng, [90, 50])
-    s[C.S_TARIFF_POWER] = _pick(rng, [800, 400, 1500])
+    s[C.S_TARIFF_POWER] = _pick(rng, [800, 400, 1200])
     s[C.S_PV_FORECAST_ENABLED] = _chance(rng, 0.25)
     s[C.S_PV_FORECAST_THRESHOLD] = _pick(rng, [15.0, 3.0])
     s[C.S_ZONE1_FORCE_ENABLED] = _chance(rng, 0.25)
@@ -163,11 +173,16 @@ def gen_instance(rng, prefix, grid_sensor="sensor.grid") -> dict:
         f"sensor.{prefix}_capacity": _sensor(rng, _pick(rng, [2.0, 4000.0, 1.5]),
                                              ["kWh", "Wh", "wh", "MWh", None], 0.1),
     }
+    settings = gen_settings(rng)
+    stored = _chance(rng, 0.9)
+    if stored and _chance(rng, 0.05):
+        key, value = _pick(rng, INVALID_SETTINGS)
+        settings[key] = value
     return {
         "prefix": prefix,
         "grid_sensor": grid_sensor,
         "export_limit": _chance(rng, 0.8),
-        "settings": gen_settings(rng),
+        "settings": settings,
         "flags": {
             "cycle_active": _chance(rng, 0.45),
             "surplus_active": _chance(rng, 0.2),
@@ -175,7 +190,7 @@ def gen_instance(rng, prefix, grid_sensor="sensor.grid") -> dict:
             "tariff_charge_active": _chance(rng, 0.12),
             "solar_zero_entry_armed": _chance(rng, 0.7),
         },
-        "stored": _chance(rng, 0.9),
+        "stored": stored,
         "drop_flags": [k for k in ("cycle_active", "surplus_active", "ac_charge_active",
                                    "tariff_charge_active", "solar_zero_entry_armed")
                        if _chance(rng, 0.08)],
@@ -372,6 +387,9 @@ def gen_settings_change(rng) -> dict:
         changes[C.S_REGULATION_ENABLED] = False
     if _chance(rng, 0.2):
         changes[C.S_PERIODIC_INTERVAL] = _pick(rng, [3, 30])
+    if _chance(rng, 0.05):
+        key, value = _pick(rng, INVALID_SETTINGS)
+        changes[key] = value
     spec["changes"] = changes
     spec["dist_save"] = _chance(rng, 0.3)
     return spec
@@ -483,11 +501,16 @@ async def _run_settings_spec(spec) -> dict:
     hass, logs, coords = _setup_env(spec)
     coord = coords["a"]
     await coord.async_setup()
-    coord.settings.update(spec["instances"][0]["settings"])
+    if not spec["instances"][0]["stored"]:
+        coord.settings.update(spec["instances"][0]["settings"])
     hass.events = []
-    await coord.async_update_settings(dict(spec["changes"]))
+    try:
+        await coord.async_update_settings(dict(spec["changes"]))
+        rejected = None
+    except InvalidSettings as err:
+        rejected = err.findings
     rec = {"events": hass.events, "state": h.coord_state(coord),
-           "settings": h.jsonable(coord.settings)}
+           "settings": h.jsonable(coord.settings), "rejected": rejected}
     if spec["dist_save"]:
         hass.events = []
         hass.data[f"{C.DOMAIN}_dist_store"] = h.ha_stubs.Store(hass, 2, "dist")

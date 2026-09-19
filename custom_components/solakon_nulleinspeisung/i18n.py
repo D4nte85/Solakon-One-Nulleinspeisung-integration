@@ -288,6 +288,20 @@ _TEXTS: dict[str, dict[str, str]] = {
         "de": "Tarif: Preis {price:g} passt nicht zur Günstig-Schwelle {cheap:g} ct/kWh — Sensor liefert vermutlich €/kWh",
         "en": "Tariff: price {price:g} does not match the cheap threshold {cheap:g} ct/kWh — sensor probably reports €/kWh",
     },
+
+    # ── Benachrichtigung beim Laden ──────────────────────────────────────────
+    "settings_reset_title": {
+        "de": "Solakon ONE: Einstellungen zurückgesetzt ({scope})",
+        "en": "Solakon ONE: settings reset ({scope})",
+    },
+    "settings_reset_body": {
+        "de": "Ungültige gespeicherte Werte wurden auf den Standardwert gesetzt: {items}",
+        "en": "Invalid stored values were reset to their default: {items}",
+    },
+    "dist_scope": {
+        "de": "Verteilung {grid}",
+        "en": "distribution {grid}",
+    },
 }
 
 

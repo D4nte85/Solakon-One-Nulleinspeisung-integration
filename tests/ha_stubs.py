@@ -279,6 +279,10 @@ def async_remove_panel(hass, path):
     hass.log("panel_remove", path)
 
 
+def persistent_notification_create(hass, message, title=None, notification_id=None):
+    hass.log("notify", notification_id, title, message)
+
+
 def install() -> None:
     _module("homeassistant.core", HomeAssistant=HomeAssistant, Event=Event, callback=callback)
     _module("homeassistant.helpers.event",
@@ -308,3 +312,4 @@ def install() -> None:
             async_register_command=async_register_command, ActiveConnection=ActiveConnection)
     _module("homeassistant.components.panel_custom", async_register_panel=async_register_panel)
     _module("homeassistant.components.frontend", async_remove_panel=async_remove_panel)
+    _module("homeassistant.components.persistent_notification", async_create=persistent_notification_create)

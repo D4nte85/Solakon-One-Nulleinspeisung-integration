@@ -24,10 +24,11 @@ from .readings import (
 from .group import NetGroup, Shares, group_for
 from .limits import PowerLimits, power_limits
 from .messages import CycleMessages
+from .schema import InvalidSettings, check, notify_reset, sanitize
 from .tariff import Tariff, forecast_suppressed
 from .zones import SurplusState, ZoneInputs, decide, forecast_flags, surplus_and_night
 from .const import (
-    DOMAIN, STORAGE_VERSION, SETTINGS_DEFAULTS, DIST_DEFAULTS, DEVICE_MAX_POWER,
+    DOMAIN, STORAGE_VERSION, SETTINGS_DEFAULTS, SETTINGS_SCHEMA, DIST_DEFAULTS, DEVICE_MAX_POWER,
     CONF_GRID_SENSOR, CONF_ACTUAL_SENSOR, CONF_SOLAR_SENSOR,
     CONF_SOC_SENSOR, CONF_TIMEOUT_COUNTDOWN, CONF_ACTIVE_POWER,
     CONF_DISCHARGE_CURRENT, CONF_TIMEOUT_SET, CONF_MODE_SELECT, CONF_EXPORT_LIMIT,
@@ -297,9 +298,13 @@ class SolakonCoordinator:
         """Einstellungen laden, State-Listener starten."""
         stored = await self._store.async_load()
         if stored:
+            stored, reset = sanitize(stored, SETTINGS_SCHEMA)
             self.settings = {**SETTINGS_DEFAULTS, **stored}
             for key, attr, default in PERSISTED_FLAGS:
                 setattr(self, attr, bool(stored.get(key, default)))
+            if reset:
+                notify_reset(self.hass, f"{DOMAIN}_settings_reset_{self.entry.entry_id}", self.entry.title, reset)
+                await self._store.async_save(self._store_data())
             _LOGGER.debug("Solakon: Einstellungen aus Speicher geladen")
         else:
             self.settings = SETTINGS_DEFAULTS.copy()
@@ -328,6 +333,9 @@ class SolakonCoordinator:
     # ── Settings-Management ──────────────────────────────────────────────────
 
     async def async_update_settings(self, changes: dict[str, Any]) -> None:
+        """Änderungen prüfen, übernehmen und speichern; InvalidSettings, wenn eine das Schema verletzt."""
+        if findings := check(changes, SETTINGS_SCHEMA):
+            raise InvalidSettings(findings)
         turning_off = (
             self._regulation_on
             and S_REGULATION_ENABLED in changes

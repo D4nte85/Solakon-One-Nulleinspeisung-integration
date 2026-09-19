@@ -6,6 +6,7 @@ verteilung: {distribution_mode: soc, global_max_power: 2000}
 instanzen:
   - prefix: a
     settings: {regulation_enabled: true, hard_limit_z1: 1500}
+    gespeichert: false
     sensoren: {soc: 90, modus: "1"}
   - prefix: b
     settings: {regulation_enabled: true}

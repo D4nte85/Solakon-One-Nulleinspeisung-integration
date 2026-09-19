@@ -5,6 +5,10 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+### Geändert
+
+- Settings und Verteilung werden beim Speichern gegen harte Grenzen geprüft: Typ, ganze Zahl, Leistung 0–1200 W, Entladestrom 0–40 A, Prozentwerte 0–100, Beträge und Faktoren nicht negativ, keine unbekannten Schlüssel. Abgewiesen wird die ganze Änderung. Gespeicherte Werte, die diese Grenzen verletzen, fallen beim Laden auf den Standard, eine HA-Benachrichtigung nennt sie. Kommazahlen in Ganzzahlfeldern werden beim Laden wie bisher abgeschnitten.
+
 ### Behoben
 
 - Lieferte der Leistungssollwert des Geräts keine Zahl, rechnete der PI-Regler von 0 W aus und schrieb einen falschen Sprung, ohne Meldung. Der Sollwert ist jetzt Pflichtsensor: Ohne Zahl überspringt die Regelung den Zyklus mit Meldung, wie bei Netz, PV, Ist-Leistung und SOC.

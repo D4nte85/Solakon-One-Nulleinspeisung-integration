@@ -110,6 +110,9 @@ def spec_aus(szenario: dict) -> dict:
         unbekannt = set(inst.get("settings") or {}) - set(C.SETTINGS_DEFAULTS)
         if unbekannt:
             raise SzenarioFehler(f"Instanz {p}: unbekannte Settings {sorted(unbekannt)}")
+        gespeichert = inst.get("gespeichert", True)
+        if not gespeichert and inst.get("flags"):
+            raise SzenarioFehler(f"Instanz {p}: flags wirken nur mit gespeichert: true")
         flags = {f: False for f in FLAGS}
         flags.update(inst.get("flags") or {})
         spec["instances"].append({
@@ -118,7 +121,7 @@ def spec_aus(szenario: dict) -> dict:
             "export_limit": inst.get("export_limit", True),
             "settings": settings,
             "flags": flags,
-            "stored": True,
+            "stored": gespeichert,
             "drop_flags": [],
             "integral": float(inst.get("integral", 0.0)),
             "prev_actual": float(inst.get("vorheriger_ist", 0.0)),
