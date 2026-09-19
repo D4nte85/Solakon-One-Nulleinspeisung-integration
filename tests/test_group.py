@@ -96,8 +96,8 @@ def test_pools():
 def test_pool_sum_eigener_wert_immer_fremde_ueber_reader():
     a, b, c = M("a", actual=999), M("b", actual=100), M("c", actual=50)
     _, g = _group(a, b, c)
-    assert g.pool_sum({"b": b, "c": c}, a, 10, lambda m: m.actual_power()) == 160
-    assert g.pool_sum({"a": a, "b": b}, a, 10, lambda m: m.actual_power()) == 110
+    assert group.pool_sum({"b": b, "c": c}, a, 10, lambda m: m.actual_power()) == 160
+    assert group.pool_sum({"a": a, "b": b}, a, 10, lambda m: m.actual_power()) == 110
 
 
 def test_config_mit_defaults():
@@ -263,19 +263,19 @@ def test_soc_switch_fremd_soc_fehlt():
 def test_wasserfuellung_abgerundet():
     ms = {k: M(k) for k in "abc"}
     _, g = _group(*ms.values())
-    assert g.waterfill(ms, {k: 1 / 3 for k in ms}, 800) == {"a": 266, "b": 266, "c": 266}
+    assert group.waterfill(ms, {k: 1 / 3 for k in ms}, 800) == {"a": 266, "b": 266, "c": 266}
 
 
 def test_wasserfuellung_reicht_rest_weiter():
     a, b = M("a", limit=200), M("b")
     _, g = _group(a, b)
-    assert g.waterfill({"a": a, "b": b}, {"a": 0.5, "b": 0.5}, 800) == {"a": 200, "b": 600}
+    assert group.waterfill({"a": a, "b": b}, {"a": 0.5, "b": 0.5}, 800) == {"a": 200, "b": 600}
 
 
 def test_wasserfuellung_ohne_anteile_null():
     a, b = M("a"), M("b")
     _, g = _group(a, b)
-    assert g.waterfill({"a": a, "b": b}, {"a": 0.0, "b": 0.0}, 800) == {"a": 0.0, "b": 0.0}
+    assert group.waterfill({"a": a, "b": b}, {"a": 0.0, "b": 0.0}, 800) == {"a": 0.0, "b": 0.0}
 
 
 def test_zuteilung_einzeln_und_ausserhalb():

@@ -685,7 +685,7 @@ async def _run_derive() -> dict:
     for sd in (-1.0, 0.0, 10.0, 40.0, 500.0):
         for mn, mx in ((30, 250), (250, 30), (0, 0)):
             for noise, factor, neg in ((15, 1.5, False), (0, 2.0, True)):
-                dyn.append([sd, mn, mx, noise, factor, neg, coord._calc_dynamic_offset(sd, mn, mx, noise, factor, neg)])
+                dyn.append([sd, mn, mx, noise, factor, neg, h.coordinator_mod.dynamic_offset(sd, mn, mx, noise, factor, neg)])
     return {"derive": rows, "pi": pi, "dyn": dyn}
 
 

@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import math
 import time
 from collections import deque, namedtuple
 from typing import Any, Callable
@@ -21,7 +20,7 @@ from .readings import (
     NO_SENSOR, NOT_NUMERIC, UNAVAILABLE, UNIT_SCALE_KILO, UNIT_SCALE_KWH, UNIT_SCALE_W,
     WRONG_DOMAIN, read_number, read_scaled, unit_of, valid_state,
 )
-from .group import NetGroup, Shares
+from .group import NetGroup, Shares, pool_sum
 from .group_store import group_for
 from .limits import PowerLimits, power_limits
 from .messages import CycleMessages
@@ -29,7 +28,7 @@ from .schema import InvalidSettings, check, notify_reset, sanitize
 from .tariff import Tariff, forecast_suppressed
 from .zones import SurplusState, ZoneInputs, decide, forecast_flags, surplus_and_night
 from .const import (
-    DOMAIN, STORAGE_VERSION, SETTINGS_DEFAULTS, SETTINGS_SCHEMA, DIST_DEFAULTS, DEVICE_MAX_POWER,
+    DOMAIN, STORAGE_VERSION, SETTINGS_DEFAULTS, SETTINGS_SCHEMA, DEVICE_MAX_POWER,
     CONF_GRID_SENSOR, CONF_ACTUAL_SENSOR, CONF_SOLAR_SENSOR,
     CONF_SOC_SENSOR, CONF_TIMEOUT_COUNTDOWN, CONF_ACTIVE_POWER,
     CONF_DISCHARGE_CURRENT, CONF_TIMEOUT_SET, CONF_MODE_SELECT, CONF_EXPORT_LIMIT,
@@ -185,6 +184,28 @@ TRACKERS = (
     ("surplus_lock", (S_SURPLUS_LOCK_ENABLED,)),
     ("zone1_force", (S_ZONE1_FORCE_ENABLED,)),
 )
+
+
+def _stddev_of(values: list[float]) -> float:
+    """Populations-Standardabweichung einer Werteliste."""
+    n = len(values)
+    mean = sum(values) / n
+    variance = sum((v - mean) ** 2 for v in values) / n
+    return round(variance ** 0.5, 1)
+
+
+def dynamic_offset(
+    stddev: float, min_off: int, max_off: int, noise: float, factor: float, negative: bool,
+) -> float:
+    """Offset = clamp(min + max(0, (StdDev − Rausch) × Faktor), min, max)."""
+    if min_off >= max_off:
+        result = min_off
+    elif stddev < 0:
+        result = min_off
+    else:
+        buf = max(0.0, (stddev - noise) * factor)
+        result = _clamp(round(min_off + buf), min_off, max_off)
+    return float(result * (-1 if negative else 1))
 
 
 class SolakonSettingsStore(Store):
@@ -569,6 +590,11 @@ class SolakonCoordinator:
         state = self.hass.states.get(self.entry.data.get(CONF_ACTUAL_SENSOR, ""))
         return state.last_updated.timestamp() if state is not None else None
 
+    def _actual_polled_since_write(self) -> bool:
+        """True, wenn der Ist-Sensor seit dem letzten Schreibbefehl neu gepollt hat."""
+        updated = self._actual_updated_ts()
+        return updated is not None and updated >= self.last_output_ts
+
     async def _wait_for_target(self, target: float, ac_charge_mode: bool = False) -> None:
         """Wartet bis actual_power den Zielwert erreicht, oder max wait_time."""
         wait_max = self._setting(S_WAIT_TIME, float)
@@ -626,46 +652,24 @@ class SolakonCoordinator:
             return
 
         values = [s[1] for s in self._grid_samples]
-        self.grid_stddev_raw = self._stddev_of(values)
+        self.grid_stddev_raw = _stddev_of(values)
 
         # Getrimmte StdDev: die `trim` größten und kleinsten Samples im Fenster
         # ausschließen, bevor die Streuung berechnet wird.
         trim = self._setting(S_STDDEV_TRIM_COUNT, int)
         if trim > 0 and n - 2 * trim >= 2:  # Fallback: mind. 2 Kernwerte nötig, sonst ungetrimmt
             core = sorted(values)[trim: n - trim]
-            self.grid_stddev = self._stddev_of(core)
+            self.grid_stddev = _stddev_of(core)
         else:
             self.grid_stddev = self.grid_stddev_raw
 
-    @staticmethod
-    def _stddev_of(values: list[float]) -> float:
-        """Populations-Standardabweichung einer Werteliste."""
-        n = len(values)
-        mean = sum(values) / n
-        variance = sum((v - mean) ** 2 for v in values) / n
-        return round(variance ** 0.5, 1)
-
     # ── Dynamic Offset-Berechnung ────────────────────────────────────────────
-
-    def _calc_dynamic_offset(
-        self, stddev: float, min_off: int, max_off: int,
-        noise: float, factor: float, negative: bool,
-    ) -> float:
-        """Offset = clamp(min + max(0, (StdDev − Rausch) × Faktor), min, max)."""
-        if min_off >= max_off:
-            result = min_off
-        elif stddev < 0:
-            result = min_off
-        else:
-            buf = max(0.0, (stddev - noise) * factor)
-            result = _clamp(round(min_off + buf), min_off, max_off)
-        return float(result * (-1 if negative else 1))
 
     def _update_dynamic_offsets(self) -> None:
         """Dynamische Offsets für alle drei Zonen berechnen."""
         for attr, keys in DYN_OFFSETS:
             args = (self._setting(key, cast) for key, cast in zip(keys, (int, int, float, float, bool)))
-            setattr(self, attr, self._calc_dynamic_offset(self.grid_stddev, *args))
+            setattr(self, attr, dynamic_offset(self.grid_stddev, *args))
 
     # ── Settings ─────────────────────────────────────────────────────────────
 
@@ -694,14 +698,6 @@ class SolakonCoordinator:
     def _flt_power(self, entity_id: str, default: float = 0.0) -> float:
         """Leistung in W lesen (kW ×1000)."""
         return self._read_scaled(entity_id, default, UNIT_SCALE_W)
-
-    def _flt_kilo_normalized(self, entity_id: str, default: float = 0.0) -> float:
-        """Zahl auf W bzw. Wh normalisieren (kW/kWh ×1000, MWh ×1e6).
-
-        Nur für Vergleiche gegen einen Watt-Referenzwert (z. B. hard_limit_z0);
-        kWh-Schwellenfelder lesen über `_flt_kwh_normalized`.
-        """
-        return self._read_scaled(entity_id, default, UNIT_SCALE_KILO)
 
     def _flt_kwh_normalized(self, entity_id: str, default: float | None = 0.0) -> float | None:
         """Energie in kWh lesen (Wh ÷1000, MWh ×1000).
@@ -842,17 +838,11 @@ class SolakonCoordinator:
 
         tolerance = self._setting(S_SELF_ADJUST_TOL, float)
 
-        def _confirmable() -> bool:
-            """True nur wenn der Sensor seit unserem letzten Schreibbefehl neu
-            gepollt hat — sonst ist der gelesene Wert kein Beleg für irgendetwas."""
-            updated = self._actual_updated_ts()
-            return updated is not None and updated >= self.last_output_ts
-
         for attempt in range(max_retries):
             actual, deviation = self._actual_vs(0)
             if deviation <= tolerance:
                 return
-            if _confirmable():
+            if self._actual_polled_since_write():
                 _LOGGER.warning(
                     "Solakon: Output-Nullung nicht bestätigt (Ist: %.0f W) — erneuter Schreibversuch %d/%d",
                     actual, attempt + 1, max_retries,
@@ -861,7 +851,7 @@ class SolakonCoordinator:
             await self._wait_for_target(0, ac_charge_mode=ac_charge_mode)
 
         actual, deviation = self._actual_vs(0)
-        if deviation > tolerance and _confirmable():
+        if deviation > tolerance and self._actual_polled_since_write():
             self._messages.hardware(("warn_output_zero_unconfirmed", {"attempts": max_retries, "actual": actual}))
             _LOGGER.error("Solakon: %s", self._tr("warn_output_zero_unconfirmed", attempts=max_retries, actual=actual))
 
@@ -943,11 +933,6 @@ class SolakonCoordinator:
     def _rest_mode(self) -> str:
         """Modus des Ruhezustands: '1' mit aktivem `S_REST_IN_DISCHARGE`, sonst '0'."""
         return MODE_DISCHARGE if self._setting(S_REST_IN_DISCHARGE, bool) else MODE_DISABLED
-
-    @property
-    def _rest_mode_key(self) -> str:
-        """Anzeigeschlüssel des Ruhemodus."""
-        return "rest_discharge" if self._rest_mode == MODE_DISCHARGE else "disabled"
 
     def _at_rest(self, mode: str) -> bool:
         """True, wenn `mode` der Ruhemodus ist und die Instanz darin ruht.
@@ -1172,7 +1157,7 @@ class SolakonCoordinator:
         prev_actual = self._prev_actual
         self._prev_actual = actual
 
-        total_actual = self.group.pool_sum(self.group.discharge_pool(), self, actual,
+        total_actual = pool_sum(self.group.discharge_pool(), self, actual,
                                            lambda m: m.actual_power())
 
         stage = surplus_and_night(
@@ -1263,7 +1248,7 @@ class SolakonCoordinator:
             if self.pi.gate_ac(grid, ac_offset, cs.tolerance) == STEP:
                 await self._pi_step(
                     grid,
-                    self.group.pool_sum(self.group.ac_pool(), self, current_power,
+                    pool_sum(self.group.ac_pool(), self, current_power,
                                         lambda m: m.output_setpoint()) * ac_error_share,
                     ac_offset, limits.ac, cs.ac_p, cs.ac_i, ac_error_share, current_power,
                     "act_ac_pi", ac_charge_mode=True,
@@ -1277,7 +1262,7 @@ class SolakonCoordinator:
             if gate == STEP:
                 await self._pi_step(
                     grid,
-                    self.group.pool_sum(self.group.discharge_pool(), self, current_power,
+                    pool_sum(self.group.discharge_pool(), self, current_power,
                                         lambda m: m.output_setpoint()) * error_share,
                     target_offset, dynamic_max, cs.p_factor, cs.i_factor, error_share, current_power,
                     "act_pi",

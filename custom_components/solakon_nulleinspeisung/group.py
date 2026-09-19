@@ -8,6 +8,14 @@ from typing import Any, Callable, Protocol
 
 from .const import DIST_DEFAULTS, DOMAIN
 
+# Warnschlüssel bei Rückfall des Verteilungsmodus, je Grund: (Entlade-Pool, AC-Pool).
+# soc_switch kommt nur im Entlade-Pool vor.
+DIST_WARNINGS = {
+    "soc_switch": ("warn_dist_soc_switch_sensor", ""),
+    "capacity": ("warn_dist_capacity_sensor", "warn_ac_dist_capacity_sensor"),
+    "soc": ("warn_dist_soc_sensor", "warn_ac_dist_soc_sensor"),
+}
+
 
 class Member(Protocol):
     """Lesefläche einer Instanz für ihre Netzgruppe; Sensoren werden erst beim Aufruf gelesen."""
@@ -41,13 +49,58 @@ class Shares:
     warning: str = ""
 
 
-# Warnschlüssel bei Rückfall des Verteilungsmodus, je Grund: (Entlade-Pool, AC-Pool).
-# soc_switch kommt nur im Entlade-Pool vor.
-DIST_WARNINGS = {
-    "soc_switch": ("warn_dist_soc_switch_sensor", ""),
-    "capacity": ("warn_dist_capacity_sensor", "warn_ac_dist_capacity_sensor"),
-    "soc": ("warn_dist_soc_sensor", "warn_ac_dist_soc_sensor"),
-}
+def pool_sum(
+    pool: dict[str, Member], me: Member, own_value: float, reader: Callable[[Member], float],
+) -> float:
+    """`own_value` plus `reader(m)` aller übrigen Mitglieder in `pool`; der eigene Wert zählt immer."""
+    return own_value + sum(reader(m) for m in pool.values() if m is not me)
+
+
+def _socs(active: dict[str, Member], me: Member, own_soc: float) -> dict[str, float] | None:
+    """SOC je Mitglied in `active`, eigener Wert `own_soc`; `None` beim ersten nicht verfügbaren."""
+    socs: dict[str, float] = {}
+    for eid, m in active.items():
+        if m is me:
+            socs[eid] = own_soc
+            continue
+        soc = m.soc_reading()
+        if soc is None:
+            return None
+        socs[eid] = soc
+    return socs
+
+
+def waterfill(active: dict[str, Member], shares: dict[str, float], global_max: float) -> dict[str, float]:
+    """Verteilt `global_max` nach `shares`, gekappt am Hard-Limit jedes Mitglieds; der
+    Rest gekappter Mitglieder geht iterativ an die übrigen. Terminiert, weil jede Runde
+    mindestens ein Mitglied endgültig zuteilt. Abgerundet, damit die Summe `global_max`
+    nicht übersteigt."""
+    caps = {eid: m.hard_limit() for eid, m in active.items()}
+
+    remaining_ids = set(shares.keys())
+    allocations: dict[str, float] = {}
+    remaining_power = global_max
+
+    while remaining_ids:
+        share_sum = sum(shares[eid] for eid in remaining_ids)
+        if share_sum <= 0:
+            for eid in remaining_ids:
+                allocations[eid] = 0.0
+            break
+
+        portion = {eid: remaining_power * (shares[eid] / share_sum) for eid in remaining_ids}
+        newly_capped = [eid for eid in remaining_ids if portion[eid] >= caps[eid] - 0.01]
+
+        if not newly_capped:
+            allocations.update(portion)
+            break
+
+        for eid in newly_capped:
+            allocations[eid] = caps[eid]
+            remaining_power -= caps[eid]
+        remaining_ids -= set(newly_capped)
+
+    return {eid: math.floor(v) for eid, v in allocations.items()}
 
 
 class NetGroup:
@@ -92,30 +145,11 @@ class NetGroup:
         """Regelnde Mitglieder mit aktivem AC-Laden."""
         return self.pool(lambda m: m.regulating and m.ac_charge_active)
 
-    def pool_sum(
-        self, pool: dict[str, Member], me: Member, own_value: float, reader: Callable[[Member], float],
-    ) -> float:
-        """`own_value` plus `reader(m)` aller übrigen Mitglieder in `pool`; der eigene Wert zählt immer."""
-        return own_value + sum(reader(m) for m in pool.values() if m is not me)
-
     # ── Verteilung ───────────────────────────────────────────────────────────
 
     def dist_cfg(self) -> dict:
         """Verteilungs-Config dieser Gruppe, mit Defaults aufgefüllt."""
         return {**DIST_DEFAULTS, **(self.dist or {})}
-
-    def socs(self, active: dict[str, Member], me: Member, own_soc: float) -> dict[str, float] | None:
-        """SOC je Mitglied in `active`, eigener Wert `own_soc`; `None` beim ersten nicht verfügbaren."""
-        socs: dict[str, float] = {}
-        for eid, m in active.items():
-            if m is me:
-                socs[eid] = own_soc
-                continue
-            soc = m.soc_reading()
-            if soc is None:
-                return None
-            socs[eid] = soc
-        return socs
 
     def all_shares(self, active: dict[str, Member], me: Member, own_soc: float, ac: bool = False) -> Shares:
         """Anteile aller Mitglieder in `active` nach Verteilungsmodus.
@@ -167,7 +201,7 @@ class NetGroup:
             else:
                 caps = measured
 
-        socs = self.socs(active, me, own_soc)
+        socs = _socs(active, me, own_soc)
         if socs is None:
             return to_equal("soc")
 
@@ -200,7 +234,7 @@ class NetGroup:
         Zone 0 übernimmt bedingungslos, mehrere Zone-0-Mitglieder gleichmäßig; beim
         Rückgang in die Rotation wird `start_soc` neu verankert.
         """
-        socs = self.socs(active, me, own_soc)
+        socs = _socs(active, me, own_soc)
         if socs is None:
             return None
 
@@ -252,38 +286,6 @@ class NetGroup:
 
         return result
 
-    def waterfill(self, active: dict[str, Member], shares: dict[str, float], global_max: float) -> dict[str, float]:
-        """Verteilt `global_max` nach `shares`, gekappt am Hard-Limit jedes Mitglieds; der
-        Rest gekappter Mitglieder geht iterativ an die übrigen. Terminiert, weil jede Runde
-        mindestens ein Mitglied endgültig zuteilt. Abgerundet, damit die Summe `global_max`
-        nicht übersteigt."""
-        caps = {eid: m.hard_limit() for eid, m in active.items()}
-
-        remaining_ids = set(shares.keys())
-        allocations: dict[str, float] = {}
-        remaining_power = global_max
-
-        while remaining_ids:
-            share_sum = sum(shares[eid] for eid in remaining_ids)
-            if share_sum <= 0:
-                for eid in remaining_ids:
-                    allocations[eid] = 0.0
-                break
-
-            portion = {eid: remaining_power * (shares[eid] / share_sum) for eid in remaining_ids}
-            newly_capped = [eid for eid in remaining_ids if portion[eid] >= caps[eid] - 0.01]
-
-            if not newly_capped:
-                allocations.update(portion)
-                break
-
-            for eid in newly_capped:
-                allocations[eid] = caps[eid]
-                remaining_power -= caps[eid]
-            remaining_ids -= set(newly_capped)
-
-        return {eid: math.floor(v) for eid, v in allocations.items()}
-
     def distribution(self, me: Member, own_soc: float) -> tuple[float, float | None, Shares | None]:
         """Fehler-Anteil, zugeteilte Leistung und Anteile von `me` im Entlade-Pool (Modus '1').
 
@@ -297,7 +299,7 @@ class NetGroup:
 
         shares = self.all_shares(active, me, own_soc)
         global_max = float(self.dist_cfg()["global_max_power"])
-        allocations = self.waterfill(active, shares.values, global_max)
+        allocations = waterfill(active, shares.values, global_max)
         others = sum(m.allocated_power or 0 for m in self.members().values() if m is not me)
         own = allocations.get(me.member_id)
         if own is not None:
