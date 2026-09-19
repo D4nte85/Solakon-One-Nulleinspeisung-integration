@@ -19,6 +19,7 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 - Verteilung: Im Zyklus, in dem eine Instanz AC-Laden startet, rechnet sie Entlade-Verteilung und AC-Anteil. Fiel dabei der Verteilungsmodus mangels Fremdsensor zurück, meldeten beide Rechnungen dieselbe Warnung, und sie stand zweimal in `last_error`. Die Warnung des AC-Anteils beginnt jetzt mit „AC-Verteilung“.
 - Hatte ein Feature-Sensor die falsche Domain (z. B. `input_boolean`), nannte die Meldung kein Feature. Lasen zwei Features dieselbe Entität, etwa Surplus-Forecast und PV-Vorhersage den PV-Vorhersage-Sensor, stand zweimal derselbe Text in `last_error`. Die Meldung nennt jetzt das Feature und die Folge, wie bei „nicht verfügbar“ und „kein Zahlenwert“.
 - Verteilung: Lag das Hard-Limit einer Instanz über der Gerätegrenze von 1200 W (nur über die WebSocket-API speicherbar, nicht über das Panel), teilte die Netzgruppe ihr bis zu diesem Wert zu. Die Instanz regelte trotzdem nur bis 1200 W, der Rest ging keiner anderen Instanz zu. Die Gruppe rechnet jetzt mit dem auf 1200 W gedeckelten Hard-Limit.
+- Nutzte eine Instanz einen globalen Sensor aus dem Verteilungs-Tab (Tarifpreis, PV-Prognose, Überschuss-Sperre), löste dessen Änderung nach einem HA-Neustart keinen Regelzyklus aus. Die Instanz meldete ihre Trigger an, bevor die Verteilungseinstellungen geladen waren, bei parallelem Setup auch die weiteren Instanzen. Jetzt wird zuerst geladen, und jede Instanz wartet auf das Ende des Ladens.
 
 ## [3.0.0-beta.4] – 2026-09-18
 

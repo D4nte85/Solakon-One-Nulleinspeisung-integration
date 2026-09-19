@@ -1,6 +1,7 @@
 """Solakon ONE Nulleinspeisung — HACS custom integration."""
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from pathlib import Path
@@ -33,7 +34,8 @@ STORAGE_KEY_SOC_SWITCH     = f"{DOMAIN}_soc_switch_state"
 _LOGGER = logging.getLogger(__name__)
 
 # Integrationsweite `hass.data`-Schlüssel (ohne DOMAIN-Präfix), entfernt mit der letzten Instanz.
-DATA_KEYS = ("dist_store", "dist_config", "soc_switch_store", "soc_switch_state", "groups",
+DATA_KEYS = ("dist_store", "dist_store_loaded", "dist_config", "soc_switch_store",
+             "soc_switch_store_loaded", "soc_switch_state", "groups",
              "panel_registered", "ws_registered")
 PANEL_JS_URL = f"/{DOMAIN}/panel.js"
 
@@ -263,17 +265,6 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     from .coordinator import SolakonCoordinator
 
-    try:
-        coordinator = SolakonCoordinator(hass, entry)
-        await coordinator.async_setup()
-    except Exception as ex:
-        raise ConfigEntryNotReady(f"Solakon: Setup fehlgeschlagen: {ex}") from ex
-
-    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
-
-    # Eintrag neu laden wenn die Entitäten-Zuweisung im OptionsFlow geändert wurde
-    entry.async_on_unload(entry.add_update_listener(_async_update_listener))
-
     # Distribution-Store einmalig anlegen + Config in synchron lesbaren Cache laden.
     # Cache ist nach grid_power_sensor verschachtelt ({gruppe: {...DIST_DEFAULTS...}})
     # — jede Netzgruppe hat unabhängige Verteilungs-Einstellungen.
@@ -291,6 +282,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         {},
         lambda stored: {gk: _soc_switch_group_state(st) for gk, st in stored.items()},
     )
+
+    try:
+        coordinator = SolakonCoordinator(hass, entry)
+        await coordinator.async_setup()
+    except Exception as ex:
+        raise ConfigEntryNotReady(f"Solakon: Setup fehlgeschlagen: {ex}") from ex
+
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
+
+    # Eintrag neu laden wenn die Entitäten-Zuweisung im OptionsFlow geändert wurde
+    entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
     # WebSocket-Commands nur einmal registrieren
     if not hass.data.get(f"{DOMAIN}_ws_registered"):
@@ -347,15 +349,20 @@ async def _ensure_store(
 ) -> None:
     """Store unter `<DOMAIN>_<store_key>` einmalig anlegen und in `<DOMAIN>_<data_key>` laden.
 
-    `empty` steht synchron im Cache, bevor `async_load()` an den Event-Loop abgibt;
-    danach ersetzt `from_stored(geladen or {})` den Inhalt.
+    Weitere Aufrufer warten auf das Ende desselben Ladevorgangs. `empty` steht im
+    Cache, falls das Laden fehlschlägt; sonst ersetzt `from_stored(geladen or {})` ihn.
     """
     if hass.data.get(f"{DOMAIN}_{store_key}"):
+        await hass.data[f"{DOMAIN}_{store_key}_loaded"].wait()
         return
+    loaded = hass.data[f"{DOMAIN}_{store_key}_loaded"] = asyncio.Event()
     store = make_store()
     hass.data[f"{DOMAIN}_{store_key}"] = store
     hass.data[f"{DOMAIN}_{data_key}"] = empty
-    hass.data[f"{DOMAIN}_{data_key}"] = from_stored(await store.async_load() or {})
+    try:
+        hass.data[f"{DOMAIN}_{data_key}"] = from_stored(await store.async_load() or {})
+    finally:
+        loaded.set()
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
