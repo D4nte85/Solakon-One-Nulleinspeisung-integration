@@ -644,7 +644,7 @@ async def _run_wiring() -> dict:
     flows["schema_partial"] = _schema_repr({"data_schema": cf._schema(partial, C.REQUIRED_ENTITY_DEFAULTS_DE)})
     rec["config_flow"] = flows
     rec["logs"] = logs.records
-    return rec
+    return h.mask_version(rec)
 
 
 async def _run_derive() -> dict:

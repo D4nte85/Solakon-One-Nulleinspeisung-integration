@@ -380,6 +380,11 @@ STATIC_ENTITY_ATTRS = (
 )
 
 
+def mask_version(rec: dict) -> dict:
+    """Ersetzt die Integrationsversion im Protokoll durch einen Platzhalter."""
+    return json.loads(json.dumps(rec, ensure_ascii=False).replace(const.VERSION, "<version>"))
+
+
 def entity_state(entity, static=False) -> dict:
     rec = {"unique_id": entity.unique_id, "icon": jsonable(entity.icon)}
     if static:
