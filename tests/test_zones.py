@@ -50,9 +50,16 @@ def test_base_trifft_keinen_fall():
     (dict(tariff_charge_active=True, mode="3", at_rest=False), "HT"),
     (dict(below_exp=True, at_least_cheap=False, mode="1", at_rest=False), "TM"),
     (dict(ac_enabled=True, grid=-200, mode="1", at_rest=True, below_exp=True), "G"),
-    (dict(ac_charge_active=True, mode="3", at_rest=False, soc=95), "H"),
-    (dict(ac_charge_active=True, mode="3", at_rest=False, grid=10, actual=3), "H"),
+    (dict(ac_enabled=True, ac_charge_active=True, mode="3", at_rest=False, soc=95), "H"),
+    (dict(ac_enabled=True, ac_charge_active=True, mode="3", at_rest=False, grid=10, actual=3), "H"),
+    # Options-Austritt: abgeschaltete Option beendet die Session unabhängig vom Wert
+    (dict(ac_charge_active=True, mode="3", at_rest=False), "H"),
+    (dict(tariff_charge_active=True, mode="3", at_rest=False, at_least_cheap=False), "HT"),
     (dict(mode="3", at_rest=False), "I"),
+    # Fall I beidseitig: Session ohne Modus '3' und beide Lade-Flags zugleich
+    (dict(ac_charge_active=True, ac_enabled=True, mode="1", at_rest=False), "I"),
+    (dict(ac_charge_active=True, tariff_charge_active=True, mode="3", at_rest=False,
+          below_cheap=True, at_least_cheap=False), "I"),
     (dict(is_night=False), "E"),
     (dict(mode="1", at_rest=False), "F"),
 ])
@@ -92,7 +99,7 @@ def test_a_erzwungen_unter_zone1():
 
 
 def test_d_session_kehrt_unter_zone3_in_modus_3_zurueck():
-    d = _decide(ac_charge_active=True, soc=15)
+    d = _decide(ac_enabled=True, ac_charge_active=True, soc=15)
     assert (d.name, d.transition) == ("D", {"mode": "3"})
 
 
@@ -102,14 +109,39 @@ def test_d_durch_tarif_lock_gesperrt():
 
 @pytest.mark.parametrize("cycle_active, rest", [(False, True), (True, False)])
 def test_end_charge_ruhe_nur_ohne_zyklus(cycle_active, rest):
-    d = _decide(ac_charge_active=True, mode="3", at_rest=False, soc=95, cycle_active=cycle_active)
+    d = _decide(ac_enabled=True, ac_charge_active=True, mode="3", at_rest=False, soc=95,
+                cycle_active=cycle_active)
     assert d.transition == {"reset_integral": True, "flags": {"ac_charge_active": False},
                             "output": 0, "mode": "1", "rest": rest}
     assert d.action == "act_fall_h"
 
 
 def test_h_bleibt_bei_selbstregelung_ausserhalb_der_toleranz():
-    assert _decide(ac_charge_active=True, mode="3", at_rest=False, grid=10, actual=5) is None
+    assert _decide(ac_enabled=True, ac_charge_active=True, mode="3", at_rest=False,
+                   grid=10, actual=5) is None
+
+
+def test_d_folgt_session_mit_abgeschalteter_option_nicht():
+    d = _decide(tariff_charge_active=True, cycle_active=True, soc=70)
+    assert (d.name, d.transition) == ("D", {"mode": "1"})
+
+
+def test_gt_startet_nicht_neben_laufender_ac_session():
+    assert _decide(ac_enabled=True, ac_charge_active=True, mode="1", at_rest=False,
+                   below_cheap=True, below_exp=True).name == "I"
+
+
+def test_i_loescht_flags_und_laesst_modus_stehen():
+    d = _decide(ac_enabled=True, ac_charge_active=True, mode="1", at_rest=False)
+    assert d.transition == {"reset_integral": True,
+                            "flags": {"ac_charge_active": False, "tariff_charge_active": False}}
+    assert (d.action, d.warn) == ("act_fall_i_session", None)
+
+
+def test_i_meldet_nur_die_doppelsession():
+    d = _decide(ac_charge_active=True, tariff_charge_active=True, mode="3", at_rest=False,
+                below_cheap=True, at_least_cheap=False)
+    assert d.warn == ("warn_double_session", {})
 
 
 # ── Vorstufe: Prognoseflags ──────────────────────────────────────────────────

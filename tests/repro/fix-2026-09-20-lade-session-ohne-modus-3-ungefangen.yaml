@@ -1,0 +1,20 @@
+titel: Lade-Session bei Modus '1' wird von keinem Fall gefangen
+bezug: fix-2026-09-20-lade-session-ohne-modus-3-ungefangen
+# ac_charge_active gesetzt, Modus '1'. Fall H und Fall I setzen beide Modus '3' voraus,
+# Fall D greift nur bei Modus nicht in ('1','3') — keiner raeumt die Lage. Der
+# Betriebszustand meldet 'ac_charging', waehrend das Geraet entlaedt.
+netz: 300
+instanzen:
+  - prefix: a
+    settings: {regulation_enabled: true, ac_enabled: true, ac_soc_target: 80}
+    flags: {ac_charge_active: true, cycle_active: false}
+    sensoren: {soc: 40, modus: "1"}
+schritte:
+  - nach: 0
+  - nach: 5
+  - nach: 5
+  - nach: 5
+erwartet:
+  - schritt: 4
+    instanz: a
+    zustand: {ac_charge_active: false}

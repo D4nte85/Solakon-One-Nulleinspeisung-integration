@@ -305,6 +305,20 @@ def d4(c: Ctx):
         return "Modus 3 ohne Lade-Session"
 
 
+def d5(c: Ctx):
+    if c.normal() and c.aus_seit is None and c.lade_session() and c.modus() != C.MODE_AC_CHARGE:
+        return "Lade-Session ohne Modus 3"
+
+
+def d6(c: Ctx):
+    if not c.normal() or c.aus_seit is not None:
+        return None
+    for flag, option, art in (("ac_charge_active", C.S_AC_ENABLED, "AC"),
+                              ("tariff_charge_active", C.S_TARIFF_ENABLED, "Tarif")):
+        if c.flags[flag] and not c.settings[option]:
+            return f"{art}-Lade-Session bei abgeschalteter Option"
+
+
 def _tarif_eingang(c: Ctx):
     """Preis und Schwellen, nur bei lokal konfiguriertem Preis und festen Schwellen."""
     s = c.settings
@@ -667,7 +681,7 @@ def k6(c: Ctx):
 
 # Regeln, die erst nach dem Übergang gelten: der erste zutreffende Fall gewinnt, der
 # gewollte Zustand stellt sich ein bis zwei Läufe später ein.
-VERZOEGERT = {"b1", "d3", "e1", "h2"}
+VERZOEGERT = {"b1", "d3", "d6", "e1", "h2"}
 
 
 def verstoss(name: str, c: Ctx) -> str | None:

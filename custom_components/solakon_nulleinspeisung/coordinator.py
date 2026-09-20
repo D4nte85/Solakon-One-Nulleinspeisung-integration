@@ -1387,6 +1387,8 @@ class SolakonCoordinator:
         if d is None:
             return None
         await self._transition(**d.transition)
+        if d.warn:
+            self._messages.warn(d.warn)
         self._set_last_action(d.action, **d.params)
         return d.name
 

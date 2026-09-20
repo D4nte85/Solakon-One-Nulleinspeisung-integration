@@ -1,0 +1,26 @@
+titel: Abschalten der Tarif-Option beendet das Tarif-Laden nicht
+bezug: issue-40-tarif-session-kein-optionsaustritt
+# Tarif an, Preis unter der Günstig-Schwelle (8 < 10), SOC unter dem Ladeziel (40 < 90):
+# Fall GT startet das Tarif-Laden. Danach wird die Tarif-Option abgeschaltet. Fall 0B
+# beendet Zone 0 in derselben Lage sofort; für die Lade-Session gibt es kein Gegenstück —
+# HT hängt allein an Ladeziel und Preis, beide bleiben unerfüllt.
+netz: 300
+sensoren:
+  sensor.preis: {wert: 8.0, einheit: ct/kWh}
+instanzen:
+  - prefix: a
+    settings: {regulation_enabled: true, tariff_enabled: true, tariff_price_sensor: sensor.preis}
+    flags: {cycle_active: false}
+    sensoren: {soc: 40, modus: "1"}
+schritte:
+  - nach: 0
+  - nach: 5
+    settings: {tariff_enabled: false}
+  - nach: 5
+erwartet:
+  - schritt: 1
+    instanz: a
+    zustand: {tariff_charge_active: true}
+  - schritt: 3
+    instanz: a
+    zustand: {tariff_charge_active: false}

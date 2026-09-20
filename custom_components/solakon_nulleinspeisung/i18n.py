@@ -118,6 +118,10 @@ _TEXTS: dict[str, dict[str, str]] = {
         "de": "Fall I: Safety-Korrektur (Modus 3 ohne Session)",
         "en": "Case I: safety correction (mode 3 without session)",
     },
+    "act_fall_i_session": {
+        "de": "Fall I: Safety-Korrektur (Lade-Session ohne Modus 3)",
+        "en": "Case I: safety correction (charging session without mode 3)",
+    },
     "act_fall_gt": {
         "de": "Fall GT: Tarif-Laden (Preis {price:.1f})",
         "en": "Case GT: tariff charging (price {price:.1f})",
@@ -287,6 +291,10 @@ _TEXTS: dict[str, dict[str, str]] = {
     "warn_ac_dist_soc_sensor": {
         "de": "AC-Verteilung: SOC-Sensor einer anderen Instanz nicht verfügbar — auf Gleichverteilung zurückgefallen",
         "en": "AC distribution: SOC sensor of another instance unavailable — fell back to equal distribution",
+    },
+    "warn_double_session": {
+        "de": "AC- und Tarif-Laden waren gleichzeitig aktiv — beide Sessions beendet",
+        "en": "AC and tariff charging were active at the same time — both sessions ended",
     },
     "warn_tariff_unit": {
         "de": "Tarif: Preis {price:g} passt nicht zur Günstig-Schwelle {cheap:g} ct/kWh — Sensor liefert vermutlich €/kWh",

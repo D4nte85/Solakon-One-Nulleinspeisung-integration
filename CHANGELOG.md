@@ -3,6 +3,15 @@
 Alle nennenswerten Änderungen an der Solakon-ONE-Nulleinspeisung-Integration.
 Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [3.1.1] – 2026-09-20
+
+### Behoben
+
+- **Tarif-Laden endet, wenn sein Grund entfällt (#40):** Eine laufende Tarif-Lade-Session lief bisher weiter, bis das SOC-Ziel erreicht war — auch mit abgeschalteter Tarif-Option, unterdrückt durch die PV-Prognose oder bei unlesbarem Preis-Sensor. Fall HT tritt jetzt aus, sobald kein günstiger Preis mehr ausgewiesen ist. Fall H macht dasselbe für die abgeschaltete AC-Option.
+- **Lade-Session ohne passenden Modus wird geräumt:** Stand ein Lade-Flag, während das Gerät nicht in Modus `'3'` war, führte kein Fall aus dieser Lage heraus — der Betriebszustand meldete „AC Laden“, während die Batterie entlud. Fall I fängt diese Richtung nun mit: das Flag fällt, der Modus bleibt, weil er der beobachtete Zustand des Geräts ist. Waren beide Lade-Flags zugleich gesetzt, endet er beide und meldet es im Status-Tab.
+- **Kein Tarif-Start neben laufendem AC-Laden:** Fall GT prüft `ac_charge_active` jetzt so, wie Fall G seit immer `tariff_charge_active` prüft — aus einer hängenden AC-Session konnte sonst eine zweite, parallele Lade-Session entstehen.
+- **Recovery folgt keiner grundlosen Session mehr:** Fall D stellte Modus `'3'` samt Ladeleistung wieder her, bevor HT oder H die Session im Folgezyklus beendeten — ein Regelzyklus echtes Netzladen für eine abbestellte Funktion.
+
 ## [3.1.0] – 2026-09-19
 
 > **Verhaltensänderung für mehrere Instanzen an einem Netzsensor.** Eine Netzgruppe lädt oder entlädt, nie beides zugleich. Einzelbetrieb unverändert.
