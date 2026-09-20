@@ -13,10 +13,12 @@ importiert. Drei Schichten nutzen das:
 
 ## Einrichtung
 
+Die Tests laufen im System-Python (`/usr/bin/python3`) — kein venv, keine pyenv-Version.
+Die Pakete aus `tests/requirements.txt` kommen aus der Paketverwaltung:
+
 ```bash
-python -m venv ~/.cache/solakon-tests-venv
-~/.cache/solakon-tests-venv/bin/pip install -r tests/requirements.txt
-~/.cache/solakon-tests-venv/bin/pytest -q -p no:cacheprovider tests
+sudo pacman -S --needed python-pytest python-voluptuous python-yaml
+python3 -m pytest -q -p no:cacheprovider tests
 npm install --prefix tests/panel        # nur für den Panel-Vergleich (jsdom)
 ```
 
