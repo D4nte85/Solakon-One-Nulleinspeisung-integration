@@ -3,6 +3,12 @@
 Alle nennenswerten Änderungen an der Solakon-ONE-Nulleinspeisung-Integration.
 Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [3.1.2] – 2026-09-20
+
+### Hinzugefügt
+
+- **Tarif-Steuerung als eigene Switch-Entität (#41):** `switch.solakon_one_tarif_steuerung_aktiv` schaltet dieselbe Option wie das Feld im Tarif-Tab, ist aber aus Dashboard, Skript und Automation heraus bedienbar — und bei mehreren Instanzen für alle zugleich. Beim Ausschalten endet eine laufende Tarif-Lade-Session im nächsten Regelzyklus (Fall HT, seit 3.1.1). Die bestehende Entität `switch.solakon_one_regelung_aktiv` bleibt unverändert.
+
 ## [3.1.1] – 2026-09-20
 
 ### Behoben

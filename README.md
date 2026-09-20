@@ -444,7 +444,7 @@ Im Multi-Instanz-Betrieb läuft das Tarif-Laden immer durch. Die übrigen Instan
 
 | Parameter | Beschreibung | Empfehlung |
 |-----------|-------------|------------|
-| Aktivieren | Ein/Aus-Schalter | — |
+| Aktivieren | Ein/Aus-Schalter — auch als Entität `switch.solakon_one_tarif_steuerung_aktiv` (siehe [Erzeugte Entitäten](#erzeugte-entitäten)) | — |
 | Preis-Sensor | 🔌 Sensor wird im **Entitäten**-Tab zugewiesen | — |
 | Günstig-Schwelle (ct/kWh) | Unter diesem Preis → Laden | 5–15 |
 | Teuer-Schwelle (ct/kWh) | Über diesem Preis → normale SOC-Logik | 20–35 |
@@ -621,6 +621,7 @@ Alle Entitätsnamen kommen aus den Übersetzungen und erscheinen in der Sprache 
 | `sensor.solakon_one_pi_integral` | Sensor | Aktueller I-Anteil des PI-Reglers |
 | `sensor.solakon_one_uberschussleistung` | Sensor | Verwertbarer PV-Überschuss in W — `min(aktuell geltendes Hard-Limit, PV-Leistung) − Ausgangsleistung`, geklemmt auf ≥0. Zeigt die Leistung, die über das aktuelle Hard-Limit oder die verfügbare Sonne hinaus **nicht** mehr sinnvoll ausgegeben werden kann, ohne den Akku zu belasten — z. B. für eine Automation, die bei Überschuss einen Zusatzverbraucher schaltet |
 | `switch.solakon_one_regelung_aktiv` | Switch | Hauptschalter — aktiviert/deaktiviert den Schreibteil |
+| `switch.solakon_one_tarif_steuerung_aktiv` | Switch | Tarif-Steuerung ein/aus — derselbe Schalter wie im **Tarif**-Tab des Panels, aus Dashboard, Skript und Automation heraus bedienbar. Beim Ausschalten endet eine laufende Tarif-Lade-Session im nächsten Regelzyklus (Fall HT) |
 | `binary_sensor.solakon_one_entladezyklus_aktiv` | Binary Sensor | Internes Flag Entladezyklus |
 | `binary_sensor.solakon_one_uberschuss_modus` | Binary Sensor | Flag Überschuss-Modus aktiv |
 | `binary_sensor.solakon_one_ac_laden_aktiv` | Binary Sensor | Flag AC-Laden aktiv |

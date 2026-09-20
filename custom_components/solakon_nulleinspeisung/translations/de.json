@@ -164,6 +164,9 @@
       }
     },
     "switch": {
+      "tariff_enabled": {
+        "name": "Tarif-Steuerung aktiv"
+      },
       "regulation_enabled": {
         "name": "Regelung aktiv"
       }
