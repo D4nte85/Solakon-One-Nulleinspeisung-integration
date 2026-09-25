@@ -3,12 +3,13 @@ from __future__ import annotations
 
 import importlib
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import pytest
 
 from tests import harness as h
 
-group = importlib.import_module(h.PKG + ".group")
+group = importlib.import_module(h.PKG + ".grid_group")
 DOMAIN = h.const.DOMAIN
 
 
@@ -67,6 +68,11 @@ def _group(*members, dist=None, soc_switch=None, on_change=None):
     hass = Hass(*members)
     return hass, group.NetGroup(hass, "sensor.grid", dist=dist, soc_switch=soc_switch,
                                 on_soc_switch_change=on_change)
+
+
+def test_kein_modul_group_im_paket():
+    """Issue #42: Home Assistant lädt ein Modul `group` als Plattform der Group-Integration."""
+    assert not (Path(group.__file__).parent / "group.py").exists()
 
 
 def test_mitglieder_nur_am_eigenen_netzsensor():

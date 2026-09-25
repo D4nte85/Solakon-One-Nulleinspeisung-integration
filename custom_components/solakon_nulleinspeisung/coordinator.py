@@ -20,7 +20,7 @@ from .readings import (
     NO_SENSOR, NOT_NUMERIC, UNAVAILABLE, UNIT_SCALE_KILO, UNIT_SCALE_KWH, UNIT_SCALE_W,
     WRONG_DOMAIN, read_number, read_scaled, unit_of, valid_state,
 )
-from .group import NetGroup, Shares, pool_sum
+from .grid_group import NetGroup, Shares, pool_sum
 from .group_store import group_for
 from .limits import PowerLimits, power_limits
 from .messages import CycleMessages

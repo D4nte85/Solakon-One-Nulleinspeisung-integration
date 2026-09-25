@@ -8,7 +8,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 
 from .const import CONF_GRID_SENSOR, DIST_DEFAULTS, DIST_INST_FIELDS, DIST_SCHEMA, DOMAIN
-from .group import NetGroup
+from .grid_group import NetGroup
 from .i18n import translate
 from .schema import check, notify_reset, sanitize
 
