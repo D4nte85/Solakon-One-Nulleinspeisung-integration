@@ -218,6 +218,7 @@ const TAB_LAYOUT = {
         tk: "tariff_charge", icon: "🔋", color: "#16a34a",
         fields: [
           { k: "tariff_soc_target", t: "num" },
+          { k: "tariff_soc_hyst",   t: "num" },
           { k: "tariff_power",      t: "num" },
         ],
       },

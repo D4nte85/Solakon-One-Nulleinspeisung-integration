@@ -241,6 +241,10 @@
       "l": "Charge Target SOC (%)",
       "d": "Tariff charging stops when this SOC is reached. Independent of the AC charging module's SOC target."
     },
+    "tariff_soc_hyst": {
+      "l": "SOC Hysteresis (%)",
+      "d": "Tariff charging only starts when SOC < (charge target − hysteresis). Prevents toggling between tariff charging and discharge-lock at the charge target. 0 = start right below the charge target."
+    },
     "tariff_power": {
       "l": "Charge Power (W)",
       "d": "Fixed charge power during tariff charging — no PI controller, no dynamic adjustment."

@@ -160,6 +160,7 @@ S_TARIFF_PRICE_SENSOR     = "tariff_price_sensor"
 S_TARIFF_CHEAP_THRESHOLD  = "tariff_cheap_threshold"
 S_TARIFF_EXP_THRESHOLD    = "tariff_exp_threshold"
 S_TARIFF_SOC_TARGET       = "tariff_soc_target"
+S_TARIFF_SOC_HYST         = "tariff_soc_hyst"
 S_TARIFF_POWER            = "tariff_power"
 S_TARIFF_CHEAP_ENTITY     = "tariff_cheap_entity"
 S_TARIFF_EXP_ENTITY       = "tariff_exp_entity"
@@ -312,6 +313,7 @@ SETTINGS_SCHEMA: dict[str, Field] = {
     S_TARIFF_CHEAP_THRESHOLD: _float(10.0, SIGNED, 0, 100, 0.5),
     S_TARIFF_EXP_THRESHOLD:   _float(25.0, SIGNED, 0, 100, 0.5),
     S_TARIFF_SOC_TARGET:      _int(90, PERCENT, 0, 100, 1),
+    S_TARIFF_SOC_HYST:        _int(3, PERCENT, 0, 20, 1),
     S_TARIFF_POWER:           _int(800, POWER, 100, 1200, 50),
     S_TARIFF_CHEAP_ENTITY:    _str(),
     S_TARIFF_EXP_ENTITY:      _str(),

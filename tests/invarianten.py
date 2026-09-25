@@ -340,7 +340,10 @@ def e1(c: Ctx):
         return None
     preis, guenstig, _ = t
     f = c.flags
-    if preis >= guenstig or c.soc() >= c.settings[C.S_TARIFF_SOC_TARGET]:
+    ziel = c.settings[C.S_TARIFF_SOC_TARGET]
+    if not c.flags_vorher.get("tariff_charge_active"):
+        ziel -= c.settings[C.S_TARIFF_SOC_HYST]
+    if preis >= guenstig or c.soc() >= ziel:
         return None
     # Laufendes AC-Laden wird nicht abgelöst; eine Ablösung käme nur als Tarif-Schalter.
     if f["surplus_active"] or f["forecast_tariff_suppressed"] or c.flags_vorher.get("ac_charge_active"):

@@ -19,7 +19,7 @@ BASE = zones.ZoneInputs(
     ac_enabled=False, ac_soc_target=90, ac_hysteresis=50, ac_offset=-50,
     tariff=tariff.TariffState(price=0.30, cheap=0.20, exp=0.40, below_exp=False,
                               below_cheap=False, at_least_cheap=True),
-    tariff_soc=80, tariff_power=800,
+    tariff_soc=80, tariff_soc_hyst=3, tariff_power=800,
     is_night=True, zone1_forced=False, self_adjust_tol=3,
     surplus_active=False, ac_charge_active=False, tariff_charge_active=False,
     cycle_active=False, at_rest=True,
@@ -101,6 +101,14 @@ def test_a_erzwungen_unter_zone1():
 def test_d_session_kehrt_unter_zone3_in_modus_3_zurueck():
     d = _decide(ac_enabled=True, ac_charge_active=True, soc=15)
     assert (d.name, d.transition) == ("D", {"mode": "3"})
+
+
+@pytest.mark.parametrize("soc, hyst, gt", [
+    (76, 3, True), (77, 3, False), (79, 3, False), (79, 0, True), (80, 0, False),
+])
+def test_gt_erst_unter_ladeziel_minus_hysterese(soc, hyst, gt):
+    d = _decide(below_cheap=True, below_exp=True, soc=soc, tariff_soc_hyst=hyst)
+    assert (d is not None and d.name == "GT") == gt
 
 
 def test_d_durch_tarif_lock_gesperrt():

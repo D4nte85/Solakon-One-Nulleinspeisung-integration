@@ -241,6 +241,10 @@
       "l": "Ladeziel SOC (%)",
       "d": "Tarif-Laden stoppt wenn dieser SOC erreicht wird. Unabhängig vom SOC-Ladeziel des AC-Lade-Moduls."
     },
+    "tariff_soc_hyst": {
+      "l": "SOC-Hysterese (%)",
+      "d": "Tarif-Laden startet erst wenn SOC < (Ladeziel − Hysterese). Verhindert Pendeln zwischen Tarif-Laden und Discharge-Lock am Ladeziel. 0 = Start direkt unter dem Ladeziel."
+    },
     "tariff_power": {
       "l": "Ladeleistung (W)",
       "d": "Feste Ladeleistung während Tarif-Laden — kein PI-Regler, keine dynamische Anpassung."

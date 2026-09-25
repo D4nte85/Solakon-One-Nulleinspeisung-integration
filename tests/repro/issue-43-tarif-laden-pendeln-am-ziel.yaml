@@ -1,0 +1,26 @@
+titel: Tarif-Laden pendelt unter Discharge-Lock am Ladeziel
+bezug: issue-43-tarif-laden-pendeln-am-ziel
+# Tarif an, Preis unter der Günstig-Schwelle (5 < 10), Lade-Session läuft, SOC erreicht
+# das Ladeziel (80): Fall HT beendet das Laden, der Discharge-Lock hält die Entladung.
+# Fällt der SOC um einen Punkt (79), startet Fall GT sofort neu — ohne Abstand zum Ziel.
+netz: 300
+sensoren:
+  sensor.preis: {wert: 5.0, einheit: ct/kWh}
+instanzen:
+  - prefix: a
+    settings: {regulation_enabled: true, tariff_enabled: true, tariff_price_sensor: sensor.preis, tariff_soc_target: 80}
+    flags: {cycle_active: false, tariff_charge_active: true}
+    sensoren: {soc: 80, modus: "3"}
+schritte:
+  - nach: 0
+  - nach: 5
+    setzen: {a.soc: 79}
+erwartet:
+  - schritt: 1
+    instanz: a
+    zustand: {tariff_charge_active: false}
+  - schritt: 2
+    instanz: a
+    zustand: {tariff_charge_active: false}
+  - schritt: 2
+    kein_aufruf: {entity: select.a_mode, wert: "3"}

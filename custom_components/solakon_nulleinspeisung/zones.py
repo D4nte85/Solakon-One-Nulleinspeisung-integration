@@ -26,6 +26,7 @@ class ZoneInputs:
     ac_offset: float
     tariff: TariffState
     tariff_soc: float
+    tariff_soc_hyst: float
     tariff_power: float
     is_night: bool
     zone1_forced: bool
@@ -275,7 +276,7 @@ def decide(inp: ZoneInputs) -> FallDecision | None:
     # Überschuss-Einspeisung hat Vorrang — kein Tarif-Laden während Zone 0 aktiv
     if (
         inp.tariff.below_cheap
-        and soc < inp.tariff_soc
+        and soc < inp.tariff_soc - inp.tariff_soc_hyst
         and not inp.tariff_charge_active
         and not inp.ac_charge_active
         and not inp.surplus_active
