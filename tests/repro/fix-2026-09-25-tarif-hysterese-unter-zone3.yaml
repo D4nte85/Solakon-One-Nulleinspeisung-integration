@@ -1,0 +1,23 @@
+titel: Tarif-Ladeziel minus Hysterese unter Zone 3 wird als weicher Fehler gemeldet
+bezug: fix-2026-09-25-tarif-hysterese-unter-zone3
+# Ziel 30 %, Hysterese 20 %, Zone 3 bei 20 %: Fall GT startet erst bei SOC < 10,
+# Fall B greift aber schon bei soc <= 20 — das Tarif-Laden kann nie beginnen.
+# Erwartung: die Regelung läuft weiter (Zone 1 schreibt einen Sollwert), aber der
+# Status-Tab meldet den Widerspruch (weicher Fehler wie die Einheitenwarnung).
+stunde: 12
+netz: 300
+sensoren:
+  sensor.preis: {wert: 30.0, einheit: ct/kWh}
+instanzen:
+  - prefix: a
+    settings: {regulation_enabled: true, tariff_enabled: true, tariff_price_sensor: sensor.preis,
+               tariff_cheap_threshold: 10.0, tariff_exp_threshold: 0.0,
+               tariff_soc_target: 30, tariff_soc_hyst: 20, zone3_limit: 20, zone1_limit: 50}
+    flags: {cycle_active: true}
+    sensoren: {soc: 60, modus: "1", leistung: 0}
+    folgt_ist: 1
+schritte:
+  - nach: 0
+erwartet:
+  - aufruf: {entity: a.leistung, wert_min: 1}
+  - zustand_nicht: {last_error: ""}
