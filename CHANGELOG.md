@@ -3,6 +3,18 @@
 Alle nennenswerten Änderungen an der Solakon-ONE-Nulleinspeisung-Integration.
 Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [3.1.3] – 2026-09-25
+
+> **Verhaltensänderung beim Tarif-Laden:** Nachgeladen wird standardmäßig erst 3 Prozentpunkte unter dem Ladeziel. Mit SOC-Hysterese 0 bleibt das bisherige Verhalten.
+
+### Hinzugefügt
+
+- **SOC-Hysterese für das Tarif-Laden (#43):** Neues Feld im Tarif-Tab unter dem Ladeziel (Standard 3 %, 0–20 %). Fall GT startet erst bei SOC < Ladeziel − Hysterese, Fall HT endet unverändert am Ladeziel. Bisher wechselte eine Instanz unter Discharge-Lock am Ladeziel alle paar Minuten zwischen Tarif-Laden und Discharge-Lock, jedes Mal mit Timer-Toggle und Modbus-Writes.
+
+### Behoben
+
+- **Kein `AttributeError` mehr beim Start von Home Assistant (#42):** Home Assistant lud das Netzgruppen-Modul `group.py` als Plattform der Group-Integration. Es heißt jetzt `grid_group.py`. Bei manueller Installation eine verbliebene `group.py` im Integrationsordner löschen.
+
 ## [3.1.2] – 2026-09-20
 
 ### Hinzugefügt
