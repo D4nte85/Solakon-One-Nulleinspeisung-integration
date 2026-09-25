@@ -730,6 +730,9 @@ Im Browser-Konsolenfenster (F12) nach WebSocket-Fehlern schauen. Häufige Ursach
 **Status-Tab zeigt Fehlermeldung „SOC-Limits ungültig"**
 Zone-1-Schwelle muss größer als Zone-3-Schwelle sein. Im Zonen-Tab prüfen und korrigieren.
 
+**Status-Tab meldet „Tarif-Laden kann nie starten"**
+Fall GT startet erst bei SOC < Ladeziel − Hysterese. Liegt dieser Wert auf oder unter der Zone-3-Schwelle, greift Fall B (SOC ≤ Zone 3) immer zuerst — das Tarif-Laden beginnt nie. Die Regelung läuft dabei normal weiter (weicher Fehler). Im Tarif-Tab Ladeziel erhöhen oder Hysterese verkleinern, oder im Zonen-Tab die Zone-3-Schwelle senken.
+
 **Regler schwingt (Leistung pendelt stark)**
 P-Faktor reduzieren oder Wartezeit erhöhen. Der Standardabweichungs-Sensor im Status-Tab zeigt die Netzstabilität — bei hohem Wert (> 50 W) größeres Totband setzen.
 
