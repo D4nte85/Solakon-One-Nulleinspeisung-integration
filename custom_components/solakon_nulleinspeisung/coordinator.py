@@ -1319,6 +1319,14 @@ class SolakonCoordinator:
         )
         if tariff.unit_warning:
             self._messages.warn(tariff.unit_warning)
+        # Tarif-Laden (Fall GT) startet erst bei SOC < Ziel - Hysterese; liegt das auf oder
+        # unter der Zone-3-Schwelle, greift Fall B (soc <= zone3) immer zuerst und das
+        # Tarif-Laden kann nie beginnen. Weicher Fehler wie die Einheitenwarnung: die
+        # Regelung läuft weiter, der Status-Tab zeigt den Widerspruch.
+        if cs.tariff_enabled and cs.tariff_soc - cs.tariff_soc_hyst <= cs.zone3_limit:
+            self._messages.warn(("warn_tariff_hyst_zone3", {
+                "target": cs.tariff_soc, "hyst": cs.tariff_soc_hyst, "zone3": cs.zone3_limit,
+            }))
 
         # ── 8. Überschuss und Nacht ──────────────────────────────────────────
         prev_actual = self._prev_actual

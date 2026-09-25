@@ -264,6 +264,10 @@ _TEXTS: dict[str, dict[str, str]] = {
     },
 
     # ── Warnungen aus Ausgangs-, Verteilungs- und Tarifprüfung ───────────────
+    "warn_tariff_hyst_zone3": {
+        "de": "Tarif-Laden kann nie starten: Ladeziel {target} % minus Hysterese {hyst} % liegt nicht über der Zone-3-Schwelle {zone3} %",
+        "en": "Tariff charging can never start: target {target} % minus hysteresis {hyst} % is not above the Zone 3 threshold {zone3} %",
+    },
     "warn_output_zero_unconfirmed": {
         "de": "Output-Nullung nach {attempts} Versuchen nicht bestätigt (Ist: {actual:.0f} W)",
         "en": "Output zeroing not confirmed after {attempts} attempts (actual: {actual:.0f} W)",
