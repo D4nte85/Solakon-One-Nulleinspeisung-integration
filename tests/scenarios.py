@@ -469,7 +469,7 @@ async def _run_cycle_spec(spec) -> dict:
         if not inst["stored"]:
             coord.settings.update(inst["settings"])
         coord.integral = inst["integral"]
-        coord._prev_actual = inst["prev_actual"]
+        coord.surplus.prev_actual = inst["prev_actual"]
     rec["setup"] = hass.events
     rec["steps"] = []
     for step in spec["steps"]:

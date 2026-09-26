@@ -327,6 +327,7 @@ def groups_state(hass):
 
 # Zustände, die in ein Teilobjekt gewandert sind: Protokollschlüssel → Pfad am Coordinator.
 COORD_PATHS = {"_tariff_unit_suspect_since": "tariff.unit_suspect_since",
+               "_prev_actual": "surplus.prev_actual", "_solar_zero_entry_armed": "surplus.armed",
                "_output_warning": "_messages.hardware_msg",
                "grid_stddev": "dyn.stddev", "grid_stddev_raw": "dyn.stddev_raw",
                "dyn_offset_z1": "dyn.z1", "dyn_offset_z2": "dyn.z2", "dyn_offset_ac": "dyn.ac",

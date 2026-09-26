@@ -139,77 +139,86 @@ def forecast_flags(
     return ForecastFlags(surplus_forced, exit_lock, zone1_forced)
 
 
-@dataclass(frozen=True)
-class SurplusState:
-    """Hysteresezustand zwischen Zyklen: PV-0-Eintritt scharf, Dunkelheit."""
+def surplus_step(
+    *, armed: bool, surplus_enabled: bool, surplus_active: bool, forced: bool, exit_lock: bool,
+    solar: float, soc: float, actual: float, prev_actual: float, total_actual: float, grid: float,
+    error_share: float, surplus_threshold: float, surplus_soc_hyst: float, surplus_pv_hyst: float,
+) -> tuple[bool, bool]:
+    """Surplus-Ein- und -Austritt mit PV-0-Entprellung; liefert (new_surplus, armed)."""
+    if not surplus_enabled:
+        return False, armed
+    if solar > 0:
+        armed = True
 
-    armed: bool
-    dark: bool
+    # Lastanteil dieser Instanz für Ein- und Austritt: (Σactual + grid) × error_share.
+    consumption_share = (total_actual + grid) * error_share
+    pv_hyst_share = surplus_pv_hyst * error_share
 
-
-@dataclass(frozen=True)
-class SurplusNight:
-    """Ergebnis der Vorstufe: Zone 0 in diesem Zyklus, Nacht, neuer Hysteresezustand."""
-
-    new_surplus: bool
-    is_night: bool
-    state: SurplusState
-
-
-def surplus_and_night(
-    *, state: SurplusState, surplus_enabled: bool, surplus_active: bool, cycle_active: bool,
-    forced: bool, exit_lock: bool, solar: float, soc: float, actual: float, prev_actual: float,
-    total_actual: float, grid: float, error_share: float, surplus_threshold: float,
-    surplus_soc_hyst: float, surplus_pv_hyst: float, pv_reserve: float,
-    night_hysteresis: float, night_enabled: bool,
-) -> SurplusNight:
-    """Überschuss-Ein- und -Austritt und Nacht-Hysterese aus Messwerten und bisherigem Zustand."""
-    armed = state.armed
-    if surplus_enabled:
-        if solar > 0:
-            armed = True
-
-        # Lastanteil dieser Instanz für Ein- und Austritt: (Σactual + grid) × error_share.
-        consumption_share = (total_actual + grid) * error_share
-        pv_hyst_share = surplus_pv_hyst * error_share
-
-        normal_entry = (
-            soc >= surplus_threshold
-            and (
-                solar > (consumption_share + pv_hyst_share)
-                or (
-                    solar == 0
-                    and actual == 0
-                    and prev_actual == 0
-                    and armed
-                )
+    normal_entry = (
+        soc >= surplus_threshold
+        and (
+            solar > (consumption_share + pv_hyst_share)
+            or (
+                solar == 0
+                and actual == 0
+                and prev_actual == 0
+                and armed
             )
         )
-        # Forcierung ist bereits an solar > hard_limit_z0 gekoppelt → SOC-unabhängiger Eintritt.
-        surplus_entry = normal_entry or forced
+    )
+    # Forcierung ist bereits an solar > hard_limit_z0 gekoppelt → SOC-unabhängiger Eintritt.
+    surplus_entry = normal_entry or forced
 
-        # Austritt: bei aktiver Forcierung gesperrt (SOC- und Verbrauchsterm ausgeklammert),
-        # sonst normal über SOC- oder Verbrauchsschwelle. Der Exit-Lock sperrt nur den
-        # Verbrauchsterm — der SOC-Austritt greift immer.
-        soc_exit = soc < (surplus_threshold - surplus_soc_hyst)
-        power_exit = solar <= (consumption_share - pv_hyst_share) and not exit_lock
-        surplus_exit = not forced and (soc_exit or power_exit)
-        if surplus_active:
-            new_surplus = not surplus_exit
-            if surplus_exit and solar == 0:
-                armed = False
-        else:
-            new_surplus = surplus_entry
-    else:
-        new_surplus = False
+    # Austritt: bei aktiver Forcierung gesperrt (SOC- und Verbrauchsterm ausgeklammert),
+    # sonst normal über SOC- oder Verbrauchsschwelle. Der Exit-Lock sperrt nur den
+    # Verbrauchsterm — der SOC-Austritt greift immer.
+    soc_exit = soc < (surplus_threshold - surplus_soc_hyst)
+    power_exit = solar <= (consumption_share - pv_hyst_share) and not exit_lock
+    surplus_exit = not forced and (soc_exit or power_exit)
+    if surplus_active:
+        if surplus_exit and solar == 0:
+            armed = False
+        return not surplus_exit, armed
+    return surplus_entry, armed
 
-    dark = state.dark
+
+def night_step(
+    *, dark: bool, solar: float, cycle_active: bool, pv_reserve: float, night_hysteresis: float,
+    night_enabled: bool,
+) -> tuple[bool, bool]:
+    """Nacht mit Dunkelheits-Hysterese; liefert (is_night, dark)."""
     if solar < pv_reserve:
         dark = True
     elif solar >= pv_reserve + night_hysteresis:
         dark = False
-    is_night = night_enabled and dark and not cycle_active
-    return SurplusNight(new_surplus, is_night, SurplusState(armed, dark))
+    return night_enabled and dark and not cycle_active, dark
+
+
+class Surplus:
+    """Surplus-Vorstufe mit Zustand über Regelzyklen: PV-0-Eintritt scharf, vorige Ist-Leistung."""
+
+    def __init__(self) -> None:
+        self.armed: bool = True
+        self.prev_actual: float = 0.0
+
+    def step(self, *, actual: float, **kw) -> bool:
+        """`surplus_step` mit eigenem Zustand; liefert new_surplus und merkt sich `actual`."""
+        new_surplus, self.armed = surplus_step(
+            armed=self.armed, actual=actual, prev_actual=self.prev_actual, **kw)
+        self.prev_actual = actual
+        return new_surplus
+
+
+class Night:
+    """Nacht-Vorstufe mit Zustand über Regelzyklen: Dunkelheit."""
+
+    def __init__(self) -> None:
+        self.dark: bool = False
+
+    def step(self, **kw) -> bool:
+        """`night_step` mit eigenem Zustand; liefert is_night."""
+        is_night, self.dark = night_step(dark=self.dark, **kw)
+        return is_night
 
 
 def decide(inp: ZoneInputs) -> FallDecision | None:

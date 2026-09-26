@@ -198,20 +198,18 @@ def test_zone1_forcierung_grenzen(kw, erwartet):
     assert _flags(**kw).zone1_forced is erwartet
 
 
-# ── Vorstufe: Überschuss und Nacht ───────────────────────────────────────────
+# ── Vorstufe: Surplus ────────────────────────────────────────────────────────
 
-# Nicht in Zone 0, PV 0, PV-0-Eintritt scharf, hell, Lastanteil 0.
+# Nicht in Zone 0, PV 0, PV-0-Eintritt scharf, Lastanteil 0.
 SN = dict(
-    state=zones.SurplusState(armed=True, dark=False), surplus_enabled=True,
-    surplus_active=False, cycle_active=False, forced=False, exit_lock=False,
+    armed=True, surplus_enabled=True, surplus_active=False, forced=False, exit_lock=False,
     solar=0, soc=95, actual=0, prev_actual=0, total_actual=0, grid=0, error_share=1.0,
     surplus_threshold=90, surplus_soc_hyst=2, surplus_pv_hyst=50,
-    pv_reserve=50, night_hysteresis=20, night_enabled=True,
 )
 
 
 def _sn(**kw):
-    return zones.surplus_and_night(**{**SN, **kw})
+    return zones.surplus_step(**{**SN, **kw})
 
 
 @pytest.mark.parametrize("kw, erwartet", [
@@ -221,7 +219,7 @@ def _sn(**kw):
     (dict(solar=351, total_actual=200, grid=100, soc=89), False),
     # Eintritt bei PV 0 nur scharf und ohne Ausgang in diesem und dem vorigen Zyklus
     (dict(), True),
-    (dict(state=zones.SurplusState(armed=False, dark=False)), False),
+    (dict(armed=False), False),
     (dict(actual=5), False),
     (dict(prev_actual=5), False),
     # Forcierung tritt SOC-unabhängig ein
@@ -229,7 +227,7 @@ def _sn(**kw):
     (dict(surplus_enabled=False), False),
 ])
 def test_ueberschuss_eintritt(kw, erwartet):
-    assert _sn(**kw).new_surplus is erwartet
+    assert _sn(**kw)[0] is erwartet
 
 
 @pytest.mark.parametrize("kw, erwartet", [
@@ -246,44 +244,74 @@ def test_ueberschuss_eintritt(kw, erwartet):
     (dict(soc=50, forced=True), True),
 ])
 def test_ueberschuss_austritt(kw, erwartet):
-    assert _sn(surplus_active=True, **kw).new_surplus is erwartet
+    assert _sn(surplus_active=True, **kw)[0] is erwartet
 
 
 def test_pv0_eintritt_erst_nach_pv_wieder_scharf():
     """Issue #17: nach dem Austritt bei PV 0 kein Wiedereintritt, bis PV > 0 war."""
-    r = _sn(surplus_active=True, soc=87)
-    assert (r.new_surplus, r.state.armed) == (False, False)
-    r = _sn(state=r.state)
-    assert (r.new_surplus, r.state.armed) == (False, False)
-    r = _sn(state=r.state, solar=10)
-    assert (r.new_surplus, r.state.armed) == (False, True)
-    assert _sn(state=r.state).new_surplus is True
+    new, armed = _sn(surplus_active=True, soc=87)
+    assert (new, armed) == (False, False)
+    new, armed = _sn(armed=armed)
+    assert (new, armed) == (False, False)
+    new, armed = _sn(armed=armed, solar=10)
+    assert (new, armed) == (False, True)
+    assert _sn(armed=armed)[0] is True
 
 
 def test_austritt_mit_pv_laesst_eintritt_scharf():
-    r = _sn(surplus_active=True, soc=87, solar=10)
-    assert (r.new_surplus, r.state.armed) == (False, True)
+    assert _sn(surplus_active=True, soc=87, solar=10) == (False, True)
 
 
 def test_ohne_ueberschuss_bleibt_scharf_unveraendert():
-    assert _sn(surplus_enabled=False, solar=10, state=zones.SurplusState(False, False)).state.armed is False
+    assert _sn(surplus_enabled=False, solar=10, armed=False)[1] is False
+
+
+def test_surplus_objekt_haelt_zustand():
+    """`prev_actual` gilt erst im nächsten Aufruf; `armed` bleibt über Aufrufe erhalten."""
+    kw = {k: v for k, v in SN.items() if k not in ("armed", "prev_actual", "actual")}
+    s = zones.Surplus()
+    assert s.step(actual=5, **kw) is False       # actual ≠ 0 in diesem Zyklus
+    assert s.prev_actual == 5
+    assert s.step(actual=0, **kw) is False       # voriger Zyklus hatte Ausgang
+    assert s.step(actual=0, **kw) is True
+    assert s.step(actual=0, **{**kw, "surplus_active": True, "soc": 87}) is False
+    assert s.armed is False
+    assert s.step(actual=0, **kw) is False
+
+
+# ── Vorstufe: Nacht ──────────────────────────────────────────────────────────
+
+NT = dict(dark=False, solar=0, cycle_active=False, pv_reserve=50, night_hysteresis=20, night_enabled=True)
+
+
+def _nt(**kw):
+    return zones.night_step(**{**NT, **kw})
 
 
 def test_nacht_hysterese_band():
-    r = _sn(solar=49)
-    assert (r.state.dark, r.is_night) == (True, True)
-    r = _sn(state=r.state, solar=69)
-    assert (r.state.dark, r.is_night) == (True, True)
-    r = _sn(state=r.state, solar=70)
-    assert (r.state.dark, r.is_night) == (False, False)
-    r = _sn(state=r.state, solar=50)
-    assert (r.state.dark, r.is_night) == (False, False)
+    is_night, dark = _nt(solar=49)
+    assert (dark, is_night) == (True, True)
+    is_night, dark = _nt(dark=dark, solar=69)
+    assert (dark, is_night) == (True, True)
+    is_night, dark = _nt(dark=dark, solar=70)
+    assert (dark, is_night) == (False, False)
+    is_night, dark = _nt(dark=dark, solar=50)
+    assert (dark, is_night) == (False, False)
 
 
 @pytest.mark.parametrize("kw", [dict(cycle_active=True), dict(night_enabled=False)])
 def test_nacht_unterdrueckt(kw):
-    r = _sn(solar=0, **kw)
-    assert (r.state.dark, r.is_night) == (True, False)
+    is_night, dark = _nt(solar=0, **kw)
+    assert (dark, is_night) == (True, False)
+
+
+def test_night_objekt_haelt_dunkelheit():
+    kw = {k: v for k, v in NT.items() if k != "dark"}
+    n = zones.Night()
+    assert n.step(**{**kw, "solar": 49}) is True
+    assert n.step(**{**kw, "solar": 69}) is True
+    assert n.dark is True
+    assert n.step(**{**kw, "solar": 70}) is False
 
 
 # ── Regelzustand und Ruhezustand ─────────────────────────────────────────────

@@ -707,7 +707,7 @@ async def _lauf(kind: str, spec: dict) -> list[Ctx]:
         if not inst["stored"]:
             coord.settings.update(inst["settings"])
         coord.integral = inst["integral"]
-        coord._prev_actual = inst["prev_actual"]
+        coord.surplus.prev_actual = inst["prev_actual"]
     flags = {p: h.coord_state(c) for p, c in coords.items()}
     aus_seit = {p: None for p in coords}
     out = []

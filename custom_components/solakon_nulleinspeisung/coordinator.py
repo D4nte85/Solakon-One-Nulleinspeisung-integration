@@ -5,6 +5,7 @@ import asyncio
 import logging
 import time
 from collections import namedtuple
+from operator import attrgetter
 from typing import Any, Callable
 
 from datetime import timedelta
@@ -29,8 +30,8 @@ from .output import Actual, Output, Stall
 from .schema import InvalidSettings, check, notify_reset, sanitize
 from .tariff import Tariff, forecast_suppressed
 from .zones import (
-    SurplusState, ZoneInputs, at_rest, control_state, decide, forecast_flags, required_discharge,
-    rest_mode, surplus_and_night,
+    Night, Surplus, ZoneInputs, at_rest, control_state, decide, forecast_flags, required_discharge,
+    rest_mode,
 )
 from .const import (
     DOMAIN, STORAGE_VERSION, SETTINGS_DEFAULTS, SETTINGS_SCHEMA,
@@ -61,13 +62,13 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 
-# Über Neustarts gespeicherte Zustandsflags: (Speicherschlüssel, Attribut, Default).
+# Über Neustarts gespeicherte Zustandsflags: (Speicherschlüssel, Attributpfad, Default).
 PERSISTED_FLAGS = (
     ("cycle_active", "cycle_active", False),
     ("surplus_active", "surplus_active", False),
     ("ac_charge_active", "ac_charge_active", False),
     ("tariff_charge_active", "tariff_charge_active", False),
-    ("solar_zero_entry_armed", "_solar_zero_entry_armed", True),
+    ("solar_zero_entry_armed", "surplus.armed", True),
 )
 
 # Fehlerschlüssel je Grund ohne Zahl, `{p}` ist das Präfix des Features.
@@ -220,8 +221,8 @@ class SolakonCoordinator:
         # Ruhezustand: Output 0 im Ruhemodus, keine PI-Regelung.
         self.resting: bool = False
         self.is_night: bool = False
-        # Dunkelheit mit Hysterese: an unter PV-Ladereserve, aus ab Reserve + Hysterese.
-        self._dark: bool = False
+        # Nacht-Vorstufe mit Dunkelheits-Hysterese.
+        self.night = Night()
         # Entladung durch den Tarif gesperrt (Preis unter Teuer-Schwelle, keine
         # Lade-Session, kein Überschuss) — der Zustand hinter Fall TM.
         self.discharge_locked: bool = False
@@ -255,12 +256,8 @@ class SolakonCoordinator:
         # Degradation vom konfigurierten distribution_mode ab.
         self.dist_mode_effective: str = ""
 
-        # Vorheriger actual-Wert (für Surplus-Einstiegs-Entprellung)
-        self._prev_actual: float = 0.0
-
-        # Sperrt den solar==0-Sonderfall-Eintritt nach einem Austritt, bis wieder
-        # echtes Solar > 0 gemessen wurde
-        self._solar_zero_entry_armed: bool = True
+        # Surplus-Vorstufe mit PV-0-Entprellung und voriger Ist-Leistung.
+        self.surplus = Surplus()
 
         # Interne Mechanik
         self._timer_toggled_in_cycle: bool = False
@@ -462,7 +459,7 @@ class SolakonCoordinator:
 
     def _persisted_flags(self) -> dict[str, bool]:
         """Gespeicherte Zustandsflags unter ihrem Speicherschlüssel."""
-        return {key: getattr(self, attr) for key, attr, _ in PERSISTED_FLAGS}
+        return {key: attrgetter(attr)(self) for key, attr, _ in PERSISTED_FLAGS}
 
     def _store_data(self) -> dict:
         """Speicherinhalt: Settings plus gespeicherte Zustandsflags."""
@@ -820,7 +817,8 @@ class SolakonCoordinator:
             stored, reset = sanitize(stored, SETTINGS_SCHEMA)
             self.settings = {**SETTINGS_DEFAULTS, **stored}
             for key, attr, default in PERSISTED_FLAGS:
-                setattr(self, attr, bool(stored.get(key, default)))
+                owner, _, name = attr.rpartition(".")
+                setattr(attrgetter(owner)(self) if owner else self, name, bool(stored.get(key, default)))
             if reset:
                 notify_reset(self.hass, f"{DOMAIN}_settings_reset_{self.entry.entry_id}", self.entry.title, reset)
                 await self._store.async_save(self._store_data())
@@ -1082,26 +1080,20 @@ class SolakonCoordinator:
             self._messages.warn(tariff.unit_warning)
 
         # ── 8. Überschuss und Nacht ──────────────────────────────────────────
-        prev_actual = self._prev_actual
-        self._prev_actual = actual
-
         total_actual = pool_sum(self.group.discharge_pool(), self, actual,
                                            lambda m: m.actual_power())
 
-        stage = surplus_and_night(
-            state=SurplusState(self._solar_zero_entry_armed, self._dark),
+        new_surplus = self.surplus.step(
             surplus_enabled=cs.surplus_enabled, surplus_active=self.surplus_active,
-            cycle_active=self.cycle_active, forced=self.forecast_surplus_forced,
-            exit_lock=self.forecast_exit_lock, solar=solar, soc=soc, actual=actual,
-            prev_actual=prev_actual, total_actual=total_actual, grid=grid, error_share=error_share,
-            surplus_threshold=cs.surplus_threshold, surplus_soc_hyst=cs.surplus_soc_hyst,
-            surplus_pv_hyst=cs.surplus_pv_hyst, pv_reserve=cs.pv_reserve,
+            forced=self.forecast_surplus_forced, exit_lock=self.forecast_exit_lock,
+            solar=solar, soc=soc, actual=actual, total_actual=total_actual, grid=grid,
+            error_share=error_share, surplus_threshold=cs.surplus_threshold,
+            surplus_soc_hyst=cs.surplus_soc_hyst, surplus_pv_hyst=cs.surplus_pv_hyst,
+        )
+        is_night = self.night.step(
+            solar=solar, cycle_active=self.cycle_active, pv_reserve=cs.pv_reserve,
             night_hysteresis=cs.night_hysteresis, night_enabled=cs.night_enabled,
         )
-        self._solar_zero_entry_armed = stage.state.armed
-        self._dark = stage.state.dark
-        new_surplus = stage.new_surplus
-        is_night = stage.is_night
         self.is_night = is_night
 
         # ── 9. Falls / Zonenwechsel ──────────────────────────────────────────
