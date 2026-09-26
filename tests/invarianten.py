@@ -159,13 +159,8 @@ def a2(c: Ctx):
 
 
 def a3(c: Ctx):
-    s = c.settings
-    if c.flags["ac_charge_active"]:
-        grenze = s[C.S_AC_POWER_LIMIT]
-    else:
-        # In Zone 0 bleibt das Integral aus Zone 1 eingefroren (I4) — dort gilt dessen Limit.
-        grenze = s[C.S_HARD_LIMIT_Z1]
-    grenze = min(grenze, C.DEVICE_MAX_POWER)
+    # Das Integral gehört nur dem Entlade-PI; AC-Laden und Zone 0 lassen es unverändert.
+    grenze = min(c.settings[C.S_HARD_LIMIT_Z1], C.DEVICE_MAX_POWER)
     if abs(c.flags["integral"]) > grenze + 1e-6:
         return f"Integral {c.flags['integral']} außerhalb ±{grenze}"
 

@@ -189,13 +189,6 @@ const TAB_LAYOUT = {
           { k: "ac_offset",      t: "num" },
         ],
       },
-      {
-        tk: "ac_pi", icon: "🎛️", color: "#0891b2",
-        fields: [
-          { k: "ac_p_factor", t: "num" },
-          { k: "ac_i_factor", t: "num" },
-        ],
-      },
     ],
   },
 

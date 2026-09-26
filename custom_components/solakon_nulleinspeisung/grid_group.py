@@ -152,10 +152,13 @@ class NetGroup:
         """Summe der Ist-Leistung im Entlade-Pool; der eigene Wert zählt immer."""
         return pool_sum(self.discharge_pool(), me, own_actual, lambda m: m.actual_power())
 
-    def pi_base(self, me: Member, own_setpoint: float, share: float, ac: bool = False) -> float:
-        """Grundwert des PI-Schritts: Summe der Sollwerte im AC- oder Entlade-Pool mal `share`."""
-        pool = self.ac_pool() if ac else self.discharge_pool()
-        return pool_sum(pool, me, own_setpoint, lambda m: m.output_setpoint()) * share
+    def ac_actual(self, me: Member, own_actual: float) -> float:
+        """Summe der Ist-Leistung im AC-Pool; der eigene Wert zählt immer."""
+        return pool_sum(self.ac_pool(), me, own_actual, lambda m: m.actual_power())
+
+    def pi_base(self, me: Member, own_setpoint: float, share: float) -> float:
+        """Grundwert des PI-Schritts: Summe der Sollwerte im Entlade-Pool mal `share`."""
+        return pool_sum(self.discharge_pool(), me, own_setpoint, lambda m: m.output_setpoint()) * share
 
     def sister_charging(self, me: Member) -> bool:
         """Ein anderes regelndes Mitglied lädt (AC oder Tarif)."""

@@ -7,6 +7,7 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ### Geändert
 
+- **AC-Laden ohne PI:** Die Ladeleistung wird in einem Schritt aus der Ist-Leistung berechnet: Ist-Ladeleistung + (Offset − Netz), im Multi-Instancing über die Ist-Leistung des AC-Pools mal Fehler-Anteil. Während die Ladeleistung noch hochfährt, wird nur gesenkt, weil der Netzsensor dann einen älteren Stand zeigt; unter 50 W wird 0 geschrieben; eine gesenkte Max. Ladeleistung greift auch bei Netzfehler in der Toleranz. Die Einstellungen `ac_p_factor` und `ac_i_factor` entfallen. Grundlage ist eine Messung des Geräts: Die Ladeleistung steigt mit etwa 34 W/s und sinkt als Sprung nach etwa 2 s.
 - **σ bleibt beim Leaderwechsel erhalten:** σ gehört jetzt der Netzgruppe, nicht dem Leader. Kommt ein neuer Leader wegen eines fehlenden Kernsensors nicht bis zur Messung, gilt für die übrigen Instanzen der letzte σ der Netzgruppe weiter. Bisher sprang er auf den eigenen Stand des neuen Leaders, oft 0.
 - Intern: Dynamic Offset (σ-Puffer, Formel, Offset je Zone) in eigenes Modul `dynamic_offset.py`.
 - Intern: Ausgangsleistung (Schreiben, Warten, Nullbestätigung, Stillstandserkennung) in eigenes Modul `output.py`, Verhalten unverändert.

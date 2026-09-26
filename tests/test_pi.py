@@ -1,4 +1,4 @@
-"""PI-Regler ohne Coordinator: Gates, Abklingen, Anti-Windup."""
+"""PI-Regler ohne Coordinator: Gate, Abklingen, Anti-Windup."""
 from __future__ import annotations
 
 import importlib
@@ -32,16 +32,6 @@ def _ctrl(integral: float = 0.0):
 ])
 def test_gate_discharge(args, expected):
     assert pi.gate_discharge(*args) == expected
-
-
-@pytest.mark.parametrize("args, expected", [
-    ((-500, -500, 25), HOLD),
-    ((-470, -500, 25), STEP),
-    ((-530, -500, 25), STEP),
-    ((-525, -500, 25), HOLD),               # genau auf der Toleranz
-])
-def test_gate_ac_nur_toleranz(args, expected):
-    assert pi.gate_ac(*args) == expected
 
 
 @pytest.mark.parametrize("start, expected", [
@@ -86,13 +76,6 @@ def test_limit_auf_geraetemaximum_gedeckelt():
     out = c.calculate(5000, 0, 0, 5000, 1.0, 0.0)
     assert out == pi.DEVICE_MAX_POWER
     assert abs(c.integral) <= pi.DEVICE_MAX_POWER
-
-
-def test_ac_fehlerrichtung_invertiert():
-    entladen = _ctrl().calculate(-100, 400, 0, 800, 1.0, 0.0)
-    laden = _ctrl().calculate(-100, 400, 0, 800, 1.0, 0.0, ac_charge_mode=True)
-    assert entladen == 300.0
-    assert laden == 500.0
 
 
 def test_anteil_skaliert_fehler():

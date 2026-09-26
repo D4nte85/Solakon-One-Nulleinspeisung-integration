@@ -90,7 +90,7 @@ def gen_settings(rng) -> dict:
     s[C.S_AC_POWER_LIMIT] = _pick(rng, [800, 1200, 300])
     s[C.S_AC_HYSTERESIS] = _pick(rng, [50, 10])
     s[C.S_AC_OFFSET] = _pick(rng, [-50, 0])
-    s[C.S_AC_I_FACTOR] = _pick(rng, [0.0, 0.1])
+    s["ac_i_factor"] = _pick(rng, [0.0, 0.1])   # entfallenes Setting: bleibt als unbekannter Schlüssel, hält die Zufallsfolge
 
     s[C.S_TARIFF_ENABLED] = _chance(rng, 0.4)
     s[C.S_TARIFF_CHEAP_THRESHOLD] = _pick(rng, [10.0, 20.0, 0.1])
@@ -383,6 +383,7 @@ def gen_settings_change(rng) -> dict:
             changes[key] = "" if val else "sensor.changed"
         else:
             changes[key] = val
+    changes.pop("ac_i_factor", None)
     if _chance(rng, 0.3):
         changes[C.S_REGULATION_ENABLED] = False
     if _chance(rng, 0.2):
@@ -681,7 +682,12 @@ async def _run_derive() -> dict:
                 rng.choice([0.0, 0.05, 0.3]))
         ac, share, integ = rng.choice([False, True]), rng.choice([1.0, 0.5, 0.0]), rng.choice([0.0, 400.0, -2000.0])
         coord.integral = integ
-        out = coord.pi.calculate(*args, ac_charge_mode=ac, error_share=share)
+        if ac:
+            # früherer AC-Modus: Fehlerrichtung invertiert, über negiertes Netz und Offset
+            grid, cur, off, *rest = args
+            out = coord.pi.calculate(-grid, cur, -off, *rest, error_share=share)
+        else:
+            out = coord.pi.calculate(*args, error_share=share)
         pi.append([list(args), ac, share, integ, out, round(coord.integral, 6)])
     dyn = []
     for sd in (-1.0, 0.0, 10.0, 40.0, 500.0):

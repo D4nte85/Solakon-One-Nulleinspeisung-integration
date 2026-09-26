@@ -409,18 +409,20 @@ Optionales Laden bei erkanntem externem Überschuss. Aktiv in Zone 1 und Zone 2.
 
 **Abbruch-Bedingung:** Modus = `'3'` UND `ac_charge_active` UND kein Tarif-Laden UND (SOC ≥ Ladeziel ODER (Grid ≥ ac_offset + Hysterese UND |eigener Output| ≤ Toleranz))
 
-> Der `|Output| ≤ Toleranz`-Guard verhindert Fehlauslösung während der PI noch aktiv regelt. `actual_power_sensor` folgt derselben Vorzeichenkonvention wie der Netzsensor (positiv = Bezug, negativ = Einspeisung) — während aktivem AC-Laden ist er durchgehend deutlich negativ (Größenordnung der tatsächlichen Ladeleistung, nicht nur Rauschen nahe 0). Der frühere einseitige `≤ 0`-Vergleich war dadurch praktisch die gesamte Ladedauer erfüllt, unabhängig von der Ladeleistung. Das symmetrische Toleranzband (Einstellung „Selbstjustierung", Standard 2 W, dieselbe wie bei der PI-Konvergenzprüfung) verlangt stattdessen, dass die Ladeleistung tatsächlich auf nahe null heruntergeregelt ist, bevor der Grid-Zweig greift.
+> Der `|Output| ≤ Toleranz`-Guard verhindert Fehlauslösung, solange noch geladen wird. `actual_power_sensor` folgt derselben Vorzeichenkonvention wie der Netzsensor (positiv = Bezug, negativ = Einspeisung) — während aktivem AC-Laden ist er durchgehend deutlich negativ (Größenordnung der tatsächlichen Ladeleistung, nicht nur Rauschen nahe 0). Der frühere einseitige `≤ 0`-Vergleich war dadurch praktisch die gesamte Ladedauer erfüllt, unabhängig von der Ladeleistung. Das symmetrische Toleranzband (Einstellung „Selbstjustierung", Standard 2 W, dieselbe wie bei der PI-Konvergenzprüfung) verlangt stattdessen, dass die Ladeleistung tatsächlich auf nahe null heruntergeregelt ist, bevor der Grid-Zweig greift.
 
-Der Lademodus verwendet einen **eigenen invertierten PI-Regler**: `raw_error = (ac_offset − grid) × Fehler-Anteil`. Ein positiver Fehler (Grid zu negativ → zu viel Einspeisung) erhöht die Ladeleistung.
+Der Lademodus verwendet keinen PI-Regler, sondern eine **Stellwertrechnung auf Basis der Ist-Leistung**. Die Netzleistung ist Hauslast plus Ladeleistung, daraus folgt die nötige Ladeleistung in einem Schritt:
+```
+Stellwert_i = Fehler-Anteil_i × (Σ Ist-Ladeleistung aller ladenden Instanzen + ac_offset − grid)
+```
+Einzelbetrieb bzw. nur eine ladende Instanz: eigene Ist-Ladeleistung + (ac_offset − grid).
 
 > Der `Fehler-Anteil` hier ist [Pool 2](#multi-instancing) — unabhängig von der Nulleinspeisungs-Verteilung. Laden mehrere Instanzen gleichzeitig, teilen sie sich denselben Netzüberschuss über diesen eigenen Pool, statt sich gegenseitig zu überschätzen.
 
-**Ausgangsbasis für den AC-PI-Stelleingriff:** Wie beim normalen Nulleinspeisungs-PI baut die Korrektur nicht auf dem eigenen zuletzt kommandierten Wert dieser Instanz auf, sondern auf ihrem proportionalen Anteil am Gruppen-Sollwert:
-```
-ac_power_base_i = (Σ kommandierte Leistung aller gleichzeitig ladenden Instanzen) × Fehler-Anteil_i
-neuer_output_i  = ac_power_base_i + PI-Korrektur
-```
-Einzelbetrieb bzw. nur eine ladende Instanz: identisch zum eigenen kommandierten Wert.
+Regeln der Stellwertrechnung:
+- Geschrieben wird, wenn |ac_offset − grid| > Toleranz oder die Ausgangsleistung über der Max. Ladeleistung liegt. Der Stellwert wird auf 0 … Max. Ladeleistung geklemmt.
+- Unter 50 W wird 0 geschrieben: Das Gerät hält kleinere Ladeleistungen nicht ruhig.
+- Solange die Ladeleistung noch hochfährt (Ist-Ladeleistung mehr als 15 W unter der Ausgangsleistung), wird nur gesenkt. Die Ladeleistung des Solakon ONE steigt mit etwa 34 W/s, aus dem Stillstand anfangs schneller; Senken wirkt nach etwa 2 s als Sprung. Der Netzsensor zeigt während des Anstiegs einen älteren Stand, eine Erhöhung darauf würde überschwingen.
 
 | Parameter | Beschreibung | Empfehlung |
 |-----------|-------------|------------|
@@ -429,8 +431,6 @@ Einzelbetrieb bzw. nur eine ladende Instanz: identisch zum eigenen kommandierten
 | Max. Ladeleistung (W) | Obergrenze der AC-Ladeleistung | 400–800 |
 | Eintritts-Hysterese (W) | (Grid + ΣOutput_entladend) muss unter −Hysterese liegen | 30–80 |
 | Regel-Offset (W) | Zielwert während AC Laden (typisch negativ) | −80 bis −30 |
-| AC P-Faktor | Klein halten: Die Ladeleistung steigt nur mit etwa 33 W/s, der PI kann vor dem Erreichen des letzten Sollwerts nachlegen | 0,3–0,5 |
-| AC I-Faktor | Auf 0 belassen — ein I-Anteil summiert während des langsamen Anstiegs weiter auf | 0,0 |
 
 ---
 
@@ -581,7 +581,7 @@ Bei P = 0,5 beginnen, schrittweise erhöhen bis das System leicht anfängt zu pe
 
 ### Schritt 3: I-Faktor hinzufügen
 
-Typischer Arbeitsbereich: **0.03–0.08**. Für AC Laden separat tunen — P besonders klein halten (~0.3–0.5), I-Faktor auf 0 belassen: Im AC-Lade-Modus steigt die Ladeleistung des Solakon ONE nur mit etwa 33 W/s (0 → 800 W in rund 25 s), Senken wirkt sofort. Solange das Gerät hochfährt, sieht der PI noch den alten Netzfehler und würde nachlegen. Tarif-Laden verwendet keinen PI-Regler.
+Typischer Arbeitsbereich: **0.03–0.08**. AC Laden und Tarif-Laden verwenden keinen PI-Regler und brauchen kein Tuning.
 
 ---
 
@@ -591,9 +591,9 @@ Typischer Arbeitsbereich: **0.03–0.08**. Für AC Laden separat tunen — P bes
 2. **Zone-1-Schwelle > Zone-3-Schwelle.** Die Integration prüft dies und gibt im Status-Tab einen Fehler aus falls die Limits ungültig sind.
 3. **Netzleistungssensor-Polarität.** Positiv = Bezug, negativ = Einspeisung — abweichende Polarität führt zu umgekehrtem Regelverhalten.
 4. **AC Laden Eintritts-Guard.** Eintritt in AC Laden ist nur möglich wenn Modus ≠ `'3'`. Das verhindert einen Re-Eintritt wenn AC Laden bereits aktiv ist.
-5. **AC Laden P/I-Tuning.** Separates Tuning erforderlich — P klein halten (~0,3–0,5), I-Faktor auf 0,0. Im AC-Lade-Modus steigt die Ladeleistung des Solakon ONE bei jeder Erhöhung nur mit etwa 33 W/s, auch mitten in einer Ladesession; Senken wirkt nach wenigen Sekunden. Ein großer P- oder I-Anteil legt nach, bevor das Gerät den letzten Sollwert erreicht hat.
+5. **AC Laden ohne PI.** Die Ladeleistung wird in einem Schritt aus Netz und Ist-Leistung berechnet (siehe [AC Laden](#-ac-laden)). Es gibt keine Faktoren einzustellen.
 6. **at_max_limit-Guard.** Greift am zonenabhängigen `dynamic_max` (Zone 0: AC-Limit, Zone 1: Hard Limit Z1, Zone 2: `min(Hard-Limit-Z1, PV−Reserve)`), jeweils zusätzlich gedeckelt auf die Gerätegrenze von 1200 W. Liegt `current_power` über `dynamic_max` (z.B. weil PV abgefallen ist), läuft der PI trotz positivem Netzfehler, auch wenn der Netzfehler im Totband liegt, und reduziert den Befehl auf die neue Decke — kein Deadlock wenn das dynamic ceiling sinkt.
-7. **at_max/at_min-Guards im AC-Lade-Modus.** Beide Guards sind während AC Laden deaktiviert — Fall I übernimmt die Safety-Funktion für jeden Widerspruch zwischen Modus und Lade-Flags.
+7. **Grenzen im AC-Lade-Modus.** Die Stellwertrechnung klemmt auf 0 … Max. Ladeleistung; liegt die Ausgangsleistung über einer gesenkten Max. Ladeleistung, wird auch bei Netzfehler in der Toleranz gesenkt. Fall I übernimmt die Safety-Funktion für jeden Widerspruch zwischen Modus und Lade-Flags.
 8. **Tarif-Discharge-Lock.** Der Lock gilt für mittlere UND günstige Preiszonen (alles unterhalb der Teuer-Schwelle) und sperrt sowohl Zone 1 als auch Zone 2 (Output 0 W, Modus Disabled). Solange Überschuss-Einspeisung aktiv ist, wird kein Lock ausgelöst. Die Sperre hebt sich automatisch wenn der Preis die Teuer-Schwelle überschreitet. Der Zyklus startet danach über Fall A (SOC über Zone-1-Schwelle) bzw. Zone 2 über Fall E **neu** — Recovery (Fall D) greift hier nicht, weil TM `cycle_active` bereits zurückgesetzt hat und Fall D genau dieses Flag als Bedingung hat.
 9. **Dynamischer Offset.** Jede Zone wird einzeln aktiviert. Die Netz-Standardabweichung wird intern berechnet — kein externer Statistik-Sensor erforderlich. Nach dem ersten Start einige Minuten warten bis genug Samples gesammelt sind. Bei mehreren Instanzen am selben Netzsensor pflegt nur der Gruppen-Leader den Ringpuffer, alle anderen übernehmen seinen Wert. Optionales **Trimmen** (`stddev_trim_count`, Standard 0): schließt die N höchsten UND die N niedrigsten Einzelmesswerte im Fenster vor der Berechnung aus — pro Seite, nicht insgesamt (N=5 → 10 Samples ausgeschlossen). Trennt kurze, seltene Lastspitzen (z. B. Kompressor-/Pumpen-Anlaufstrom) von echter Dauerunruhe anhand des betroffenen Fensteranteils, nicht der Ereignisdauer — ein Puls, der nur eine Minderheit der Samples füllt, fällt komplett raus, eine Schwankung über den Großteil des Fensters bewegt den Offset weiterhin. Wert wird als Anzahl Samples angegeben, nicht als Prozent, weil die Sample-Zahl im Fenster von der Update-Rate des Netzsensors abhängt. Effekt live vergleichbar über den ungetrimmten Rohwert (Attribut `stddev_raw` am Netz-Stabw.-Sensor, bzw. „StdDev (roh)" im Panel).
 10. **Self-Adjusting Wait.** Polls die tatsächliche Ausgangsleistung nach einem Setpoint-Befehl statt einer festen Wartezeit zu schlafen. Die konfigurierte Wartezeit wird zum maximalen Timeout als Sicherheitsnetz.
@@ -692,8 +692,8 @@ Der Hebel ist die **Zone-3-Schwelle** — sie beendet den Zyklus. Die Zone-1-Sch
 **Was bedeutet das Vorzeichen beim Offset?**
 Der Offset ist der Zielwert am **Netzzähler**, nicht am Wechselrichter: `0` regelt auf die Nulllinie, `+20` hält 20 W Bezug, `−20` hält 20 W Einspeisung als Sicherheitsabstand. Beim AC Laden verhindert ein negativer Offset entsprechend, dass aus dem Netz mitgeladen wird.
 
-**Warum haben AC Laden und die Entladezonen getrennte Offsets und PI-Faktoren?**
-Weil es zwei verschiedene Regelstrecken sind: Beim Entladen regelt der Wechselrichter, beim AC Laden das Ladenetzteil, dessen Leistung nur mit etwa 33 W/s steigt. AC Laden hat deshalb einen eigenen Offset, eigene P/I-Faktoren und ein eigenes Leistungslimit; die Zonen-Offsets greifen währenddessen nicht. Die Werte sollten **nicht** gleichgesetzt werden — für AC Laden gilt die Einstellempfehlung aus [Wichtige Hinweise](#wichtige-hinweise) (P klein, I auf 0).
+**Warum haben AC Laden und die Entladezonen getrennte Offsets und Regelungen?**
+Weil es zwei verschiedene Regelstrecken sind: Beim Entladen regelt der Wechselrichter, beim AC Laden das Ladenetzteil, dessen Leistung nur mit etwa 34 W/s steigt. AC Laden hat deshalb einen eigenen Offset, ein eigenes Leistungslimit und statt des PI eine Stellwertrechnung auf Basis der Ist-Leistung; die Zonen-Offsets greifen währenddessen nicht.
 
 **„Max. Entladestrom Zone 1" in A und „Hard-Limit Z1" in W — was von beidem gilt?**
 Beides, an verschiedenen Stellen: Die Ampere begrenzen den Strom auf der Batterieseite, die Watt den AC-Ausgang, gegen den der PI regelt. Sie schließen sich nicht aus. Bei einem niedrigen Watt-Limit wird die Stromgrenze in der Regel nie erreicht — dann wirkt praktisch nur das Watt-Limit.

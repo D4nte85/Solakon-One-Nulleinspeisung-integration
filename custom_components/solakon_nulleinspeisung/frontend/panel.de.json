@@ -67,7 +67,6 @@
     "surplus_forecast": "PV-Vorhersage",
     "surplus_lock":     "Austritts-Sperre",
     "ac_entry":         "Eintritt & Grenzen",
-    "ac_pi":            "PI-Parameter",
     "tariff_thresholds":"Preisschwellen",
     "tariff_charge":    "Laden",
     "tariff_forecast":  "PV-Vorhersage",
@@ -189,7 +188,7 @@
     },
     "ac_power_limit": {
       "l": "Max. Ladeleistung (W)",
-      "d": "Absolute Obergrenze der AC-Ladeleistung. Wird als max_power an den PI-Regler übergeben."
+      "d": "Absolute Obergrenze der AC-Ladeleistung. Liegt die Ausgangsleistung darüber, wird sofort gesenkt."
     },
     "ac_hysteresis": {
       "l": "Eintritts-Hysterese (W)",
@@ -197,15 +196,7 @@
     },
     "ac_offset": {
       "l": "Regel-Offset (W)",
-      "d": "Regelziel für die Netzleistung im AC-Lade-Modus. Negativ = Einspeisung angestrebt → PI erhöht Ladeleistung. Wird überschrieben wenn Dyn. Offset für Zone AC aktiv ist."
-    },
-    "ac_p_factor": {
-      "l": "AC P-Faktor",
-      "d": "Proportional-Verstärkung im AC-Lade-Modus. Klein halten (~0.3–0.5): Die Ladeleistung des Solakon ONE steigt nur mit etwa 33 W/s, der PI kann sonst nachlegen, bevor das Gerät den letzten Sollwert erreicht hat. Startwert: 0.3."
-    },
-    "ac_i_factor": {
-      "l": "AC I-Faktor",
-      "d": "Integral-Verstärkung im AC-Lade-Modus. Auf 0 belassen — die Ladeleistung steigt nur mit etwa 33 W/s, ein I-Anteil summiert während des Anstiegs weiter auf. Reine P-Regelung reicht."
+      "d": "Regelziel für die Netzleistung im AC-Lade-Modus. Negativ = Einspeisung angestrebt; die Ladeleistung wird aus Netz und Ist-Leistung so berechnet, dass das Netz diesen Wert trifft. Wird überschrieben wenn Dyn. Offset für Zone AC aktiv ist."
     },
     "tariff_enabled": {
       "l": "Tarif-Steuerung aktivieren",

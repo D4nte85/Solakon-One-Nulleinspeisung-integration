@@ -67,7 +67,6 @@
     "surplus_forecast": "PV Forecast",
     "surplus_lock":     "Exit Lock",
     "ac_entry":         "Entry & Limits",
-    "ac_pi":            "PI Parameters",
     "tariff_thresholds":"Price Thresholds",
     "tariff_charge":    "Charging",
     "tariff_forecast":  "PV Forecast",
@@ -189,7 +188,7 @@
     },
     "ac_power_limit": {
       "l": "Max. Charge Power (W)",
-      "d": "Absolute ceiling for AC charge power. Passed as max_power to the PI controller."
+      "d": "Absolute ceiling for AC charge power. If the output power is above it, it is lowered immediately."
     },
     "ac_hysteresis": {
       "l": "Entry Hysteresis (W)",
@@ -197,15 +196,7 @@
     },
     "ac_offset": {
       "l": "Control Offset (W)",
-      "d": "Control target for grid power in AC charge mode. Negative = export targeted → PI increases charge power. Overridden when dynamic offset for Zone AC is active."
-    },
-    "ac_p_factor": {
-      "l": "AC P-Factor",
-      "d": "Proportional gain in AC charge mode. Keep low (~0.3–0.5): the Solakon ONE raises its charging power by only about 33 W/s, otherwise the PI may add more before the device has reached the last setpoint. Starting value: 0.3."
-    },
-    "ac_i_factor": {
-      "l": "AC I-Factor",
-      "d": "Integral gain in AC charge mode. Leave at 0 — the charging power rises by only about 33 W/s, an I-part keeps accumulating during the rise. P alone is sufficient."
+      "d": "Control target for grid power in AC charge mode. Negative = export targeted; the charge power is calculated from grid and actual power so that the grid hits this value. Overridden when dynamic offset for Zone AC is active."
     },
     "tariff_enabled": {
       "l": "Enable Tariff Control",

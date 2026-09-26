@@ -114,12 +114,19 @@ def test_discharge_actual_summiert_entlade_pool():
     assert g.discharge_actual(a, 10) == 110
 
 
-@pytest.mark.parametrize("ac, erwartet", [(False, (10 + 100) * 0.5), (True, (10 + 50) * 0.5)])
-def test_pi_base_pool_mal_anteil(ac, erwartet):
+def test_ac_actual_summiert_ac_pool():
+    a, b = M("a", actual=999), M("b", actual=100)
+    c = M("c", actual=-50, discharge=False, ac_charge_active=True)
+    _, g = _group(a, b, c)
+    assert g.ac_actual(a, -10) == -60
+
+
+def test_pi_base_pool_mal_anteil():
     a, b = M("a", setpoint=999), M("b", setpoint=100)
     c = M("c", setpoint=50, discharge=False, ac_charge_active=True)
     _, g = _group(a, b, c)
-    assert g.pi_base(a, 10, 0.5, ac=ac) == erwartet
+    assert g.pi_base(a, 10, 0.5) == (10 + 100) * 0.5
+
 
 def test_config_mit_defaults():
     _, g = _group(dist={"global_max_power": 500})

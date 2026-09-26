@@ -12,7 +12,7 @@ from homeassistant.helpers.storage import Store
 
 from .const import (
     Field,
-    S_AC_ENABLED, S_AC_HYSTERESIS, S_AC_I_FACTOR, S_AC_POWER_LIMIT, S_AC_P_FACTOR, S_AC_SOC_TARGET,
+    S_AC_ENABLED, S_AC_HYSTERESIS, S_AC_POWER_LIMIT, S_AC_SOC_TARGET,
     S_DISCHARGE_MAX, S_HARD_LIMIT_Z0, S_HARD_LIMIT_Z1, S_I_FACTOR, S_NIGHT_ENABLED,
     S_NIGHT_HYSTERESIS, S_PV_FORECAST_ENABLED, S_PV_FORECAST_SENSOR, S_PV_FORECAST_THRESHOLD,
     S_PV_RESERVE, S_P_FACTOR, S_SURPLUS_ENABLED, S_SURPLUS_FORECAST_ENABLED,
@@ -45,8 +45,6 @@ CYCLE_SETTINGS = (
     ("ac_soc_target", S_AC_SOC_TARGET, int),
     ("ac_power_limit", S_AC_POWER_LIMIT, int),
     ("ac_hysteresis", S_AC_HYSTERESIS, int),
-    ("ac_p", S_AC_P_FACTOR, float),
-    ("ac_i", S_AC_I_FACTOR, float),
     ("tariff_enabled", S_TARIFF_ENABLED, bool),
     ("tariff_cheap", S_TARIFF_CHEAP_THRESHOLD, float),
     ("tariff_exp", S_TARIFF_EXP_THRESHOLD, float),

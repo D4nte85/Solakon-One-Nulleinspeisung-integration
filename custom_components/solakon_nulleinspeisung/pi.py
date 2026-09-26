@@ -28,11 +28,6 @@ def gate_discharge(grid: float, current: float, offset: float, limit: float, tol
     return SATURATED if saturated_high else HOLD
 
 
-def gate_ac(grid: float, offset: float, tolerance: float) -> str:
-    """Gate des AC-Lade-PI: nur Toleranz, keine Guards an den Grenzen."""
-    return STEP if abs(grid - offset) > tolerance else HOLD
-
-
 class PIController:
     """Integral, Rechenschritt und Abklingen."""
 
@@ -56,20 +51,16 @@ class PIController:
         max_power: float,
         p_factor: float,
         i_factor: float,
-        ac_charge_mode: bool = False,
         error_share: float = 1.0,
     ) -> float:
-        """PI-Schritt mit modusabhängiger Fehlerrichtung und Anti-Windup via Back-Calculation.
+        """PI-Schritt des Entladens mit Anti-Windup via Back-Calculation.
 
         max_power wird auf DEVICE_MAX_POWER gedeckelt, damit Klemmung und
         Back-Calculation gegen die real erreichbare Grenze rechnen.
         """
         max_power = min(max_power, DEVICE_MAX_POWER)
 
-        if ac_charge_mode:
-            raw_error = (target_offset - grid_power) * error_share
-        else:
-            raw_error = (grid_power - target_offset) * error_share
+        raw_error = (grid_power - target_offset) * error_share
 
         if raw_error > 0:
             error = min(raw_error, max(0.0, max_power - current_power))

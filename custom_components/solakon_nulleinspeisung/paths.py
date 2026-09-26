@@ -3,10 +3,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .pi import SATURATED, STEP, gate_ac, gate_discharge
+from .ac_charge import setpoint as ac_setpoint
+from .pi import SATURATED, STEP, gate_discharge
 
 # Arten der Pfadentscheidung.
 FIXED = "fixed"              # Festwert schreiben
+AC_SET = "ac_set"            # Stellwert des AC-Ladens schreiben
 PI_STEP = "pi_step"          # PI-Schritt ausführen
 STALL_CHECK = "stall_check"  # Stillstand prüfen
 STALL_RESET = "stall_reset"  # Stillstandszähler zurücksetzen
@@ -28,10 +30,9 @@ class PathInputs:
     tariff_power: float
     ac_offset: float
     ac_limit: float
-    ac_p: float
-    ac_i: float
     ac_share: float
-    ac_base: float
+    ac_charge: float
+    ac_pool_charge: float
     target_offset: float
     dynamic_max: float
     p_factor: float
@@ -51,7 +52,6 @@ class PiStep:
     i_factor: float
     share: float
     action: str
-    ac_charge_mode: bool = False
 
 
 @dataclass(frozen=True)
@@ -68,17 +68,16 @@ class PathDecision:
 
 
 def decide(inp: PathInputs) -> PathDecision:
-    """Pfad nach Regelzustand: Zone-0-Festwert, AC-PI, Tarif-Festwert oder Entlade-PI."""
+    """Pfad nach Regelzustand: Zone-0-Festwert, AC-Stellwert, Tarif-Festwert oder Entlade-PI."""
     if inp.surplus_active:
         return PathDecision(FIXED, inp.zone0_power, "act_zone0_output")
 
     if inp.ac_charge_active:
-        if gate_ac(inp.grid, inp.ac_offset, inp.tolerance) != STEP:
-            return PathDecision(IDLE, decay=True)
-        return PathDecision(PI_STEP, step=PiStep(
-            inp.ac_base, inp.ac_offset, inp.ac_limit, inp.ac_p, inp.ac_i, inp.ac_share,
-            "act_ac_pi", ac_charge_mode=True,
-        ))
+        value = ac_setpoint(inp.grid, inp.ac_charge, inp.ac_pool_charge, inp.current_power,
+                            inp.ac_offset, inp.ac_limit, inp.ac_share, inp.tolerance)
+        if value is None:
+            return PathDecision(IDLE)
+        return PathDecision(AC_SET, value, "act_ac_setpoint", ac_charge_mode=True)
 
     if inp.tariff_charge_active:
         return PathDecision(FIXED, inp.tariff_power, "act_tariff_power", ac_charge_mode=True)

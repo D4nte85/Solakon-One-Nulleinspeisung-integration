@@ -152,8 +152,6 @@ S_AC_SOC_TARGET  = "ac_soc_target"
 S_AC_POWER_LIMIT = "ac_power_limit"
 S_AC_HYSTERESIS  = "ac_hysteresis"
 S_AC_OFFSET      = "ac_offset"
-S_AC_P_FACTOR    = "ac_p_factor"
-S_AC_I_FACTOR    = "ac_i_factor"
 
 S_TARIFF_ENABLED          = "tariff_enabled"
 S_TARIFF_PRICE_SENSOR     = "tariff_price_sensor"
@@ -305,8 +303,6 @@ SETTINGS_SCHEMA: dict[str, Field] = {
     S_AC_POWER_LIMIT: _int(800, POWER, 100, 1200, 50),
     S_AC_HYSTERESIS:  _int(50, AMOUNT, 10, 500, 10),
     S_AC_OFFSET:      _int(-50, SIGNED, -500, 200, 5),
-    S_AC_P_FACTOR:    _float(0.3, AMOUNT, 0.1, 3, 0.1),
-    S_AC_I_FACTOR:    _float(0.0, AMOUNT, 0, 0.5, 0.01),
 
     S_TARIFF_ENABLED:         _bool(),
     S_TARIFF_PRICE_SENSOR:    _str(),

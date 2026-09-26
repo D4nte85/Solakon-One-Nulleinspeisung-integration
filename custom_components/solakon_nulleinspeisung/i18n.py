@@ -50,9 +50,9 @@ _TEXTS: dict[str, dict[str, str]] = {
         "de": "Zone 0: Output → {power:.0f} W",
         "en": "Zone 0: output → {power:.0f} W",
     },
-    "act_ac_pi": {
-        "de": "AC-PI: {frm:.0f} → {to:.0f} W",
-        "en": "AC PI: {frm:.0f} → {to:.0f} W",
+    "act_ac_setpoint": {
+        "de": "AC-Laden: {frm:.0f} → {to:.0f} W",
+        "en": "AC charging: {frm:.0f} → {to:.0f} W",
     },
     "act_tariff_power": {
         "de": "Tarif-Laden: {power:.0f} W",

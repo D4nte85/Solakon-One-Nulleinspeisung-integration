@@ -13,7 +13,7 @@ BASE = dict(
     grid=30.0, current_power=400.0, tolerance=25.0,
     surplus_active=False, ac_charge_active=False, tariff_charge_active=False, capped=False,
     zone0_power=1200.0, tariff_power=800.0,
-    ac_offset=-50.0, ac_limit=800.0, ac_p=0.3, ac_i=0.0, ac_share=1.0, ac_base=300.0,
+    ac_offset=-50.0, ac_limit=800.0, ac_share=1.0, ac_charge=300.0, ac_pool_charge=300.0,
     target_offset=30.0, dynamic_max=800.0, p_factor=1.3, i_factor=0.05, share=1.0,
     discharge_base=400.0,
 )
@@ -33,15 +33,15 @@ def test_tarif_schreibt_festwert_im_lademodus():
     assert (d.kind, d.value, d.action, d.ac_charge_mode) == (paths.FIXED, 800.0, "act_tariff_power", True)
 
 
-def test_ac_in_toleranz_nichts_und_abklingen():
-    d = _decide(ac_charge_active=True, grid=-50.0)
-    assert (d.kind, d.decay) == (paths.IDLE, True)
+def test_ac_in_toleranz_nichts():
+    d = _decide(ac_charge_active=True, grid=-50.0, current_power=300.0)
+    assert (d.kind, d.decay) == (paths.IDLE, False)
 
 
-def test_ac_schritt_mit_ac_parametern():
-    d = _decide(ac_charge_active=True, grid=-200.0)
-    assert d.kind == paths.PI_STEP and not d.decay
-    assert d.step == paths.PiStep(300.0, -50.0, 800.0, 0.3, 0.0, 1.0, "act_ac_pi", ac_charge_mode=True)
+def test_ac_stellwert_aus_ist_leistung():
+    d = _decide(ac_charge_active=True, grid=-200.0, current_power=300.0)
+    assert (d.kind, d.value, d.action, d.ac_charge_mode, d.decay) == (
+        paths.AC_SET, 450.0, "act_ac_setpoint", True, False)
 
 
 @pytest.mark.parametrize("capped, action", [(False, "act_pi"), (True, "act_pi_sister_charging")])
