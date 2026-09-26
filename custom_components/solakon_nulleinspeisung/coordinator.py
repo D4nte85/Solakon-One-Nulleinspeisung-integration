@@ -4,7 +4,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from collections import deque, namedtuple
+from collections import namedtuple
 from typing import Any, Callable
 
 from datetime import timedelta
@@ -14,6 +14,7 @@ from homeassistant.helpers.event import async_track_state_change_event, async_tr
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
+from .dynamic_offset import DynamicOffset
 from .i18n import Msg, translate, translate_msgs
 from .pi import SATURATED, STEP, PIController, clamp as _clamp
 from .readings import (
@@ -35,14 +36,14 @@ from .const import (
     MODE_DISABLED, MODE_DISCHARGE, MODE_AC_CHARGE,
     OUTPUT_STALL_SECONDS, OUTPUT_STALL_DEVIATION,
     S_REGULATION_ENABLED,
-    S_P_FACTOR, S_I_FACTOR, S_TOLERANCE, S_WAIT_TIME, S_STDDEV_WINDOW, S_STDDEV_TRIM_COUNT,
+    S_P_FACTOR, S_I_FACTOR, S_TOLERANCE, S_WAIT_TIME,
     S_ZONE1_LIMIT, S_ZONE3_LIMIT, S_DISCHARGE_MAX, S_HARD_LIMIT_Z0, S_HARD_LIMIT_Z1,
-    S_OFFSET_1, S_OFFSET_2, S_PV_RESERVE,
+    S_PV_RESERVE,
     S_SURPLUS_ENABLED, S_SURPLUS_SOC_THRESHOLD, S_SURPLUS_SOC_HYST, S_SURPLUS_PV_HYST,
     S_SURPLUS_FORECAST_ENABLED, S_SURPLUS_FORECAST_THRESHOLD,
     S_SURPLUS_LOCK_ENABLED, S_SURPLUS_LOCK_SENSOR, S_SURPLUS_LOCK_FACTOR,
     S_AC_ENABLED, S_AC_SOC_TARGET, S_AC_POWER_LIMIT, S_AC_HYSTERESIS,
-    S_AC_OFFSET, S_AC_P_FACTOR, S_AC_I_FACTOR,
+    S_AC_P_FACTOR, S_AC_I_FACTOR,
     S_PERIODIC_ENABLED, S_PERIODIC_INTERVAL,
     S_TARIFF_ENABLED, S_TARIFF_PRICE_SENSOR, S_TARIFF_CHEAP_THRESHOLD,
     S_TARIFF_EXP_THRESHOLD, S_TARIFF_SOC_TARGET, S_TARIFF_SOC_HYST, S_TARIFF_POWER,
@@ -51,9 +52,7 @@ from .const import (
     S_ZONE1_FORCE_ENABLED, S_ZONE1_FORCE_SENSOR, S_ZONE1_FORCE_THRESHOLD, S_ZONE1_FORCE_MIN_SOC,
     S_NIGHT_ENABLED, S_NIGHT_HYSTERESIS, S_REST_IN_DISCHARGE,
     S_SELF_ADJUST, S_SELF_ADJUST_TOL,
-    S_DYN_Z1_ENABLED, S_DYN_Z1_MIN, S_DYN_Z1_MAX, S_DYN_Z1_NOISE, S_DYN_Z1_FACTOR, S_DYN_Z1_NEGATIVE,
-    S_DYN_Z2_ENABLED, S_DYN_Z2_MIN, S_DYN_Z2_MAX, S_DYN_Z2_NOISE, S_DYN_Z2_FACTOR, S_DYN_Z2_NEGATIVE,
-    S_DYN_AC_ENABLED, S_DYN_AC_MIN, S_DYN_AC_MAX, S_DYN_AC_NOISE, S_DYN_AC_FACTOR, S_DYN_AC_NEGATIVE,
+    S_DYN_Z1_ENABLED, S_DYN_Z2_ENABLED, S_DYN_AC_ENABLED,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -98,20 +97,6 @@ FEATURE_READINGS = (
     ("pv_forecast", "pv_forecast", "pv_forecast_enabled", "err_pv_forecast", UNIT_SCALE_KWH, False),
     ("zone1_force", "zone1_force", "zone1_force_enabled", "err_zone1_force", UNIT_SCALE_KWH, False),
 )
-
-# Dynamische Offsets: (Attribut, (Min, Max, Rauschen, Faktor, Negativ)).
-DYN_OFFSETS = (
-    ("dyn_offset_z1", (S_DYN_Z1_MIN, S_DYN_Z1_MAX, S_DYN_Z1_NOISE, S_DYN_Z1_FACTOR, S_DYN_Z1_NEGATIVE)),
-    ("dyn_offset_z2", (S_DYN_Z2_MIN, S_DYN_Z2_MAX, S_DYN_Z2_NOISE, S_DYN_Z2_FACTOR, S_DYN_Z2_NEGATIVE)),
-    ("dyn_offset_ac", (S_DYN_AC_MIN, S_DYN_AC_MAX, S_DYN_AC_NOISE, S_DYN_AC_FACTOR, S_DYN_AC_NEGATIVE)),
-)
-
-# Offset je Anzeigezone: (Enable-Setting, statisches Setting, Attribut des dynamischen Werts).
-OFFSET_SOURCES = {
-    "ac": (S_DYN_AC_ENABLED, S_AC_OFFSET, "dyn_offset_ac"),
-    "z1": (S_DYN_Z1_ENABLED, S_OFFSET_1, "dyn_offset_z1"),
-    "z2": (S_DYN_Z2_ENABLED, S_OFFSET_2, "dyn_offset_z2"),
-}
 
 # Kernsensoren der Instanz: (Konfigschlüssel, löst Regelzyklus aus, Pflicht für den Zyklus).
 # Ist-Leistung und Leistungssollwert werden gepollt und lösen keinen Zyklus aus.
@@ -187,31 +172,6 @@ TRACKERS = (
 )
 
 
-def _stddev_of(values: list[float]) -> float:
-    """Populations-Standardabweichung einer Werteliste."""
-    n = len(values)
-    mean = sum(values) / n
-    variance = sum((v - mean) ** 2 for v in values) / n
-    return round(variance ** 0.5, 1)
-
-
-def dynamic_offset(
-    stddev: float, min_off: int, max_off: int, noise: float, factor: float, negative: bool,
-) -> float:
-    """Offset = clamp(min + max(0, (StdDev − Rausch) × Faktor), min, max), mit `negative` negiert.
-
-    Bei `min_off >= max_off` oder negativer StdDev gilt `min_off`.
-    """
-    if min_off >= max_off:
-        result = min_off
-    elif stddev < 0:
-        result = min_off
-    else:
-        buf = max(0.0, (stddev - noise) * factor)
-        result = _clamp(round(min_off + buf), min_off, max_off)
-    return float(result * (-1 if negative else 1))
-
-
 class SolakonSettingsStore(Store):
     """Settings-Store mit Schemamigration."""
 
@@ -276,13 +236,7 @@ class SolakonCoordinator:
         self.last_output_ts: float = time.time()
         self.mode_label_ts: float = time.time()
 
-        self.grid_stddev: float = 0.0
-        self.grid_stddev_raw: float = 0.0
-
-        # Dynamischer Offset (berechnete Werte pro Zone)
-        self.dyn_offset_z1: float = 0.0
-        self.dyn_offset_z2: float = 0.0
-        self.dyn_offset_ac: float = 0.0
+        self.dyn = DynamicOffset()
 
         # Multi-Instanz: zugeteiltes Leistungslimit (None = Einzelbetrieb)
         self.allocated_power: float | None = None
@@ -332,13 +286,6 @@ class SolakonCoordinator:
     def _cycle_settings(self) -> CycleSettings:
         """Schnappschuss aller CYCLE_SETTINGS für einen Regelzyklus."""
         return CycleSettings(*(self._setting(key, cast) for _, key, cast in CYCLE_SETTINGS))
-
-    def _offset(self, zone: str) -> tuple[bool, Any, float]:
-        """(dynamisch, statischer Settings-Wert, wirksamer Offset) der Zone aus OFFSET_SOURCES."""
-        enabled_key, static_key, dyn_attr = OFFSET_SOURCES[zone]
-        dynamic = bool(self.settings.get(enabled_key, False))
-        static = self.settings.get(static_key)
-        return dynamic, static, getattr(self, dyn_attr) if dynamic else static
 
     # ── Lesen: Sensoren ──────────────────────────────────────────────────────
 
@@ -440,11 +387,6 @@ class SolakonCoordinator:
     def group(self) -> NetGroup:
         """Netzgruppe dieser Instanz aus dem Register."""
         return group_for(self.hass, self.grid_sensor)
-
-    @property
-    def _grid_samples(self) -> deque[tuple[float, float]]:
-        """StdDev-Ringpuffer (timestamp, value) der Netzgruppe, gefüllt vom Gruppen-Leader."""
-        return self.group.samples
 
     @property
     def member_id(self) -> str:
@@ -549,43 +491,6 @@ class SolakonCoordinator:
     def _store_data(self) -> dict:
         """Speicherinhalt: Settings plus gespeicherte Zustandsflags."""
         return {**self.settings, **self._persisted_flags()}
-
-    # ── Ableiten: StdDev und dynamischer Offset ──────────────────────────────
-
-    def _update_stddev(self, grid_value: float) -> None:
-        """Neuen Grid-Messwert in Ringpuffer aufnehmen und StdDev berechnen."""
-        now = time.monotonic()
-        window = self._setting(S_STDDEV_WINDOW, int)
-        cutoff = now - window
-
-        self._grid_samples.append((now, grid_value))
-
-        while self._grid_samples and self._grid_samples[0][0] < cutoff:
-            self._grid_samples.popleft()
-
-        n = len(self._grid_samples)
-        if n < 2:
-            self.grid_stddev = 0.0
-            self.grid_stddev_raw = 0.0
-            return
-
-        values = [s[1] for s in self._grid_samples]
-        self.grid_stddev_raw = _stddev_of(values)
-
-        # Getrimmte StdDev: die `trim` größten und kleinsten Samples im Fenster
-        # ausschließen, bevor die Streuung berechnet wird.
-        trim = self._setting(S_STDDEV_TRIM_COUNT, int)
-        if trim > 0 and n - 2 * trim >= 2:  # Fallback: mind. 2 Kernwerte nötig, sonst ungetrimmt
-            core = sorted(values)[trim: n - trim]
-            self.grid_stddev = _stddev_of(core)
-        else:
-            self.grid_stddev = self.grid_stddev_raw
-
-    def _update_dynamic_offsets(self) -> None:
-        """Dynamische Offsets für alle drei Zonen berechnen."""
-        for attr, keys in DYN_OFFSETS:
-            args = (self._setting(key, cast) for key, cast in zip(keys, (int, int, float, float, bool)))
-            setattr(self, attr, dynamic_offset(self.grid_stddev, *args))
 
     # ── Ableiten: Verteilung ─────────────────────────────────────────────────
 
@@ -696,7 +601,7 @@ class SolakonCoordinator:
         Kapazität in kWh aus dem Verteilungs-Sensor der Instanz, None ohne gültigen Wert.
         """
         offset_zone = "ac" if self.ac_charge_active else "z1" if self.cycle_active else "z2"
-        offset_dynamic, offset_static, offset_value = self._offset(offset_zone)
+        offset_dynamic, offset_static, offset_value = self.dyn.offset(offset_zone, self.settings)
         cap_sensor = str(self.group.dist_cfg().get(f"inst_{self.entry.entry_id}_capacity_sensor", ""))
         return {
             "offset_zone": offset_zone,
@@ -719,14 +624,14 @@ class SolakonCoordinator:
             "ac_charge_active": self.ac_charge_active,
             "tariff_charge_active": self.tariff_charge_active,
             "regulation_enabled": self.settings.get(S_REGULATION_ENABLED, False),
-            "grid_stddev": self.grid_stddev,
-            "grid_stddev_raw": self.grid_stddev_raw,
+            "grid_stddev": self.dyn.stddev,
+            "grid_stddev_raw": self.dyn.stddev_raw,
             "dyn_z1_enabled": self.settings.get(S_DYN_Z1_ENABLED, False),
             "dyn_z2_enabled": self.settings.get(S_DYN_Z2_ENABLED, False),
             "dyn_ac_enabled": self.settings.get(S_DYN_AC_ENABLED, False),
-            "dyn_offset_z1": self.dyn_offset_z1,
-            "dyn_offset_z2": self.dyn_offset_z2,
-            "dyn_offset_ac": self.dyn_offset_ac,
+            "dyn_offset_z1": self.dyn.z1,
+            "dyn_offset_z2": self.dyn.z2,
+            "dyn_offset_ac": self.dyn.ac,
             "active_fall": self.active_fall,
             "operating_state": self.operating_state,
             "operating_state_ts": self.operating_state_ts,
@@ -1244,20 +1149,16 @@ class SolakonCoordinator:
 
         # ── 2. StdDev und dynamische Offsets ─────────────────────────────────
         # StdDev ist eine Eigenschaft der Netzgruppe, nicht der einzelnen Instanz:
-        # nur der Gruppen-Leader pflegt den Ringpuffer, alle Instanzen übernehmen
-        # seinen Wert.
-        leader = self.group.leader()
-        if leader is self:
-            self._update_stddev(grid)
-        self.grid_stddev = leader.grid_stddev
-        self.grid_stddev_raw = leader.grid_stddev_raw
-        if any(self.settings[k] for k in (S_DYN_Z1_ENABLED, S_DYN_Z2_ENABLED, S_DYN_AC_ENABLED)):
-            self._update_dynamic_offsets()
+        # nur der Gruppen-Leader nimmt in den σ-Puffer auf, alle Instanzen übernehmen
+        # σ aus der Netzgruppe.
+        if self.group.leader() is self:
+            self.group.sigma.record(grid, time.monotonic(), self.settings)
+        self.dyn.update(self.group.sigma, self.settings)
 
         # ── 3. Settings und Feature-Sensoren ─────────────────────────────────
         cs = self._cycle_settings()
 
-        ac_offset = float(self._offset("ac")[2])
+        ac_offset = float(self.dyn.offset("ac", self.settings)[2])
 
         tariff_sensor = self._effective("tariff")
         feature = self._feature_values(cs)
@@ -1416,7 +1317,7 @@ class SolakonCoordinator:
         sister_charging = self.group.sister_charging(self)
         capped = sister_charging and self.cycle_active and mode == MODE_DISCHARGE
 
-        target_offset = float(self._offset("z1" if self.cycle_active else "z2")[2])
+        target_offset = float(self.dyn.offset("z1" if self.cycle_active else "z2", self.settings)[2])
 
         # ── 11b. Timeout-Reset ───────────────────────────────────────────────
         # Entfällt wenn ein Fall in diesem Zyklus bereits getoggelt hat

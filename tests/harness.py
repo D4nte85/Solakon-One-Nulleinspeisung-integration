@@ -27,6 +27,7 @@ ha_stubs.install()
 PKG = "custom_components.solakon_nulleinspeisung"
 integration = importlib.import_module(PKG)
 coordinator_mod = importlib.import_module(PKG + ".coordinator")
+dynamic_offset_mod = importlib.import_module(PKG + ".dynamic_offset")
 const = importlib.import_module(PKG + ".const")
 sensor_mod = importlib.import_module(PKG + ".sensor")
 binary_mod = importlib.import_module(PKG + ".binary_sensor")
@@ -325,7 +326,9 @@ def groups_state(hass):
 
 # Zustände, die in ein Teilobjekt gewandert sind: Protokollschlüssel → Pfad am Coordinator.
 COORD_PATHS = {"_tariff_unit_suspect_since": "tariff.unit_suspect_since",
-               "_output_warning": "_messages.hardware_msg"}
+               "_output_warning": "_messages.hardware_msg",
+               "grid_stddev": "dyn.stddev", "grid_stddev_raw": "dyn.stddev_raw",
+               "dyn_offset_z1": "dyn.z1", "dyn_offset_z2": "dyn.z2", "dyn_offset_ac": "dyn.ac"}
 
 
 def _coord_attr(coord, name):

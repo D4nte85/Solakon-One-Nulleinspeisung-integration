@@ -2,11 +2,11 @@
 from __future__ import annotations
 
 import math
-from collections import deque
 from dataclasses import dataclass
 from typing import Any, Callable, Protocol
 
 from .const import DIST_DEFAULTS, DOMAIN
+from .dynamic_offset import Sigma
 
 # Warnschlüssel bei Rückfall des Verteilungsmodus, je Grund: (Entlade-Pool, AC-Pool).
 # soc_switch kommt nur im Entlade-Pool vor.
@@ -108,7 +108,7 @@ def waterfill(active: dict[str, Member], shares: dict[str, float], global_max: f
 
 class NetGroup:
     """Alle Instanzen an einem Netzsensor. Mitglieder werden bei jedem Aufruf neu bestimmt,
-    Anteile je Aufruf neu gerechnet; gehalten werden StdDev-Puffer, gespeicherte Verteilung
+    Anteile je Aufruf neu gerechnet; gehalten werden σ-Puffer, gespeicherte Verteilung
     und `soc_switch`-Zustand. Änderungen am `soc_switch`-Zustand gehen an `on_soc_switch_change`."""
 
     def __init__(
@@ -117,7 +117,7 @@ class NetGroup:
     ) -> None:
         self.hass = hass
         self.grid_sensor = grid_sensor
-        self.samples: deque[tuple[float, float]] = deque()
+        self.sigma = Sigma()
         self.dist = dist
         self._soc_switch = soc_switch
         self._on_soc_switch_change = on_soc_switch_change

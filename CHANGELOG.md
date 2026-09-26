@@ -5,6 +5,11 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+### Geändert
+
+- **σ bleibt beim Leaderwechsel erhalten:** σ gehört jetzt der Netzgruppe, nicht dem Leader. Kommt ein neuer Leader wegen eines fehlenden Kernsensors nicht bis zur Messung, gilt für die übrigen Instanzen der letzte σ der Netzgruppe weiter. Bisher sprang er auf den eigenen Stand des neuen Leaders, oft 0.
+- Intern: Dynamic Offset (σ-Puffer, Formel, Offset je Zone) in eigenes Modul `dynamic_offset.py`.
+
 ### Behoben
 
 - **Kein Nullen des Outputs mehr bei Sensorausfall mitten im Regelzyklus:** Die PI-Phase liest Netz und PV nach den Falls ein zweites Mal. Fiel einer der beiden Sensoren nach der Kernsensor-Prüfung aus, rechnete sie still mit 0 W. In Zone 2 fiel dadurch die PI-Obergrenze auf 0 und der Output wurde genullt. Jetzt endet die PI-Phase ohne Schreibbefehl mit der Meldung „Sensor … nicht verfügbar oder ohne Zahlenwert“.

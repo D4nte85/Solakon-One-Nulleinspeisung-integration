@@ -124,7 +124,7 @@ class GridStdDevSensor(CoordinatorSensor):
     """Netz-Standardabweichung — intern berechnet aus Grid-Messwert-Stream."""
 
     def __init__(self, coord: SolakonCoordinator) -> None:
-        super().__init__(coord, "grid_stddev", lambda c: c.grid_stddev,
+        super().__init__(coord, "grid_stddev", lambda c: c.dyn.stddev,
                          icon="mdi:chart-bell-curve-cumulative", suggested_display_precision=1,
                          **POWER, **DIAG)
 
@@ -135,15 +135,15 @@ class GridStdDevSensor(CoordinatorSensor):
         dyn = any(s.get(k, False) for k in ("dyn_z1_enabled", "dyn_z2_enabled", "dyn_ac_enabled"))
         attrs = {
             "window_seconds": s.get("stddev_window", 60),
-            "sample_count": len(self._coordinator._grid_samples),
+            "sample_count": len(self._coordinator.group.sigma.samples),
             "trim_count": s.get("stddev_trim_count", 0),
-            "stddev_raw": self._coordinator.grid_stddev_raw,
+            "stddev_raw": self._coordinator.dyn.stddev_raw,
             "dynamic_offset_active": dyn,
         }
         if dyn:
-            attrs["dyn_offset_z1"] = self._coordinator.dyn_offset_z1
-            attrs["dyn_offset_z2"] = self._coordinator.dyn_offset_z2
-            attrs["dyn_offset_ac"] = self._coordinator.dyn_offset_ac
+            attrs["dyn_offset_z1"] = self._coordinator.dyn.z1
+            attrs["dyn_offset_z2"] = self._coordinator.dyn.z2
+            attrs["dyn_offset_ac"] = self._coordinator.dyn.ac
         return attrs
 
 
