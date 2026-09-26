@@ -31,7 +31,7 @@ def _ac_pi(p_factor: float, i_factor: float = 0.0):
 
 
 def _stellwert(netz, ist, sollwert):
-    return ac.setpoint(netz, ist, ist, sollwert, OFFSET, LIMIT, 1.0, TOLERANZ)
+    return ac.setpoint(netz, ist, ist, sollwert, OFFSET, LIMIT, 50.0, 1.0, TOLERANZ)
 
 
 def _abschnitte(regler):

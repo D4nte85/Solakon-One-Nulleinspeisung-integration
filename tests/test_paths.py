@@ -13,7 +13,7 @@ BASE = dict(
     grid=30.0, current_power=400.0, tolerance=25.0,
     surplus_active=False, ac_charge_active=False, tariff_charge_active=False, capped=False,
     zone0_power=1200.0, tariff_power=800.0,
-    ac_offset=-50.0, ac_limit=800.0, ac_share=1.0, ac_charge=300.0, ac_pool_charge=300.0,
+    ac_offset=-50.0, ac_limit=800.0, ac_min_charge=50.0, ac_share=1.0, ac_charge=300.0, ac_pool_charge=300.0,
     target_offset=30.0, dynamic_max=800.0, p_factor=1.3, i_factor=0.05, share=1.0,
     discharge_base=400.0,
 )

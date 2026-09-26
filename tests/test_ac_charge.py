@@ -10,8 +10,10 @@ from tests import harness as h
 ac = importlib.import_module(h.PKG + ".ac_charge")
 
 
-def _sp(grid, own=400.0, pool=None, output=400.0, offset=-50.0, limit=800.0, share=1.0, tolerance=15.0):
-    return ac.setpoint(grid, own, own if pool is None else pool, output, offset, limit, share, tolerance)
+def _sp(grid, own=400.0, pool=None, output=400.0, offset=-50.0, limit=800.0, share=1.0, tolerance=15.0,
+        min_charge=50.0):
+    return ac.setpoint(grid, own, own if pool is None else pool, output, offset, limit, min_charge, share,
+                       tolerance)
 
 
 @pytest.mark.parametrize("grid, expected", [
@@ -44,6 +46,19 @@ def test_ueber_gesenktem_limit_auch_in_toleranz():
 def test_mindestladeleistung(grid, output, expected):
     own = 400.0 if output else 0.0
     assert _sp(grid, own=own, output=output) == expected
+
+
+@pytest.mark.parametrize("min_charge, expected", [
+    (100.0, 0.0),    # Stellwert 80 W unter der eingestellten Mindestladeleistung → 0
+    (0.0, 80.0),     # Mindestladeleistung 0: jeder Stellwert wird geschrieben
+])
+def test_mindestladeleistung_einstellbar(min_charge, expected):
+    assert _sp(270.0, min_charge=min_charge) == expected
+
+
+def test_mindestladeleistung_ueber_limit():
+    # Mindestladeleistung 300 W über Max. Ladeleistung 200 W: das Limit gilt als Schwelle
+    assert _sp(-900.0, own=0.0, output=0.0, limit=200.0, min_charge=300.0) == 200.0
 
 
 @pytest.mark.parametrize("grid, expected", [

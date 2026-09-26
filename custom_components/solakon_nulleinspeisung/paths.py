@@ -30,6 +30,7 @@ class PathInputs:
     tariff_power: float
     ac_offset: float
     ac_limit: float
+    ac_min_charge: float
     ac_share: float
     ac_charge: float
     ac_pool_charge: float
@@ -74,7 +75,8 @@ def decide(inp: PathInputs) -> PathDecision:
 
     if inp.ac_charge_active:
         value = ac_setpoint(inp.grid, inp.ac_charge, inp.ac_pool_charge, inp.current_power,
-                            inp.ac_offset, inp.ac_limit, inp.ac_share, inp.tolerance)
+                            inp.ac_offset, inp.ac_limit, inp.ac_min_charge, inp.ac_share,
+                            inp.tolerance)
         if value is None:
             return PathDecision(IDLE)
         return PathDecision(AC_SET, value, "act_ac_setpoint", ac_charge_mode=True)

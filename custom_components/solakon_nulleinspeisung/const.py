@@ -151,6 +151,7 @@ S_AC_ENABLED     = "ac_enabled"
 S_AC_SOC_TARGET  = "ac_soc_target"
 S_AC_POWER_LIMIT = "ac_power_limit"
 S_AC_HYSTERESIS  = "ac_hysteresis"
+S_AC_MIN_POWER   = "ac_min_power"
 S_AC_OFFSET      = "ac_offset"
 
 S_TARIFF_ENABLED          = "tariff_enabled"
@@ -302,6 +303,7 @@ SETTINGS_SCHEMA: dict[str, Field] = {
     S_AC_SOC_TARGET:  _int(90, PERCENT, 0, 100, 1),
     S_AC_POWER_LIMIT: _int(800, POWER, 100, 1200, 50),
     S_AC_HYSTERESIS:  _int(50, AMOUNT, 10, 500, 10),
+    S_AC_MIN_POWER:   _int(50, POWER, 0, 300, 10),
     S_AC_OFFSET:      _int(-50, SIGNED, -500, 200, 5),
 
     S_TARIFF_ENABLED:         _bool(),

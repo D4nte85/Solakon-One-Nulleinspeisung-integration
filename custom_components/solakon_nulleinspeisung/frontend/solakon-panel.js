@@ -185,6 +185,7 @@ const TAB_LAYOUT = {
         fields: [
           { k: "ac_soc_target",  t: "num" },
           { k: "ac_power_limit", t: "num" },
+          { k: "ac_min_power",   t: "num" },
           { k: "ac_hysteresis",  t: "num" },
           { k: "ac_offset",      t: "num" },
         ],
