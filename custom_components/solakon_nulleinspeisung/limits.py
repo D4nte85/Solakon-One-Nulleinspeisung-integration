@@ -25,6 +25,10 @@ class PowerLimits:
         """Hard-Limit der aktuellen Zone: Zone 0 bei Überschuss, sonst Zone 1/2."""
         return self.zone0 if surplus_active else self.zone12
 
+    def surplus_power(self, surplus_active: bool, solar: float, actual: float) -> float:
+        """Verwertbarer PV-Überschuss: Minimum aus Hard-Limit der Zone und PV minus Ist-Leistung, geklemmt auf ≥0."""
+        return max(0.0, min(self.zone_max(surplus_active), solar) - actual)
+
     def pi_max(self, mode: str, cycle_active: bool, solar: float, sister_charging: bool = False) -> float:
         """Obergrenze des PI: AC-Grenze in Modus '3', Zone-1/2-Limit mit Zyklus, sonst zusätzlich PV minus Reserve.
 

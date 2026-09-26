@@ -15,6 +15,7 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 - Intern: Regelzustand, Ruhezustand und Entladestrom je Regelzustand als reine Funktionen in `zones.py` (`control_state`, `rest_mode`, `at_rest`, `required_discharge`). Verhalten unverändert.
 - Intern: Surplus- und Nacht-Vorstufe getrennt und mit eigenem Zustand in `zones.py` (`Surplus` mit PV-0-Entprellung und voriger Ist-Leistung, `Night` mit Dunkelheits-Hysterese). Speicherschlüssel unverändert, Verhalten unverändert.
 - Intern: Die Falls übergeben die zu setzenden Zustandsflags als `FlagUpdate` statt als Attributnamen des Coordinators. Verhalten unverändert.
+- Intern: Pool-Summen der Netzgruppe als `NetGroup.discharge_actual` und `NetGroup.pi_base`, verwertbarer PV-Überschuss als `PowerLimits.surplus_power`. Verhalten unverändert.
 
 ### Behoben
 

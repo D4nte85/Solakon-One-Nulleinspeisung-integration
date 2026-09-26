@@ -22,7 +22,7 @@ from .readings import (
     NO_SENSOR, NOT_NUMERIC, UNAVAILABLE, UNIT_SCALE_KILO, UNIT_SCALE_KWH, UNIT_SCALE_W,
     WRONG_DOMAIN, read_number, read_scaled, unit_of, valid_state,
 )
-from .grid_group import NetGroup, Shares, pool_sum
+from .grid_group import NetGroup, Shares
 from .group_store import group_for
 from .limits import PowerLimits, power_limits
 from .messages import CycleMessages
@@ -1038,11 +1038,9 @@ class SolakonCoordinator:
             ac_power_limit=cs.ac_power_limit, pv_reserve=cs.pv_reserve, allocated=allocated_power,
         )
 
-        # Verwertbarer PV-Überschuss: Luft zwischen dem aktuellen Output und dem
-        # Minimum aus geltendem Hard-Limit und aktueller PV-Leistung, geklemmt auf ≥0.
         # Nutzt die Zone des vorherigen Zyklus — self.surplus_active ist hier noch
         # nicht aktualisiert.
-        self.surplus_power = max(0.0, min(limits.zone_max(self.surplus_active), solar) - actual)
+        self.surplus_power = limits.surplus_power(self.surplus_active, solar, actual)
 
         # ── 5. Prognoseflags ─────────────────────────────────────────────────
         forecast = forecast_flags(
@@ -1087,8 +1085,7 @@ class SolakonCoordinator:
             self._messages.warn(tariff.unit_warning)
 
         # ── 8. Überschuss und Nacht ──────────────────────────────────────────
-        total_actual = pool_sum(self.group.discharge_pool(), self, actual,
-                                           lambda m: m.actual_power())
+        total_actual = self.group.discharge_actual(self, actual)
 
         new_surplus = self.surplus.step(
             surplus_enabled=cs.surplus_enabled, surplus_active=self.surplus_active,
@@ -1210,8 +1207,7 @@ class SolakonCoordinator:
             if self.pi.gate_ac(grid, ac_offset, cs.tolerance) == STEP:
                 await self._pi_step(
                     grid,
-                    pool_sum(self.group.ac_pool(), self, current_power,
-                                        lambda m: m.output_setpoint()) * ac_error_share,
+                    self.group.pi_base(self, current_power, ac_error_share, ac=True),
                     ac_offset, limits.ac, cs.ac_p, cs.ac_i, ac_error_share, current_power,
                     "act_ac_pi", ac_charge_mode=True,
                 )
@@ -1224,8 +1220,7 @@ class SolakonCoordinator:
             if gate == STEP:
                 await self._pi_step(
                     grid,
-                    pool_sum(self.group.discharge_pool(), self, current_power,
-                                        lambda m: m.output_setpoint()) * error_share,
+                    self.group.pi_base(self, current_power, error_share),
                     target_offset, dynamic_max, cs.p_factor, cs.i_factor, error_share, current_power,
                     "act_pi_sister_charging" if capped else "act_pi",
                 )

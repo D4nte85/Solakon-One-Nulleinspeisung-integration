@@ -106,6 +106,21 @@ def test_pool_sum_eigener_wert_immer_fremde_ueber_reader():
     assert group.pool_sum({"a": a, "b": b}, a, 10, lambda m: m.actual_power()) == 110
 
 
+
+def test_discharge_actual_summiert_entlade_pool():
+    a, b = M("a", actual=999), M("b", actual=100)
+    c = M("c", actual=50, discharge=False)
+    _, g = _group(a, b, c)
+    assert g.discharge_actual(a, 10) == 110
+
+
+@pytest.mark.parametrize("ac, erwartet", [(False, (10 + 100) * 0.5), (True, (10 + 50) * 0.5)])
+def test_pi_base_pool_mal_anteil(ac, erwartet):
+    a, b = M("a", setpoint=999), M("b", setpoint=100)
+    c = M("c", setpoint=50, discharge=False, ac_charge_active=True)
+    _, g = _group(a, b, c)
+    assert g.pi_base(a, 10, 0.5, ac=ac) == erwartet
+
 def test_config_mit_defaults():
     _, g = _group(dist={"global_max_power": 500})
     cfg = g.dist_cfg()

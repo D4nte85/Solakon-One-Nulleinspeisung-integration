@@ -36,6 +36,16 @@ def test_zonengrenzen(z0, z1, allocated, zone0, zone12):
     assert lim.zone_max(False) == zone12
 
 
+
+@pytest.mark.parametrize("surplus, solar, actual, erwartet", [
+    (True, 1000, 300, 500),     # Zone-0-Limit 800 begrenzt
+    (False, 1000, 300, 300),    # Zone-1/2-Limit 600 begrenzt
+    (False, 400, 300, 100),     # PV begrenzt
+    (False, 200, 300, 0),       # geklemmt auf 0
+])
+def test_surplus_power(surplus, solar, actual, erwartet):
+    assert _limits().surplus_power(surplus, solar, actual) == erwartet
+
 @pytest.mark.parametrize("ac, erwartet", [(700, 700), (MAX, MAX), (1500, MAX)])
 def test_ac_grenze_gedeckelt(ac, erwartet):
     lim = _limits(ac_power_limit=ac, allocated=300.0)
