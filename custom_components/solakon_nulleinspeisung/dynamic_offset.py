@@ -115,3 +115,12 @@ class DynamicOffset:
         dynamic = bool(settings.get(enabled_key, False))
         static = settings.get(static_key)
         return dynamic, static, getattr(self, zone) if dynamic else static
+
+    def value(self, zone: str, settings: dict) -> float:
+        """Wirksamer Offset der Zone in W."""
+        return float(self.offset(zone, settings)[2])
+
+    @staticmethod
+    def zone_of(ac_charge: bool, cycle: bool) -> str:
+        """Offsetzone des Regelzustands: AC-Laden `ac`, sonst Zyklus `z1`, sonst `z2`."""
+        return "ac" if ac_charge else "z1" if cycle else "z2"

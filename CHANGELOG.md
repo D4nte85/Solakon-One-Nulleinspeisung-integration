@@ -10,6 +10,7 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 - **σ bleibt beim Leaderwechsel erhalten:** σ gehört jetzt der Netzgruppe, nicht dem Leader. Kommt ein neuer Leader wegen eines fehlenden Kernsensors nicht bis zur Messung, gilt für die übrigen Instanzen der letzte σ der Netzgruppe weiter. Bisher sprang er auf den eigenen Stand des neuen Leaders, oft 0.
 - Intern: Dynamic Offset (σ-Puffer, Formel, Offset je Zone) in eigenes Modul `dynamic_offset.py`.
 - Intern: Ausgangsleistung (Schreiben, Warten, Nullbestätigung, Stillstandserkennung) in eigenes Modul `output.py`, Verhalten unverändert.
+- Intern: Offsetzone des Regelzustands und wirksamer Offset als `DynamicOffset.zone_of` und `DynamicOffset.value`; Stillstandswarnung über denselben Weg wie die übrigen Schreibwarnungen. Verhalten unverändert.
 
 ### Behoben
 

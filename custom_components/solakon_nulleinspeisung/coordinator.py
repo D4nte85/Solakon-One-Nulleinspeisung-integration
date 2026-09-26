@@ -592,7 +592,7 @@ class SolakonCoordinator:
         Offsetzone: AC-Laden, sonst Zone 1 bei aktivem Zyklus, sonst Zone 2.
         Kapazität in kWh aus dem Verteilungs-Sensor der Instanz, None ohne gültigen Wert.
         """
-        offset_zone = "ac" if self.ac_charge_active else "z1" if self.cycle_active else "z2"
+        offset_zone = DynamicOffset.zone_of(self.ac_charge_active, self.cycle_active)
         offset_dynamic, offset_static, offset_value = self.dyn.offset(offset_zone, self.settings)
         cap_sensor = str(self.group.dist_cfg().get(f"inst_{self.entry.entry_id}_capacity_sensor", ""))
         return {
@@ -718,10 +718,10 @@ class SolakonCoordinator:
 
     # ── Schreiben: Ausgangsleistung ──────────────────────────────────────────
 
-    def _warn_hardware(self, key: str, params: dict) -> None:
-        """Schreibwarnung in die Fehlerkette des laufenden Regelzyklus und ins Log."""
+    def _warn_hardware(self, key: str, params: dict, log_suffix: str = "") -> None:
+        """Schreibwarnung in die Fehlerkette des laufenden Regelzyklus und ins Log; `log_suffix` nur im Log."""
         self._messages.hardware((key, params))
-        _LOGGER.error("Solakon: %s", self._tr(key, **params))
+        _LOGGER.error("Solakon: %s%s", self._tr(key, **params), log_suffix)
 
     async def _handle_output_stall(self, limit: float) -> None:
         """Stillstand prüfen und das Urteil umsetzen.
@@ -737,9 +737,8 @@ class SolakonCoordinator:
         if stall is Stall.REWRITTEN:
             self._set_last_action("act_output_rewritten", actual=actual, limit=limit)
             return
-        self._messages.hardware(("warn_output_stuck", {"actual": actual, "limit": limit}))
-        _LOGGER.error("Solakon: %s (Versuch %d)", self._tr("warn_output_stuck", actual=actual, limit=limit),
-                      self.out.stall_actions)
+        self._warn_hardware("warn_output_stuck", {"actual": actual, "limit": limit},
+                            f" (Versuch {self.out.stall_actions})")
         await self._transition(reset_integral=True, output=0, rest=True)
         self._set_last_action("act_output_recovery", actual=actual, limit=limit)
 
@@ -1025,7 +1024,7 @@ class SolakonCoordinator:
         # ── 3. Settings und Feature-Sensoren ─────────────────────────────────
         cs = self._cycle_settings()
 
-        ac_offset = float(self.dyn.offset("ac", self.settings)[2])
+        ac_offset = self.dyn.value("ac", self.settings)
 
         tariff_sensor = self._effective("tariff")
         feature = self._feature_values(cs)
@@ -1184,7 +1183,7 @@ class SolakonCoordinator:
         sister_charging = self.group.sister_charging(self)
         capped = sister_charging and self.cycle_active and mode == MODE_DISCHARGE
 
-        target_offset = float(self.dyn.offset("z1" if self.cycle_active else "z2", self.settings)[2])
+        target_offset = self.dyn.value(DynamicOffset.zone_of(self.ac_charge_active, self.cycle_active), self.settings)
 
         # ── 11b. Timeout-Reset ───────────────────────────────────────────────
         # Entfällt wenn ein Fall in diesem Zyklus bereits getoggelt hat
