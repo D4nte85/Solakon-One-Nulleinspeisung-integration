@@ -30,8 +30,8 @@ from .output import Actual, Output, Stall
 from .schema import InvalidSettings, check, notify_reset, sanitize
 from .tariff import Tariff, forecast_suppressed
 from .zones import (
-    Night, Surplus, ZoneInputs, at_rest, control_state, decide, forecast_flags, required_discharge,
-    rest_mode,
+    FlagUpdate, Night, Surplus, ZoneInputs, at_rest, control_state, decide, forecast_flags,
+    required_discharge, rest_mode,
 )
 from .const import (
     DOMAIN, STORAGE_VERSION, SETTINGS_DEFAULTS, SETTINGS_SCHEMA,
@@ -747,22 +747,29 @@ class SolakonCoordinator:
     # ── Schreiben: Zustandsübergang und Integral ─────────────────────────────
 
     async def _transition(
-        self, *, reset_integral: bool = False, flags: dict[str, bool] | None = None,
+        self, *, reset_integral: bool = False, flags: FlagUpdate | None = None,
         output: float | None = None, wait: bool = True, ac_charge_mode: bool = False,
         timer: bool = True, timer_first: bool = False, mode: str | None = None,
         rest: bool = False,
     ) -> None:
         """Zustandsübergang in fester Folge: Integral, Flags, Output, Timer, Modus.
 
-        `flags` setzt nur die übergebenen Zustandsflags. `output` None lässt die
+        `flags` setzt nur die Zustandsflags, die nicht None sind. `output` None lässt die
         Ausgangsleistung unberührt, `wait=False` schreibt sie ohne Konvergenzwarten.
         `timer_first` schaltet den Timer vor den Output. `mode` None schreibt keinen Modus.
         `rest` schreibt den Ruhemodus statt `mode`; jeder geschriebene Modus setzt `resting`.
         """
         if reset_integral:
             self.pi.reset()
-        for name, value in (flags or {}).items():
-            setattr(self, name, value)
+        if flags is not None:
+            if flags.cycle_active is not None:
+                self.cycle_active = flags.cycle_active
+            if flags.surplus_active is not None:
+                self.surplus_active = flags.surplus_active
+            if flags.ac_charge_active is not None:
+                self.ac_charge_active = flags.ac_charge_active
+            if flags.tariff_charge_active is not None:
+                self.tariff_charge_active = flags.tariff_charge_active
         if timer and timer_first:
             await self._timer_toggle()
         if output is not None:

@@ -84,13 +84,13 @@ def test_reihenfolge(kw, name):
 
 def test_0a_ohne_moduswechsel_in_laufendem_modus_1():
     d = _decide(surplus_enabled=True, new_surplus=True, mode="1", at_rest=False)
-    assert d.transition == {"flags": {"surplus_active": True, "cycle_active": True},
+    assert d.transition == {"flags": zones.FlagUpdate(surplus_active=True, cycle_active=True),
                             "timer": False, "mode": None}
 
 
 def test_0b_leitet_zyklus_aus_soc_ab():
     d = _decide(surplus_active=True, soc=70)
-    assert d.transition["flags"] == {"surplus_active": False, "cycle_active": True}
+    assert d.transition["flags"] == zones.FlagUpdate(surplus_active=False, cycle_active=True)
 
 
 def test_a_erzwungen_unter_zone1():
@@ -119,7 +119,7 @@ def test_d_durch_tarif_lock_gesperrt():
 def test_end_charge_ruhe_nur_ohne_zyklus(cycle_active, rest):
     d = _decide(ac_enabled=True, ac_charge_active=True, mode="3", at_rest=False, soc=95,
                 cycle_active=cycle_active)
-    assert d.transition == {"reset_integral": True, "flags": {"ac_charge_active": False},
+    assert d.transition == {"reset_integral": True, "flags": zones.FlagUpdate(ac_charge_active=False),
                             "output": 0, "mode": "1", "rest": rest}
     assert d.action == "act_fall_h"
 
@@ -142,7 +142,7 @@ def test_gt_startet_nicht_neben_laufender_ac_session():
 def test_i_loescht_flags_und_laesst_modus_stehen():
     d = _decide(ac_enabled=True, ac_charge_active=True, mode="1", at_rest=False)
     assert d.transition == {"reset_integral": True,
-                            "flags": {"ac_charge_active": False, "tariff_charge_active": False}}
+                            "flags": zones.FlagUpdate(ac_charge_active=False, tariff_charge_active=False)}
     assert (d.action, d.warn) == ("act_fall_i_session", None)
 
 

@@ -80,6 +80,16 @@ class ZoneInputs:
 
 
 @dataclass(frozen=True)
+class FlagUpdate:
+    """Zu setzende Zustandsflags eines Übergangs; None lässt das Flag unverändert."""
+
+    cycle_active: bool | None = None
+    surplus_active: bool | None = None
+    ac_charge_active: bool | None = None
+    tariff_charge_active: bool | None = None
+
+
+@dataclass(frozen=True)
 class FallDecision:
     """Getroffener Fall: Übergang (Argumente für `_transition`), Aktionstext, Warnung."""
 
@@ -90,10 +100,10 @@ class FallDecision:
     warn: tuple[str, dict] | None = None
 
 
-def _end_charge(name: str, flag: str, action_key: str, cycle_active: bool) -> FallDecision:
-    """Lade-Session beenden: Integral, Flag, Output 0, Rückkehrmodus, Aktionstext."""
+def _end_charge(name: str, flags: FlagUpdate, action_key: str, cycle_active: bool) -> FallDecision:
+    """Lade-Session beenden: Integral, Flags, Output 0, Rückkehrmodus, Aktionstext."""
     return FallDecision(name, {
-        "reset_integral": True, "flags": {flag: False}, "output": 0,
+        "reset_integral": True, "flags": flags, "output": 0,
         "mode": MODE_DISCHARGE, "rest": not cycle_active,
     }, action_key)
 
@@ -239,7 +249,7 @@ def decide(inp: ZoneInputs) -> FallDecision | None:
         # Zone 0 setzt immer auf einem aktiven Zone-1-Zyklus auf
         switch = mode != MODE_DISCHARGE or inp.at_rest
         return FallDecision("0A", {
-            "flags": {"surplus_active": True, "cycle_active": True},
+            "flags": FlagUpdate(surplus_active=True, cycle_active=True),
             "timer": switch, "mode": MODE_DISCHARGE if switch else None,
         }, "act_surplus_on")
 
@@ -249,7 +259,7 @@ def decide(inp: ZoneInputs) -> FallDecision | None:
         # Zone nach Overlay-Ende aus dem SOC ableiten
         return FallDecision("0B", {
             "reset_integral": True,
-            "flags": {"surplus_active": False, "cycle_active": soc > zone1},
+            "flags": FlagUpdate(surplus_active=False, cycle_active=soc > zone1),
             "output": 0, "timer": False,
         }, "act_surplus_off")
 
@@ -269,8 +279,8 @@ def decide(inp: ZoneInputs) -> FallDecision | None:
         action = "act_fall_a_forced" if zone1_forced and soc <= zone1 else "act_fall_a"
         return FallDecision("A", {
             "reset_integral": True,
-            "flags": {"cycle_active": True, "surplus_active": False,
-                      "ac_charge_active": False, "tariff_charge_active": False},
+            "flags": FlagUpdate(cycle_active=True, surplus_active=False,
+                      ac_charge_active=False, tariff_charge_active=False),
             "mode": MODE_DISCHARGE,
         }, action, {"soc": soc})
 
@@ -283,8 +293,8 @@ def decide(inp: ZoneInputs) -> FallDecision | None:
     ):
         return FallDecision("B", {
             "reset_integral": True,
-            "flags": {"cycle_active": False, "surplus_active": False,
-                      "ac_charge_active": False, "tariff_charge_active": False},
+            "flags": FlagUpdate(cycle_active=False, surplus_active=False,
+                      ac_charge_active=False, tariff_charge_active=False),
             "output": 0, "rest": True,
         }, "act_fall_b", {"soc": soc})
 
@@ -297,8 +307,8 @@ def decide(inp: ZoneInputs) -> FallDecision | None:
         and not inp.at_rest
     ):
         return FallDecision("C", {
-            "flags": {"surplus_active": False, "ac_charge_active": False,
-                      "tariff_charge_active": False},
+            "flags": FlagUpdate(surplus_active=False, ac_charge_active=False,
+                      tariff_charge_active=False),
             "output": 0, "rest": True,
         }, "act_fall_c")
 
@@ -333,7 +343,7 @@ def decide(inp: ZoneInputs) -> FallDecision | None:
         and mode != MODE_AC_CHARGE
     ):
         return FallDecision("GT", {
-            "flags": {"tariff_charge_active": True}, "output": inp.tariff_power,
+            "flags": FlagUpdate(tariff_charge_active=True), "output": inp.tariff_power,
             "ac_charge_mode": True, "timer_first": True, "mode": MODE_AC_CHARGE,
         }, "act_fall_gt", {"price": inp.tariff.price})
 
@@ -347,7 +357,7 @@ def decide(inp: ZoneInputs) -> FallDecision | None:
             or soc >= inp.tariff_soc
         )
     ):
-        return _end_charge("HT", "tariff_charge_active", "act_fall_ht", inp.cycle_active)
+        return _end_charge("HT", FlagUpdate(tariff_charge_active=False), "act_fall_ht", inp.cycle_active)
 
     # ── Discharge-Lock (Preis < Teuer-Schwelle) ──────────────────────────────
     # Sperrt Zone 1 und Zone 2 solange Preis < teuer (günstig UND mittel).
@@ -357,7 +367,7 @@ def decide(inp: ZoneInputs) -> FallDecision | None:
         and not inp.at_rest
     ):
         return FallDecision("TM", {
-            "reset_integral": True, "flags": {"cycle_active": False}, "output": 0, "rest": True,
+            "reset_integral": True, "flags": FlagUpdate(cycle_active=False), "output": 0, "rest": True,
         }, "act_fall_tm", {"price": inp.tariff.price})
 
     # ── Fall G: AC Laden Start ───────────────────────────────────────────────
@@ -373,7 +383,7 @@ def decide(inp: ZoneInputs) -> FallDecision | None:
         and (inp.grid + inp.total_actual) < -inp.ac_hysteresis
     ):
         return FallDecision("G", {
-            "flags": {"ac_charge_active": True}, "output": 0,
+            "flags": FlagUpdate(ac_charge_active=True), "output": 0,
             "ac_charge_mode": True, "timer_first": True, "mode": MODE_AC_CHARGE,
         }, "act_fall_g")
 
@@ -391,7 +401,7 @@ def decide(inp: ZoneInputs) -> FallDecision | None:
             )
         )
     ):
-        return _end_charge("H", "ac_charge_active", "act_fall_h", inp.cycle_active)
+        return _end_charge("H", FlagUpdate(ac_charge_active=False), "act_fall_h", inp.cycle_active)
 
     # ── Fall I: Safety — Modus und Lade-Session widersprechen sich ───────────
     # Zwei Richtungen: Modus '3' ohne Session, und Session ohne Modus '3' bzw.
@@ -401,7 +411,7 @@ def decide(inp: ZoneInputs) -> FallDecision | None:
     if both_sessions or (session and mode != MODE_AC_CHARGE):
         return FallDecision("I", {
             "reset_integral": True,
-            "flags": {"ac_charge_active": False, "tariff_charge_active": False},
+            "flags": FlagUpdate(ac_charge_active=False, tariff_charge_active=False),
         }, "act_fall_i_session", warn=("warn_double_session", {}) if both_sessions else None)
     if mode == MODE_AC_CHARGE and not session:
         return FallDecision("I", {
