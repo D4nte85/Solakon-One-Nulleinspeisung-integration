@@ -19,6 +19,7 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 - Intern: Settings-Schicht in `schema.py`: Zyklus-Schnappschuss (`CYCLE_SETTINGS`, `cycle_settings`), Prüfung der SOC-Grenzen gegeneinander (`soc_conflict`) und der Settings-Store mit Migration. Die SOC-Prüfung blockiert weiter im Regelzyklus. Verhalten unverändert.
 - Intern: Feature-Sensoren in eigenes Modul `feature_sensors.py`: wirksamer Sensor je Vorgabe (lokal vor global, `zone1_force` ab 12 Uhr mit der Vorhersage für morgen), Werte in Zieleinheit mit Meldung ohne Zahl, Tarifpreis mit Einheit aus einer Lesung. Verhalten unverändert.
 - Intern: Anzeigezustand als Objekt `Display` in `display.py`: Anzeigezone, Modus mit Label und Zeitstempel sowie Betriebszustand an einer Stelle; das Setzen des Modus steht nur noch in `Display.set_mode`. Verhalten unverändert.
+- Intern: Timer-Toggle und Timeout-Reset als Objekt `Timeout` in `timeout.py`, unverändert verschoben. Verhalten unverändert.
 
 ### Behoben
 

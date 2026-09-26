@@ -336,7 +336,8 @@ COORD_PATHS = {"_tariff_unit_suspect_since": "tariff.unit_suspect_since",
                "current_zone": "display.zone", "zone_label": "display.zone_label",
                "mode_key": "display.mode_key", "mode_label": "display.mode_label",
                "mode_label_ts": "display.mode_ts", "operating_state": "display.operating_state",
-               "operating_state_ts": "display.operating_state_ts"}
+               "operating_state_ts": "display.operating_state_ts",
+               "_timer_toggled_in_cycle": "timeout.toggled_in_cycle"}
 
 
 def _coord_attr(coord, name):

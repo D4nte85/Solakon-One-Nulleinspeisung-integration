@@ -29,6 +29,7 @@ from .schema import (
     soc_conflict,
 )
 from .tariff import Tariff, forecast_suppressed
+from .timeout import Timeout
 from .zones import (
     FlagUpdate, Night, Surplus, ZoneInputs, at_rest, control_state, decide, forecast_flags,
     required_discharge, rest_mode,
@@ -138,7 +139,11 @@ class SolakonCoordinator:
         self.surplus = Surplus()
 
         # Interne Mechanik
-        self._timer_toggled_in_cycle: bool = False
+        self.timeout = Timeout(
+            lambda value: self._set_number(self.entry.data[CONF_TIMEOUT_SET], value),
+            lambda: self._flt(self.entry.data[CONF_TIMEOUT_SET], 3599),
+            lambda: self._entity_ok(self.entry.data[CONF_TIMEOUT_COUNTDOWN]),
+        )
         self._lock = asyncio.Lock()
         self._listeners: list[Callable[[], None]] = []
         self._unsub_trackers: list[Callable] = []
@@ -481,15 +486,6 @@ class SolakonCoordinator:
         if await self._set_number(export_entity, target, only_if_changed=True, current=current):
             _LOGGER.info("Solakon: Export-Limit korrigiert %d → %d W", int(current), target)
 
-    async def _timer_toggle(self) -> None:
-        """Timer-Wechsel 3598↔3599 — erzwingt sichere Modus-Übernahme."""
-        timer_eid = self.entry.data[CONF_TIMEOUT_SET]
-        current = self._flt(timer_eid, 3599)
-        new_val = 3598.0 if current >= 3599 else 3599.0
-        await self._set_number(timer_eid, new_val)
-        self._timer_toggled_in_cycle = True
-        await asyncio.sleep(1)
-
     # ── Schreiben: Ausgangsleistung ──────────────────────────────────────────
 
     def _warn_hardware(self, key: str, params: dict, log_suffix: str = "") -> None:
@@ -564,14 +560,14 @@ class SolakonCoordinator:
             if flags.tariff_charge_active is not None:
                 self.tariff_charge_active = flags.tariff_charge_active
         if timer and timer_first:
-            await self._timer_toggle()
+            await self.timeout.toggle()
         if output is not None:
             if wait:
                 await self.out.set_and_wait(output, ac_charge_mode=ac_charge_mode)
             else:
                 await self.out.set(output)
         if timer and not timer_first:
-            await self._timer_toggle()
+            await self.timeout.toggle()
         if rest:
             mode = rest_mode(self._setting(S_REST_IN_DISCHARGE, bool))
         if mode is not None:
@@ -778,7 +774,7 @@ class SolakonCoordinator:
             self._end_cycle(notify_on_change=True)
             return
 
-        self._timer_toggled_in_cycle = False
+        self.timeout.start_cycle()
         self._messages = CycleMessages()
         self._cycle_blocked = False
 
@@ -966,8 +962,7 @@ class SolakonCoordinator:
 
         # ── 11b. Timeout-Reset ───────────────────────────────────────────────
         # Entfällt wenn ein Fall in diesem Zyklus bereits getoggelt hat
-        if timer_val < 120 and not self._timer_toggled_in_cycle and self._entity_ok(cfg[CONF_TIMEOUT_COUNTDOWN]):
-            await self._timer_toggle()
+        await self.timeout.reset_if_due(timer_val)
 
         if self._at_rest(mode):
             return False
