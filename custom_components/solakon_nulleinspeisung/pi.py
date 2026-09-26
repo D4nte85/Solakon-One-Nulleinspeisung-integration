@@ -5,7 +5,7 @@ from .const import DEVICE_MAX_POWER
 
 # Ergebnisse der Gates.
 STEP = "step"            # PI-Schritt ausführen
-HOLD = "hold"            # nichts schreiben, Integral klingt ab
+HOLD = "hold"            # nichts schreiben
 SATURATED = "saturated"  # wie HOLD, Ausgang steht am Limit und könnte höher
 
 
@@ -14,8 +14,27 @@ def clamp(value, lo, hi):
     return max(lo, min(hi, value))
 
 
+def gate_discharge(grid: float, current: float, offset: float, limit: float, tolerance: float) -> str:
+    """Gate des Entlade-PI: Toleranz, Sättigung oben, Überschreitung des Limits, Untergrenze.
+
+    Über `limit` gibt es auch bei Netzfehler in der Toleranz einen Schritt.
+    """
+    error = grid - offset
+    above_limit = current > limit
+    saturated_high = current >= limit and not above_limit and error > 0
+    if ((abs(error) > tolerance or above_limit)
+            and not saturated_high and not (current <= 0 and error < 0)):
+        return STEP
+    return SATURATED if saturated_high else HOLD
+
+
+def gate_ac(grid: float, offset: float, tolerance: float) -> str:
+    """Gate des AC-Lade-PI: nur Toleranz, keine Guards an den Grenzen."""
+    return STEP if abs(grid - offset) > tolerance else HOLD
+
+
 class PIController:
-    """Integral, Gates für Entladen und AC-Laden, Rechenschritt und Abklingen."""
+    """Integral, Rechenschritt und Abklingen."""
 
     def __init__(self) -> None:
         self.integral: float = 0.0
@@ -28,33 +47,6 @@ class PIController:
         """Integral über 10 um 5 % abklingen lassen."""
         if abs(self.integral) > 10:
             self.integral *= 0.95
-
-    def gate_discharge(
-        self, grid: float, current: float, offset: float, limit: float, tolerance: float,
-    ) -> str:
-        """Gate des Entlade-PI: Toleranz, Sättigung oben, Überschreitung des Limits, Untergrenze.
-
-        Über `limit` gibt es auch bei Netzfehler in der Toleranz einen Schritt.
-        Ohne Schritt klingt das Integral ab.
-        """
-        error = grid - offset
-        above_limit = current > limit
-        saturated_high = current >= limit and not above_limit and error > 0
-        if ((abs(error) > tolerance or above_limit)
-                and not saturated_high and not (current <= 0 and error < 0)):
-            return STEP
-        self.decay()
-        return SATURATED if saturated_high else HOLD
-
-    def gate_ac(self, grid: float, offset: float, tolerance: float) -> str:
-        """Gate des AC-Lade-PI: nur Toleranz, keine Guards an den Grenzen.
-
-        Ohne Schritt klingt das Integral ab.
-        """
-        if abs(grid - offset) > tolerance:
-            return STEP
-        self.decay()
-        return HOLD
 
     def calculate(
         self,

@@ -17,7 +17,8 @@ from .display import Display
 from .dynamic_offset import DynamicOffset
 from .feature_sensors import effective_sensor, feature_values, tariff_price
 from .i18n import Msg, translate, translate_msgs
-from .pi import SATURATED, STEP, PIController
+from .paths import FIXED, PI_STEP, STALL_CHECK, STALL_RESET, PathInputs, decide as decide_path
+from .pi import PIController
 from .readings import UNIT_SCALE_KWH, UNIT_SCALE_W, read_number, read_scaled, valid_state
 from .grid_group import NetGroup, Shares
 from .group_store import group_for
@@ -984,36 +985,32 @@ class SolakonCoordinator:
             self._messages.warn(dist_warning)
 
         # ── 11c. PI-Pfade ────────────────────────────────────────────────────
-        if self.surplus_active:
-            await self._set_fixed_output(limits.zone0, current_power, "act_zone0_output")
-
-        elif self.ac_charge_active:
-            if self.pi.gate_ac(grid, ac_offset, cs.tolerance) == STEP:
-                await self._pi_step(
-                    grid,
-                    self.group.pi_base(self, current_power, ac_error_share, ac=True),
-                    ac_offset, limits.ac, cs.ac_p, cs.ac_i, ac_error_share, current_power,
-                    "act_ac_pi", ac_charge_mode=True,
-                )
-
-        elif self.tariff_charge_active:
-            await self._set_fixed_output(cs.tariff_power, current_power, "act_tariff_power", ac_charge_mode=True)
-
-        else:
-            gate = self.pi.gate_discharge(grid, current_power, target_offset, dynamic_max, cs.tolerance)
-            if gate == STEP:
-                await self._pi_step(
-                    grid,
-                    self.group.pi_base(self, current_power, error_share),
-                    target_offset, dynamic_max, cs.p_factor, cs.i_factor, error_share, current_power,
-                    "act_pi_sister_charging" if capped else "act_pi",
-                )
-            elif gate == SATURATED:
-                await self._handle_output_stall(dynamic_max)
-            else:
-                self.out.reset_stall()
-            if capped and gate != STEP and self.last_action_key != "act_zone1_sister_charging":
-                self._set_last_action("act_zone1_sister_charging")
+        d = decide_path(PathInputs(
+            grid=grid, current_power=current_power, tolerance=cs.tolerance,
+            surplus_active=self.surplus_active, ac_charge_active=self.ac_charge_active,
+            tariff_charge_active=self.tariff_charge_active, capped=capped,
+            zone0_power=limits.zone0, tariff_power=cs.tariff_power,
+            ac_offset=ac_offset, ac_limit=limits.ac, ac_p=cs.ac_p, ac_i=cs.ac_i,
+            ac_share=ac_error_share,
+            ac_base=self.group.pi_base(self, current_power, ac_error_share, ac=True),
+            target_offset=target_offset, dynamic_max=dynamic_max,
+            p_factor=cs.p_factor, i_factor=cs.i_factor, share=error_share,
+            discharge_base=self.group.pi_base(self, current_power, error_share),
+        ))
+        if d.decay:
+            self.pi.decay()
+        if d.kind == FIXED:
+            await self._set_fixed_output(d.value, current_power, d.action, ac_charge_mode=d.ac_charge_mode)
+        elif d.kind == PI_STEP:
+            st = d.step
+            await self._pi_step(grid, st.base, st.offset, st.limit, st.p_factor, st.i_factor,
+                                st.share, current_power, st.action, ac_charge_mode=st.ac_charge_mode)
+        elif d.kind == STALL_CHECK:
+            await self._handle_output_stall(d.value)
+        elif d.kind == STALL_RESET:
+            self.out.reset_stall()
+        if d.sister_note and self.last_action_key != "act_zone1_sister_charging":
+            self._set_last_action("act_zone1_sister_charging")
         return False
 
     def _end_cycle(

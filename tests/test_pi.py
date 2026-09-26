@@ -31,7 +31,7 @@ def _ctrl(integral: float = 0.0):
     ((30, 0, 30, 0, 25), HOLD),             # Limit 0, Fehler 0
 ])
 def test_gate_discharge(args, expected):
-    assert _ctrl().gate_discharge(*args) == expected
+    assert pi.gate_discharge(*args) == expected
 
 
 @pytest.mark.parametrize("args, expected", [
@@ -41,24 +41,7 @@ def test_gate_discharge(args, expected):
     ((-525, -500, 25), HOLD),               # genau auf der Toleranz
 ])
 def test_gate_ac_nur_toleranz(args, expected):
-    assert _ctrl().gate_ac(*args) == expected
-
-
-@pytest.mark.parametrize("gate, args", [
-    ("gate_discharge", (30, 400, 30, 800, 25)),
-    ("gate_discharge", (200, 800, 30, 800, 25)),
-    ("gate_ac", (-500, -500, 25)),
-])
-def test_ohne_schritt_klingt_integral_ab(gate, args):
-    c = _ctrl(100.0)
-    getattr(c, gate)(*args)
-    assert c.integral == pytest.approx(95.0)
-
-
-def test_mit_schritt_bleibt_integral():
-    c = _ctrl(100.0)
-    assert c.gate_discharge(80, 400, 30, 800, 25) == STEP
-    assert c.integral == 100.0
+    assert pi.gate_ac(*args) == expected
 
 
 @pytest.mark.parametrize("start, expected", [
