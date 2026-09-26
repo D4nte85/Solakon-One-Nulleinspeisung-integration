@@ -5,6 +5,8 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+## [3.2.0-beta.1] – 2026-09-26
+
 ### Geändert
 
 - **AC-Laden ohne PI:** Die Ladeleistung wird in einem Schritt aus der Ist-Leistung berechnet: Ist-Ladeleistung + (Offset − Netz), im Multi-Instancing über die Ist-Leistung des AC-Pools mal Fehler-Anteil. Während die Ladeleistung noch hochfährt, wird nur gesenkt, weil der Netzsensor dann einen älteren Stand zeigt; unter 50 W wird 0 geschrieben; eine gesenkte Max. Ladeleistung greift auch bei Netzfehler in der Toleranz. Die Einstellungen `ac_p_factor` und `ac_i_factor` entfallen. Grundlage ist eine Messung des Geräts: Die Ladeleistung steigt mit etwa 34 W/s und sinkt als Sprung nach etwa 2 s.
@@ -21,7 +23,7 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 - Intern: Feature-Sensoren in eigenes Modul `feature_sensors.py`: wirksamer Sensor je Vorgabe (lokal vor global, `zone1_force` ab 12 Uhr mit der Vorhersage für morgen), Werte in Zieleinheit mit Meldung ohne Zahl, Tarifpreis mit Einheit aus einer Lesung. Verhalten unverändert.
 - Intern: Anzeigezustand als Objekt `Display` in `display.py`: Anzeigezone, Modus mit Label und Zeitstempel sowie Betriebszustand an einer Stelle; das Setzen des Modus steht nur noch in `Display.set_mode`. Verhalten unverändert.
 - Intern: Timer-Toggle und Timeout-Reset als Objekt `Timeout` in `timeout.py`, unverändert verschoben. Verhalten unverändert.
-- Intern: Pfadwahl der PI-Phase (Zone-0-Festwert, AC-PI, Tarif-Festwert, Entlade-PI mit Stillstandsprüfung) als reine Entscheidung `paths.decide`; die Gates sind reine Funktionen in `pi.py`, das Abklingen des Integrals führt der Coordinator aus. Verhalten unverändert.
+- Intern: Pfadwahl der PI-Phase (Zone-0-Festwert, AC-Laden, Tarif-Festwert, Entlade-PI mit Stillstandsprüfung) als reine Entscheidung `paths.decide`; die Gates sind reine Funktionen in `pi.py`, das Abklingen des Integrals führt der Coordinator aus. Verhalten unverändert.
 
 ### Behoben
 
