@@ -144,6 +144,10 @@ class FakeServices:
             if geraet and value not in geraet.optionen:
                 return
             self.hass.states.set(eid, value, attrs)
+        # Szenario-Schlüssel `nach_aufruf`: Zustände einmalig nach dem ersten Schreibbefehl auf `eid` setzen
+        for other, st in self.hass.on_call.pop(eid, {}).items():
+            self.hass.states.set(other, st.get("state"), st.get("attrs"),
+                                 last_updated=CLOCK.now - st.get("age", 0))
 
 
 def _num(value):
@@ -200,6 +204,7 @@ class FakeHass:
         self.http = FakeHttp(self)
         self.events: list = []
         self.followers: dict[str, list[tuple[str, float]]] = {}
+        self.on_call: dict[str, dict] = {}   # entity_id -> Zustände, gesetzt nach dem ersten Schreibbefehl darauf
         self.geraet: dict = {}   # entity_id -> tests.geraet.Entity
         self._tracker_seq = 0
         CLOCK.hass = self

@@ -1368,11 +1368,12 @@ class SolakonCoordinator:
         await self._set_discharge(self._required_discharge(cs.discharge_max, mode))
 
         # ── 11. PI-Phase (Modus '1' und '3') ─────────────────────────────────
+        blocked = False
         if mode in (MODE_DISCHARGE, MODE_AC_CHARGE):
-            await self._run_pi_phase(cs, soc, mode, timer_val, error_share, limits, ac_offset)
+            blocked = await self._run_pi_phase(cs, soc, mode, timer_val, error_share, limits, ac_offset)
 
         # ── 12. Anzeige und Flag-Speicherung ─────────────────────────────────
-        self._end_cycle(display=(soc, cs.zone1_limit, cs.zone3_limit, mode),
+        self._end_cycle(blocked=blocked, display=(soc, cs.zone1_limit, cs.zone3_limit, mode),
                         prev_flags=prev_flags)
 
     async def _execute_falls(self, **v) -> str | None:
@@ -1397,22 +1398,23 @@ class SolakonCoordinator:
     async def _run_pi_phase(
         self, cs: CycleSettings, soc: float, mode: str, timer_val: float, error_share: float,
         limits: PowerLimits, ac_offset: float,
-    ) -> None:
+    ) -> bool:
         """PI-Phase in Modus '1' oder '3': Timeout-Reset, dann ein Pfad je Regelzustand.
 
         Pfade: Zone-0-Festwert, AC-PI, Tarif-Festwert oder Entlade-PI mit Stillstandsprüfung.
-        Im Ruhemodus endet die Phase nach dem Timeout-Reset.
+        Im Ruhemodus endet die Phase nach dem Timeout-Reset. Liefert die Zweitlesung von
+        Netz oder PV keine Zahl, endet sie mit `err_core_sensor` ohne Schreibbefehl.
+        True, wenn der Regelzyklus damit blockiert ist.
         """
         cfg = self.entry.data
 
-        # ── 11a. Frische Werte nach den Falls ────────────────────────────────
-        grid = self._flt_power(cfg[CONF_GRID_SENSOR])
-        solar = self._flt_power(cfg[CONF_SOLAR_SENSOR])
+        # ── 11a. Zweitlesung nach den Falls ──────────────────────────────────
+        grid = read_scaled(self.hass, cfg[CONF_GRID_SENSOR], UNIT_SCALE_W).value
+        solar = read_scaled(self.hass, cfg[CONF_SOLAR_SENSOR], UNIT_SCALE_W).value
 
         # Eine Energierichtung je Netzgruppe: lädt eine Schwester, entlädt Zone 1 nur PV.
         sister_charging = self.group.sister_charging(self)
         capped = sister_charging and self.cycle_active and mode == MODE_DISCHARGE
-        dynamic_max = limits.pi_max(mode, self.cycle_active, solar, sister_charging)
 
         target_offset = float(self._offset("z1" if self.cycle_active else "z2")[2])
 
@@ -1422,7 +1424,14 @@ class SolakonCoordinator:
             await self._timer_toggle()
 
         if self._at_rest(mode):
-            return
+            return False
+
+        missing = next((cfg[key] for key, value in ((CONF_GRID_SENSOR, grid), (CONF_SOLAR_SENSOR, solar))
+                        if value is None), None)
+        if missing is not None:
+            self._messages.fail(("err_core_sensor", {"sensor": missing}))
+            return True
+        dynamic_max = limits.pi_max(mode, self.cycle_active, solar, sister_charging)
 
         # Einzige CONF_ACTIVE_POWER-Lesung dieses Zyklus, nach dem letzten Await vor
         # der PI-Entscheidung. Gemeinsam genutzt von Gate, PI-Basis und Log-Zeile.
@@ -1466,6 +1475,7 @@ class SolakonCoordinator:
                 self._reset_output_stall_state()
             if capped and gate != STEP and self.last_action_key != "act_zone1_sister_charging":
                 self._set_last_action("act_zone1_sister_charging")
+        return False
 
     def _end_cycle(
         self, *, blocked: bool = False,

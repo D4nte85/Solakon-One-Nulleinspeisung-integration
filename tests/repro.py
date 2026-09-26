@@ -129,7 +129,7 @@ def spec_aus(szenario: dict) -> dict:
             "states": states,
         })
     for nr, schritt in enumerate(szenario.get("schritte") or [{}], 1):
-        unbekannt = set(schritt) - {"nach", "setzen", "settings", "wer"}
+        unbekannt = set(schritt) - {"nach", "setzen", "settings", "wer", "nach_aufruf"}
         if unbekannt:
             raise SzenarioFehler(f"Schritt {nr}: unbekannte Felder {sorted(unbekannt)}")
         setzen = {}
@@ -139,6 +139,16 @@ def spec_aus(szenario: dict) -> dict:
         step = {"advance": schritt.get("nach", 0), "set": setzen, "who": schritt.get("wer", "a")}
         if schritt.get("settings"):
             step["changes"] = schritt["settings"]
+        if nach_aufruf := schritt.get("nach_aufruf"):
+            unbekannt = set(nach_aufruf) - {"entity", "setzen"}
+            if unbekannt or "entity" not in nach_aufruf:
+                raise SzenarioFehler(f"Schritt {nr}: nach_aufruf braucht entity und setzen, unbekannt {sorted(unbekannt)}")
+            ziel, _ = entity_id(nach_aufruf["entity"], prefixe)
+            step["on_call"] = {ziel: {
+                eid: zustand(wert, einheit)
+                for eid, einheit, wert in (
+                    (*entity_id(k, prefixe), w) for k, w in (nach_aufruf.get("setzen") or {}).items())
+            }}
         spec["steps"].append(step)
     return spec
 

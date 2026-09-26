@@ -476,6 +476,7 @@ async def _run_cycle_spec(spec) -> dict:
         h.CLOCK.now += step["advance"]
         hass.events = []
         _apply_states(hass, step["set"])
+        hass.on_call = {eid: dict(states) for eid, states in step.get("on_call", {}).items()}
         if "changes" in step:
             await coords["a"].async_update_settings(dict(step["changes"]))
         for p, changes in step.get("changes_for", {}).items():
@@ -486,6 +487,7 @@ async def _run_cycle_spec(spec) -> dict:
         targets = list(coords) if step["who"] == "all" else ["a"]
         for p in targets:
             await coords[p]._async_regulate()
+        hass.on_call = {}
         rec["steps"].append({
             "events": hass.events,
             "notify": notify,

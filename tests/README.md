@@ -70,6 +70,7 @@ schritte:             # je Schritt: Uhr vor, Sensoren setzen, regeln
     setzen: {netz: 250, a.soc: 39, sensor.preis: 30.0}
     settings: {tariff_enabled: false}   # optional: über async_update_settings der Instanz a
     wer: a            # a | all
+    nach_aufruf: {entity: a.export, setzen: {a.solar: unavailable}}   # optional: einmalig nach dem ersten Schreibbefehl auf entity
 erwartet:
   - schritt: alle     # Nummer ab 1, letzter (Standard) oder alle
     kein_aufruf: {entity: a.leistung, wert_min: 1201}
@@ -79,6 +80,8 @@ erwartet:
   - aufruf: {entity: select.a_mode, wert: "3"}
   - log: Teiltext einer WARNING
 ```
+
+`nach_aufruf` setzt Sensoren mitten im Regelzyklus, sobald die Integration zum ersten Mal auf `entity` schreibt. So lässt sich ein Ausfall zwischen zwei Lesungen desselben Regelzyklus nachstellen. Der Eintrag gilt nur für seinen Schritt.
 
 `zustand` prüft Attribute aus `COORD_ATTRS` in `harness.py` auf Gleichheit, `zustand_nicht` auf Ungleichheit (z. B. `last_error: ""` für „Fehlermeldung gesetzt"). `aufruf`/`kein_aufruf` prüfen
 die Schreibbefehle eines Schritts auf eine Entity, optional mit `wert`, `wert_min`,

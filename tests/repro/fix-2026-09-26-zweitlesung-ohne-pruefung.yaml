@@ -1,0 +1,17 @@
+titel: Ausfall des PV-Sensors nach der Kernsensor-Prüfung nullt den Output in Zone 2 ohne Meldung
+bezug: fix-2026-09-26-zweitlesung-ohne-pruefung
+# Zone 2 (Zyklus aus, Modus 1), 300 W Output bei 600 W PV, Netz in der Toleranz.
+# Die Export-Limit-Korrektur schreibt nach der Kernsensor-Prüfung; dabei fällt der
+# PV-Sensor aus. Die Zweitlesung in der PI-Phase darf dann nicht mit 0 W rechnen:
+# kein Schreibbefehl auf die Ausgangsleistung, aber eine Meldung.
+netz: 5
+instanzen:
+  - prefix: a
+    settings: {regulation_enabled: true}
+    sensoren: {soc: 40, solar: 600, modus: "1", leistung: 300, export: 0}
+schritte:
+  - nach: 0
+    nach_aufruf: {entity: a.export, setzen: {a.solar: unavailable}}
+erwartet:
+  - kein_aufruf: {entity: a.leistung}
+  - zustand_nicht: {last_error: ""}

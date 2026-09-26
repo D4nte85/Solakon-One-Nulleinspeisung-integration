@@ -3,6 +3,12 @@
 Alle nennenswerten Änderungen an der Solakon-ONE-Nulleinspeisung-Integration.
 Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
+## [Unreleased]
+
+### Behoben
+
+- **Kein Nullen des Outputs mehr bei Sensorausfall mitten im Regelzyklus:** Die PI-Phase liest Netz und PV nach den Falls ein zweites Mal. Fiel einer der beiden Sensoren nach der Kernsensor-Prüfung aus, rechnete sie still mit 0 W. In Zone 2 fiel dadurch die PI-Obergrenze auf 0 und der Output wurde genullt. Jetzt endet die PI-Phase ohne Schreibbefehl mit der Meldung „Sensor … nicht verfügbar oder ohne Zahlenwert“.
+
 ## [3.1.3] – 2026-09-25
 
 > **Verhaltensänderung beim Tarif-Laden:** Nachgeladen wird standardmäßig erst 3 Prozentpunkte unter dem Ladeziel. Mit SOC-Hysterese 0 bleibt das bisherige Verhalten.
