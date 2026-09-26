@@ -5,6 +5,8 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+## [3.2.0-beta.2] – 2026-09-26
+
 ### Hinzugefügt
 
 - **Mindestladeleistung einstellbar:** Die bisher feste Schwelle von 50 W im AC-Laden ist jetzt die Einstellung `ac_min_power` im Tab AC-Laden (Standard 50 W, 0 … 300 W). Stellwerte darunter werden als 0 geschrieben; liegt sie über der Max. Ladeleistung, gilt die Max. Ladeleistung als Schwelle.
