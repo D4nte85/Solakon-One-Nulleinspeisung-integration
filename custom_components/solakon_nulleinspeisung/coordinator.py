@@ -943,7 +943,7 @@ class SolakonCoordinator:
     ) -> bool:
         """PI-Phase in Modus '1' oder '3': Timeout-Reset, dann ein Pfad je Regelzustand.
 
-        Pfade: Zone-0-Festwert, AC-PI, Tarif-Festwert oder Entlade-PI mit Stillstandsprüfung.
+        Pfade laut `paths.decide`: Zone-0-Festwert, AC-Stellwert, Tarif-Festwert oder Entlade-PI mit Stillstandsprüfung.
         Im Ruhemodus endet die Phase nach dem Timeout-Reset. Liefert die Zweitlesung von
         Netz oder PV keine Zahl, endet sie mit `err_core_sensor` ohne Schreibbefehl.
         True, wenn der Regelzyklus damit blockiert ist.
