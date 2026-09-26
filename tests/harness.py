@@ -328,7 +328,9 @@ def groups_state(hass):
 COORD_PATHS = {"_tariff_unit_suspect_since": "tariff.unit_suspect_since",
                "_output_warning": "_messages.hardware_msg",
                "grid_stddev": "dyn.stddev", "grid_stddev_raw": "dyn.stddev_raw",
-               "dyn_offset_z1": "dyn.z1", "dyn_offset_z2": "dyn.z2", "dyn_offset_ac": "dyn.ac"}
+               "dyn_offset_z1": "dyn.z1", "dyn_offset_z2": "dyn.z2", "dyn_offset_ac": "dyn.ac",
+               "last_output_ts": "out.last_ts", "_output_stall_actions": "out.stall_actions",
+               "_output_stall_last_ts": "out.stall_last_ts"}
 
 
 def _coord_attr(coord, name):

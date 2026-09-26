@@ -16,7 +16,7 @@ from homeassistant.util import dt as dt_util
 
 from .dynamic_offset import DynamicOffset
 from .i18n import Msg, translate, translate_msgs
-from .pi import SATURATED, STEP, PIController, clamp as _clamp
+from .pi import SATURATED, STEP, PIController
 from .readings import (
     NO_SENSOR, NOT_NUMERIC, UNAVAILABLE, UNIT_SCALE_KILO, UNIT_SCALE_KWH, UNIT_SCALE_W,
     WRONG_DOMAIN, read_number, read_scaled, unit_of, valid_state,
@@ -25,18 +25,18 @@ from .grid_group import NetGroup, Shares, pool_sum
 from .group_store import group_for
 from .limits import PowerLimits, power_limits
 from .messages import CycleMessages
+from .output import Actual, Output, Stall
 from .schema import InvalidSettings, check, notify_reset, sanitize
 from .tariff import Tariff, forecast_suppressed
 from .zones import SurplusState, ZoneInputs, decide, forecast_flags, surplus_and_night
 from .const import (
-    DOMAIN, STORAGE_VERSION, SETTINGS_DEFAULTS, SETTINGS_SCHEMA, DEVICE_MAX_POWER,
+    DOMAIN, STORAGE_VERSION, SETTINGS_DEFAULTS, SETTINGS_SCHEMA,
     CONF_GRID_SENSOR, CONF_ACTUAL_SENSOR, CONF_SOLAR_SENSOR,
     CONF_SOC_SENSOR, CONF_TIMEOUT_COUNTDOWN, CONF_ACTIVE_POWER,
     CONF_DISCHARGE_CURRENT, CONF_TIMEOUT_SET, CONF_MODE_SELECT, CONF_EXPORT_LIMIT,
     MODE_DISABLED, MODE_DISCHARGE, MODE_AC_CHARGE,
-    OUTPUT_STALL_SECONDS, OUTPUT_STALL_DEVIATION,
     S_REGULATION_ENABLED,
-    S_P_FACTOR, S_I_FACTOR, S_TOLERANCE, S_WAIT_TIME,
+    S_P_FACTOR, S_I_FACTOR, S_TOLERANCE,
     S_ZONE1_LIMIT, S_ZONE3_LIMIT, S_DISCHARGE_MAX, S_HARD_LIMIT_Z0, S_HARD_LIMIT_Z1,
     S_PV_RESERVE,
     S_SURPLUS_ENABLED, S_SURPLUS_SOC_THRESHOLD, S_SURPLUS_SOC_HYST, S_SURPLUS_PV_HYST,
@@ -51,7 +51,7 @@ from .const import (
     S_PV_FORECAST_ENABLED, S_PV_FORECAST_SENSOR, S_PV_FORECAST_THRESHOLD,
     S_ZONE1_FORCE_ENABLED, S_ZONE1_FORCE_SENSOR, S_ZONE1_FORCE_THRESHOLD, S_ZONE1_FORCE_MIN_SOC,
     S_NIGHT_ENABLED, S_NIGHT_HYSTERESIS, S_REST_IN_DISCHARGE,
-    S_SELF_ADJUST, S_SELF_ADJUST_TOL,
+    S_SELF_ADJUST_TOL,
     S_DYN_Z1_ENABLED, S_DYN_Z2_ENABLED, S_DYN_AC_ENABLED,
 )
 
@@ -233,7 +233,10 @@ class SolakonCoordinator:
 
         # Zeitstempel
         self.last_action_ts: float = time.time()
-        self.last_output_ts: float = time.time()
+        self.out = Output(
+            lambda value: self._set_number(self.entry.data[CONF_ACTIVE_POWER], value),
+            self._read_actual, lambda: self.settings, self._warn_hardware,
+        )
         self.mode_label_ts: float = time.time()
 
         self.dyn = DynamicOffset()
@@ -245,8 +248,6 @@ class SolakonCoordinator:
         self.surplus_power: float = 0.0
         # Meldungen des laufenden Zyklus, von _end_cycle nach last_error_msgs übernommen.
         self._messages = CycleMessages()
-        self._output_stall_actions: int = 0
-        self._output_stall_last_ts: float = 0.0
         # Tariflage je Zyklus; hält den Verdacht auf eine EUR/kWh-Preiseinheit über Zyklen.
         self.tariff = Tariff()
         # Zuletzt angewandter Verteilungsmodus aus _apply_shares(); weicht bei
@@ -322,23 +323,14 @@ class SolakonCoordinator:
         """Prüft ob Entity verfügbar und nicht unknown/unavailable ist."""
         return valid_state(self.hass, entity_id) is not None
 
-    def _actual_updated_ts(self) -> float | None:
-        """`last_updated` des Ist-Sensors als Unix-Zeit, None ohne State."""
-        state = self.hass.states.get(self.entry.data.get(CONF_ACTUAL_SENSOR, ""))
-        return state.last_updated.timestamp() if state is not None else None
-
-    def _actual_polled_since_write(self) -> bool:
-        """True, wenn der Ist-Sensor seit dem letzten Schreibbefehl neu gepollt hat."""
-        updated = self._actual_updated_ts()
-        return updated is not None and updated >= self.last_output_ts
-
-    def _actual_vs(self, target: float, ac_charge_mode: bool = False) -> tuple[float, float]:
-        """(Ist-Leistung in W, Betrag ihrer Abweichung vom Sollwert).
-
-        Im AC-Lademodus meldet der Ist-Sensor negativ; verglichen wird dann gegen `-target`.
-        """
-        actual = self.actual_power()
-        return actual, abs(actual - (-target if ac_charge_mode else target))
+    def _read_actual(self) -> Actual:
+        """Schnappschuss des Ist-Sensors für die Ausgangsleistung."""
+        eid = self.entry.data.get(CONF_ACTUAL_SENSOR, "")
+        state = self.hass.states.get(eid)
+        return Actual(
+            self.actual_power(), self._entity_ok(eid),
+            state.last_updated.timestamp() if state is not None else None,
+        )
 
     # ── Lesen: Sensor-Vorgaben ───────────────────────────────────────────────
 
@@ -615,7 +607,7 @@ class SolakonCoordinator:
             "mode_label": self.mode_label,
             "last_action": self.last_action,
             "last_action_ts": self.last_action_ts,
-            "last_output_ts": self.last_output_ts,
+            "last_output_ts": self.out.last_ts,
             "mode_label_ts": self.mode_label_ts,
             "last_error": self.last_error,
             "integral": round(self.integral, 2),
@@ -702,17 +694,6 @@ class SolakonCoordinator:
             {"entity_id": self.entry.data[CONF_MODE_SELECT], "option": mode},
         )
 
-    async def _set_output(self, value: float) -> None:
-        """Ausgangsleistung setzen, geklemmt auf 0 bis DEVICE_MAX_POWER.
-
-        `last_output_ts` wird auch gesetzt, wenn der Guard den Schreibbefehl unterdrückt.
-        """
-        await self._set_number(
-            self.entry.data[CONF_ACTIVE_POWER],
-            _clamp(round(value), 0, DEVICE_MAX_POWER),
-        )
-        self.last_output_ts = time.time()
-
     async def _set_discharge(self, amps: float) -> None:
         """Entladestrom setzen — nur wenn aktueller Wert abweicht."""
         await self._set_number(self.entry.data[CONF_DISCHARGE_CURRENT], amps, only_if_changed=True)
@@ -737,142 +718,28 @@ class SolakonCoordinator:
 
     # ── Schreiben: Ausgangsleistung ──────────────────────────────────────────
 
-    async def _wait_for_target(self, target: float, ac_charge_mode: bool = False) -> None:
-        """Wartet, bis die Ist-Leistung den Zielwert erreicht, höchstens `S_WAIT_TIME` Sekunden.
+    def _warn_hardware(self, key: str, params: dict) -> None:
+        """Schreibwarnung in die Fehlerkette des laufenden Regelzyklus und ins Log."""
+        self._messages.hardware((key, params))
+        _LOGGER.error("Solakon: %s", self._tr(key, **params))
 
-        Ohne `S_SELF_ADJUST` wird die volle Wartezeit abgewartet.
-        """
-        wait_max = self._setting(S_WAIT_TIME, float)
+    async def _handle_output_stall(self, limit: float) -> None:
+        """Stillstand prüfen und das Urteil umsetzen.
 
-        if not self.settings[S_SELF_ADJUST]:
-            await asyncio.sleep(wait_max)
-            return
-
-        tolerance = self._setting(S_SELF_ADJUST_TOL, float)
-        compare_target = -target if ac_charge_mode else target
-
-        await asyncio.sleep(1.0)
-
-        start = time.monotonic()
-        remaining = wait_max - 1.0
-
-        while remaining > 0:
-            actual, deviation = self._actual_vs(target, ac_charge_mode)
-            if deviation <= tolerance:
-                _LOGGER.debug(
-                    "Solakon: Zielwert erreicht (actual=%.0f, target=%.0f) nach %.1fs",
-                    actual, compare_target, time.monotonic() - start,
-                )
-                return
-            await asyncio.sleep(min(1.0, remaining))
-            remaining = wait_max - (time.monotonic() - start)
-
-        _LOGGER.debug(
-            "Solakon: Max-Wartezeit (%.0fs), actual=%.0f, target=%.0f",
-            wait_max, self._actual_vs(target)[0], compare_target,
-        )
-
-    async def _set_output_and_wait(self, value: float, ac_charge_mode: bool = False) -> None:
-        """Ausgangsleistung setzen und auf reale Konvergenz warten (_wait_for_target).
-
-        `number.set_value` läuft ohne `blocking=True`: der Aufruf kehrt zurück,
-        sobald der Service-Call eingereiht ist, nicht wenn CONF_ACTIVE_POWER den
-        neuen Wert zeigt. Ein unmittelbar folgender Reread im selben Zyklus sieht
-        ohne diesen Wait noch den alten Wert.
-
-        Nullung (`value == 0`) gilt als sicherheitskritisch und wird zusätzlich
-        über `_confirm_zero_output()` verifiziert und bei Bedarf erneut geschrieben.
-        """
-        value = _clamp(value, 0, DEVICE_MAX_POWER)
-        await self._set_output(value)
-        await self._wait_for_target(value, ac_charge_mode=ac_charge_mode)
-        if value == 0:
-            await self._confirm_zero_output(ac_charge_mode)
-
-    async def _confirm_zero_output(self, ac_charge_mode: bool, max_retries: int = 2) -> None:
-        """Bestätigt, dass die Ausgangsleistung real auf 0 gefallen ist, auch ohne S_SELF_ADJUST.
-
-        Schreibt bei fehlender Konvergenz bis zu `max_retries`-mal erneut und meldet
-        danach eine Schreibwarnung in der Fehlerkette. CONF_ACTUAL_SENSOR pollt in einem
-        fremden Intervall (1–300 s): ein Wert, der älter ist als der letzte Schreibbefehl,
-        belegt weder Erfolg noch Fehlschlag; dann unterbleibt nur die Warnung, Schreib-
-        und Retry-Verhalten bleibt gleich.
-        """
-        actual_eid = self.entry.data.get(CONF_ACTUAL_SENSOR, "")
-        if not self._entity_ok(actual_eid):
-            return  # kein Sensor zur Verifikation verfügbar — nichts zu prüfen
-
-        tolerance = self._setting(S_SELF_ADJUST_TOL, float)
-
-        for attempt in range(max_retries):
-            actual, deviation = self._actual_vs(0)
-            if deviation <= tolerance:
-                return
-            if self._actual_polled_since_write():
-                _LOGGER.warning(
-                    "Solakon: Output-Nullung nicht bestätigt (Ist: %.0f W) — erneuter Schreibversuch %d/%d",
-                    actual, attempt + 1, max_retries,
-                )
-            await self._set_output(0)
-            await self._wait_for_target(0, ac_charge_mode=ac_charge_mode)
-
-        actual, deviation = self._actual_vs(0)
-        if deviation > tolerance and self._actual_polled_since_write():
-            self._messages.hardware(("warn_output_zero_unconfirmed", {"attempts": max_retries, "actual": actual}))
-            _LOGGER.error("Solakon: %s", self._tr("warn_output_zero_unconfirmed", attempts=max_retries, actual=actual))
-
-    def _reset_output_stall_state(self) -> None:
-        """Stillstandszähler zurücksetzen: der Ausgang folgt dem Limit oder ist nicht prüfbar."""
-        self._output_stall_actions = 0
-        self._output_stall_last_ts = 0.0
-
-    async def _check_output_stall(self, limit: float) -> None:
-        """Erkennt einen Wechselrichter, der dem Limit nicht folgt, und stößt ihn an.
-
-        Nur aus dem gesättigten Zweig des Entlade-PI aufgerufen. Kriterium: Abweichung über `OUTPUT_STALL_DEVIATION` bei einem
-        Ist-Wert, dessen `last_updated` seit `OUTPUT_STALL_SECONDS` nicht vorrückt.
-
-        Erster Treffer schreibt den Sollwert neu. Bleibt die Abweichung:
+        `REWRITTEN` setzt nur die letzte Aktion. `RECOVERY`: Schreibwarnung,
         Integral-Reset, Output 0, Timer-Toggle, Ruhezustand — Fall D holt im
-        Folgezyklus zurück. Mindestabstand zweier Aktionen: `OUTPUT_STALL_SECONDS`.
+        Folgezyklus zurück.
         """
-        actual_eid = self.entry.data.get(CONF_ACTUAL_SENSOR, "")
-        if limit <= 0 or not self._entity_ok(actual_eid):
-            self._reset_output_stall_state()
+        verdict = await self.out.check_stall(limit)
+        if verdict is None:
             return
-
-        actual, deviation = self._actual_vs(limit)
-        if deviation <= limit * OUTPUT_STALL_DEVIATION:
-            self._reset_output_stall_state()
-            return
-
-        updated = self._actual_updated_ts()
-        if updated is None:
-            self._reset_output_stall_state()
-            return
-
-        now = time.time()
-        if now - updated < OUTPUT_STALL_SECONDS:
-            return
-        if self._output_stall_last_ts and now - self._output_stall_last_ts < OUTPUT_STALL_SECONDS:
-            return
-
-        self._output_stall_last_ts = now
-        self._output_stall_actions += 1
-
-        if self._output_stall_actions == 1:
-            _LOGGER.warning(
-                "Solakon: Ausgang %.0f W folgt Limit %.0f W nicht (unverändert seit %.0f s) "
-                "— Sollwert wird neu geschrieben",
-                actual, limit, now - updated,
-            )
-            await self._set_output(limit)
+        stall, actual = verdict
+        if stall is Stall.REWRITTEN:
             self._set_last_action("act_output_rewritten", actual=actual, limit=limit)
             return
-
         self._messages.hardware(("warn_output_stuck", {"actual": actual, "limit": limit}))
         _LOGGER.error("Solakon: %s (Versuch %d)", self._tr("warn_output_stuck", actual=actual, limit=limit),
-                      self._output_stall_actions)
+                      self.out.stall_actions)
         await self._transition(reset_integral=True, output=0, rest=True)
         self._set_last_action("act_output_recovery", actual=actual, limit=limit)
 
@@ -882,7 +749,7 @@ class SolakonCoordinator:
         """Fester Sollwert: schreibt nur bei Abweichung über 0,5 vom kommandierten Ist-Wert."""
         if abs(current - target) > 0.5:
             self._set_last_action(action_key, power=target)
-            await self._set_output_and_wait(target, ac_charge_mode=ac_charge_mode)
+            await self.out.set_and_wait(target, ac_charge_mode=ac_charge_mode)
 
     async def _pi_step(
         self, grid: float, power_base: float, offset: float, limit: float, p_factor: float,
@@ -895,7 +762,7 @@ class SolakonCoordinator:
             ac_charge_mode=ac_charge_mode, error_share=share,
         )
         self._set_last_action(action_key, frm=current_power, to=new_pw)
-        await self._set_output_and_wait(new_pw, ac_charge_mode=ac_charge_mode)
+        await self.out.set_and_wait(new_pw, ac_charge_mode=ac_charge_mode)
 
     # ── Schreiben: Zustandsübergang und Integral ─────────────────────────────
 
@@ -920,9 +787,9 @@ class SolakonCoordinator:
             await self._timer_toggle()
         if output is not None:
             if wait:
-                await self._set_output_and_wait(output, ac_charge_mode=ac_charge_mode)
+                await self.out.set_and_wait(output, ac_charge_mode=ac_charge_mode)
             else:
-                await self._set_output(output)
+                await self.out.set(output)
         if timer and not timer_first:
             await self._timer_toggle()
         if rest:
@@ -1371,9 +1238,9 @@ class SolakonCoordinator:
                     "act_pi_sister_charging" if capped else "act_pi",
                 )
             elif gate == SATURATED:
-                await self._check_output_stall(dynamic_max)
+                await self._handle_output_stall(dynamic_max)
             else:
-                self._reset_output_stall_state()
+                self.out.reset_stall()
             if capped and gate != STEP and self.last_action_key != "act_zone1_sister_charging":
                 self._set_last_action("act_zone1_sister_charging")
         return False
