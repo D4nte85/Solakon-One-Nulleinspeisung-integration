@@ -4,7 +4,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from collections import namedtuple
 from operator import attrgetter
 from typing import Any, Callable
 
@@ -12,7 +11,6 @@ from datetime import timedelta
 
 from homeassistant.core import HomeAssistant, Event, callback
 from homeassistant.helpers.event import async_track_state_change_event, async_track_time_interval
-from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .dynamic_offset import DynamicOffset
@@ -27,36 +25,26 @@ from .group_store import group_for
 from .limits import PowerLimits, power_limits
 from .messages import CycleMessages
 from .output import Actual, Output, Stall
-from .schema import InvalidSettings, check, notify_reset, sanitize
+from .schema import (
+    CycleSettings, InvalidSettings, SolakonSettingsStore, check, cycle_settings, notify_reset, sanitize,
+    soc_conflict,
+)
 from .tariff import Tariff, forecast_suppressed
 from .zones import (
     FlagUpdate, Night, Surplus, ZoneInputs, at_rest, control_state, decide, forecast_flags,
     required_discharge, rest_mode,
 )
 from .const import (
-    DOMAIN, STORAGE_VERSION, SETTINGS_DEFAULTS, SETTINGS_SCHEMA,
-    CONF_GRID_SENSOR, CONF_ACTUAL_SENSOR, CONF_SOLAR_SENSOR,
-    CONF_SOC_SENSOR, CONF_TIMEOUT_COUNTDOWN, CONF_ACTIVE_POWER,
-    CONF_DISCHARGE_CURRENT, CONF_TIMEOUT_SET, CONF_MODE_SELECT, CONF_EXPORT_LIMIT,
-    MODE_DISABLED, MODE_DISCHARGE, MODE_AC_CHARGE,
-    S_REGULATION_ENABLED,
-    S_P_FACTOR, S_I_FACTOR, S_TOLERANCE,
-    S_ZONE1_LIMIT, S_ZONE3_LIMIT, S_DISCHARGE_MAX, S_HARD_LIMIT_Z0, S_HARD_LIMIT_Z1,
-    S_PV_RESERVE,
-    S_SURPLUS_ENABLED, S_SURPLUS_SOC_THRESHOLD, S_SURPLUS_SOC_HYST, S_SURPLUS_PV_HYST,
-    S_SURPLUS_FORECAST_ENABLED, S_SURPLUS_FORECAST_THRESHOLD,
-    S_SURPLUS_LOCK_ENABLED, S_SURPLUS_LOCK_SENSOR, S_SURPLUS_LOCK_FACTOR,
-    S_AC_ENABLED, S_AC_SOC_TARGET, S_AC_POWER_LIMIT, S_AC_HYSTERESIS,
-    S_AC_P_FACTOR, S_AC_I_FACTOR,
-    S_PERIODIC_ENABLED, S_PERIODIC_INTERVAL,
-    S_TARIFF_ENABLED, S_TARIFF_PRICE_SENSOR, S_TARIFF_CHEAP_THRESHOLD,
-    S_TARIFF_EXP_THRESHOLD, S_TARIFF_SOC_TARGET, S_TARIFF_SOC_HYST, S_TARIFF_POWER,
-    S_TARIFF_CHEAP_ENTITY, S_TARIFF_EXP_ENTITY,
-    S_PV_FORECAST_ENABLED, S_PV_FORECAST_SENSOR, S_PV_FORECAST_THRESHOLD,
-    S_ZONE1_FORCE_ENABLED, S_ZONE1_FORCE_SENSOR, S_ZONE1_FORCE_THRESHOLD, S_ZONE1_FORCE_MIN_SOC,
-    S_NIGHT_ENABLED, S_NIGHT_HYSTERESIS, S_REST_IN_DISCHARGE,
-    S_SELF_ADJUST_TOL,
-    S_DYN_Z1_ENABLED, S_DYN_Z2_ENABLED, S_DYN_AC_ENABLED,
+    DOMAIN, STORAGE_VERSION, SETTINGS_DEFAULTS, SETTINGS_SCHEMA, CONF_GRID_SENSOR,
+    CONF_ACTUAL_SENSOR, CONF_SOLAR_SENSOR, CONF_SOC_SENSOR, CONF_TIMEOUT_COUNTDOWN,
+    CONF_ACTIVE_POWER, CONF_DISCHARGE_CURRENT, CONF_TIMEOUT_SET, CONF_MODE_SELECT,
+    CONF_EXPORT_LIMIT, MODE_DISABLED, MODE_DISCHARGE, MODE_AC_CHARGE, S_REGULATION_ENABLED,
+    S_ZONE3_LIMIT, S_DISCHARGE_MAX, S_HARD_LIMIT_Z0, S_HARD_LIMIT_Z1, S_PV_RESERVE,
+    S_SURPLUS_FORECAST_ENABLED, S_SURPLUS_LOCK_ENABLED, S_SURPLUS_LOCK_SENSOR, S_AC_SOC_TARGET,
+    S_AC_POWER_LIMIT, S_PERIODIC_ENABLED, S_PERIODIC_INTERVAL, S_TARIFF_ENABLED,
+    S_TARIFF_PRICE_SENSOR, S_TARIFF_CHEAP_ENTITY, S_TARIFF_EXP_ENTITY, S_PV_FORECAST_ENABLED,
+    S_PV_FORECAST_SENSOR, S_ZONE1_FORCE_ENABLED, S_ZONE1_FORCE_SENSOR, S_REST_IN_DISCHARGE,
+    S_SELF_ADJUST_TOL, S_DYN_Z1_ENABLED, S_DYN_Z2_ENABLED, S_DYN_AC_ENABLED,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -122,47 +110,6 @@ OPERATING_BY_STATE = {
     "pv": "pv_direct",
 }
 
-# Settings, die der Regelzyklus einmal je Durchlauf liest: (Feld, Schlüssel, Typ).
-CYCLE_SETTINGS = (
-    ("zone1_limit", S_ZONE1_LIMIT, int),
-    ("zone3_limit", S_ZONE3_LIMIT, int),
-    ("hard_limit_z0", S_HARD_LIMIT_Z0, int),
-    ("hard_limit_z1", S_HARD_LIMIT_Z1, int),
-    ("tolerance", S_TOLERANCE, int),
-    ("p_factor", S_P_FACTOR, float),
-    ("i_factor", S_I_FACTOR, float),
-    ("pv_reserve", S_PV_RESERVE, int),
-    ("discharge_max", S_DISCHARGE_MAX, int),
-    ("surplus_enabled", S_SURPLUS_ENABLED, bool),
-    ("surplus_threshold", S_SURPLUS_SOC_THRESHOLD, int),
-    ("surplus_soc_hyst", S_SURPLUS_SOC_HYST, int),
-    ("surplus_pv_hyst", S_SURPLUS_PV_HYST, int),
-    ("ac_enabled", S_AC_ENABLED, bool),
-    ("ac_soc_target", S_AC_SOC_TARGET, int),
-    ("ac_power_limit", S_AC_POWER_LIMIT, int),
-    ("ac_hysteresis", S_AC_HYSTERESIS, int),
-    ("ac_p", S_AC_P_FACTOR, float),
-    ("ac_i", S_AC_I_FACTOR, float),
-    ("tariff_enabled", S_TARIFF_ENABLED, bool),
-    ("tariff_cheap", S_TARIFF_CHEAP_THRESHOLD, float),
-    ("tariff_exp", S_TARIFF_EXP_THRESHOLD, float),
-    ("tariff_soc", S_TARIFF_SOC_TARGET, int),
-    ("tariff_soc_hyst", S_TARIFF_SOC_HYST, int),
-    ("tariff_power", S_TARIFF_POWER, int),
-    ("pv_forecast_enabled", S_PV_FORECAST_ENABLED, bool),
-    ("pv_forecast_threshold", S_PV_FORECAST_THRESHOLD, float),
-    ("surplus_forecast_enabled", S_SURPLUS_FORECAST_ENABLED, bool),
-    ("surplus_forecast_threshold", S_SURPLUS_FORECAST_THRESHOLD, float),
-    ("surplus_lock_enabled", S_SURPLUS_LOCK_ENABLED, bool),
-    ("surplus_lock_factor", S_SURPLUS_LOCK_FACTOR, float),
-    ("zone1_force_enabled", S_ZONE1_FORCE_ENABLED, bool),
-    ("zone1_force_threshold", S_ZONE1_FORCE_THRESHOLD, float),
-    ("zone1_force_min_soc", S_ZONE1_FORCE_MIN_SOC, int),
-    ("night_enabled", S_NIGHT_ENABLED, bool),
-    ("night_hysteresis", S_NIGHT_HYSTERESIS, int),
-)
-CycleSettings = namedtuple("CycleSettings", [field for field, _, _ in CYCLE_SETTINGS])
-
 # Zusätzliche Regel-Trigger in Registrierungsreihenfolge: (Name, Aktivierungsschlüssel,
 # ODER-verknüpft). "periodic" ist ein Zeitintervall, alle übrigen lauschen auf ihren Sensor.
 TRACKERS = (
@@ -172,24 +119,6 @@ TRACKERS = (
     ("surplus_lock", (S_SURPLUS_LOCK_ENABLED,)),
     ("zone1_force", (S_ZONE1_FORCE_ENABLED,)),
 )
-
-
-class SolakonSettingsStore(Store):
-    """Settings-Store mit Schemamigration."""
-
-    async def _async_migrate_func(
-        self, old_major_version: int, old_minor_version: int, old_data: dict
-    ) -> dict:
-        """Hebt Version 1 auf 2: Hard-Limit aufgespalten, Forecast-Sensor umbenannt."""
-        if old_major_version < 2:
-            old_limit = old_data.pop("hard_limit", 800)
-            old_data.setdefault(S_HARD_LIMIT_Z0, old_limit)
-            old_data.setdefault(S_HARD_LIMIT_Z1, old_limit)
-
-            old_forecast = old_data.pop("surplus_forecast_sensor", "")
-            if old_forecast and not old_data.get(S_PV_FORECAST_SENSOR):
-                old_data[S_PV_FORECAST_SENSOR] = old_forecast
-        return old_data
 
 
 class SolakonCoordinator:
@@ -281,10 +210,6 @@ class SolakonCoordinator:
     def _regulation_on(self) -> bool:
         """Regelung aktiviert; Voraussetzung für jeden Schreibzugriff."""
         return self._setting(S_REGULATION_ENABLED, bool)
-
-    def _cycle_settings(self) -> CycleSettings:
-        """Schnappschuss aller CYCLE_SETTINGS für einen Regelzyklus."""
-        return CycleSettings(*(self._setting(key, cast) for _, key, cast in CYCLE_SETTINGS))
 
     # ── Lesen: Sensoren ──────────────────────────────────────────────────────
 
@@ -1021,7 +946,7 @@ class SolakonCoordinator:
         self.dyn.update(self.group.sigma, self.settings)
 
         # ── 3. Settings und Feature-Sensoren ─────────────────────────────────
-        cs = self._cycle_settings()
+        cs = cycle_settings(self.settings)
 
         ac_offset = self.dyn.value("ac", self.settings)
 
@@ -1057,13 +982,7 @@ class SolakonCoordinator:
         self.zone1_forced = forecast.zone1_forced
 
         # ── 6. Validierung ───────────────────────────────────────────────────
-        invalid = next((key for failed, key in (
-            (cs.zone1_limit <= cs.zone3_limit, "err_soc_zone1_zone3"),
-            (cs.surplus_enabled and cs.surplus_threshold <= cs.zone1_limit, "err_soc_surplus_zone1"),
-            (cs.zone1_force_enabled and not (cs.zone3_limit < cs.zone1_force_min_soc < cs.zone1_limit),
-             "err_soc_zone1_force"),
-            (not self._entity_ok(cfg[CONF_MODE_SELECT]), "err_mode_select"),
-        ) if failed), None)
+        invalid = soc_conflict(cs) or (None if self._entity_ok(cfg[CONF_MODE_SELECT]) else "err_mode_select")
         if invalid:
             self._messages.fail((invalid, {}))
             self._end_cycle(blocked=True)

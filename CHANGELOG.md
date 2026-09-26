@@ -16,6 +16,7 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 - Intern: Surplus- und Nacht-Vorstufe getrennt und mit eigenem Zustand in `zones.py` (`Surplus` mit PV-0-Entprellung und voriger Ist-Leistung, `Night` mit Dunkelheits-Hysterese). Speicherschlüssel unverändert, Verhalten unverändert.
 - Intern: Die Falls übergeben die zu setzenden Zustandsflags als `FlagUpdate` statt als Attributnamen des Coordinators. Verhalten unverändert.
 - Intern: Pool-Summen der Netzgruppe als `NetGroup.discharge_actual` und `NetGroup.pi_base`, verwertbarer PV-Überschuss als `PowerLimits.surplus_power`. Verhalten unverändert.
+- Intern: Settings-Schicht in `schema.py`: Zyklus-Schnappschuss (`CYCLE_SETTINGS`, `cycle_settings`), Prüfung der SOC-Grenzen gegeneinander (`soc_conflict`) und der Settings-Store mit Migration. Die SOC-Prüfung blockiert weiter im Regelzyklus. Verhalten unverändert.
 
 ### Behoben
 

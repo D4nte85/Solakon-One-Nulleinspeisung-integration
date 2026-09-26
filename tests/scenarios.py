@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 
 from tests import geraet, harness as h
 from tests.ha_stubs import ActiveConnection, _DtState
-from custom_components.solakon_nulleinspeisung.schema import InvalidSettings
+from custom_components.solakon_nulleinspeisung.schema import InvalidSettings, SolakonSettingsStore
 
 C = h.const
 # Literal statt Konstante, damit die Referenz auch vom Stand ohne das Setting erzeugbar ist.
@@ -611,7 +611,7 @@ async def _run_wiring() -> dict:
     soc_switch_store = h.group_store_mod.SolakonSocSwitchStore(hass, 2, "z")
     for name, data in {"v1": {"active_id": "entry_b", "start_soc": 55}, "empty": {}}.items():
         mig["soc_switch_" + name] = h.jsonable(await soc_switch_store._async_migrate_func(1, 0, dict(data)))
-    settings_store = h.coordinator_mod.SolakonSettingsStore(hass, 2, "y")
+    settings_store = SolakonSettingsStore(hass, 2, "y")
     mig["settings_v1"] = h.jsonable(await settings_store._async_migrate_func(
         1, 0, {"hard_limit": 650, "surplus_forecast_sensor": "sensor.f"}))
     mig["settings_v1_keep"] = h.jsonable(await settings_store._async_migrate_func(

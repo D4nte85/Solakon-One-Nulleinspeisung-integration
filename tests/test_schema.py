@@ -178,3 +178,26 @@ def test_get_schema_liefert_jeden_schluessel():
     assert set(result["distribution"]) == set(C.DIST_DEFAULTS)
     assert result["settings"][C.S_HARD_LIMIT_Z0]["max"] == 1200
     assert list(result["settings"][C.S_HARD_LIMIT_Z0]["ui"]) == [100, 1200, 50]
+
+
+_SOC = dict(zone1_limit=50, zone3_limit=20, surplus_enabled=False, surplus_threshold=90,
+            zone1_force_enabled=False, zone1_force_min_soc=30)
+
+
+@pytest.mark.parametrize("kw, erwartet", [
+    ({}, None),
+    (dict(zone1_limit=20), "err_soc_zone1_zone3"),
+    (dict(zone1_limit=21), None),
+    (dict(surplus_enabled=True, surplus_threshold=50), "err_soc_surplus_zone1"),
+    (dict(surplus_enabled=True, surplus_threshold=51), None),
+    (dict(surplus_threshold=50), None),
+    (dict(zone1_force_enabled=True, zone1_force_min_soc=20), "err_soc_zone1_force"),
+    (dict(zone1_force_enabled=True, zone1_force_min_soc=50), "err_soc_zone1_force"),
+    (dict(zone1_force_enabled=True, zone1_force_min_soc=21), None),
+    (dict(zone1_force_enabled=True, zone1_force_min_soc=49), None),
+    (dict(zone1_limit=20, surplus_enabled=True, surplus_threshold=10), "err_soc_zone1_zone3"),
+])
+def test_soc_conflict(kw, erwartet):
+    settings = {**C.SETTINGS_DEFAULTS}
+    cs = schema.cycle_settings(settings)._replace(**{**_SOC, **kw})
+    assert schema.soc_conflict(cs) == erwartet
