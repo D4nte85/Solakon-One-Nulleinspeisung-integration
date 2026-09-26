@@ -332,7 +332,11 @@ COORD_PATHS = {"_tariff_unit_suspect_since": "tariff.unit_suspect_since",
                "grid_stddev": "dyn.stddev", "grid_stddev_raw": "dyn.stddev_raw",
                "dyn_offset_z1": "dyn.z1", "dyn_offset_z2": "dyn.z2", "dyn_offset_ac": "dyn.ac",
                "last_output_ts": "out.last_ts", "_output_stall_actions": "out.stall_actions",
-               "_output_stall_last_ts": "out.stall_last_ts"}
+               "_output_stall_last_ts": "out.stall_last_ts",
+               "current_zone": "display.zone", "zone_label": "display.zone_label",
+               "mode_key": "display.mode_key", "mode_label": "display.mode_label",
+               "mode_label_ts": "display.mode_ts", "operating_state": "display.operating_state",
+               "operating_state_ts": "display.operating_state_ts"}
 
 
 def _coord_attr(coord, name):

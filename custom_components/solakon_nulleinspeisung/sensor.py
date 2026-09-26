@@ -75,13 +75,13 @@ class OperatingStateSensor(CoordinatorSensor):
     """
 
     def __init__(self, coord: SolakonCoordinator) -> None:
-        super().__init__(coord, "operating_state", lambda c: c.operating_state or None,
+        super().__init__(coord, "operating_state", lambda c: c.display.operating_state or None,
                          **_enum(OPERATING_STATES))
 
     @property
     def icon(self) -> str:
         """Icon zum aktuellen Betriebszustand."""
-        return _STATE_ICONS.get(self._coordinator.operating_state, "mdi:state-machine")
+        return _STATE_ICONS.get(self._coordinator.display.operating_state, "mdi:state-machine")
 
     @property
     def extra_state_attributes(self) -> dict:
@@ -93,13 +93,13 @@ class OperatingStateSensor(CoordinatorSensor):
 
 class ZoneSensor(CoordinatorSensor):
     def __init__(self, coord: SolakonCoordinator) -> None:
-        super().__init__(coord, "zone", lambda c: c.current_zone,
+        super().__init__(coord, "zone", lambda c: c.display.zone,
                          state_class=SensorStateClass.MEASUREMENT, **DIAG)
 
     @property
     def icon(self) -> str:
         """Icon zur aktuellen Zone."""
-        return _ZONE_ICONS.get(self._coordinator.current_zone, "mdi:layers")
+        return _ZONE_ICONS.get(self._coordinator.display.zone, "mdi:layers")
 
     @property
     def extra_state_attributes(self) -> dict:
@@ -155,7 +155,7 @@ async def async_setup_entry(
     add([
         OperatingStateSensor(coord),
         ZoneSensor(coord),
-        CoordinatorSensor(coord, "mode_label", lambda c: c.mode_key,
+        CoordinatorSensor(coord, "mode_label", lambda c: c.display.mode_key,
                           icon="mdi:information-outline", **_enum(MODE_KEYS), **DIAG),
         LastActionSensor(coord),
         GridStdDevSensor(coord),

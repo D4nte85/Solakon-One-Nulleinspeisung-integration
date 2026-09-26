@@ -13,6 +13,7 @@ from homeassistant.core import HomeAssistant, Event, callback
 from homeassistant.helpers.event import async_track_state_change_event, async_track_time_interval
 from homeassistant.util import dt as dt_util
 
+from .display import Display
 from .dynamic_offset import DynamicOffset
 from .feature_sensors import effective_sensor, feature_values, tariff_price
 from .i18n import Msg, translate, translate_msgs
@@ -66,15 +67,6 @@ CORE_SENSORS = (
     (CONF_MODE_SELECT, True, False),
 )
 
-# Regelzustand → Kenngrößen. Laden liegt als Zustand über dem Entladezyklus.
-OPERATING_BY_STATE = {
-    "surplus": "exporting",
-    "tariff_charge": "tariff_charging",
-    "ac_charge": "ac_charging",
-    "cycle": "battery_supply",
-    "pv": "pv_direct",
-}
-
 # Zusätzliche Regel-Trigger in Registrierungsreihenfolge: (Name, Aktivierungsschlüssel,
 # ODER-verknüpft). "periodic" ist ein Zeitintervall, alle übrigen lauschen auf ihren Sensor.
 TRACKERS = (
@@ -96,10 +88,7 @@ class SolakonCoordinator:
         self._store = SolakonSettingsStore(hass, STORAGE_VERSION, f"{DOMAIN}_{entry.entry_id}")
 
         # Laufzeit-Zustände
-        self.current_zone: int = 2
-        self.zone_label: str = translate(hass.config.language, "zone_init")
-        self.mode_key: str = "waiting"
-        self.mode_label: str = translate(hass.config.language, "mode_waiting")
+        self.display = Display(hass.config.language)
         self.last_action_key: str = ""
         self.last_action_params: dict = {}
         # Bausteine von last_error als (Schlüssel, Parameter), für andere Sprachen.
@@ -120,10 +109,6 @@ class SolakonCoordinator:
         # Entladung durch den Tarif gesperrt (Preis unter Teuer-Schwelle, keine
         # Lade-Session, kein Überschuss) — der Zustand hinter Fall TM.
         self.discharge_locked: bool = False
-        # Zusammengefasster Betriebszustand für Panel und Sensor; "" bis zum
-        # ersten Zyklus. Schlüssel aus OPERATING_STATES.
-        self.operating_state: str = ""
-        self.operating_state_ts: float = time.time()
         # Zyklus an einem Guard abgebrochen (Kernsensor fehlt, SOC-Limits ungültig)
         self._cycle_blocked: bool = False
 
@@ -133,7 +118,6 @@ class SolakonCoordinator:
             lambda value: self._set_number(self.entry.data[CONF_ACTIVE_POWER], value),
             self._read_actual, lambda: self.settings, self._warn_hardware,
         )
-        self.mode_label_ts: float = time.time()
 
         self.dyn = DynamicOffset()
 
@@ -362,65 +346,19 @@ class SolakonCoordinator:
 
     # ── Darstellen: Anzeigezustand ───────────────────────────────────────────
 
-    def _update_zone_display(
-        self, soc: float, zone1: int, zone3: int, mode: str
-    ) -> None:
-        """Zone-Label und Modus-Label für Panel-Anzeige aktualisieren."""
-        if soc <= zone3:
-            self.current_zone = 3
-        elif self.surplus_active:
-            self.current_zone = 0
-        elif self.cycle_active:
-            self.current_zone = 1
-        else:
-            self.current_zone = 2
-        self.zone_label = self._tr(f"zone_{self.current_zone}")
-
-        mode_map = {
-            MODE_DISABLED: "disabled",
-            MODE_DISCHARGE: "discharge",
-            MODE_AC_CHARGE: "ac_charge",
-        }
-        new_mode_key = mode_map.get(mode, "unknown")
-        if mode == MODE_DISCHARGE and self._at_rest(mode):
-            new_mode_key = "rest_discharge"
-        if new_mode_key != self.mode_key:
-            self.mode_label_ts = time.time()
-        self.mode_key = new_mode_key
-        # Beim unbekannten Modus den Rohwert an den Zustandstext anhängen.
-        self.mode_label = self._tr(f"mode_{new_mode_key}")
-        if new_mode_key == "unknown":
-            self.mode_label = f"{self.mode_label}: {mode}"
+    def _update_display(self, soc: float, zone3: int, mode: str) -> None:
+        """Anzeigezone, Modus und Betriebszustand nachziehen."""
+        self.display.update(
+            self.hass.config.language, soc, zone3, mode, self._at_rest(mode),
+            self.surplus_active, self.cycle_active,
+        )
         self._update_operating_state()
 
     def _update_operating_state(self) -> bool:
-        """Betriebszustand aus den Zustandsflags ableiten; True bei Wechsel.
-
-        Erster zutreffender Zustand gewinnt, Reihenfolge wie in OPERATING_STATES.
-        Anders als `active_fall`, das den zuletzt ausgeführten Übergang hält,
-        beschreibt der Zustand, was gerade gilt.
-        """
-        control = self._control_state
-        if not self._regulation_on:
-            state = "disabled"
-        elif self._cycle_blocked:
-            state = "blocked"
-        elif control in ("surplus", "tariff_charge", "ac_charge"):
-            state = OPERATING_BY_STATE[control]
-        elif self.discharge_locked:
-            state = "discharge_locked"
-        elif self.is_night:
-            state = "night_off"
-        elif control == "pv" and self.current_zone == 3:
-            state = "safety_stop"
-        else:
-            state = OPERATING_BY_STATE[control]
-
-        if state == self.operating_state:
-            return False
-        self.operating_state = state
-        self.operating_state_ts = time.time()
-        return True
+        """Betriebszustand aus den Zustandsflags nachziehen; True bei Wechsel."""
+        return self.display.update_state(
+            self._regulation_on, self._cycle_blocked, self._control_state, self.discharge_locked, self.is_night,
+        )
 
     def snapshot(self) -> dict[str, Any]:
         """Anzeigezustand unter internen Namen, ohne Live-Sensorwerte.
@@ -437,14 +375,14 @@ class SolakonCoordinator:
             "offset_static": offset_static,
             "offset_value": offset_value,
             "capacity_kwh": self._flt_kwh_normalized(cap_sensor, None) if cap_sensor else None,
-            "current_zone": self.current_zone,
-            "zone_label": self.zone_label,
-            "mode_key": self.mode_key,
-            "mode_label": self.mode_label,
+            "current_zone": self.display.zone,
+            "zone_label": self.display.zone_label,
+            "mode_key": self.display.mode_key,
+            "mode_label": self.display.mode_label,
             "last_action": self.last_action,
             "last_action_ts": self.last_action_ts,
             "last_output_ts": self.out.last_ts,
-            "mode_label_ts": self.mode_label_ts,
+            "mode_label_ts": self.display.mode_ts,
             "last_error": self.last_error,
             "integral": round(self.integral, 2),
             "cycle_active": self.cycle_active,
@@ -461,8 +399,8 @@ class SolakonCoordinator:
             "dyn_offset_z2": self.dyn.z2,
             "dyn_offset_ac": self.dyn.ac,
             "active_fall": self.active_fall,
-            "operating_state": self.operating_state,
-            "operating_state_ts": self.operating_state_ts,
+            "operating_state": self.display.operating_state,
+            "operating_state_ts": self.display.operating_state_ts,
             "discharge_locked": self.discharge_locked,
             "dist_mode_effective": self.dist_mode_effective,
             "is_night": self.is_night,
@@ -727,11 +665,7 @@ class SolakonCoordinator:
                 await self._transition(output=0, wait=False, timer=False)
                 await self._set_discharge(self._setting(S_DISCHARGE_MAX, float))
                 await self._transition(mode=MODE_DISABLED)
-                off_key = "disabled_regulation_off"
-                if self.mode_key != off_key:
-                    self.mode_label_ts = time.time()
-                self.mode_key = off_key
-                self.mode_label = self._tr(f"mode_{off_key}")
+                self.display.set_mode("disabled_regulation_off", self.hass.config.language)
 
         before = {name: self._tracker_input(name) for name, _ in TRACKERS}
 
@@ -985,7 +919,7 @@ class SolakonCoordinator:
             blocked = await self._run_pi_phase(cs, soc, mode, timer_val, error_share, limits, ac_offset)
 
         # ── 12. Anzeige und Flag-Speicherung ─────────────────────────────────
-        self._end_cycle(blocked=blocked, display=(soc, cs.zone1_limit, cs.zone3_limit, mode),
+        self._end_cycle(blocked=blocked, display=(soc, cs.zone3_limit, mode),
                         prev_flags=prev_flags)
 
     async def _execute_falls(self, **v) -> str | None:
@@ -1089,13 +1023,13 @@ class SolakonCoordinator:
 
     def _end_cycle(
         self, *, blocked: bool = False,
-        display: tuple[float, int, int, str] | None = None, prev_flags: dict[str, bool] | None = None,
+        display: tuple[float, int, str] | None = None, prev_flags: dict[str, bool] | None = None,
         notify_on_change: bool = False,
     ) -> None:
         """Zyklus abschließen: Fehler, Anzeige, Flag-Speicherung, Benachrichtigung.
 
         Übernimmt die Meldungen des Zyklus nach `last_error_msgs`.
-        `display` (soc, zone1, zone3, mode) zieht Zonen- und Modusanzeige nach, sonst nur
+        `display` (soc, zone3, mode) zieht Zonen- und Modusanzeige nach, sonst nur
         den Betriebszustand. Mit `prev_flags` wird bei geänderten Flags verzögert gespeichert.
         `notify_on_change` benachrichtigt nur, wenn der Betriebszustand gewechselt hat.
         """
@@ -1103,7 +1037,7 @@ class SolakonCoordinator:
         if blocked:
             self._cycle_blocked = True
         if display is not None:
-            self._update_zone_display(*display)
+            self._update_display(*display)
             changed = True
         else:
             changed = self._update_operating_state()
