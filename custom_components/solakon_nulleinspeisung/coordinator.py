@@ -14,12 +14,10 @@ from homeassistant.helpers.event import async_track_state_change_event, async_tr
 from homeassistant.util import dt as dt_util
 
 from .dynamic_offset import DynamicOffset
+from .feature_sensors import effective_sensor, feature_values, tariff_price
 from .i18n import Msg, translate, translate_msgs
 from .pi import SATURATED, STEP, PIController
-from .readings import (
-    NO_SENSOR, NOT_NUMERIC, UNAVAILABLE, UNIT_SCALE_KILO, UNIT_SCALE_KWH, UNIT_SCALE_W,
-    WRONG_DOMAIN, read_number, read_scaled, unit_of, valid_state,
-)
+from .readings import UNIT_SCALE_KWH, UNIT_SCALE_W, read_number, read_scaled, valid_state
 from .grid_group import NetGroup, Shares
 from .group_store import group_for
 from .limits import PowerLimits, power_limits
@@ -40,11 +38,9 @@ from .const import (
     CONF_ACTIVE_POWER, CONF_DISCHARGE_CURRENT, CONF_TIMEOUT_SET, CONF_MODE_SELECT,
     CONF_EXPORT_LIMIT, MODE_DISABLED, MODE_DISCHARGE, MODE_AC_CHARGE, S_REGULATION_ENABLED,
     S_ZONE3_LIMIT, S_DISCHARGE_MAX, S_HARD_LIMIT_Z0, S_HARD_LIMIT_Z1, S_PV_RESERVE,
-    S_SURPLUS_FORECAST_ENABLED, S_SURPLUS_LOCK_ENABLED, S_SURPLUS_LOCK_SENSOR, S_AC_SOC_TARGET,
-    S_AC_POWER_LIMIT, S_PERIODIC_ENABLED, S_PERIODIC_INTERVAL, S_TARIFF_ENABLED,
-    S_TARIFF_PRICE_SENSOR, S_TARIFF_CHEAP_ENTITY, S_TARIFF_EXP_ENTITY, S_PV_FORECAST_ENABLED,
-    S_PV_FORECAST_SENSOR, S_ZONE1_FORCE_ENABLED, S_ZONE1_FORCE_SENSOR, S_REST_IN_DISCHARGE,
-    S_SELF_ADJUST_TOL, S_DYN_Z1_ENABLED, S_DYN_Z2_ENABLED, S_DYN_AC_ENABLED,
+    S_SURPLUS_FORECAST_ENABLED, S_SURPLUS_LOCK_ENABLED, S_AC_SOC_TARGET, S_AC_POWER_LIMIT,
+    S_PERIODIC_ENABLED, S_PERIODIC_INTERVAL, S_TARIFF_ENABLED, S_PV_FORECAST_ENABLED,
+    S_ZONE1_FORCE_ENABLED, S_REST_IN_DISCHARGE, S_SELF_ADJUST_TOL, S_DYN_Z1_ENABLED, S_DYN_Z2_ENABLED, S_DYN_AC_ENABLED,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -57,37 +53,6 @@ PERSISTED_FLAGS = (
     ("ac_charge_active", "ac_charge_active", False),
     ("tariff_charge_active", "tariff_charge_active", False),
     ("solar_zero_entry_armed", "surplus.armed", True),
-)
-
-# Fehlerschlüssel je Grund ohne Zahl, `{p}` ist das Präfix des Features.
-FEATURE_ERRORS = {
-    NO_SENSOR: "{p}_no_sensor",
-    WRONG_DOMAIN: "{p}_sensor_wrong_domain",
-    UNAVAILABLE: "{p}_sensor_unavailable",
-    NOT_NUMERIC: "{p}_sensor_not_numeric",
-}
-
-# Instanzübergreifend pflegbare Sensor-Vorgaben: (lokaler Settings-Schlüssel, globaler
-# Schlüssel der Verteilung). Lokal gewinnt, sonst der globale Wert.
-SENSOR_SOURCES = {
-    "tariff": (S_TARIFF_PRICE_SENSOR, "global_tariff_price_sensor"),
-    "tariff_cheap": (S_TARIFF_CHEAP_ENTITY, "global_tariff_cheap_entity"),
-    "tariff_exp": (S_TARIFF_EXP_ENTITY, "global_tariff_exp_entity"),
-    "pv_forecast": (S_PV_FORECAST_SENSOR, "global_pv_forecast_today_sensor"),
-    "surplus_lock": (S_SURPLUS_LOCK_SENSOR, "global_surplus_lock_sensor"),
-    "zone1_force": (S_ZONE1_FORCE_SENSOR, "global_pv_forecast_tomorrow_sensor"),
-}
-
-# Sensorgebundene Werte des Regelzyklus: (Name, SENSOR_SOURCES-Schlüssel, Enable-Feld
-# in CycleSettings, Fehlerpräfix, Einheitenskala, Entität optional). Ohne optionale
-# Entität wird nicht gelesen und nichts gemeldet.
-FEATURE_READINGS = (
-    ("cheap", "tariff_cheap", "tariff_enabled", "err_tariff_cheap", {}, True),
-    ("exp", "tariff_exp", "tariff_enabled", "err_tariff_exp", {}, True),
-    ("surplus_forecast", "pv_forecast", "surplus_forecast_enabled", "err_surplus_forecast", UNIT_SCALE_KWH, False),
-    ("surplus_lock", "surplus_lock", "surplus_lock_enabled", "err_exit_lock", UNIT_SCALE_KILO, False),
-    ("pv_forecast", "pv_forecast", "pv_forecast_enabled", "err_pv_forecast", UNIT_SCALE_KWH, False),
-    ("zone1_force", "zone1_force", "zone1_force_enabled", "err_zone1_force", UNIT_SCALE_KWH, False),
 )
 
 # Kernsensoren der Instanz: (Konfigschlüssel, löst Regelzyklus aus, Pflicht für den Zyklus).
@@ -257,44 +222,9 @@ class SolakonCoordinator:
 
     # ── Lesen: Sensor-Vorgaben ───────────────────────────────────────────────
 
-    def _global_sensor(self, key: str) -> str:
-        """Globale Vorgabe `key` aus dem Verteilungs-Tab der Netzgruppe; leer ohne Eintrag."""
-        return str(self.group.dist_cfg().get(key, ""))
-
     def _effective(self, name: str) -> str:
-        """Wirksamer Sensor aus SENSOR_SOURCES: lokaler Override, sonst globale Vorgabe.
-
-        `zone1_force` liest ab 12 Uhr die Vorhersage für morgen, davor die für heute
-        (`pv_forecast`) — derselbe Zieltag, nur der Sensor wechselt.
-        """
-        if name == "zone1_force" and dt_util.now().hour < 12:
-            name = "pv_forecast"
-        local, global_key = SENSOR_SOURCES[name]
-        return str(self.settings[local]) or self._global_sensor(global_key)
-
-    def _feature_value(
-        self, enabled: bool, sensor: str, err_prefix: str, scale: dict[str, float],
-    ) -> float | None:
-        """Wert des Feature-Sensors in der Zieleinheit; None, wenn das Feature aus ist oder keine Zahl kommt.
-
-        Ohne Zahl geht der Fehlerschlüssel des Grundes aus FEATURE_ERRORS in die Fehlerkette.
-        """
-        if not enabled:
-            return None
-        reading = read_scaled(self.hass, sensor, scale)
-        if reading.reason:
-            params = {} if reading.reason == NO_SENSOR else {"sensor": sensor}
-            self._messages.warn((FEATURE_ERRORS[reading.reason].format(p=err_prefix), params))
-        return reading.value
-
-    def _feature_values(self, cs: CycleSettings) -> dict[str, float | None]:
-        """Alle Werte aus FEATURE_READINGS nach Name, in Tabellenreihenfolge gelesen."""
-        values = {}
-        for name, source, enabled, err_prefix, scale, optional in FEATURE_READINGS:
-            sensor = self._effective(source)
-            on = getattr(cs, enabled) and (bool(sensor) or not optional)
-            values[name] = self._feature_value(on, sensor, err_prefix, scale)
-        return values
+        """Wirksamer Sensor der Vorgabe `name` für diese Instanz und die aktuelle Stunde."""
+        return effective_sensor(name, self.settings, self.group.dist_cfg(), dt_util.now().hour)
 
     # ── Lesen: Netzgruppe ────────────────────────────────────────────────────
 
@@ -951,7 +881,11 @@ class SolakonCoordinator:
         ac_offset = self.dyn.value("ac", self.settings)
 
         tariff_sensor = self._effective("tariff")
-        feature = self._feature_values(cs)
+        feature, feature_warnings = feature_values(
+            self.hass, cs, self.settings, self.group.dist_cfg(), dt_util.now().hour,
+        )
+        for warning in feature_warnings:
+            self._messages.warn(warning)
 
         # ── 4. Verteilung und Leistungsgrenzen ───────────────────────────────
         error_share, allocated_power, shares = self.group.distribution(self, soc)
@@ -993,12 +927,14 @@ class SolakonCoordinator:
 
         # Preis ohne Einheitenumrechnung; die Einheitenwarnung der Tariflage geht als
         # weicher Fehler in dieselbe Meldungskette ein.
-        price = self._feature_value(cs.tariff_enabled, tariff_sensor, "err_tariff", {})
+        price, unit, price_warning = tariff_price(self.hass, cs.tariff_enabled, tariff_sensor)
+        if price_warning:
+            self._messages.warn(price_warning)
         tariff = self.tariff.assess(
             enabled=cs.tariff_enabled and bool(tariff_sensor), suppressed=self.forecast_tariff_suppressed,
             price=price, cheap_entity=feature["cheap"], cheap_setting=cs.tariff_cheap,
             exp_entity=feature["exp"], exp_setting=cs.tariff_exp,
-            unit=unit_of(self.hass.states.get(tariff_sensor)) if price is not None else "", now=time.time(),
+            unit=unit, now=time.time(),
         )
         if tariff.unit_warning:
             self._messages.warn(tariff.unit_warning)

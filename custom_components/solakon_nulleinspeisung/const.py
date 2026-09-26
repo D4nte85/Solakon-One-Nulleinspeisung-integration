@@ -172,7 +172,7 @@ S_PV_FORECAST_THRESHOLD  = "pv_forecast_threshold"
 
 # Zone-1-Nacht-Forcierung. Sensor ist zeitabhängig "heute" (S_PV_FORECAST_SENSOR
 # + globaler Fallback) oder "morgen" (S_ZONE1_FORCE_SENSOR + globaler Fallback) — siehe
-# _effective() in coordinator.py.
+# effective_sensor() in feature_sensors.py.
 S_ZONE1_FORCE_ENABLED   = "zone1_force_enabled"
 S_ZONE1_FORCE_SENSOR    = "zone1_force_sensor"
 S_ZONE1_FORCE_THRESHOLD = "zone1_force_threshold"
@@ -354,7 +354,7 @@ DIST_SCHEMA: dict[str, Field] = {
     # diese optional lokal überschreiben (S_PV_FORECAST_SENSOR, S_ZONE1_FORCE_SENSOR,
     # S_SURPLUS_LOCK_SENSOR, S_TARIFF_PRICE_SENSOR, S_TARIFF_CHEAP_ENTITY,
     # S_TARIFF_EXP_ENTITY); lokal gewinnt, sonst greift dieser globale Wert. Nur bei
-    # >1 Instanz im Panel sichtbar, siehe coordinator.py _effective().
+    # >1 Instanz im Panel sichtbar, siehe feature_sensors.py effective_sensor().
     "global_pv_forecast_today_sensor":    _str(),
     "global_pv_forecast_tomorrow_sensor": _str(),
     "global_surplus_lock_sensor":         _str(),
