@@ -284,3 +284,46 @@ def test_nacht_hysterese_band():
 def test_nacht_unterdrueckt(kw):
     r = _sn(solar=0, **kw)
     assert (r.state.dark, r.is_night) == (True, False)
+
+
+# ── Regelzustand und Ruhezustand ─────────────────────────────────────────────
+
+@pytest.mark.parametrize("flags, expected", [
+    ((True, True, True, True), "surplus"),
+    ((False, True, True, True), "tariff_charge"),
+    ((False, False, True, True), "ac_charge"),
+    ((False, False, False, True), "cycle"),
+    ((False, False, False, False), "pv"),
+])
+def test_control_state_rangfolge(flags, expected):
+    assert zones.control_state(*flags) == expected
+
+
+@pytest.mark.parametrize("rest_in_discharge, expected", [(True, "1"), (False, "0")])
+def test_rest_mode(rest_in_discharge, expected):
+    assert zones.rest_mode(rest_in_discharge) == expected
+
+
+@pytest.mark.parametrize("mode, rest_in_discharge, resting, expected", [
+    ("0", False, False, True),   # Modus '0' ist stets Ruhe
+    ("0", True, True, False),    # Ruhemodus ist '1', Modus '0' zählt nicht
+    ("1", True, True, True),
+    ("1", True, False, False),   # Modus '1' ohne Flag: regelt
+    ("1", False, True, False),   # Ruhemodus ist '0'
+    ("3", True, True, False),
+])
+def test_at_rest(mode, rest_in_discharge, resting, expected):
+    assert zones.at_rest(mode, rest_in_discharge, resting) is expected
+
+
+@pytest.mark.parametrize("state, mode, expected", [
+    ("surplus", "1", 2.0),
+    ("tariff_charge", "3", 0.0),
+    ("ac_charge", "3", 0.0),
+    ("cycle", "1", 40.0),
+    ("pv", "1", 0.0),
+    ("pv", "0", 40.0),
+    ("pv", "3", 40.0),
+])
+def test_required_discharge(state, mode, expected):
+    assert zones.required_discharge(state, mode, 40) == expected

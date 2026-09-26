@@ -672,7 +672,7 @@ async def _run_derive() -> dict:
                     coord._update_zone_display(soc, 50, 20, mode)
                     rows.append([int("".join("1" if v else "0" for v in combo), 2), regulation, soc, mode,
                                  coord.operating_state, coord.current_zone, coord.zone_label,
-                                 coord.mode_key, coord.mode_label, coord._required_discharge(40, mode)])
+                                 coord.mode_key, coord.mode_label, h.zones_mod.required_discharge(coord._control_state, mode, 40)])
     rng = random.Random("solakon-pi")
     pi = []
     for _ in range(3000):

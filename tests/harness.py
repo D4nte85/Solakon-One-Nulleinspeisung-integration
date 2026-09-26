@@ -28,6 +28,7 @@ PKG = "custom_components.solakon_nulleinspeisung"
 integration = importlib.import_module(PKG)
 coordinator_mod = importlib.import_module(PKG + ".coordinator")
 dynamic_offset_mod = importlib.import_module(PKG + ".dynamic_offset")
+zones_mod = importlib.import_module(PKG + ".zones")
 const = importlib.import_module(PKG + ".const")
 sensor_mod = importlib.import_module(PKG + ".sensor")
 binary_mod = importlib.import_module(PKG + ".binary_sensor")

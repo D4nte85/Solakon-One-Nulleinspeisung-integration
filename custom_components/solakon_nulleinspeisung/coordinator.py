@@ -28,7 +28,10 @@ from .messages import CycleMessages
 from .output import Actual, Output, Stall
 from .schema import InvalidSettings, check, notify_reset, sanitize
 from .tariff import Tariff, forecast_suppressed
-from .zones import SurplusState, ZoneInputs, decide, forecast_flags, surplus_and_night
+from .zones import (
+    SurplusState, ZoneInputs, at_rest, control_state, decide, forecast_flags, required_discharge,
+    rest_mode, surplus_and_night,
+)
 from .const import (
     DOMAIN, STORAGE_VERSION, SETTINGS_DEFAULTS, SETTINGS_SCHEMA,
     CONF_GRID_SENSOR, CONF_ACTUAL_SENSOR, CONF_SOLAR_SENSOR,
@@ -117,8 +120,6 @@ OPERATING_BY_STATE = {
     "cycle": "battery_supply",
     "pv": "pv_direct",
 }
-# Entladestrom in A; der Zyklus nutzt den eingestellten Maximalstrom.
-DISCHARGE_BY_STATE = {"surplus": 2.0, "tariff_charge": 0.0, "ac_charge": 0.0, "pv": 0.0}
 
 # Settings, die der Regelzyklus einmal je Durchlauf liest: (Feld, Schlüssel, Typ).
 CYCLE_SETTINGS = (
@@ -451,40 +452,13 @@ class SolakonCoordinator:
 
     @property
     def _control_state(self) -> str:
-        """Regelzustand aus den Flags; es gilt surplus → tariff_charge → ac_charge → cycle → pv."""
-        if self.surplus_active:
-            return "surplus"
-        if self.tariff_charge_active:
-            return "tariff_charge"
-        if self.ac_charge_active:
-            return "ac_charge"
-        if self.cycle_active:
-            return "cycle"
-        return "pv"
-
-    @property
-    def _rest_mode(self) -> str:
-        """Modus des Ruhezustands: '1' mit aktivem `S_REST_IN_DISCHARGE`, sonst '0'."""
-        return MODE_DISCHARGE if self._setting(S_REST_IN_DISCHARGE, bool) else MODE_DISABLED
+        """Regelzustand der Instanz laut `zones.control_state`."""
+        return control_state(self.surplus_active, self.tariff_charge_active, self.ac_charge_active,
+                             self.cycle_active)
 
     def _at_rest(self, mode: str) -> bool:
-        """True, wenn `mode` der Ruhemodus ist und die Instanz darin ruht.
-
-        Modus '0' wird nur vom Ruhezustand geschrieben und gilt stets als Ruhe;
-        in Modus '1' entscheidet das Flag `resting`.
-        """
-        return mode == self._rest_mode and (mode == MODE_DISABLED or self.resting)
-
-    def _required_discharge(self, discharge_max: int, mode: str) -> float:
-        """Entladestrom für den aktuellen Regelzustand laut DISCHARGE_BY_STATE.
-
-        Ohne Zyklus und Lade-Session gilt 0 A nur in Modus '1' (Zone 2, Ruhe in Modus 1);
-        in jedem anderen Modus `discharge_max`.
-        """
-        state = self._control_state
-        if state == "pv" and mode != MODE_DISCHARGE:
-            return float(discharge_max)
-        return DISCHARGE_BY_STATE.get(state, float(discharge_max))
+        """Ruht die Instanz in `mode`, laut `zones.at_rest`."""
+        return at_rest(mode, self._setting(S_REST_IN_DISCHARGE, bool), self.resting)
 
     def _persisted_flags(self) -> dict[str, bool]:
         """Gespeicherte Zustandsflags unter ihrem Speicherschlüssel."""
@@ -802,7 +776,7 @@ class SolakonCoordinator:
         if timer and not timer_first:
             await self._timer_toggle()
         if rest:
-            mode = self._rest_mode
+            mode = rest_mode(self._setting(S_REST_IN_DISCHARGE, bool))
         if mode is not None:
             self.resting = rest
             await self._set_mode(mode)
@@ -1152,7 +1126,7 @@ class SolakonCoordinator:
 
         # ── 10. Entladestrom mit Regelzustand abgleichen ─────────────────────
         mode = self._str(cfg[CONF_MODE_SELECT])
-        await self._set_discharge(self._required_discharge(cs.discharge_max, mode))
+        await self._set_discharge(required_discharge(self._control_state, mode, cs.discharge_max))
 
         # ── 11. PI-Phase (Modus '1' und '3') ─────────────────────────────────
         blocked = False

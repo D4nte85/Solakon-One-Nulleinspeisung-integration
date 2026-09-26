@@ -12,6 +12,7 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 - Intern: Ausgangsleistung (Schreiben, Warten, Nullbestätigung, Stillstandserkennung) in eigenes Modul `output.py`, Verhalten unverändert.
 - Intern: Offsetzone des Regelzustands und wirksamer Offset als `DynamicOffset.zone_of` und `DynamicOffset.value`; Stillstandswarnung über denselben Weg wie die übrigen Schreibwarnungen. Verhalten unverändert.
 - Intern: Die WebSocket-Handler greifen nicht mehr auf Interna des Coordinators zu; Messwerte, Integral-Reset und Setzen des Zyklus laufen über `live_values`, `async_reset_integral` und `async_set_cycle`. Verhalten unverändert.
+- Intern: Regelzustand, Ruhezustand und Entladestrom je Regelzustand als reine Funktionen in `zones.py` (`control_state`, `rest_mode`, `at_rest`, `required_discharge`). Verhalten unverändert.
 
 ### Behoben
 

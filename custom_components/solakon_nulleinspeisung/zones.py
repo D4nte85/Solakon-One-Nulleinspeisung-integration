@@ -6,6 +6,47 @@ from dataclasses import dataclass, field
 from .const import MODE_AC_CHARGE, MODE_DISABLED, MODE_DISCHARGE
 from .tariff import TariffState
 
+# Entladestrom in A je Regelzustand; der Zyklus nutzt den eingestellten Maximalstrom.
+DISCHARGE_BY_STATE = {"surplus": 2.0, "tariff_charge": 0.0, "ac_charge": 0.0, "pv": 0.0}
+
+
+def control_state(surplus: bool, tariff_charge: bool, ac_charge: bool, cycle: bool) -> str:
+    """Regelzustand aus den Flags; es gilt surplus → tariff_charge → ac_charge → cycle → pv."""
+    if surplus:
+        return "surplus"
+    if tariff_charge:
+        return "tariff_charge"
+    if ac_charge:
+        return "ac_charge"
+    if cycle:
+        return "cycle"
+    return "pv"
+
+
+def rest_mode(rest_in_discharge: bool) -> str:
+    """Modus des Ruhezustands: '1' mit `rest_in_discharge`, sonst '0'."""
+    return MODE_DISCHARGE if rest_in_discharge else MODE_DISABLED
+
+
+def at_rest(mode: str, rest_in_discharge: bool, resting: bool) -> bool:
+    """True, wenn `mode` der Ruhemodus ist und die Instanz darin ruht.
+
+    Modus '0' wird nur vom Ruhezustand geschrieben und gilt stets als Ruhe;
+    in Modus '1' entscheidet `resting`.
+    """
+    return mode == rest_mode(rest_in_discharge) and (mode == MODE_DISABLED or resting)
+
+
+def required_discharge(state: str, mode: str, discharge_max: int) -> float:
+    """Entladestrom für den Regelzustand `state` laut DISCHARGE_BY_STATE.
+
+    Ohne Zyklus und Lade-Session gilt 0 A nur in Modus '1' (Zone 2, Ruhe in Modus 1);
+    in jedem anderen Modus `discharge_max`.
+    """
+    if state == "pv" and mode != MODE_DISCHARGE:
+        return float(discharge_max)
+    return DISCHARGE_BY_STATE.get(state, float(discharge_max))
+
 
 @dataclass(frozen=True)
 class ZoneInputs:
