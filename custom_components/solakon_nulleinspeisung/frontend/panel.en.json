@@ -192,7 +192,7 @@
     },
     "ac_min_power": {
       "l": "Minimum charge power (W)",
-      "d": "Smallest charge setpoint that is written. If the setpoint calculation yields less, 0 is written — the device does not hold smaller charge powers steadily. A higher value charges less often but more steadily; 0 disables the threshold. If the value exceeds the max. charge power, the max. charge power serves as the threshold."
+      "d": "Smallest charge setpoint that is written; if the setpoint calculation yields less, 0 is written. The default of 50 W is measured on the device: it does not act on 10 W, 20–30 W oscillate by about ±20 W, from about 50 W the charge power is stable. Change at your own risk — below that, the charge power and with it the grid oscillate. 0 disables the threshold. If the value exceeds the max. charge power, the max. charge power serves as the threshold."
     },
     "ac_hysteresis": {
       "l": "Entry Hysteresis (W)",

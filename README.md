@@ -421,7 +421,7 @@ Einzelbetrieb bzw. nur eine ladende Instanz: eigene Ist-Ladeleistung + (ac_offse
 
 Regeln der Stellwertrechnung:
 - Geschrieben wird, wenn |ac_offset − grid| > Toleranz oder die Ausgangsleistung über der Max. Ladeleistung liegt. Der Stellwert wird auf 0 … Max. Ladeleistung geklemmt.
-- Unter der Mindestladeleistung (Standard 50 W) wird 0 geschrieben: Das Gerät hält kleinere Ladeleistungen nicht ruhig. Liegt die Mindestladeleistung über der Max. Ladeleistung, gilt die Max. Ladeleistung als Schwelle.
+- Unter der Mindestladeleistung (Standard 50 W) wird 0 geschrieben: Das Gerät hält kleinere Ladeleistungen nicht ruhig. Die 50 W sind gemessen — 10 W setzt das Gerät nicht um, 20–30 W pendeln um etwa ±20 W, ab etwa 50 W ist die Ladeleistung stabil. Eine Änderung geschieht auf eigene Gefahr. Liegt die Mindestladeleistung über der Max. Ladeleistung, gilt die Max. Ladeleistung als Schwelle.
 - Solange die Ladeleistung noch hochfährt (Ist-Ladeleistung mehr als 15 W unter der Ausgangsleistung), wird nur gesenkt. Die Ladeleistung des Solakon ONE steigt mit etwa 34 W/s, aus dem Stillstand anfangs schneller; Senken wirkt nach etwa 2 s als Sprung. Der Netzsensor zeigt während des Anstiegs einen älteren Stand, eine Erhöhung darauf würde überschwingen.
 
 | Parameter | Beschreibung | Empfehlung |
@@ -429,7 +429,7 @@ Regeln der Stellwertrechnung:
 | Aktivieren | Ein/Aus-Schalter | — |
 | Ladeziel SOC (%) | Laden stoppt bei diesem SOC | 80–95 |
 | Max. Ladeleistung (W) | Obergrenze der AC-Ladeleistung | 400–800 |
-| Mindestladeleistung (W) | Kleinster geschriebener Ladesollwert, darunter 0; 0 schaltet die Schwelle ab | 50–100 |
+| Mindestladeleistung (W) | Kleinster geschriebener Ladesollwert, darunter 0; 0 schaltet die Schwelle ab. 50 W gemessen, Änderung auf eigene Gefahr | 50 |
 | Eintritts-Hysterese (W) | (Grid + ΣOutput_entladend) muss unter −Hysterese liegen | 30–80 |
 | Regel-Offset (W) | Zielwert während AC Laden (typisch negativ) | −80 bis −30 |
 

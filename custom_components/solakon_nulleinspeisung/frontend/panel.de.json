@@ -192,7 +192,7 @@
     },
     "ac_min_power": {
       "l": "Mindestladeleistung (W)",
-      "d": "Kleinster Ladesollwert, der geschrieben wird. Ergibt die Stellwertrechnung weniger, wird 0 geschrieben — das Gerät hält kleinere Ladeleistungen nicht ruhig. Höher gesetzt lädt die Batterie seltener, aber ruhiger; 0 schaltet die Schwelle ab. Liegt der Wert über der Max. Ladeleistung, gilt die Max. Ladeleistung als Schwelle."
+      "d": "Kleinster Ladesollwert, der geschrieben wird; ergibt die Stellwertrechnung weniger, wird 0 geschrieben. Der Standard von 50 W ist am Gerät gemessen: 10 W setzt es nicht um, 20–30 W pendeln um etwa ±20 W, ab etwa 50 W ist die Ladeleistung stabil. Änderung auf eigene Gefahr — darunter pendelt die Ladeleistung und damit das Netz. 0 schaltet die Schwelle ab. Liegt der Wert über der Max. Ladeleistung, gilt die Max. Ladeleistung als Schwelle."
     },
     "ac_hysteresis": {
       "l": "Eintritts-Hysterese (W)",
