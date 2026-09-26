@@ -437,6 +437,16 @@ class SolakonCoordinator:
         """Gesetzte Ausgangsleistung."""
         return self._flt(self.entry.data.get(CONF_ACTIVE_POWER, ""))
 
+    def live_values(self) -> dict[str, float]:
+        """Netz, Ist-Leistung und PV in W, SOC in %; ohne Zahl 0."""
+        cfg = self.entry.data
+        return {
+            "grid": self._flt_power(cfg.get(CONF_GRID_SENSOR, "")),
+            "actual_power": self._flt_power(cfg.get(CONF_ACTUAL_SENSOR, "")),
+            "solar": self._flt_power(cfg.get(CONF_SOLAR_SENSOR, "")),
+            "soc": self._flt(cfg.get(CONF_SOC_SENSOR, "")),
+        }
+
     # ── Ableiten: Regelzustand ───────────────────────────────────────────────
 
     @property
@@ -807,11 +817,21 @@ class SolakonCoordinator:
         """Integralanteil des PI-Reglers setzen."""
         self.pi.integral = value
 
-    def reset_integral(self) -> None:
-        """Integral nullen, als letzte Aktion vermerken, Listener benachrichtigen."""
-        self.pi.reset()
-        self._set_last_action("act_integral_reset")
-        self.notify_listeners()
+    async def async_reset_integral(self) -> None:
+        """Unter dem Lock: Integral nullen, als letzte Aktion vermerken, Listener benachrichtigen."""
+        async with self._lock:
+            self.pi.reset()
+            self._set_last_action("act_integral_reset")
+            self.notify_listeners()
+
+    async def async_set_cycle(self, active: bool) -> None:
+        """Unter dem Lock: Zyklus setzen, Integral nullen, speichern, benachrichtigen; danach Regelzyklus anstoßen."""
+        async with self._lock:
+            self.cycle_active = active
+            self.pi.reset()
+            self.schedule_save()
+            self.notify_listeners()
+        self.request_regulation()
 
     # ── Lebenszyklus: Setup und Settings ─────────────────────────────────────
 

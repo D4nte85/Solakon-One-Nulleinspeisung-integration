@@ -18,7 +18,7 @@ from homeassistant.helpers.storage import Store
 from .const import (
     DOMAIN, PLATFORMS,
     CONF_INSTANCE_NAME,
-    CONF_GRID_SENSOR, CONF_ACTUAL_SENSOR, CONF_SOLAR_SENSOR, CONF_SOC_SENSOR,
+    CONF_GRID_SENSOR,
     STORAGE_VERSION, DIST_DEFAULTS, DIST_SCHEMA, SETTINGS_SCHEMA, VERSION,
 )
 from . import group_store
@@ -135,13 +135,9 @@ async def _ws_get_status(
     if (coord := _coord_or_error(hass, connection, msg)) is None:
         return
 
-    cfg = coord.entry.data
     connection.send_result(msg["id"], {
         **coord.snapshot_view(WS_STATUS_KEYS),
-        "grid":         coord._flt_power(cfg.get(CONF_GRID_SENSOR, ""), 0),
-        "actual_power": coord._flt_power(cfg.get(CONF_ACTUAL_SENSOR, ""), 0),
-        "solar":        coord._flt_power(cfg.get(CONF_SOLAR_SENSOR, ""), 0),
-        "soc":          coord._flt(cfg.get(CONF_SOC_SENSOR, ""), 0),
+        **coord.live_values(),
         # Mit Panelsprache: Aktion und Fehlerkette in dieser statt in der Instanzsprache.
         **(coord.status_texts(msg["language"]) if msg.get("language") else {}),
     })
@@ -159,8 +155,7 @@ async def _ws_reset_integral(
     """WS: PI-Integral der Instanz auf 0 setzen."""
     if (coord := _coord_or_error(hass, connection, msg)) is None:
         return
-    async with coord._lock:
-        coord.reset_integral()
+    await coord.async_reset_integral()
     connection.send_result(msg["id"], {"success": True})
 
 
@@ -177,12 +172,7 @@ async def _ws_set_cycle(
     """WS: Entladezyklus setzen, Integral nullen und sofort einen Regelzyklus anstoßen."""
     if (coord := _coord_or_error(hass, connection, msg)) is None:
         return
-    async with coord._lock:
-        coord.cycle_active = msg["active"]
-        coord.integral = 0.0
-        coord.schedule_save()
-        coord.notify_listeners()
-    coord.request_regulation()
+    await coord.async_set_cycle(msg["active"])
     connection.send_result(msg["id"], {"success": True})
 
 
