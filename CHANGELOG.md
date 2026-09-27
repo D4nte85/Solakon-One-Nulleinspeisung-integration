@@ -5,6 +5,8 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+## [3.2.0-beta.3] – 2026-09-27
+
 ### Geändert
 
 - **Fall-G-Eintritt symmetrisch zum Austritt um den Offset:** Eintritt bei `(Grid + ΣOutput) < min(ac_offset, 0) − Hysterese` statt `< −Hysterese`. Bei einem Offset unter −2 × Hysterese lag der Austritt bisher unter dem Eintritt: G öffnete eine Lade-Session mit 0 W, H schloss sie im nächsten Zyklus, Moduswechsel 1↔3 in jedem Zyklus. Unterhalb der Mindestladeleistung entstehen keine leeren Lade-Sessions mehr. Bei positivem Offset bleibt der Eintritt bei −Hysterese.
