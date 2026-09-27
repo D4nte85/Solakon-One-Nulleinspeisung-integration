@@ -111,7 +111,7 @@ Die Module werden in fest definierter Prioritätsreihenfolge ausgewertet — ein
 |:---------:|-------|-----------|
 | 1 (höchste) | ☀️ Überschuss-Einspeisung | Tarif-Laden (GT), Discharge-Lock (TM), AC Laden (G) |
 | 2 | 💹 Tarif-Laden (günstig) | AC Laden (via Modus `'3'`), Discharge-Lock |
-| 3 | 💹 Discharge-Lock (< Teuer) | Zone-1/2-Recovery (Fall D), Zone-2-Start (Fall E) |
+| 3 | 💹 Discharge-Lock (< Teuer) | Zone-1-Start (Fall A), Zone-1/2-Recovery (Fall D), Zone-2-Start (Fall E) |
 | 4 | ⚡ AC Laden | Tarif-Laden (via Modus `'3'`), Discharge-Lock |
 | 5 | 🌙 Nachtabschaltung | Zone-2-Start (Fall E) |
 | 6 (niedrigste) | Zone 1 / Zone 2 | — |
@@ -432,7 +432,7 @@ Regeln der Stellwertrechnung:
 | Ladeziel SOC (%) | Laden stoppt bei diesem SOC | 80–95 |
 | Max. Ladeleistung (W) | Obergrenze der AC-Ladeleistung | 400–800 |
 | Mindestladeleistung (W) | Kleinster geschriebener Ladesollwert, darunter 0; 0 schaltet die Schwelle ab. 50 W gemessen, Änderung auf eigene Gefahr | 50 |
-| Eintritts-Hysterese (W) | (Grid + ΣOutput_entladend) muss unter −Hysterese liegen | 30–80 |
+| Hysterese (W) | Wirkt auf Eintritt und Austritt: Eintritt unter min(Offset, 0) − Hysterese, Austritt ab Offset + Hysterese | 30–80 |
 | Regel-Offset (W) | Zielwert während AC Laden (typisch negativ) | −80 bis −30 |
 
 ---
@@ -481,13 +481,13 @@ offset_out        = +offset_abs  (Negativer Offset: Aus)
 offset_out        = −offset_abs  (Negativer Offset: Ein)
 ```
 
-| Netz-Zustand | StdDev | Ergebnis (min=30, noise=15, factor=1.5) |
+| Netz-Zustand | StdDev | Ergebnis (min=30, max=250, noise=15, factor=1.5) |
 |:------------|:------:|:---------------------------------------:|
 | Sehr ruhig | 5 W | 30 W *(Minimum)* |
 | Normal | 30 W | 52 W |
 | Unruhig | 80 W | 128 W |
 | Sehr unruhig | 160 W | 248 W |
-| Extrem | 250 W+ | 250 W *(Maximum)* |
+| Extrem | ab 162 W | 250 W *(Maximum)* |
 
 Jede Zone (Zone 1, Zone 2, Zone AC) hat einen eigenen Parameterblock:
 
@@ -545,10 +545,10 @@ Die Regellogik arbeitet mit einer geordneten Liste von Falls. Die Reihenfolge is
 | **C** — Zone 3 Absicherung | SOC ≤ Zone-3-Schwelle UND `cycle_active = False` UND Modus ≠ `'0'` UND kein AC/Tarif-Laden | Output → 0 W. Timer-Toggle. Modus → `'0'`. Kein Integral-Reset. |
 | **D** — Recovery | `(cycle_active = True ODER Lade-Session mit geltendem Ladegrund)` UND Modus ∉ `{'1','3'}` UND (SOC > Zone-3-Schwelle **ODER** Lade-Session mit geltendem Ladegrund) UND kein aktiver **Mittelpreis-Lock** (Günstig-Schwelle ≤ Preis < Teuer-Schwelle; greift nicht bei `ac_charge_active`, `tariff_charge_active` oder `surplus_active`) | Timer-Toggle. Modus → `'3'` (wenn eine Lade-Session mit geltendem Ladegrund läuft) sonst `'1'`. Kein Integral-Reset. Als *geltender Ladegrund* zählt `ac_charge_active` bei eingeschalteter AC-Option und `tariff_charge_active` bei ausgewiesenem Günstig-Preis — sonst räumt HT bzw. H die Session im selben Zyklus, und Recovery würde das Netzladen davor noch einmal anwerfen. |
 | **GT** — Tarif-Laden Start | Tarif aktiv UND Preis gültig UND Preis < Günstig-Schwelle UND SOC < Tarif-SOC-Ziel − SOC-Hysterese UND kein Tarif-Laden aktiv UND **kein AC-Laden aktiv** UND kein Überschuss aktiv UND Modus ≠ `'3'` | `tariff_charge_active → True`. Timer-Toggle. Output → Tarif-Ladeleistung. Modus → `'3'`. |
-| **HT** — Tarif-Laden Ende | `tariff_charge_active = True` UND (**kein Günstig-Preis ausgewiesen** ODER SOC ≥ Tarif-SOC-Ziel) — der Ausweis fehlt bei Preis ≥ Günstig-Schwelle, abgeschalteter Tarif-Option, PV-Prognose-Unterdrückung und unlesbarem Preissensor | `tariff_charge_active → False`. Integral = 0. Zone 1 → Timer-Toggle + `'1'` / Zone 2 → Timer-Toggle + `'0'` + 0 W. |
+| **HT** — Tarif-Laden Ende | `tariff_charge_active = True` UND (**kein Günstig-Preis ausgewiesen** ODER SOC ≥ Tarif-SOC-Ziel) — der Ausweis fehlt bei Preis ≥ Günstig-Schwelle, abgeschalteter Tarif-Option, PV-Prognose-Unterdrückung und unlesbarem Preissensor | `tariff_charge_active → False`. Integral = 0. Output 0 W. Timer-Toggle. Zone 1 → `'1'` / Zone 2 → `'0'`. |
 | **TM** — Discharge-Lock | Tarif aktiv UND Preis gültig UND Preis < Teuer-Schwelle UND kein AC/Tarif-Laden UND kein Überschuss UND Modus = `'1'` | Integral = 0. `cycle_active → False`. Output → 0 W. Timer-Toggle. Modus → `'0'`. Sperrt Zone 1 und Zone 2 (greift für günstig + mittel, d.h. alles unter Teuer-Schwelle). |
 | **G** — AC Laden Start | AC aktiv UND kein AC/Tarif-Laden aktiv UND kein Überschuss aktiv UND SOC < Ladeziel UND **Modus ≠ `'3'`** UND (Grid + ΣOutput_entladend) < min(ac_offset, 0) − Hysterese | `ac_charge_active → True`. Timer-Toggle. Output → 0 W. Modus → `'3'`. |
-| **H** — AC Laden Ende | Modus = `'3'` UND `ac_charge_active = True` UND kein Tarif-Laden UND (**AC-Option AUS** ODER SOC ≥ Ladeziel ODER (Grid ≥ ac_offset + Hysterese UND eigener Output = 0 W)) | `ac_charge_active → False`. Integral = 0. Zone 1 → Timer-Toggle + `'1'` / Zone 2 → Timer-Toggle + `'0'` + 0 W. |
+| **H** — AC Laden Ende | Modus = `'3'` UND `ac_charge_active = True` UND kein Tarif-Laden UND (**AC-Option AUS** ODER SOC ≥ Ladeziel ODER (Grid ≥ ac_offset + Hysterese UND eigener Output = 0 W)) | `ac_charge_active → False`. Integral = 0. Output 0 W. Timer-Toggle. Zone 1 → `'1'` / Zone 2 → `'0'`. |
 | **I** — Safety | Modus und Lade-Session widersprechen sich, in einer von zwei Richtungen: **(a)** Modus = `'3'` UND kein AC- und kein Tarif-Laden; **(b)** eine Lade-Session läuft, aber Modus ≠ `'3'`, **oder** beide Lade-Flags sind zugleich gesetzt | **(a)** Integral = 0. Zone 1 → Timer-Toggle + `'1'` / Zone 2 → Timer-Toggle + `'0'` + 0 W. **(b)** Integral = 0. Beide Lade-Flags → `False`, Modus bleibt unangetastet. Waren beide Flags gesetzt, endet zusätzlich eine Meldung im Status-Tab. |
 | **E** — Zone 2 Start | Zone-3 < SOC ≤ Zone-1 UND `cycle_active = False` UND Modus = `'0'` UND kein AC/Tarif-Laden UND kein aktiver Tarif-Block (gültiger Preis < Teuer) UND kein Nacht | Integral = 0. Timer-Toggle. Modus → `'1'`. |
 | **F** — Nachtabschaltung | Nacht aktiv UND `cycle_active = False` UND Modus ≠ `'0'` UND kein AC/Tarif-Laden | Integral = 0. Output → 0 W. Timer-Toggle. Modus → `'0'`. |
@@ -740,10 +740,10 @@ P-Faktor reduzieren oder Wartezeit erhöhen. Der Standardabweichungs-Sensor im S
 Zone-3-Schwelle im Zonen-Tab prüfen. Wert muss kleiner als Zone-1-Schwelle sein.
 
 **AC Laden startet nicht trotz Überschuss**
-Der Reihe nach prüfen: Ist Zone 0 (Überschuss-Einspeisung) aktiv? Die blockiert AC Laden. Ist AC Laden im Tab aktiviert? Liegt `(Grid + ΣOutput_entladend)` unter −Hysterese — im Multi-Instanz-Betrieb zählen der eigene Output und alle entladenden Schwester-Instanzen? Ist der SOC unter dem Ladeziel? Das Status-Flag „AC Laden aktiv“ zeigt das Ergebnis.
+Der Reihe nach prüfen: Ist Zone 0 (Überschuss-Einspeisung) aktiv? Die blockiert AC Laden. Ist AC Laden im Tab aktiviert? Liegt `(Grid + ΣOutput_entladend)` unter `min(Offset, 0) − Hysterese` — im Multi-Instanz-Betrieb zählen der eigene Output und alle entladenden Schwester-Instanzen? Ist der SOC unter dem Ladeziel? Das Status-Flag „AC Laden aktiv“ zeigt das Ergebnis.
 
 **AC Laden bricht sofort wieder ab**
-Eintritts-Hysterese zu klein — Grid-Wert schwankt bereits über der Abbruch-Schwelle. Hysterese erhöhen oder P/I kleiner setzen.
+Hysterese zu klein — Grid-Wert schwankt bereits über der Abbruch-Schwelle. Hysterese erhöhen oder P/I kleiner setzen.
 
 **Tarif-Laden reagiert nicht auf Preisänderungen**
 Zuerst die Fehlermeldung im Status-Tab prüfen — liefert der Preis-Sensor keine Zahl oder ist er nicht verfügbar, ist die Tarif-Funktion abgeschaltet. Günstig-Schwelle muss über dem aktuellen Preis liegen. Prüfen ob Überschuss-Einspeisung aktiv ist — blockiert Tarif-Laden.
