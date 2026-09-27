@@ -5,6 +5,8 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+## [3.3.0-beta.1] – 2026-09-27
+
 ### Hinzugefügt
 
 - **Entlade-PI abschaltbar:** Neue Einstellung `pi_enabled` im Tab PI-Regler (Standard an). Aus: Zone 1 und 2 rechnen den Sollwert wie das AC-Laden über die Stellwertrechnung auf Ist-Basis, Anteil × (Ist-Entladeleistung des Entlade-Pools + Netz − Offset), geklemmt auf das Zone-1/2-Limit, ohne Mindestleistung; während die Rampe läuft, wird nur gesenkt. Gate und Stillstandsprüfung bleiben, P- und I-Faktor sowie die Integral-Kachel im Status-Tab werden ausgeblendet, das Modul-Flag „PI-Regler“ im Status-Tab zeigt den Schalter an, beim Umschalten wird das Integral genullt. `ac_charge.py` heißt jetzt `setpoint.py` und enthält die gemeinsame Rechnung.
