@@ -43,7 +43,7 @@ from .const import (
     S_ZONE3_LIMIT, S_DISCHARGE_MAX, S_HARD_LIMIT_Z0, S_HARD_LIMIT_Z1, S_PV_RESERVE,
     S_SURPLUS_FORECAST_ENABLED, S_SURPLUS_LOCK_ENABLED, S_AC_SOC_TARGET, S_AC_POWER_LIMIT,
     S_PERIODIC_ENABLED, S_PERIODIC_INTERVAL, S_TARIFF_ENABLED, S_PV_FORECAST_ENABLED,
-    S_ZONE1_FORCE_ENABLED, S_REST_IN_DISCHARGE, S_SELF_ADJUST_TOL, S_DYN_Z1_ENABLED, S_DYN_Z2_ENABLED, S_DYN_AC_ENABLED,
+    S_ZONE1_FORCE_ENABLED, S_REST_IN_DISCHARGE, S_DYN_Z1_ENABLED, S_DYN_Z2_ENABLED, S_DYN_AC_ENABLED,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -922,7 +922,6 @@ class SolakonCoordinator:
         """Fall per `zones.decide` bestimmen, Übergang und Aktionstext ausführen, Kennung zurückgeben."""
         d = decide(ZoneInputs(
             **v,
-            self_adjust_tol=self._setting(S_SELF_ADJUST_TOL, float),
             surplus_active=self.surplus_active,
             ac_charge_active=self.ac_charge_active,
             tariff_charge_active=self.tariff_charge_active,

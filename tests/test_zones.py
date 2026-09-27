@@ -20,7 +20,7 @@ BASE = zones.ZoneInputs(
     tariff=tariff.TariffState(price=0.30, cheap=0.20, exp=0.40, below_exp=False,
                               below_cheap=False, at_least_cheap=True),
     tariff_soc=80, tariff_soc_hyst=3, tariff_power=800,
-    is_night=True, zone1_forced=False, self_adjust_tol=3,
+    is_night=True, zone1_forced=False,
     surplus_active=False, ac_charge_active=False, tariff_charge_active=False,
     cycle_active=False, at_rest=True,
 )
@@ -51,7 +51,7 @@ def test_base_trifft_keinen_fall():
     (dict(below_exp=True, at_least_cheap=False, mode="1", at_rest=False), "TM"),
     (dict(ac_enabled=True, grid=-200, mode="1", at_rest=True, below_exp=True), "G"),
     (dict(ac_enabled=True, ac_charge_active=True, mode="3", at_rest=False, soc=95), "H"),
-    (dict(ac_enabled=True, ac_charge_active=True, mode="3", at_rest=False, grid=10, actual=3), "H"),
+    (dict(ac_enabled=True, ac_charge_active=True, mode="3", at_rest=False, grid=10, actual=0), "H"),
     # Options-Austritt: abgeschaltete Option beendet die Session unabhängig vom Wert
     (dict(ac_charge_active=True, mode="3", at_rest=False), "H"),
     (dict(tariff_charge_active=True, mode="3", at_rest=False, at_least_cheap=False), "HT"),
@@ -124,9 +124,10 @@ def test_end_charge_ruhe_nur_ohne_zyklus(cycle_active, rest):
     assert d.action == "act_fall_h"
 
 
-def test_h_bleibt_bei_selbstregelung_ausserhalb_der_toleranz():
+@pytest.mark.parametrize("actual", [-1, 1, -300])
+def test_h_bleibt_bei_ladeleistung_ungleich_null(actual):
     assert _decide(ac_enabled=True, ac_charge_active=True, mode="3", at_rest=False,
-                   grid=10, actual=5) is None
+                   grid=10, actual=actual) is None
 
 
 def test_d_folgt_session_mit_abgeschalteter_option_nicht():

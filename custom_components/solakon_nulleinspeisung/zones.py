@@ -71,7 +71,6 @@ class ZoneInputs:
     tariff_power: float
     is_night: bool
     zone1_forced: bool
-    self_adjust_tol: float
     surplus_active: bool
     ac_charge_active: bool
     tariff_charge_active: bool
@@ -397,7 +396,7 @@ def decide(inp: ZoneInputs) -> FallDecision | None:
             or soc >= inp.ac_soc_target
             or (
                 inp.grid >= (inp.ac_offset + inp.ac_hysteresis)
-                and abs(inp.actual) <= inp.self_adjust_tol
+                and inp.actual == 0
             )
         )
     ):

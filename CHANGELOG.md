@@ -5,6 +5,10 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+### Geändert
+
+- **Fall-H-Austritt wieder auf exakt 0 W:** Der Grid-Zweig verlangt `actual == 0` statt `|actual| ≤ Zielwert-Toleranz`. Das Band hing an der Einstellung von Self-Adjusting Wait; ein größerer Wert dort beendete AC-Laden bei noch laufender Ladeleistung. `== 0` hat im Feld funktioniert, die Probleme kamen allein vom einseitigen `≤ 0`.
+
 ## [3.2.0-beta.2] – 2026-09-26
 
 ### Hinzugefügt
