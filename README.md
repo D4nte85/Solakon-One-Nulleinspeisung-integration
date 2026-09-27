@@ -95,7 +95,7 @@ Das Verhalten wird abhängig vom Batterie-Ladestand in vier Zonen eingeteilt:
 
 **☀️ Überschuss-Einspeisung (Zone 0)** — Wenn PV-Erzeugung den Eigenbedarf um mehr als eine konfigurierbare Hysterese übersteigt und der SOC eine Zielschwelle erreicht hat, wird der Wechselrichter über den Nullpunkt hinaus angesteuert. Ein SOC-Hysterese-Band und eine PV-Hysterese verhindern Flackern beim Ein- und Ausschalten.
 
-**⚡ AC-Laden** — Steuert den Wechselrichter in den Lademodus, wenn der SOC unter ein Ziel fällt und externer Überschuss erkannt wird (`Grid + ΣOutput_entladend < −Hysterese`, Σ über alle Instanzen im Entlademodus). Eigener PI-Regler mit separaten P/I-Faktoren, eigenem Offset und konfigurierbarer Leistungsobergrenze.
+**⚡ AC-Laden** — Steuert den Wechselrichter in den Lademodus, wenn der SOC unter ein Ziel fällt und externer Überschuss erkannt wird (`Grid + ΣOutput_entladend < min(ac_offset, 0) − Hysterese`, Σ über alle Instanzen im Entlademodus). Eigener PI-Regler mit separaten P/I-Faktoren, eigenem Offset und konfigurierbarer Leistungsobergrenze.
 
 **💹 Tarif-Arbitrage** — Wertet einen externen Strompreis-Sensor aus und lädt bei günstigem Tarif automatisch auf, sperrt die Entladung unterhalb der Teuer-Schwelle (günstig + mittel) in Zone 1 und Zone 2, und gibt sie bei teurem Tarif wieder frei.
 
@@ -401,7 +401,9 @@ Optionale Überschuss-Einspeisung (Zone 0). **Hat absoluten Vorrang vor allen an
 
 Optionales Laden bei erkanntem externem Überschuss. Aktiv in Zone 1 und Zone 2. **Startet nicht wenn Überschuss-Einspeisung (Zone 0) oder Tarif-Laden aktiv ist.**
 
-**Eintritts-Bedingung:** SOC < Ladeziel UND kein Überschuss aktiv UND kein AC/Tarif-Laden aktiv UND Modus ≠ `'3'` UND (Grid + ΣOutput_entladend) < −Hysterese
+**Eintritts-Bedingung:** SOC < Ladeziel UND kein Überschuss aktiv UND kein AC/Tarif-Laden aktiv UND Modus ≠ `'3'` UND (Grid + ΣOutput_entladend) < min(ac_offset, 0) − Hysterese
+
+> Eintritt und Abbruch liegen symmetrisch um den Offset, je eine Hysterese darunter und darüber; sie können sich auch bei stark negativem (dynamischem) Offset nicht überkreuzen. Bei positivem Offset bleibt der Eintritt bei −Hysterese: AC-Laden startet nur bei externem Überschuss.
 
 > Der Modus-Guard `≠ '3'` verhindert einen Re-Eintritt wenn AC Laden bereits aktiv ist. `ΣOutput_entladend` ist im Einzelbetrieb der eigene Output, im Multi-Instanz-Betrieb der eigene Output plus der Output aller Schwester-Instanzen, die in Modus `'1'` entladen (nicht ruhend) — sonst würde eine Instanz die Entladung einer Schwester-Instanz als externen Netzüberschuss werten und aus dem Netz genau das nachladen, was die Schwester gerade einspeist.
 
@@ -545,7 +547,7 @@ Die Regellogik arbeitet mit einer geordneten Liste von Falls. Die Reihenfolge is
 | **GT** — Tarif-Laden Start | Tarif aktiv UND Preis gültig UND Preis < Günstig-Schwelle UND SOC < Tarif-SOC-Ziel − SOC-Hysterese UND kein Tarif-Laden aktiv UND **kein AC-Laden aktiv** UND kein Überschuss aktiv UND Modus ≠ `'3'` | `tariff_charge_active → True`. Timer-Toggle. Output → Tarif-Ladeleistung. Modus → `'3'`. |
 | **HT** — Tarif-Laden Ende | `tariff_charge_active = True` UND (**kein Günstig-Preis ausgewiesen** ODER SOC ≥ Tarif-SOC-Ziel) — der Ausweis fehlt bei Preis ≥ Günstig-Schwelle, abgeschalteter Tarif-Option, PV-Prognose-Unterdrückung und unlesbarem Preissensor | `tariff_charge_active → False`. Integral = 0. Zone 1 → Timer-Toggle + `'1'` / Zone 2 → Timer-Toggle + `'0'` + 0 W. |
 | **TM** — Discharge-Lock | Tarif aktiv UND Preis gültig UND Preis < Teuer-Schwelle UND kein AC/Tarif-Laden UND kein Überschuss UND Modus = `'1'` | Integral = 0. `cycle_active → False`. Output → 0 W. Timer-Toggle. Modus → `'0'`. Sperrt Zone 1 und Zone 2 (greift für günstig + mittel, d.h. alles unter Teuer-Schwelle). |
-| **G** — AC Laden Start | AC aktiv UND kein AC/Tarif-Laden aktiv UND kein Überschuss aktiv UND SOC < Ladeziel UND **Modus ≠ `'3'`** UND (Grid + ΣOutput_entladend) < −Hysterese | `ac_charge_active → True`. Timer-Toggle. Output → 0 W. Modus → `'3'`. |
+| **G** — AC Laden Start | AC aktiv UND kein AC/Tarif-Laden aktiv UND kein Überschuss aktiv UND SOC < Ladeziel UND **Modus ≠ `'3'`** UND (Grid + ΣOutput_entladend) < min(ac_offset, 0) − Hysterese | `ac_charge_active → True`. Timer-Toggle. Output → 0 W. Modus → `'3'`. |
 | **H** — AC Laden Ende | Modus = `'3'` UND `ac_charge_active = True` UND kein Tarif-Laden UND (**AC-Option AUS** ODER SOC ≥ Ladeziel ODER (Grid ≥ ac_offset + Hysterese UND eigener Output = 0 W)) | `ac_charge_active → False`. Integral = 0. Zone 1 → Timer-Toggle + `'1'` / Zone 2 → Timer-Toggle + `'0'` + 0 W. |
 | **I** — Safety | Modus und Lade-Session widersprechen sich, in einer von zwei Richtungen: **(a)** Modus = `'3'` UND kein AC- und kein Tarif-Laden; **(b)** eine Lade-Session läuft, aber Modus ≠ `'3'`, **oder** beide Lade-Flags sind zugleich gesetzt | **(a)** Integral = 0. Zone 1 → Timer-Toggle + `'1'` / Zone 2 → Timer-Toggle + `'0'` + 0 W. **(b)** Integral = 0. Beide Lade-Flags → `False`, Modus bleibt unangetastet. Waren beide Flags gesetzt, endet zusätzlich eine Meldung im Status-Tab. |
 | **E** — Zone 2 Start | Zone-3 < SOC ≤ Zone-1 UND `cycle_active = False` UND Modus = `'0'` UND kein AC/Tarif-Laden UND kein aktiver Tarif-Block (gültiger Preis < Teuer) UND kein Nacht | Integral = 0. Timer-Toggle. Modus → `'1'`. |

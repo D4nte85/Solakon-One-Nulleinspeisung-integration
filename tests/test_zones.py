@@ -130,6 +130,16 @@ def test_h_bleibt_bei_ladeleistung_ungleich_null(actual):
                    grid=10, actual=actual) is None
 
 
+@pytest.mark.parametrize("offset, grid, fall", [
+    (-50, -100, None), (-50, -101, "G"),      # symmetrisch um den Offset
+    (-150, -200, None), (-150, -201, "G"),
+    (100, -50, None), (100, -51, "G"),        # positiver Offset: Bezug 0
+])
+def test_g_eintritt_symmetrisch_zum_austritt_um_den_offset(offset, grid, fall):
+    d = _decide(ac_enabled=True, ac_offset=offset, grid=grid, mode="1", at_rest=True, below_exp=True)
+    assert (d.name if d else None) == fall
+
+
 def test_d_folgt_session_mit_abgeschalteter_option_nicht():
     d = _decide(tariff_charge_active=True, cycle_active=True, soc=70)
     assert (d.name, d.transition) == ("D", {"mode": "1"})

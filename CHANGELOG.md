@@ -7,6 +7,7 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ### Geändert
 
+- **Fall-G-Eintritt symmetrisch zum Austritt um den Offset:** Eintritt bei `(Grid + ΣOutput) < min(ac_offset, 0) − Hysterese` statt `< −Hysterese`. Bei einem Offset unter −2 × Hysterese lag der Austritt bisher unter dem Eintritt: G öffnete eine Lade-Session mit 0 W, H schloss sie im nächsten Zyklus, Moduswechsel 1↔3 in jedem Zyklus. Unterhalb der Mindestladeleistung entstehen keine leeren Lade-Sessions mehr. Bei positivem Offset bleibt der Eintritt bei −Hysterese.
 - **Fall-H-Austritt wieder auf exakt 0 W:** Der Grid-Zweig verlangt `actual == 0` statt `|actual| ≤ Zielwert-Toleranz`. Das Band hing an der Einstellung von Self-Adjusting Wait; ein größerer Wert dort beendete AC-Laden bei noch laufender Ladeleistung. `== 0` hat im Feld funktioniert, die Probleme kamen allein vom einseitigen `≤ 0`.
 
 ## [3.2.0-beta.2] – 2026-09-26
