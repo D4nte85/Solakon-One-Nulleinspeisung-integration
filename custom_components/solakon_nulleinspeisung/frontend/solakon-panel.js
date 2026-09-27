@@ -66,15 +66,17 @@ const dynOffSection = (tk, prefix, icon, color) => ({
 // Layout: Feldschlüssel und Darstellungsart. Grenzen liefert get_schema, Texte die Übersetzungsdateien.
 const TAB_LAYOUT = {
   pi: {
+    top: [
+      { k: "tolerance", t: "num" },
+      { k: "wait_time", t: "num" },
+    ],
     cols: [
       {
         tk: "pi_ctrl", icon: "🎛️", color: "#0891b2",
         fields: [
           { k: "pi_enabled", t: "bool" },
-          { k: "p_factor",  t: "num", showIf: "pi_enabled" },
-          { k: "i_factor",  t: "num", showIf: "pi_enabled" },
-          { k: "tolerance", t: "num" },
-          { k: "wait_time", t: "num" },
+          { k: "p_factor",  t: "num", dimIf: "pi_enabled" },
+          { k: "i_factor",  t: "num", dimIf: "pi_enabled" },
         ],
       },
       {
@@ -896,7 +898,8 @@ class SolakonPanel extends HTMLElement {
 
         /* ── Fields ──────────────────────────────────────────────────────── */
         .field { display: flex; flex-direction: column; gap: 4px; }
-        .field[hidden] { display: none; }
+        .field.dimmed, .stat.dimmed { opacity: .45; }
+        .field.dimmed { pointer-events: none; }
         .field label { display: flex; align-items: center; gap: 8px; font-size: .9em; font-weight: 500; cursor: pointer; }
         .field input[type="number"], .field input[type="text"] { padding: 6px 10px; border: 1px solid var(--divider-color, #ddd); border-radius: 6px; background: var(--secondary-background-color, #f5f5f5); color: var(--primary-text-color, #333); font-size: .9em; width: 100%; box-sizing: border-box; }
         .field input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; accent-color: var(--primary-color, #03a9f4); }
@@ -1083,9 +1086,9 @@ ${this._textsMissing ? `
 
     container.appendChild(colGrid);
 
-    for (const key of new Set(layout.cols.flatMap(c => c.fields.map(f => f.showIf).filter(Boolean)))) {
+    for (const key of new Set(layout.cols.flatMap(c => c.fields.map(f => f.dimIf).filter(Boolean)))) {
       container.querySelector(`input[data-key="${key}"]`)?.addEventListener("change", (e) => {
-        container.querySelectorAll(`[data-show-if="${key}"]`).forEach(el => { el.hidden = !e.target.checked; });
+        container.querySelectorAll(`[data-dim-if="${key}"]`).forEach(el => el.classList.toggle("dimmed", !e.target.checked));
       });
     }
 
@@ -1143,9 +1146,9 @@ ${this._textsMissing ? `
       div.className = "field field-note";
       div.innerHTML = `<div class="desc">${desc}</div>`;
     }
-    if (f.showIf) {
-      div.dataset.showIf = f.showIf;
-      div.hidden = !this._cfg.get(f.showIf);
+    if (f.dimIf) {
+      div.dataset.dimIf = f.dimIf;
+      div.classList.toggle("dimmed", !this._cfg.get(f.dimIf));
     }
     return div;
   }
@@ -1219,12 +1222,12 @@ ${this._textsMissing ? `
 
         ${this._cardHtml("#7c3aed", s.ctrl_hdr || "", `
             <div class="stat-row">
-              <div class="stat"><div class="val" id="st-int">—</div>   <div class="lbl">${this._en("integral")}</div></div>
+              <div class="stat"><div class="val" id="st-stddev-raw">—</div><div class="lbl">${s.stddev_raw_lbl || ""}</div></div>
               <div class="stat"><div class="val" id="st-stddev">—</div><div class="lbl">${s.stddev_lbl   || ""}</div></div>
             </div>
             <div class="stat-row">
-              <div class="stat"><div class="val" id="st-stddev-raw">—</div><div class="lbl">${s.stddev_raw_lbl || ""}</div></div>
               <div class="stat"><div class="val" id="st-alloc">—</div><div class="lbl">${s.alloc_lbl || ""}</div></div>
+              <div class="stat"><div class="val" id="st-int">—</div>   <div class="lbl">${this._en("integral")}</div></div>
             </div>
             <div class="stat-full">
               <div class="val" id="st-offset-val">—</div>
@@ -1279,7 +1282,7 @@ ${this._textsMissing ? `
       "st-actual":       `${st.actual_power ?? "—"} W`,
       "st-solar":        `${st.solar ?? "—"} W`,
       "st-soc":          `${st.soc ?? "—"} %`,
-      "st-int":          `${(st.integral ?? 0).toFixed(2)}`,
+      "st-int":          this._cfg.saved.pi_enabled !== false ? `${(st.integral ?? 0).toFixed(2)}` : "—",
       "st-stddev":       `${(st.stddev ?? 0).toFixed(1)} W`,
       "st-stddev-raw":   `${(st.stddev_raw ?? 0).toFixed(1)} W`,
       "st-alloc":        st.allocated_power != null ? `${st.allocated_power} W` : (s.alloc_single || "—"),
@@ -1309,8 +1312,8 @@ ${this._textsMissing ? `
     if (b) { b.textContent = `${zs.icon} ${zLabel}`; b.style.background = zs.color; }
 
     const piOn = this._cfg.saved.pi_enabled !== false;
-    const intStat = this.shadowRoot.getElementById("st-int")?.parentElement;
-    if (intStat) intStat.hidden = !piOn;
+    this.shadowRoot.getElementById("st-int")?.parentElement.classList.toggle("dimmed", !piOn);
+    this.shadowRoot.getElementById("st-stddev")?.parentElement.classList.toggle("dimmed", !(this._cfg.saved.stddev_trim_count > 0));
 
     const fl = this.shadowRoot.getElementById("st-flags");
     if (fl) fl.innerHTML = [

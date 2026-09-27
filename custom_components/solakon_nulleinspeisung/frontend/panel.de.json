@@ -7,7 +7,7 @@
   },
   "tabs": {
     "status":   "Status",
-    "pi":       "PI-Regler",
+    "pi":       "Regelung",
     "zones":    "Zonen",
     "entities": "Entitäten",
     "surplus":  "Überschuss",
@@ -19,8 +19,8 @@
   },
   "tab_docs": {
     "pi": {
-      "summary": "PI-Regler — Kern des Regelkreises",
-      "text": "Regelgröße: Netzleistung (positiv = Bezug, negativ = Einspeisung). Stellgröße: AC-Ausgangsleistung des Wechselrichters.\n\nP-Anteil: reagiert sofort auf die aktuelle Abweichung (Grid − Offset).\nI-Anteil: summiert Abweichungen über die Zeit auf, eliminiert bleibende Regelabweichungen.\nAnti-Windup: Back-Calculation — nach jedem Stelleingriff wird das Integral auf den Wert korrigiert, der den tatsächlichen (ggf. geklemmten) Ausgang produziert. Bei ungeklemmtem Ausgang identisch zur normalen Akkumulation.\nIntegral-Reset: bei den meisten Zonenwechseln auf 0 — außer Fall 0A (Überschuss-Start), C (Zone-3-Absicherung), D (Recovery), G (AC-Start) und GT (Tarif-Laden-Start).\nToleranz-Decay: −5 %/Zyklus wenn Fehler ≤ Totband und |Integral| > 10.\nZone 0: Integral eingefroren, kein PI-Aufruf.\n\nFehlerberechnung: raw_error = (Grid − Offset) × Fehler-Anteil. AC Laden läuft ohne PI über die Stellwertrechnung (siehe Tab „AC Laden“).\nFehler-Anteil: wird nur unter Instanzen in Modus '1' aufgeteilt, gewichtet nach dem Verteilungs-Modus (Tab „Verteilung“); im Einzelbetrieb immer 1.0.\nMehrinstanz-Ausgangsbasis (Modus-'1'-Pool): Der Stelleingriff setzt nicht auf dem eigenen zuletzt kommandierten Wert auf, sondern auf (Σ kommandierte Leistung aller Instanzen im Pool) × eigener Fehler-Anteil. Gleicht die Aufteilung bei jedem Stelleingriff automatisch an die Gewichtung an, statt eine einmal entstandene Schieflage zwischen Instanzen fortzuschreiben.\n\nSelf-Adjusting Wait: Nach einem Stelleingriff wird auf die tatsächliche WR-Ausgangsleistung gewartet statt einer fixen Pause. Sobald actual_power den Sollwert ±Toleranz erreicht, geht der Regler weiter. Die konfigurierte Wartezeit wirkt als maximales Timeout.\n\nAusgangs-Stillstandserkennung: Steht der Sollwert am oberen Limit und besteht der Netzfehler in dieselbe Richtung fort, kann der PI nicht weiter hochregeln und schreibt nicht mehr — ein in diesem Zustand stehengebliebener Wechselrichter bekäme keinen neuen Befehl mehr. Weicht die tatsächliche Ausgangsleistung dann um mehr als 5 % vom Limit ab und steht der Messwert dabei länger als fünf Minuten unverändert, wird der Sollwert neu geschrieben und unter Letzte Aktion protokolliert. Bleibt die Abweichung bestehen, wird der Wechselrichter nach weiteren fünf Minuten aus dem Regelmodus genommen (Output 0, Timer-Toggle, Modus Disabled) und im nächsten Zyklus von Fall D regulär zurückgeholt — samt Fehlermeldung. Das ist derselbe Weg, der einen aus dem Tritt geratenen Wechselrichter auch sonst wiederherstellt, mit einer echten Modus-Flanke statt einer Wiederholung des bestehenden Werts. Die Dauer kommt aus dem Zeitstempel der letzten Wertänderung des Ist-Sensors — ein Sensor, der um den abweichenden Wert rauscht, löst nicht aus. Gilt ausschließlich in diesem gesättigten PI-Zustand; Zone 0, AC Laden und Tarif-Laden halten den Ausgang bewusst unterhalb ihres Limits und sind ausgenommen.\n\nEinstieg: P = 0.5, I = 0. P schrittweise erhöhen bis Output zu pendeln beginnt, dann einen Schritt zurück. I erst einführen wenn P-Regelung stabil ist."
+      "summary": "Regelung — Kern des Regelkreises",
+      "text": "Regelgröße: Netzleistung (positiv = Bezug, negativ = Einspeisung). Stellgröße: AC-Ausgangsleistung des Wechselrichters.\n\nEntladeregelung: Zone 1 und 2 regeln mit eingeschaltetem Entlade-PI über den PI-Regler, sonst über die Stellwertrechnung auf Ist-Basis — neuer Sollwert = Ist-Entladeleistung + (Grid − Offset) in einem Schritt, ohne Integral und ohne Mindestleistung. Totband, Wartezeit, Self-Adjusting Wait und Stillstandserkennung gelten für beide.\n\nP-Anteil: reagiert sofort auf die aktuelle Abweichung (Grid − Offset).\nI-Anteil: summiert Abweichungen über die Zeit auf, eliminiert bleibende Regelabweichungen.\nAnti-Windup: Back-Calculation — nach jedem Stelleingriff wird das Integral auf den Wert korrigiert, der den tatsächlichen (ggf. geklemmten) Ausgang produziert. Bei ungeklemmtem Ausgang identisch zur normalen Akkumulation.\nIntegral-Reset: bei den meisten Zonenwechseln auf 0 — außer Fall 0A (Überschuss-Start), C (Zone-3-Absicherung), D (Recovery), G (AC-Start) und GT (Tarif-Laden-Start).\nToleranz-Decay: −5 %/Zyklus wenn Fehler ≤ Totband und |Integral| > 10.\nZone 0: Integral eingefroren, kein PI-Aufruf.\n\nFehlerberechnung: raw_error = (Grid − Offset) × Fehler-Anteil. AC Laden läuft ohne PI über die Stellwertrechnung (siehe Tab „AC Laden“).\nFehler-Anteil: wird nur unter Instanzen in Modus '1' aufgeteilt, gewichtet nach dem Verteilungs-Modus (Tab „Verteilung“); im Einzelbetrieb immer 1.0.\nMehrinstanz-Ausgangsbasis (Modus-'1'-Pool): Der Stelleingriff setzt nicht auf dem eigenen zuletzt kommandierten Wert auf, sondern auf (Σ kommandierte Leistung aller Instanzen im Pool) × eigener Fehler-Anteil. Gleicht die Aufteilung bei jedem Stelleingriff automatisch an die Gewichtung an, statt eine einmal entstandene Schieflage zwischen Instanzen fortzuschreiben.\n\nSelf-Adjusting Wait: Nach einem Stelleingriff wird auf die tatsächliche WR-Ausgangsleistung gewartet statt einer fixen Pause. Sobald actual_power den Sollwert ±Toleranz erreicht, geht der Regler weiter. Die konfigurierte Wartezeit wirkt als maximales Timeout.\n\nAusgangs-Stillstandserkennung: Steht der Sollwert am oberen Limit und besteht der Netzfehler in dieselbe Richtung fort, kann die Entladeregelung nicht weiter hochregeln und schreibt nicht mehr — ein in diesem Zustand stehengebliebener Wechselrichter bekäme keinen neuen Befehl mehr. Weicht die tatsächliche Ausgangsleistung dann um mehr als 5 % vom Limit ab und steht der Messwert dabei länger als fünf Minuten unverändert, wird der Sollwert neu geschrieben und unter Letzte Aktion protokolliert. Bleibt die Abweichung bestehen, wird der Wechselrichter nach weiteren fünf Minuten aus dem Regelmodus genommen (Output 0, Timer-Toggle, Modus Disabled) und im nächsten Zyklus von Fall D regulär zurückgeholt — samt Fehlermeldung. Das ist derselbe Weg, der einen aus dem Tritt geratenen Wechselrichter auch sonst wiederherstellt, mit einer echten Modus-Flanke statt einer Wiederholung des bestehenden Werts. Die Dauer kommt aus dem Zeitstempel der letzten Wertänderung des Ist-Sensors — ein Sensor, der um den abweichenden Wert rauscht, löst nicht aus. Gilt ausschließlich in diesem gesättigten Entlade-Zustand, mit PI-Regler wie mit Stellwertrechnung; Zone 0, AC Laden und Tarif-Laden halten den Ausgang bewusst unterhalb ihres Limits und sind ausgenommen.\n\nEinstieg: P = 0.5, I = 0. P schrittweise erhöhen bis Output zu pendeln beginnt, dann einen Schritt zurück. I erst einführen wenn P-Regelung stabil ist."
     },
     "zones": {
       "summary": "SOC-Zonenlogik — Verhalten abhängig vom Batterieladestand",
@@ -56,7 +56,7 @@
     }
   },
   "col_titles": {
-    "pi_ctrl":          "Regelparameter",
+    "pi_ctrl":          "Entladeregelung",
     "pi_saw":           "Self-Adjusting Wait",
     "zones_soc":        "SOC-Grenzen",
     "zones_power":      "Leistungsgrenzen",
@@ -82,7 +82,7 @@
   "fields": {
     "pi_enabled": {
       "l": "Entlade-PI",
-      "d": "An: Zone 1 und 2 entladen über den PI-Regler mit P- und I-Faktor. Aus: Stellwertrechnung wie beim AC-Laden — neuer Sollwert = Ist-Entladeleistung + (Grid − Offset), in einem Schritt, ohne Integral; während die Rampe läuft, wird nur gesenkt. Beim Umschalten wird das Integral genullt."
+      "d": "An: Zone 1 und 2 entladen über den PI-Regler mit P- und I-Faktor. Aus: Stellwertrechnung wie beim AC-Laden — neuer Sollwert = Ist-Entladeleistung + (Grid − Offset), in einem Schritt, ohne Integral; während die Rampe läuft, wird nur gesenkt. P- und I-Faktor wirken nur bei An und sind sonst ausgegraut. Beim Umschalten wird das Integral genullt."
     },
     "p_factor":  {
       "l": "P-Faktor (Proportional)",
@@ -94,7 +94,7 @@
     },
     "tolerance": {
       "l": "Toleranzbereich / Totband (W)",
-      "d": "Abweichungen innerhalb dieses Bereichs lösen keinen PI-Eingriff aus. Stattdessen greift der Integral-Decay (−5 %/Zyklus wenn |Integral| > 10)."
+      "d": "Abweichungen (Grid − Offset) innerhalb dieses Bereichs lösen keinen Stelleingriff aus — weder PI-Schritt noch Stellwertrechnung. Mit Entlade-PI greift stattdessen der Integral-Decay (−5 %/Zyklus wenn |Integral| > 10). Im AC-Laden gilt dasselbe Totband für |AC-Offset − Grid|."
     },
     "wait_time": {
       "l": "Wartezeit / Max-Timeout (s)",
@@ -126,7 +126,7 @@
     },
     "hard_limit_z1": {
       "l": "Hard Limit Zone 1 / 2 — Entladung (W)",
-      "d": "Ausgangsleistungs-Obergrenze in Zone 1 (Entladung) und Zone 2 (PV-Tracking). In Zone 2 gilt zusätzlich das PV-basierte Limit min(Hard-Limit-Z1, max(0, PV − Reserve)). Sinkt die PV plötzlich, läuft der PI weiter und korrigiert den Output nach unten."
+      "d": "Ausgangsleistungs-Obergrenze in Zone 1 (Entladung) und Zone 2 (PV-Tracking). In Zone 2 gilt zusätzlich das PV-basierte Limit min(Hard-Limit-Z1, max(0, PV − Reserve)). Sinkt die PV plötzlich, läuft die Entladeregelung weiter und korrigiert den Output nach unten."
     },
     "discharge_max": {
       "l": "Max. Entladestrom Zone 1 (A)",
@@ -288,7 +288,7 @@
     },
     "stddev_trim_count": {
       "l": "Trim (Anzahl Werte pro Seite)",
-      "d": "Anzahl der höchsten UND Anzahl der niedrigsten Einzelmesswerte im Stabw.-Fenster, die je Seite vor der Berechnung ausgeschlossen werden — bei z. B. 5 werden insgesamt 10 Samples ausgeschlossen (5 niedrigste + 5 höchste), nicht 5. Als Anzahl Werte, nicht als Prozent, da die Sample-Zahl im Fenster je nach Netzsensor-Update-Rate schwankt. Trennt kurze, seltene Lastspitzen (z. B. Kompressor-/Pumpen-Anlaufstrom für wenige Sekunden) von echter Dauerunruhe: Ein Puls, der nur eine Minderheit der Werte im Fenster füllt, fällt komplett in den ausgeschlossenen Bereich; eine Schwankung, die den Großteil des Fensters betrifft, übersteht das Trimmen unverändert und bewegt den Offset weiterhin. 0 = kein Trimmen (Standard, bisheriges Verhalten). Effekt live vergleichbar über „StdDev (roh)“ unten."
+      "d": "Anzahl der höchsten UND Anzahl der niedrigsten Einzelmesswerte im Stabw.-Fenster, die je Seite vor der Berechnung ausgeschlossen werden — bei z. B. 5 werden insgesamt 10 Samples ausgeschlossen (5 niedrigste + 5 höchste), nicht 5. Als Anzahl Werte, nicht als Prozent, da die Sample-Zahl im Fenster je nach Netzsensor-Update-Rate schwankt. Trennt kurze, seltene Lastspitzen (z. B. Kompressor-/Pumpen-Anlaufstrom für wenige Sekunden) von echter Dauerunruhe: Ein Puls, der nur eine Minderheit der Werte im Fenster füllt, fällt komplett in den ausgeschlossenen Bereich; eine Schwankung, die den Großteil des Fensters betrifft, übersteht das Trimmen unverändert und bewegt den Offset weiterhin. 0 = kein Trimmen (Standard, bisheriges Verhalten). Effekt live vergleichbar im Status-Tab: „StdDev (roh)“ neben „StdDev (getrimmt)“, letztere ausgegraut bei 0."
     },
     "dyn_z1_enabled":  { "l": "Aktivieren", "d": "Berechnet den Offset dynamisch aus der Netz-StdDev statt des statischen Werts. Überschreibt den statischen Zone-1-Offset." },
     "dyn_z1_min":      { "l": "Min. Offset (W)", "d": "Grundpuffer bei ruhigem Netz (StdDev ≤ Rausch-Schwelle). Offset sinkt nie unter diesen Wert." },
@@ -330,7 +330,7 @@
     "title":         "⚡ Solakon ONE Nulleinspeisung",
     "info_summary":  "ℹ️ Über diese Integration",
     "p1": "Die <strong>Solakon ONE Nulleinspeisung</strong> regelt die Ausgangsleistung des Wechselrichters vollautomatisch so, dass der Netzbezug möglichst bei 0 W gehalten wird — ohne Einspeisung ins öffentliche Netz.",
-    "p2": "Kern ist ein <strong>PI-Regler</strong> mit der Netzleistung als Regelgröße und der WR-Ausgangsleistung als Stellgröße. Das Verhalten richtet sich nach vier <strong>SOC-Zonen</strong>: Zone 1 entlädt aggressiv, Zone 2 batterieschonend, Zone 3 sperrt die Entladung, Zone 0 speist aktiv Überschuss ein.",
+    "p2": "Kern ist ein <strong>PI-Regler</strong> mit der Netzleistung als Regelgröße und der WR-Ausgangsleistung als Stellgröße; im Entladen wahlweise eine <strong>Stellwertrechnung auf Ist-Basis</strong>. Das Verhalten richtet sich nach vier <strong>SOC-Zonen</strong>: Zone 1 entlädt aggressiv, Zone 2 batterieschonend, Zone 3 sperrt die Entladung, Zone 0 speist aktiv Überschuss ein.",
     "p3": "Optionale Module: <strong>☀️ Überschuss</strong>, <strong>⚡ AC-Laden</strong>, <strong>💹 Tarif-Arbitrage</strong>, <strong>📈 Dynamischer Offset</strong> (pro Zone einzeln), <strong>🌙 Nachtabschaltung</strong>. Alle Parameter werden persistent hier im Panel gespeichert — kein YAML, keine Helfer-Entitäten.",
     "prio_heading":  "Priorität und gegenseitige Blockierung der optionalen Module:",
     "prio_priority": "Priorität",
@@ -365,7 +365,7 @@
     "solar_lbl":         "Solarleistung",
     "alloc_lbl":        "Zone-1-Limit (zugeteilt)",
     "alloc_single":     "Einzel",
-    "stddev_lbl":        "Netz-StdDev",
+    "stddev_lbl":        "StdDev (getrimmt)",
     "stddev_raw_lbl":    "StdDev (roh)",
     "offset_lbl":        "Aktiver Offset",
     "elapsed_lbl":       "Seit letztem Output",

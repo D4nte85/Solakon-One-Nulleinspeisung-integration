@@ -5,6 +5,11 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+### Geändert
+
+- **Panel-Tab „PI-Regler“ heißt „Regelung“:** Totband und Wartezeit stehen in einer eigenen Karte „Allgemein“, weil sie für PI-Regler und Stellwertrechnung gelten; die Spalte „Entladeregelung“ enthält den Schalter Entlade-PI mit P- und I-Faktor. Bei ausgeschaltetem Entlade-PI werden P- und I-Faktor sowie die Integral-Kachel im Status-Tab ausgegraut statt ausgeblendet. Die Beschreibungen von Totband, Entlade-PI, Hard Limit Zone 1/2, Infokasten und Stillstandserkennung nennen beide Entladeverfahren.
+- **Status-Tab, Karte Regelzustand geordnet:** erste Zeile StdDev roh und getrimmt (getrimmt ausgegraut bei Trim 0, Beschriftung „StdDev (getrimmt)“ statt „Netz-StdDev“), zweite Zeile Zone-1-Limit und PI-Integral.
+
 ## [3.3.0-beta.1] – 2026-09-27
 
 ### Hinzugefügt
