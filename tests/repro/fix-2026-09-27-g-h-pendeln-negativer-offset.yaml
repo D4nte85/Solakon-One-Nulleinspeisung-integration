@@ -1,0 +1,22 @@
+titel: AC-Laden pendelt zwischen G und H bei stark negativem Offset
+bezug: fix-2026-09-27-g-h-pendeln-negativer-offset
+# AC-Laden an, Offset −150, Hysterese 50: Austritt H bei Netz ≥ −100, Eintritt G bisher
+# bei Netz + ΣOutput < −50. Bei 60 W externem Überschuss tritt G ein, die Stellwertrechnung
+# schreibt 0 W (Ziel Netz −150 verlangt 60 − 150 < 0 W), H schließt die Lade-Session im
+# nächsten Lauf, G öffnet sie wieder.
+netz: -60
+instanzen:
+  - prefix: a
+    settings: {regulation_enabled: true, ac_enabled: true, ac_offset: -150, ac_hysteresis: 50}
+    flags: {cycle_active: true}
+    sensoren: {soc: 50, modus: "1", ist: 0}
+schritte:
+  - nach: 0
+  - nach: 5
+  - nach: 5
+erwartet:
+  - schritt: 1
+    instanz: a
+    zustand: {ac_charge_active: false}
+  - schritt: 3
+    kein_aufruf: {entity: select.a_mode, wert: "3"}
