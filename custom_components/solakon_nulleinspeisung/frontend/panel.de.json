@@ -80,6 +80,10 @@
     "entities_all": "Optionale Entity-Zuweisungen dieser Instanz. Enable-Flags und Zahlen-Schwellen bleiben im jeweiligen Feature-Tab (Zonen, Überschuss, Tarif) — hier wird nur zugewiesen, welche Entität gelesen wird. Bei Multi-Instanz: lokal (hier) überschreibt den globalen Wert aus dem Verteilungs-Tab, sonst gilt dieser."
   },
   "fields": {
+    "pi_enabled": {
+      "l": "Entlade-PI",
+      "d": "An: Zone 1 und 2 entladen über den PI-Regler mit P- und I-Faktor. Aus: Stellwertrechnung wie beim AC-Laden — neuer Sollwert = Ist-Entladeleistung + (Grid − Offset), in einem Schritt, ohne Integral; während die Rampe läuft, wird nur gesenkt. Beim Umschalten wird das Integral genullt."
+    },
     "p_factor":  {
       "l": "P-Faktor (Proportional)",
       "d": "Reagiert sofort auf die aktuelle Abweichung (Grid − Offset). Höher = aggressiver. Zu groß: Output pendelt dauerhaft. Typisch nach Einstellung: 0.8–1.5"
@@ -369,6 +373,7 @@
     "active_modules_lbl":"Aktive Module",
     "error_lbl":         "Fehler",
     "no_error":          "Keine",
+    "flag_pi":           "PI-Regler",
     "flag_cycle":        "Zyklus",
     "flag_surplus":      "Surplus",
     "flag_ac":           "AC Laden",

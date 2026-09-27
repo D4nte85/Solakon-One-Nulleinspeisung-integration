@@ -3,12 +3,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .ac_charge import setpoint as ac_setpoint
+from . import setpoint
 from .pi import SATURATED, STEP, gate_discharge
 
 # Arten der Pfadentscheidung.
 FIXED = "fixed"              # Festwert schreiben
-AC_SET = "ac_set"            # Stellwert des AC-Ladens schreiben
+SETPOINT = "setpoint"        # Stellwert der Stellwertrechnung schreiben
 PI_STEP = "pi_step"          # PI-Schritt ausführen
 STALL_CHECK = "stall_check"  # Stillstand prüfen
 STALL_RESET = "stall_reset"  # Stillstandszähler zurücksetzen
@@ -36,6 +36,9 @@ class PathInputs:
     ac_pool_charge: float
     target_offset: float
     dynamic_max: float
+    pi_enabled: bool
+    discharge: float
+    discharge_pool: float
     p_factor: float
     i_factor: float
     share: float
@@ -69,22 +72,33 @@ class PathDecision:
 
 
 def decide(inp: PathInputs) -> PathDecision:
-    """Pfad nach Regelzustand: Zone-0-Festwert, AC-Stellwert, Tarif-Festwert oder Entlade-PI."""
+    """Pfad nach Regelzustand: Zone-0-Festwert, AC-Stellwert, Tarif-Festwert oder Entladen.
+
+    Entladen schreibt nach dem Gate einen PI-Schritt, bei ausgeschaltetem `pi_enabled`
+    stattdessen den Stellwert auf Ist-Basis (Bedarf Netz − Offset, ohne Mindestleistung).
+    """
     if inp.surplus_active:
         return PathDecision(FIXED, inp.zone0_power, "act_zone0_output")
 
     if inp.ac_charge_active:
-        value = ac_setpoint(inp.grid, inp.ac_charge, inp.ac_pool_charge, inp.current_power,
+        value = setpoint.ac(inp.grid, inp.ac_charge, inp.ac_pool_charge, inp.current_power,
                             inp.ac_offset, inp.ac_limit, inp.ac_min_charge, inp.ac_share,
                             inp.tolerance)
         if value is None:
             return PathDecision(IDLE)
-        return PathDecision(AC_SET, value, "act_ac_setpoint", ac_charge_mode=True)
+        return PathDecision(SETPOINT, value, "act_ac_setpoint", ac_charge_mode=True)
 
     if inp.tariff_charge_active:
         return PathDecision(FIXED, inp.tariff_power, "act_tariff_power", ac_charge_mode=True)
 
     gate = gate_discharge(inp.grid, inp.current_power, inp.target_offset, inp.dynamic_max, inp.tolerance)
+    if gate == STEP and not inp.pi_enabled:
+        value = setpoint.value(inp.grid - inp.target_offset, inp.discharge, inp.discharge_pool,
+                               inp.current_power, inp.dynamic_max, 0.0, inp.share)
+        if value is None:
+            return PathDecision(IDLE)
+        action = "act_discharge_setpoint_sister_charging" if inp.capped else "act_discharge_setpoint"
+        return PathDecision(SETPOINT, value, action)
     if gate == STEP:
         return PathDecision(PI_STEP, step=PiStep(
             inp.discharge_base, inp.target_offset, inp.dynamic_max, inp.p_factor, inp.i_factor,

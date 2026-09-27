@@ -80,6 +80,10 @@
     "entities_all": "Optional entity assignments for this instance. Enable flags and numeric thresholds stay in their respective feature tab (Zones, Surplus, Tariff) — this only assigns which entity is read. With multiple instances: local (here) overrides the global value from the Distribution tab, otherwise the global value applies."
   },
   "fields": {
+    "pi_enabled": {
+      "l": "Discharge PI",
+      "d": "On: zones 1 and 2 discharge via the PI controller with P and I factor. Off: setpoint calculation as in AC charging — new setpoint = actual discharge power + (grid − offset), in one step, without integral; while the ramp is running, it only lowers. Switching resets the integral."
+    },
     "p_factor":  {
       "l": "P-Factor (Proportional)",
       "d": "Responds immediately to the current deviation (grid − offset). Higher = more aggressive. Too high: output oscillates permanently. Typical after tuning: 0.8–1.5"
@@ -369,6 +373,7 @@
     "active_modules_lbl":"Active modules",
     "error_lbl":         "Error",
     "no_error":          "None",
+    "flag_pi":           "PI Controller",
     "flag_cycle":        "Cycle",
     "flag_surplus":      "Surplus",
     "flag_ac":           "AC Charge",

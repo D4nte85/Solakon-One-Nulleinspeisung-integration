@@ -17,7 +17,7 @@ from .display import Display
 from .dynamic_offset import DynamicOffset
 from .feature_sensors import effective_sensor, feature_values, tariff_price
 from .i18n import Msg, translate, translate_msgs
-from .paths import AC_SET, FIXED, PI_STEP, STALL_CHECK, STALL_RESET, PathInputs, decide as decide_path
+from .paths import SETPOINT, FIXED, PI_STEP, STALL_CHECK, STALL_RESET, PathInputs, decide as decide_path
 from .pi import PIController
 from .readings import UNIT_SCALE_KWH, UNIT_SCALE_W, read_number, read_scaled, valid_state
 from .grid_group import NetGroup, Shares
@@ -44,6 +44,7 @@ from .const import (
     S_SURPLUS_FORECAST_ENABLED, S_SURPLUS_LOCK_ENABLED, S_AC_SOC_TARGET, S_AC_POWER_LIMIT,
     S_PERIODIC_ENABLED, S_PERIODIC_INTERVAL, S_TARIFF_ENABLED, S_PV_FORECAST_ENABLED,
     S_ZONE1_FORCE_ENABLED, S_REST_IN_DISCHARGE, S_DYN_Z1_ENABLED, S_DYN_Z2_ENABLED, S_DYN_AC_ENABLED,
+    S_PI_ENABLED,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -667,6 +668,8 @@ class SolakonCoordinator:
 
         if S_REST_IN_DISCHARGE in changes:
             self.resting = False
+        if S_PI_ENABLED in changes and changes[S_PI_ENABLED] != self._setting(S_PI_ENABLED, bool):
+            self.pi.reset()
         self.settings.update(changes)
         await self._store.async_save(self._store_data())
         _LOGGER.info("Solakon: Einstellungen gespeichert")
@@ -942,7 +945,8 @@ class SolakonCoordinator:
     ) -> bool:
         """PI-Phase in Modus '1' oder '3': Timeout-Reset, dann ein Pfad je Regelzustand.
 
-        Pfade laut `paths.decide`: Zone-0-Festwert, AC-Stellwert, Tarif-Festwert oder Entlade-PI mit Stillstandsprüfung.
+        Pfade laut `paths.decide`: Zone-0-Festwert, AC-Stellwert, Tarif-Festwert oder Entladen
+        (PI-Schritt oder Stellwert) mit Stillstandsprüfung.
         Im Ruhemodus endet die Phase nach dem Timeout-Reset. Liefert die Zweitlesung von
         Netz oder PV keine Zahl, endet sie mit `err_core_sensor` ohne Schreibbefehl.
         True, wenn der Regelzyklus damit blockiert ist.
@@ -976,7 +980,7 @@ class SolakonCoordinator:
         # Einzige CONF_ACTIVE_POWER-Lesung dieses Zyklus, nach dem letzten Await vor
         # der PI-Entscheidung. Gemeinsam genutzt von Gate, PI-Basis und Log-Zeile.
         current_power = self._flt(cfg[CONF_ACTIVE_POWER])
-        # Ist-Leistung als Basis der AC-Stellwertrechnung, im AC-Laden negativ.
+        # Ist-Leistung als Basis der Stellwertrechnung, im AC-Laden negativ.
         actual = self.actual_power()
 
         # Eigener Pool für AC-Laden, nach den Falls berechnet.
@@ -994,6 +998,8 @@ class SolakonCoordinator:
             ac_share=ac_error_share,
             ac_charge=-actual, ac_pool_charge=-self.group.ac_actual(self, actual),
             target_offset=target_offset, dynamic_max=dynamic_max,
+            pi_enabled=cs.pi_enabled, discharge=actual,
+            discharge_pool=self.group.discharge_actual(self, actual),
             p_factor=cs.p_factor, i_factor=cs.i_factor, share=error_share,
             discharge_base=self.group.pi_base(self, current_power, error_share),
         ))
@@ -1001,9 +1007,9 @@ class SolakonCoordinator:
             self.pi.decay()
         if d.kind == FIXED:
             await self._set_fixed_output(d.value, current_power, d.action, ac_charge_mode=d.ac_charge_mode)
-        elif d.kind == AC_SET:
+        elif d.kind == SETPOINT:
             self._set_last_action(d.action, frm=current_power, to=d.value)
-            await self.out.set_and_wait(d.value, ac_charge_mode=True)
+            await self.out.set_and_wait(d.value, ac_charge_mode=d.ac_charge_mode)
         elif d.kind == PI_STEP:
             st = d.step
             await self._pi_step(grid, st.base, st.offset, st.limit, st.p_factor, st.i_factor,

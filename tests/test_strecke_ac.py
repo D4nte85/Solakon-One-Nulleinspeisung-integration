@@ -9,7 +9,7 @@ from tests import harness as h
 from tests.strecke_ac import Geraet, bewertung, simulieren, stufen
 
 pi = importlib.import_module(h.PKG + ".pi")
-ac = importlib.import_module(h.PKG + ".ac_charge")
+sp = importlib.import_module(h.PKG + ".setpoint")
 
 OFFSET = -50.0
 TOLERANZ = 15.0
@@ -31,7 +31,7 @@ def _ac_pi(p_factor: float, i_factor: float = 0.0):
 
 
 def _stellwert(netz, ist, sollwert):
-    return ac.setpoint(netz, ist, ist, sollwert, OFFSET, LIMIT, 50.0, 1.0, TOLERANZ)
+    return sp.ac(netz, ist, ist, sollwert, OFFSET, LIMIT, 50.0, 1.0, TOLERANZ)
 
 
 def _abschnitte(regler):

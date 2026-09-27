@@ -120,6 +120,8 @@ MODE_AC_CHARGE = "3"
 # -- Settings Keys (Panel / Storage) ------------------------------------------
 S_REGULATION_ENABLED = "regulation_enabled"
 
+# Entladen über den Entlade-PI; aus: Stellwertrechnung auf Ist-Basis.
+S_PI_ENABLED = "pi_enabled"
 S_P_FACTOR   = "p_factor"
 S_I_FACTOR   = "i_factor"
 S_TOLERANCE  = "tolerance"
@@ -273,6 +275,7 @@ def _dyn_offset(prefix: str) -> dict[str, Field]:
 SETTINGS_SCHEMA: dict[str, Field] = {
     S_REGULATION_ENABLED: _bool(),
 
+    S_PI_ENABLED: _bool(True),
     S_P_FACTOR:   _float(1.3, AMOUNT, 0.1, 5, 0.1),
     S_I_FACTOR:   _float(0.05, AMOUNT, 0, 0.5, 0.01),
     S_TOLERANCE:  _int(15, AMOUNT, 0, 200, 1),

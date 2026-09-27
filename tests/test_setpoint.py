@@ -1,4 +1,4 @@
-"""Stellwertrechnung des AC-Ladens ohne Coordinator: Ist-Basis, Gate, Schwelle, Rampe."""
+"""Stellwertrechnung ohne Coordinator: Ist-Basis, AC-Gate, Schwelle, Rampe, Entladen."""
 from __future__ import annotations
 
 import importlib
@@ -7,12 +7,12 @@ import pytest
 
 from tests import harness as h
 
-ac = importlib.import_module(h.PKG + ".ac_charge")
+sp = importlib.import_module(h.PKG + ".setpoint")
 
 
 def _sp(grid, own=400.0, pool=None, output=400.0, offset=-50.0, limit=800.0, share=1.0, tolerance=15.0,
         min_charge=50.0):
-    return ac.setpoint(grid, own, own if pool is None else pool, output, offset, limit, min_charge, share,
+    return sp.ac(grid, own, own if pool is None else pool, output, offset, limit, min_charge, share,
                        tolerance)
 
 
@@ -77,3 +77,32 @@ def test_nach_der_rampe_wieder_erhoehen():
 def test_anteil_im_ac_pool():
     # zwei Instanzen mit zusammen 800 W, 200 W Überschuss, Anteil 0,5
     assert _sp(-250.0, own=300.0, pool=800.0, output=300.0, share=0.5) == 500.0
+
+
+def _dis(grid, own=400.0, pool=None, output=400.0, offset=30.0, limit=800.0, share=1.0):
+    return sp.value(grid - offset, own, own if pool is None else pool, output, limit, 0.0, share)
+
+
+@pytest.mark.parametrize("grid, expected", [
+    (230.0, 600.0),    # 200 W Bezug über dem Offset: Entladeleistung + 200
+    (-170.0, 200.0),   # 200 W unter dem Offset: Entladeleistung − 200
+    (-570.0, 0.0),     # mehr als die Entladeleistung unter dem Offset: 0
+])
+def test_entladen_ist_basis(grid, expected):
+    assert _dis(grid) == expected
+
+
+def test_entladen_klemmen_und_ohne_schwelle():
+    assert _dis(1000.0) == 800.0
+    assert _dis(-350.0) == 20.0    # kleine Entladeleistung, keine Mindestleistung
+
+
+def test_entladen_rampe_nur_senken():
+    # Ist 200 W, Ausgangsleistung 600 W: höher gesperrt, tiefer erlaubt
+    assert _dis(630.0, own=200.0, output=600.0) is None
+    assert _dis(130.0, own=200.0, output=600.0) == 300.0
+
+
+def test_entladen_anteil_im_pool():
+    # zwei Instanzen mit zusammen 800 W, 200 W Bezug, Anteil 0,5
+    assert _dis(230.0, own=400.0, pool=800.0, share=0.5) == 500.0

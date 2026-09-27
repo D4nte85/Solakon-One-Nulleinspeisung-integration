@@ -70,8 +70,9 @@ const TAB_LAYOUT = {
       {
         tk: "pi_ctrl", icon: "🎛️", color: "#0891b2",
         fields: [
-          { k: "p_factor",  t: "num" },
-          { k: "i_factor",  t: "num" },
+          { k: "pi_enabled", t: "bool" },
+          { k: "p_factor",  t: "num", showIf: "pi_enabled" },
+          { k: "i_factor",  t: "num", showIf: "pi_enabled" },
           { k: "tolerance", t: "num" },
           { k: "wait_time", t: "num" },
         ],
@@ -895,6 +896,7 @@ class SolakonPanel extends HTMLElement {
 
         /* ── Fields ──────────────────────────────────────────────────────── */
         .field { display: flex; flex-direction: column; gap: 4px; }
+        .field[hidden] { display: none; }
         .field label { display: flex; align-items: center; gap: 8px; font-size: .9em; font-weight: 500; cursor: pointer; }
         .field input[type="number"], .field input[type="text"] { padding: 6px 10px; border: 1px solid var(--divider-color, #ddd); border-radius: 6px; background: var(--secondary-background-color, #f5f5f5); color: var(--primary-text-color, #333); font-size: .9em; width: 100%; box-sizing: border-box; }
         .field input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; accent-color: var(--primary-color, #03a9f4); }
@@ -1081,6 +1083,12 @@ ${this._textsMissing ? `
 
     container.appendChild(colGrid);
 
+    for (const key of new Set(layout.cols.flatMap(c => c.fields.map(f => f.showIf).filter(Boolean)))) {
+      container.querySelector(`input[data-key="${key}"]`)?.addEventListener("change", (e) => {
+        container.querySelectorAll(`[data-show-if="${key}"]`).forEach(el => { el.hidden = !e.target.checked; });
+      });
+    }
+
     if (enabledKey) {
       const masterCb = container.querySelector(`input[data-key="${enabledKey}"]`);
       if (masterCb) {
@@ -1134,6 +1142,10 @@ ${this._textsMissing ? `
     } else if (f.t === "note") {
       div.className = "field field-note";
       div.innerHTML = `<div class="desc">${desc}</div>`;
+    }
+    if (f.showIf) {
+      div.dataset.showIf = f.showIf;
+      div.hidden = !this._cfg.get(f.showIf);
     }
     return div;
   }
@@ -1296,8 +1308,13 @@ ${this._textsMissing ? `
     const b = this.shadowRoot.getElementById("zone-banner");
     if (b) { b.textContent = `${zs.icon} ${zLabel}`; b.style.background = zs.color; }
 
+    const piOn = this._cfg.saved.pi_enabled !== false;
+    const intStat = this.shadowRoot.getElementById("st-int")?.parentElement;
+    if (intStat) intStat.hidden = !piOn;
+
     const fl = this.shadowRoot.getElementById("st-flags");
     if (fl) fl.innerHTML = [
+      [s.flag_pi          || "",         piOn],
       [s.flag_cycle       || "",         st.cycle_active],
       [s.flag_surplus     || "",        st.surplus_active],
       [s.flag_ac          || "",             st.ac_charge],

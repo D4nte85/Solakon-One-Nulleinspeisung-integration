@@ -7,7 +7,7 @@
 
 Vollautomatische **Nulleinspeisung** für den **Solakon ONE** Wechselrichter als native Home Assistant Integration — kein Blueprint, keine Helfer-Entitäten, keine manuelle YAML-Pflege.
 
-Die Integration regelt die Ausgangsleistung des Wechselrichters über einen **PI-Regler** so, dass der Netzbezug möglichst bei 0 W gehalten wird. Alle Parameter werden über ein **Sidebar-Panel** direkt in der HA-Oberfläche konfiguriert und persistent gespeichert.
+Die Integration regelt die Ausgangsleistung des Wechselrichters über einen **PI-Regler** so, dass der Netzbezug möglichst bei 0 W gehalten wird; alternativ rechnet eine **Stellwertrechnung auf Ist-Basis** den Sollwert in einem Schritt. Alle Parameter werden über ein **Sidebar-Panel** direkt in der HA-Oberfläche konfiguriert und persistent gespeichert.
 
 > [!IMPORTANT]
 > **Voraussetzung: die offizielle Solakon-ONE-Integration.**
@@ -95,7 +95,7 @@ Das Verhalten wird abhängig vom Batterie-Ladestand in vier Zonen eingeteilt:
 
 **☀️ Überschuss-Einspeisung (Zone 0)** — Wenn PV-Erzeugung den Eigenbedarf um mehr als eine konfigurierbare Hysterese übersteigt und der SOC eine Zielschwelle erreicht hat, wird der Wechselrichter über den Nullpunkt hinaus angesteuert. Ein SOC-Hysterese-Band und eine PV-Hysterese verhindern Flackern beim Ein- und Ausschalten.
 
-**⚡ AC-Laden** — Steuert den Wechselrichter in den Lademodus, wenn der SOC unter ein Ziel fällt und externer Überschuss erkannt wird (`Grid + ΣOutput_entladend < min(ac_offset, 0) − Hysterese`, Σ über alle Instanzen im Entlademodus). Eigener PI-Regler mit separaten P/I-Faktoren, eigenem Offset und konfigurierbarer Leistungsobergrenze.
+**⚡ AC-Laden** — Steuert den Wechselrichter in den Lademodus, wenn der SOC unter ein Ziel fällt und externer Überschuss erkannt wird (`Grid + ΣOutput_entladend < min(ac_offset, 0) − Hysterese`, Σ über alle Instanzen im Entlademodus). Kein PI: [Stellwertrechnung auf Ist-Basis](#-ac-laden) mit eigenem Offset, Mindestladeleistung und konfigurierbarer Leistungsobergrenze.
 
 **💹 Tarif-Arbitrage** — Wertet einen externen Strompreis-Sensor aus und lädt bei günstigem Tarif automatisch auf, sperrt die Entladung unterhalb der Teuer-Schwelle (günstig + mittel) in Zone 1 und Zone 2, und gibt sie bei teurem Tarif wieder frei.
 
@@ -277,7 +277,7 @@ Alle Eingabefelder für Entity-IDs (z. B. Kapazitäts-, Vorhersage- und Preis-Se
 
 ### 📊 Status
 
-Echtzeit-Übersicht aller Regelzustände: aktive Zone mit farblichem Banner (Zone 0–3), Netzleistung, Solarleistung, Ausgangsleistung, SOC, Netz-Standardabweichung (Stabilitätsindikator), PI-Integral-Wert, aktiver Offset (Zone 1 / Zone 2 / Zone AC) mit Quelle (dynamisch / statisch), Zeitabstand seit letzter Regelaktion und seit letztem Moduswechsel, letzte Aktion und etwaige Fehlermeldungen, Status-Flags: Zyklus, Surplus, AC Laden, Tarif-Laden, Nacht, PV→Tarif, PV→Surplus, Austritts-Sperre. Rein lesend — manuelle Eingriffe liegen im **Debug**-Tab.
+Echtzeit-Übersicht aller Regelzustände: aktive Zone mit farblichem Banner (Zone 0–3), Netzleistung, Solarleistung, Ausgangsleistung, SOC, Netz-Standardabweichung (Stabilitätsindikator), PI-Integral-Wert (nur mit eingeschaltetem Entlade-PI), aktiver Offset (Zone 1 / Zone 2 / Zone AC) mit Quelle (dynamisch / statisch), Zeitabstand seit letzter Regelaktion und seit letztem Moduswechsel, letzte Aktion und etwaige Fehlermeldungen, Status-Flags: PI-Regler (grün bei eingeschaltetem Entlade-PI), Zyklus, Surplus, AC Laden, Tarif-Laden, Nacht, PV→Tarif, PV→Surplus, Austritts-Sperre. Rein lesend — manuelle Eingriffe liegen im **Debug**-Tab.
 
 ---
 
@@ -287,6 +287,7 @@ Kern des Regelkreises. Vollständige Einstellhilfe → [PI-Regler Einstellung](#
 
 | Parameter | Beschreibung | Empfehlung |
 |-----------|-------------|------------|
+| Entlade-PI | An: Zone 1 und 2 entladen über den PI-Regler. Aus: Stellwertrechnung auf Ist-Basis wie beim [AC-Laden](#-ac-laden), P- und I-Faktor werden ausgeblendet. Beim Umschalten wird das Integral genullt. | An |
 | P-Faktor | Proportionale Verstärkung — sofortige Reaktion auf Abweichung | 0,8–1,5 |
 | I-Faktor | Integrale Verstärkung — gleicht dauerhaften Offset aus | 0,03–0,08 |
 | Totband (W) | Abweichungen innerhalb dieses Bereichs lösen keinen Stelleingriff aus | 10–30 |
@@ -296,6 +297,12 @@ Kern des Regelkreises. Vollständige Einstellhilfe → [PI-Regler Einstellung](#
 | Periodischer Trigger | Startet die Regelschleife im konfigurierten Intervall neu — auch ohne Sensor-Änderung. Sinnvoll bei stabilen Haushalten, in denen der Netzbezug selten springt, und in Aufbauten ohne eigene PV am Gerät, in denen der Solar-Sensor als Trigger-Quelle ausfällt. | Aus |
 | Trigger-Intervall (s) | Abstand zwischen zwei periodischen Regelläufen. Bereich: 5–300 s. | 10–60 |
 
+
+**Stellwertrechnung im Entladen (Entlade-PI aus):** Der neue Sollwert entsteht in einem Schritt aus der Ist-Leistung, ohne Integral:
+```
+Stellwert_i = Fehler-Anteil_i × (Σ Ist-Entladeleistung des Entlade-Pools + grid − Offset)
+```
+Geklemmt auf 0 … Zone-1/2-Limit (mit Richtungssperre). Gate, Totband und Stillstandsprüfung bleiben wie beim PI; eine Mindestleistung gibt es nicht. Solange die Ist-Leistung mehr als 15 W unter der Ausgangsleistung liegt, wird nur gesenkt — dieselbe Regel wie im AC-Laden; das Anstiegsverhalten beim Entladen ist nicht gemessen.
 ---
 
 ### 🔋 Zonen
