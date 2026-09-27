@@ -5,6 +5,10 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+## [3.2.0] – 2026-09-27
+
+Stabile Fassung von 3.2.0-beta.1 bis 3.2.0-beta.3; die Stellwertrechnung des AC-Ladens ist am AC-gekoppelten Gerät bestätigt. Enthält alle Änderungen der drei Beta-Abschnitte unten.
+
 ### Behoben
 
 - **Panel zeigte nach einem Update alte Texte:** `panel.*.json` und `entity.*.json` wurden ohne Versionsparameter geladen, der Browser nutzte die zwischengespeicherte Fassung weiter. Das Panel lädt sie jetzt mit `cache: "no-cache"` und fragt bei jedem Öffnen per ETag nach.
