@@ -330,7 +330,7 @@ class SolakonPanel extends HTMLElement {
 
   async _fetchJson(file) {
     try {
-      const res = await fetch(`/${DOMAIN}/${file}`);
+      const res = await fetch(`/${DOMAIN}/${file}`, { cache: "no-cache" });
       if (res.ok) { return await res.json(); }
     } catch (_) { /* fehlt — der Aufrufer entscheidet */ }
     return {};
