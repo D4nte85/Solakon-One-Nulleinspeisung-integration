@@ -5,6 +5,8 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+## [3.3.0-beta.3] – 2026-09-28
+
 ### Geändert
 
 - **Entladen: Totband an der Grenze.** Bei Netzbezug gilt eine Ausgangsleistung über 0 W, die höchstens um das Totband unter dem Zone-1/2-Limit liegt, als gesättigt; PI-Regler und Stellwertrechnung schreiben dann nicht. In Zone 2 folgte der Sollwert zuvor jedem Watt der PV − Reserve. Über dem Limit wird weiter sofort gesenkt. Die Stillstandserkennung vergleicht die Ist-Leistung jetzt mit dem geschriebenen Sollwert statt mit dem Limit.
