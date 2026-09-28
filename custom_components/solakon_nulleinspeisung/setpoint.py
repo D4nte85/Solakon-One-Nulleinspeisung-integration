@@ -34,7 +34,7 @@ def ac(
     """Ladesollwert des AC-Ladens oder None, wenn nichts zu schreiben ist.
 
     Bedarf = Offset − Netz, Basis ist die Ist-Ladeleistung des AC-Pools, Schwelle die
-    Mindestladeleistung `min_charge`. Geschrieben wird bei Netzfehler über der Toleranz
+    Mindestladeleistung `min_charge`. Geschrieben wird bei Netzfehler über dem Totband
     oder Ausgangsleistung über `limit`.
     """
     if abs(offset - grid) <= tolerance and output <= limit:

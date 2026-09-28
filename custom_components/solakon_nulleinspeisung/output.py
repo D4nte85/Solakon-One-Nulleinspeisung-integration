@@ -88,7 +88,7 @@ class Output:
 
         `number.set_value` läuft ohne `blocking=True`: der Aufruf kehrt zurück,
         sobald der Service-Call eingereiht ist, nicht wenn CONF_ACTIVE_POWER den
-        neuen Wert zeigt. Ein unmittelbar folgender Reread im selben Zyklus sieht
+        neuen Wert zeigt. Eine unmittelbar folgende Lesung im selben Regelzyklus sieht
         ohne diesen Wait noch den alten Wert.
 
         Nullung (`value == 0`) gilt als sicherheitskritisch und wird zusätzlich

@@ -19,7 +19,7 @@ HAUSLAST = ((0, -600.0), (60, -300.0), (120, -800.0), (180, -150.0), (240, -500.
 
 
 def _ac_pi(p_factor: float, i_factor: float = 0.0):
-    """Früherer AC-PI: Sollwert-Basis, Fehler Offset − Netz, Gate nur Toleranz."""
+    """Früherer AC-PI: Sollwert-Basis, Fehler Offset − Netz, Gate nur Totband."""
     c = pi.PIController()
 
     def regler(netz, ist, sollwert):

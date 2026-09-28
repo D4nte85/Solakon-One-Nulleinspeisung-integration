@@ -19,10 +19,10 @@ def _ctrl(integral: float = 0.0):
 
 # grid, current, offset, limit, tolerance, erwartet
 @pytest.mark.parametrize("args, expected", [
-    ((30, 400, 30, 800, 25), HOLD),         # Fehler 0 in der Toleranz
-    ((80, 400, 30, 800, 25), STEP),         # Fehler über Toleranz, nach oben
-    ((-20, 400, 30, 800, 25), STEP),        # Fehler über Toleranz, nach unten
-    ((35, 900, 30, 800, 25), STEP),         # über dem Limit, Fehler in der Toleranz
+    ((30, 400, 30, 800, 25), HOLD),         # Fehler 0 im Totband
+    ((80, 400, 30, 800, 25), STEP),         # Fehler über dem Totband, nach oben
+    ((-20, 400, 30, 800, 25), STEP),        # Fehler über dem Totband, nach unten
+    ((35, 900, 30, 800, 25), STEP),         # über dem Limit, Fehler im Totband
     ((200, 800, 30, 800, 25), SATURATED),   # am Limit, Netz will mehr
     ((-200, 800, 30, 800, 25), STEP),       # am Limit, Netz will weniger
     ((35, 800, 30, 800, 25), SATURATED),    # am Limit, kleiner positiver Fehler

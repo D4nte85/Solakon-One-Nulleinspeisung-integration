@@ -5,6 +5,10 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+### Geändert
+
+- **Deutsche Texte an das Glossar angeglichen:** Totband statt Toleranz, Ausgangsleistung statt Output im Fließtext (Formeln behalten `Output`), Dynamic Offset statt dynamischer Offset. Panel-Labels: „Toleranzbereich / Totband (W)“ heißt „Totband (W)“, „Seit letztem Output“ heißt „Seit letztem Schreibbefehl“. Keine Verhaltensänderung.
+
 ## [3.3.0-beta.3] – 2026-09-28
 
 ### Geändert

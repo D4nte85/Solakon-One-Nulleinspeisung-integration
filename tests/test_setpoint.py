@@ -19,7 +19,7 @@ def _sp(grid, own=400.0, pool=None, output=400.0, offset=-50.0, limit=800.0, sha
 @pytest.mark.parametrize("grid, expected", [
     (-250.0, 600.0),   # 200 W zu viel Einspeisung: Ladeleistung + 200
     (150.0, 200.0),    # 200 W Bezug: Ladeleistung − 200
-    (-60.0, None),     # Netzfehler in der Toleranz
+    (-60.0, None),     # Netzfehler im Totband
 ])
 def test_ist_basis_ein_schritt(grid, expected):
     assert _sp(grid) == expected
