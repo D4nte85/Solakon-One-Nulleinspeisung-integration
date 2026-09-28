@@ -9,6 +9,7 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 - **Deutsche Texte an das Glossar angeglichen:** Totband statt Toleranz, Ausgangsleistung statt Output im Fließtext (Formeln behalten `Output`), Dynamic Offset statt dynamischer Offset. Panel-Labels: „Toleranzbereich / Totband (W)“ heißt „Totband (W)“, „Seit letztem Output“ heißt „Seit letztem Schreibbefehl“. Keine Verhaltensänderung.
 - **Adaptive Wartezeit:** Deutsche Texte nennen die Funktion „Adaptive Wartezeit“ statt „Self-Adjusting Wait“ wie der Blueprint; Panel-Label „Adaptive Wartezeit aktivieren“, Abschnittstitel „Adaptive Wartezeit“. Keine Verhaltensänderung.
+- **Ist-Leistung:** Deutsche Texte nennen den Messwert des Ist-Sensors „Ist-Leistung“ statt „tatsächliche (WR-)Ausgangsleistung“; Feldname im Konfigurationsdialog „⚡ Ist-Leistung des Wechselrichters“. Keine Verhaltensänderung.
 
 ## [3.3.0-beta.3] – 2026-09-28
 

@@ -7,7 +7,7 @@
         "data": {
           "instance_name": "📛 Instanzname (z.B. Speicher 1)",
           "grid_power_sensor": "🔌 Netz-Leistungssensor (z.B. Shelly 3EM)",
-          "actual_power_sensor": "⚡ Tatsächliche WR-Ausgangsleistung",
+          "actual_power_sensor": "⚡ Ist-Leistung des Wechselrichters",
           "solar_power_sensor": "☀️ Solarleistung (PV-Erzeugung)",
           "soc_sensor": "🔋 Batterieladestand (SOC)",
           "remote_timeout_countdown_sensor": "⏱️ Remote Timeout Countdown",
@@ -19,7 +19,7 @@
         },
         "data_description": {
           "grid_power_sensor": "Sensor der die aktuelle Netzleistung misst. Positiv = Bezug, negativ = Einspeisung.",
-          "actual_power_sensor": "Tatsächliche Ausgangsleistung des Wechselrichters — wird für die adaptive Wartezeit benötigt.",
+          "actual_power_sensor": "Ist-Leistung des Wechselrichters — wird für die adaptive Wartezeit benötigt.",
           "solar_power_sensor": "PV-Erzeugungsleistung — wird für Überschuss-Erkennung und Zone-2-Limit verwendet.",
           "soc_sensor": "Batterieladestand in Prozent — steuert den Zonenwechsel.",
           "remote_timeout_countdown_sensor": "Verbleibende Zeit bis der Fernsteuerungs-Modus automatisch zurückgesetzt wird.",
@@ -54,7 +54,7 @@
         },
         "data_description": {
           "grid_power_sensor": "Sensor der die aktuelle Netzleistung misst. Positiv = Bezug, negativ = Einspeisung.",
-          "actual_power_sensor": "Tatsächliche Ausgangsleistung des Wechselrichters — wird für die adaptive Wartezeit benötigt.",
+          "actual_power_sensor": "Ist-Leistung des Wechselrichters — wird für die adaptive Wartezeit benötigt.",
           "solar_power_sensor": "PV-Erzeugungsleistung — wird für Überschuss-Erkennung und Zone-2-Limit verwendet.",
           "soc_sensor": "Batterieladestand in Prozent — steuert den Zonenwechsel.",
           "remote_timeout_countdown_sensor": "Verbleibende Zeit bis der Fernsteuerungs-Modus automatisch zurückgesetzt wird.",
