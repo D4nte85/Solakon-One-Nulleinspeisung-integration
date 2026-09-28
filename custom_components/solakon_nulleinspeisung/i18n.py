@@ -17,7 +17,7 @@ _TEXTS: dict[str, dict[str, str]] = {
         "en": "Initialising…",
     },
     "zone_0": {
-        "de": "Zone 0 — Überschuss-Einspeisung",
+        "de": "Zone 0 — Surplus",
         "en": "Zone 0 — Surplus export",
     },
     "zone_1": {
@@ -139,8 +139,8 @@ _TEXTS: dict[str, dict[str, str]] = {
         "en": "Case HT: tariff charging ended",
     },
     "act_fall_tm": {
-        "de": "Tarif: Discharge-Lock (Preis {price:.1f})",
-        "en": "Tariff: discharge lock (price {price:.1f})",
+        "de": "Tarifsperre (Preis {price:.1f})",
+        "en": "Tariff Lock (price {price:.1f})",
     },
 
     # ── Harte Fehler ─────────────────────────────────────────────────────────

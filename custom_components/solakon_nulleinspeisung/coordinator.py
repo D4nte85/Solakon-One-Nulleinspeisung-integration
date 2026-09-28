@@ -124,7 +124,7 @@ class SolakonCoordinator:
 
         self.dyn = DynamicOffset()
 
-        # Multi-Instanz: zugeteiltes Leistungslimit (None = Einzelbetrieb)
+        # Multi-Instancing: zugeteiltes Leistungslimit (None = Einzelbetrieb)
         self.allocated_power: float | None = None
         # Verwertbarer PV-Überschuss: Luft zwischen aktuellem Output und dem
         # Minimum aus Hard-Limit und aktueller PV-Leistung.

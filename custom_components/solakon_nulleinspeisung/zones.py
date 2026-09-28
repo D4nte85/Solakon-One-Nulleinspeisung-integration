@@ -312,7 +312,7 @@ def decide(inp: ZoneInputs) -> FallDecision | None:
         }, "act_fall_c")
 
     # ── Fall D: Recovery ─────────────────────────────────────────────────────
-    # Tarif-Lock blockiert Recovery für normalen Discharge (ac/tariff_charge_active-Recovery bleibt erlaubt)
+    # Tarifsperre blockiert Recovery für normalen Discharge (ac/tariff_charge_active-Recovery bleibt erlaubt)
     # Recovery einer aktiven Lade-Session ignoriert die Zone-3-Schwelle — Laden bleibt bei jedem SOC möglich
     charging_session_active = inp.ac_charge_active or inp.tariff_charge_active
     tariff_lock_active = inp.tariff.discharge_locked(charging_session_active, inp.surplus_active)
@@ -332,7 +332,7 @@ def decide(inp: ZoneInputs) -> FallDecision | None:
         }, "act_fall_d")
 
     # ── Fall GT: Tarif-Laden Start ───────────────────────────────────────────
-    # Überschuss-Einspeisung hat Vorrang — kein Tarif-Laden während Zone 0 aktiv
+    # Surplus hat Vorrang — kein Tarif-Laden während Zone 0 aktiv
     if (
         inp.tariff.below_cheap
         and soc < inp.tariff_soc - inp.tariff_soc_hyst
@@ -358,7 +358,7 @@ def decide(inp: ZoneInputs) -> FallDecision | None:
     ):
         return _end_charge("HT", FlagUpdate(tariff_charge_active=False), "act_fall_ht", inp.cycle_active)
 
-    # ── Discharge-Lock (Preis < Teuer-Schwelle) ──────────────────────────────
+    # ── Tarifsperre (Preis < Teuer-Schwelle) ──────────────────────────────
     # Sperrt Zone 1 und Zone 2 solange Preis < teuer (günstig UND mittel).
     if (
         tariff_lock_active
@@ -370,7 +370,7 @@ def decide(inp: ZoneInputs) -> FallDecision | None:
         }, "act_fall_tm", {"price": inp.tariff.price})
 
     # ── Fall G: AC Laden Start ───────────────────────────────────────────────
-    # Überschuss-Einspeisung hat Vorrang — kein AC Laden während Zone 0 aktiv
+    # Surplus hat Vorrang — kein AC Laden während Zone 0 aktiv
     # total_actual summiert über alle entladenden Instanzen (Einzelbetrieb: eigener Wert)
     # Schwelle symmetrisch zu Fall H um den Offset, bei positivem Offset Bezug 0
     if (

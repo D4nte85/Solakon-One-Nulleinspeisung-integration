@@ -80,7 +80,7 @@
           "exporting": "Surplus export",
           "tariff_charging": "Tariff charging",
           "ac_charging": "AC charging",
-          "discharge_locked": "Discharge locked (tariff)",
+          "discharge_locked": "Tariff Lock",
           "night_off": "Night shutdown",
           "battery_supply": "Battery supply",
           "safety_stop": "Safety stop (SOC minimum)",
@@ -106,7 +106,7 @@
           "I": "Safety: mode correction",
           "GT": "Tariff charging: start",
           "HT": "Tariff charging: end",
-          "TM": "Discharge lock: price too high"
+          "TM": "Tariff Lock: price not expensive"
         }
       },
       "mode_label": {

@@ -1,4 +1,4 @@
-"""Tariflage: wirksame Schwellen, Preisvergleiche, Prognosesperre, Entladesperre, Einheitenwarnung."""
+"""Tariflage: wirksame Schwellen, Preisvergleiche, Prognosesperre, Tarifsperre, Einheitenwarnung."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -37,7 +37,7 @@ class TariffState:
         return not self.below_exp
 
     def discharge_locked(self, charging: bool, surplus: bool) -> bool:
-        """Entladesperre für D, TM und die Anzeige: Preis unter der Teuer-Schwelle, keine Lade-Session, kein Überschuss."""
+        """Tarifsperre für D, TM und die Anzeige: Preis unter der Teuer-Schwelle, keine Lade-Session, kein Überschuss."""
         return self.below_exp and not charging and not surplus
 
 

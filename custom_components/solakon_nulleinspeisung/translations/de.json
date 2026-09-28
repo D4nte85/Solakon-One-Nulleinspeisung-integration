@@ -77,10 +77,10 @@
         "state": {
           "disabled": "Regelung inaktiv",
           "blocked": "Regelung blockiert",
-          "exporting": "Überschuss-Einspeisung",
+          "exporting": "Surplus",
           "tariff_charging": "Tarif-Laden",
           "ac_charging": "AC-Laden",
-          "discharge_locked": "Entladung gesperrt (Tarif)",
+          "discharge_locked": "Tarifsperre",
           "night_off": "Nachtabschaltung",
           "battery_supply": "Batteriebetrieb",
           "safety_stop": "Sicherheitsstopp (SOC-Minimum)",
@@ -95,7 +95,7 @@
         "state": {
           "0A": "Zone 0: Überschuss Start",
           "0B": "Zone 0: Überschuss Ende",
-          "A": "Zone 1: Entladezyklus Start",
+          "A": "Zone 1: Zyklus Start",
           "B": "Zone 3: Stopp (Zyklus aktiv)",
           "C": "Zone 3: Stopp",
           "D": "Recovery: Modus wiederhergestellt",
@@ -106,7 +106,7 @@
           "I": "Safety: Modus-Korrektur",
           "GT": "Tarif-Laden: Start",
           "HT": "Tarif-Laden: Ende",
-          "TM": "Discharge-Lock: Preis zu hoch"
+          "TM": "Tarifsperre: Preis nicht teuer"
         }
       },
       "mode_label": {
@@ -136,7 +136,7 @@
     },
     "binary_sensor": {
       "cycle_active": {
-        "name": "Entladezyklus aktiv"
+        "name": "Zyklus aktiv"
       },
       "surplus_active": {
         "name": "Überschuss-Modus"

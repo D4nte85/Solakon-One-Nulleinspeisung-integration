@@ -1,4 +1,4 @@
-"""Tariflage ohne Coordinator: Schwellen, Vergleiche, Prognosesperre, Entladesperre, Einheitenwarnung."""
+"""Tariflage ohne Coordinator: Schwellen, Vergleiche, Prognosesperre, Tarifsperre, Einheitenwarnung."""
 from __future__ import annotations
 
 import importlib
@@ -66,7 +66,7 @@ def test_prognosesperre(value, threshold, expected):
 @pytest.mark.parametrize("charging, surplus, expected", [
     (False, False, True), (True, False, False), (False, True, False), (True, True, False),
 ])
-def test_entladesperre_mit_flags(charging, surplus, expected):
+def test_tarifsperre_mit_flags(charging, surplus, expected):
     assert _assess(price=5.0).discharge_locked(charging, surplus) is expected
     assert _assess(price=12.0).discharge_locked(charging, surplus) is expected
     assert _assess(price=30.0).discharge_locked(charging, surplus) is False

@@ -1,7 +1,7 @@
-titel: Tarif-Laden pendelt unter Discharge-Lock am Ladeziel
+titel: Tarif-Laden pendelt unter Tarifsperre am Ladeziel
 bezug: issue-43-tarif-laden-pendeln-am-ziel
 # Tarif an, Preis unter der Günstig-Schwelle (5 < 10), Lade-Session läuft, SOC erreicht
-# das Ladeziel (80): Fall HT beendet das Laden, der Discharge-Lock hält die Entladung.
+# das Ladeziel (80): Fall HT beendet das Laden, die Tarifsperre hält die Entladung.
 # Fällt der SOC um einen Punkt (79), startet Fall GT sofort neu — ohne Abstand zum Ziel.
 netz: 300
 sensoren:

@@ -459,7 +459,7 @@ def h4(c: Ctx):
     if c.flags["tariff_charge_active"] and not c.flags_vorher.get("tariff_charge_active"):
         return "Tarif-Laden startet trotz PV-Vorhersage-Unterdrückung"
     if c.flags["discharge_locked"]:
-        return "Entladesperre trotz PV-Vorhersage-Unterdrückung"
+        return "Tarifsperre trotz PV-Vorhersage-Unterdrückung"
 
 
 def h5(c: Ctx):

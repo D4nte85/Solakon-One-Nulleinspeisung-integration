@@ -169,7 +169,7 @@ async def _ws_reset_integral(
 async def _ws_set_cycle(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
 ) -> None:
-    """WS: Entladezyklus setzen, Integral nullen und sofort einen Regelzyklus anstoßen."""
+    """WS: Zyklus setzen, Integral nullen und sofort einen Regelzyklus anstoßen."""
     if (coord := _coord_or_error(hass, connection, msg)) is None:
         return
     await coord.async_set_cycle(msg["active"])

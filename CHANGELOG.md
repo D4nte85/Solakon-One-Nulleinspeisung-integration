@@ -10,6 +10,10 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 - **Deutsche Texte an das Glossar angeglichen:** Totband statt Toleranz, Ausgangsleistung statt Output im Fließtext (Formeln behalten `Output`), Dynamic Offset statt dynamischer Offset. Panel-Labels: „Toleranzbereich / Totband (W)“ heißt „Totband (W)“, „Seit letztem Output“ heißt „Seit letztem Schreibbefehl“. Keine Verhaltensänderung.
 - **Adaptive Wartezeit:** Deutsche Texte nennen die Funktion „Adaptive Wartezeit“ statt „Self-Adjusting Wait“ wie der Blueprint; Panel-Label „Adaptive Wartezeit aktivieren“, Abschnittstitel „Adaptive Wartezeit“. Keine Verhaltensänderung.
 - **Ist-Leistung:** Deutsche Texte nennen den Messwert des Ist-Sensors „Ist-Leistung“ statt „tatsächliche (WR-)Ausgangsleistung“; Feldname im Konfigurationsdialog „⚡ Ist-Leistung des Wechselrichters“. Keine Verhaltensänderung.
+- **Tarifsperre:** Deutsche Texte nennen die Preissperre `discharge_locked` „Tarifsperre“ statt „Discharge-Lock“, englische „Tariff Lock“. Betriebszustand „Tarifsperre“ statt „Entladung gesperrt (Tarif)“; Fall TM „Tarifsperre: Preis nicht teuer“ statt „Discharge-Lock: Preis zu hoch“, denn TM greift unter der Teuer-Schwelle. „Tarif-Lock-Unterdrückung“ heißt „Prognose-Unterdrückung“.
+- **README, Fall D:** Die Beschreibung eines eigenen „Mittelpreis-Locks“ für Fall D war veraltet. D prüft dieselbe Tarifsperre wie A, E und TM (jeder Preis unter der Teuer-Schwelle); eine Lade-Session oder aktiver Surplus hebt sie auf.
+- **Surplus, Zyklus, Multi-Instancing:** Deutsche Texte sagen „Surplus“ statt „Überschuss-Einspeisung“ (Zonen-Label „Zone 0 — Surplus“, Betriebszustand `exporting` „Surplus“), „Zyklus“ statt „Entladezyklus“ und „Multi-Instancing“ statt „Multi-Instanz“.
+- **Binärsensor „Zyklus aktiv“:** `cycle_active` heißt „Zyklus aktiv“ statt „Entladezyklus aktiv“. Bestehende Installationen behalten ihre entity_id; Neuinstallationen mit deutscher Sprache erhalten `binary_sensor.<gerät>_zyklus_aktiv` statt `…_entladezyklus_aktiv`.
 
 ## [3.3.0-beta.3] – 2026-09-28
 

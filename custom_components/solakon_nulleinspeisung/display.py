@@ -6,7 +6,7 @@ import time
 from .i18n import translate
 from .const import MODE_AC_CHARGE, MODE_DISABLED, MODE_DISCHARGE
 
-# Regelzustand → Betriebszustand. Laden liegt als Zustand über dem Entladezyklus.
+# Regelzustand → Betriebszustand. Laden liegt als Zustand über dem Zyklus.
 OPERATING_BY_STATE = {
     "surplus": "exporting",
     "tariff_charge": "tariff_charging",

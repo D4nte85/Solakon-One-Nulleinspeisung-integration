@@ -1,7 +1,7 @@
 titel: Recovery holt die Entladung bei günstigem Preis zurück, obwohl TM sie sperrt
 bezug: fix-2026-09-18-recovery-bei-guenstigem-preis
 # Tarif aktiv, Preis unter der Günstig-Schwelle, SOC über dem Tarif-Ziel (kein GT).
-# Zyklus aktiv, Modus 0 (etwa nach Stillstands-Recovery). Die Preissperre gilt unter
+# Zyklus aktiv, Modus 0 (etwa nach Stillstands-Recovery). Die Tarifsperre gilt unter
 # der Teuer-Schwelle; Fall D darf die Entladung nicht in Modus 1 zurückholen.
 netz: 300
 sensoren:
