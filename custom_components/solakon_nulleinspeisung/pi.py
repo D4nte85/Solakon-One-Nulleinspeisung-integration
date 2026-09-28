@@ -15,10 +15,11 @@ def clamp(value, lo, hi):
 
 
 def gate_discharge(grid: float, current: float, offset: float, limit: float, tolerance: float) -> str:
-    """Gate des Entlade-PI: Toleranz, Sättigung oben, Überschreitung des Limits, Untergrenze.
+    """Gate der Entladeregelung: Totband, Sättigung am Limit, Überschreitung des Limits, Untergrenze.
 
-    Über `limit` gibt es auch bei Netzfehler in der Toleranz einen Schritt. Bei positivem
-    Netzfehler gilt ein Ausgang über 0 im Totband unter `limit` als gesättigt.
+    Gilt für PI-Schritt und Stellwertrechnung. Über `limit` gibt es auch bei Netzfehler im
+    Totband einen Schritt. Bei positivem Netzfehler gilt ein Ausgang über 0 im Totband
+    unter `limit` als gesättigt.
     """
     error = grid - offset
     above_limit = current > limit
