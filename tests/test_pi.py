@@ -26,6 +26,11 @@ def _ctrl(integral: float = 0.0):
     ((200, 800, 30, 800, 25), SATURATED),   # am Limit, Netz will mehr
     ((-200, 800, 30, 800, 25), STEP),       # am Limit, Netz will weniger
     ((35, 800, 30, 800, 25), SATURATED),    # am Limit, kleiner positiver Fehler
+    ((200, 780, 30, 800, 25), SATURATED),   # im Totband unter dem Limit, Netz will mehr
+    ((200, 775, 30, 800, 25), SATURATED),   # genau Limit − Totband
+    ((200, 770, 30, 800, 25), STEP),        # unter Limit − Totband
+    ((-200, 780, 30, 800, 25), STEP),       # im Totband unter dem Limit, Netz will weniger
+    ((200, 0, 30, 20, 25), STEP),           # bei 0 W, Limit kleiner als das Totband
     ((-200, 0, 30, 800, 25), HOLD),         # bei 0 W, Netz will weniger
     ((200, 0, 30, 800, 25), STEP),          # bei 0 W, Netz will mehr
     ((30, 0, 30, 0, 25), HOLD),             # Limit 0, Fehler 0

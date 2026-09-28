@@ -53,12 +53,13 @@ def test_entladen_schritt(capped, action):
 
 
 @pytest.mark.parametrize("over, kind", [
-    (dict(grid=30.0), "stall_reset"),
+    (dict(grid=30.0, current_power=400.0), "stall_reset"),
     (dict(grid=200.0, current_power=800.0), "stall_check"),
+    (dict(grid=200.0, current_power=790.0), "stall_check"),
 ])
 def test_entladen_ohne_schritt_klingt_ab(over, kind):
     d = _decide(**over, capped=True)
-    assert (d.kind, d.value, d.decay, d.sister_note) == (kind, 800.0, True, True)
+    assert (d.kind, d.value, d.decay, d.sister_note) == (kind, over["current_power"], True, True)
 
 
 @pytest.mark.parametrize("capped, action", [
@@ -77,12 +78,13 @@ def test_entladen_stellwert_aus_dem_pool():
 
 
 @pytest.mark.parametrize("over, kind", [
-    (dict(grid=30.0), "stall_reset"),
+    (dict(grid=30.0, current_power=400.0), "stall_reset"),
     (dict(grid=200.0, current_power=800.0), "stall_check"),
+    (dict(grid=200.0, current_power=790.0), "stall_check"),
 ])
 def test_entladen_stellwert_gate_bleibt(over, kind):
     d = _decide(**over, pi_enabled=False)
-    assert (d.kind, d.value, d.decay) == (kind, 800.0, True)
+    assert (d.kind, d.value, d.decay) == (kind, over["current_power"], True)
 
 
 def test_entladen_stellwert_rampe_nichts():

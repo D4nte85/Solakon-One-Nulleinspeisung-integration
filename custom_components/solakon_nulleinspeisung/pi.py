@@ -17,11 +17,13 @@ def clamp(value, lo, hi):
 def gate_discharge(grid: float, current: float, offset: float, limit: float, tolerance: float) -> str:
     """Gate des Entlade-PI: Toleranz, Sättigung oben, Überschreitung des Limits, Untergrenze.
 
-    Über `limit` gibt es auch bei Netzfehler in der Toleranz einen Schritt.
+    Über `limit` gibt es auch bei Netzfehler in der Toleranz einen Schritt. Bei positivem
+    Netzfehler gilt ein Ausgang über 0 im Totband unter `limit` als gesättigt.
     """
     error = grid - offset
     above_limit = current > limit
-    saturated_high = current >= limit and not above_limit and error > 0
+    near_limit = current >= limit or 0 < current >= limit - tolerance
+    saturated_high = near_limit and not above_limit and error > 0
     if ((abs(error) > tolerance or above_limit)
             and not saturated_high and not (current <= 0 and error < 0)):
         return STEP

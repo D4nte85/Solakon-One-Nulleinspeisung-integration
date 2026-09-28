@@ -105,4 +105,4 @@ def decide(inp: PathInputs) -> PathDecision:
             inp.share, "act_pi_sister_charging" if inp.capped else "act_pi",
         ))
     kind = STALL_CHECK if gate == SATURATED else STALL_RESET
-    return PathDecision(kind, inp.dynamic_max, decay=True, sister_note=inp.capped)
+    return PathDecision(kind, inp.current_power, decay=True, sister_note=inp.capped)
