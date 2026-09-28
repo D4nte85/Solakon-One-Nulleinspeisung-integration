@@ -19,7 +19,7 @@
         },
         "data_description": {
           "grid_power_sensor": "Sensor der die aktuelle Netzleistung misst. Positiv = Bezug, negativ = Einspeisung.",
-          "actual_power_sensor": "Tatsächliche Ausgangsleistung des Wechselrichters — wird für Self-Adjusting Wait benötigt.",
+          "actual_power_sensor": "Tatsächliche Ausgangsleistung des Wechselrichters — wird für die adaptive Wartezeit benötigt.",
           "solar_power_sensor": "PV-Erzeugungsleistung — wird für Überschuss-Erkennung und Zone-2-Limit verwendet.",
           "soc_sensor": "Batterieladestand in Prozent — steuert den Zonenwechsel.",
           "remote_timeout_countdown_sensor": "Verbleibende Zeit bis der Fernsteuerungs-Modus automatisch zurückgesetzt wird.",
@@ -54,7 +54,7 @@
         },
         "data_description": {
           "grid_power_sensor": "Sensor der die aktuelle Netzleistung misst. Positiv = Bezug, negativ = Einspeisung.",
-          "actual_power_sensor": "Tatsächliche Ausgangsleistung des Wechselrichters — wird für Self-Adjusting Wait benötigt.",
+          "actual_power_sensor": "Tatsächliche Ausgangsleistung des Wechselrichters — wird für die adaptive Wartezeit benötigt.",
           "solar_power_sensor": "PV-Erzeugungsleistung — wird für Überschuss-Erkennung und Zone-2-Limit verwendet.",
           "soc_sensor": "Batterieladestand in Prozent — steuert den Zonenwechsel.",
           "remote_timeout_countdown_sensor": "Verbleibende Zeit bis der Fernsteuerungs-Modus automatisch zurückgesetzt wird.",
