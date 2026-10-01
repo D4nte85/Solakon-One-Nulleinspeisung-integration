@@ -24,7 +24,7 @@
     },
     "zones": {
       "summary": "SOC Zone Logic — behaviour based on battery state of charge",
-      "text": "Zone 0 (surplus, optional): SOC ≥ export threshold AND PV surplus → output at Hard Limit Z0. Discharge current 2 A. PI integral frozen. Always sits on top of an active Zone-1 cycle; on exit the zone is re-derived from the SOC.\n\nZone 1 (aggressive): SOC > zone-1 threshold → high discharge current, offset 1. Runs through until SOC ≤ zone-3 threshold — no yo-yo effect.\n\nZone 2 (conservative): zone-3 < SOC ≤ zone-1 → 0 A discharge current, dynamic output limit (min(Hard Limit Z1, max(0, PV − reserve))), offset 2.\n\nZone 3 (safety stop): SOC ≤ zone-3 threshold → output 0 W, mode disabled. AC charging remains possible.\n\nMulti-instance: while another instance of the same grid group charges (AC or tariff), Zone 1 uses the Zone 2 output limit — the battery does not discharge, PV is still fed in. A grid group charges or discharges, never both."
+      "text": "Zone 0 (surplus, optional): SOC ≥ export threshold AND PV surplus → output at Hard Limit Z0. Discharge current 2 A. PI integral frozen. Always sits on top of an active Zone-1 cycle; on exit the zone is re-derived from the SOC.\n\nZone 1 (aggressive): SOC > zone-1 threshold → high discharge current, offset 1 (Night Offset while dark, optional). Runs through until SOC ≤ zone-3 threshold — no yo-yo effect.\n\nZone 2 (conservative): zone-3 < SOC ≤ zone-1 → 0 A discharge current, dynamic output limit (min(Hard Limit Z1, max(0, PV − reserve))), offset 2.\n\nZone 3 (safety stop): SOC ≤ zone-3 threshold → output 0 W, mode disabled. AC charging remains possible.\n\nMulti-instance: while another instance of the same grid group charges (AC or tariff), Zone 1 uses the Zone 2 output limit — the battery does not discharge, PV is still fed in. A grid group charges or discharges, never both."
     },
     "surplus": {
       "summary": "Surplus Feed-In — activating Zone 0",
@@ -44,7 +44,7 @@
     },
     "night": {
       "summary": "Night Shutdown — disable Zone 2 when PV < PV reserve, re-enable with hysteresis",
-      "text": "Affects Zone 2 only (case F): output 0 W, timer toggle, mode → disabled, integral reset.\nZone 1 and AC charging continue running at night.\n\nOff threshold: PV reserve from zone settings. On threshold: PV reserve + hysteresis (default 0 W). In between, the last state is kept.\n\nReactivation: once PV reaches the on threshold, case E applies (integral reset, timer toggle, mode → '1') — provided no tariff lock is active."
+      "text": "Affects Zone 2 only (case F): output 0 W, timer toggle, mode → disabled, integral reset.\nZone 1 and AC charging continue running at night.\n\nOff threshold: PV reserve from zone settings. On threshold: PV reserve + hysteresis (default 0 W). In between, the last state is kept.\n\nReactivation: once PV reaches the on threshold, case E applies (integral reset, timer toggle, mode → '1') — provided no tariff lock is active.\n\nThe same darkness (off and on threshold as above) switches the Zone 1 Night Offset (Zones tab) — even with night shutdown disabled."
     },
     "debug": {
       "summary": "Debug — manual intervention in the control state",
@@ -120,7 +120,7 @@
     },
     "pv_reserve": {
       "l": "PV Reserve (W)",
-      "d": "Zone-2 output limit: min(Hard Limit Z1, max(0, PV − reserve)) — PV-based limit capped by Hard Limit Z1. Also the off threshold for night shutdown: Zone 2 disabled when PV < reserve (re-enabled at reserve + night hysteresis)."
+      "d": "Zone-2 output limit: min(Hard Limit Z1, max(0, PV − reserve)) — PV-based limit capped by Hard Limit Z1. Also the off threshold for night shutdown: Zone 2 disabled when PV < reserve (re-enabled at reserve + night hysteresis). Also the switching threshold of the Night Offset."
     },
     "hard_limit_z0": {
       "l": "Hard Limit Zone 0 — Surplus (W)",
@@ -136,7 +136,7 @@
     },
     "offset_1": {
       "l": "Offset Zone 1 (W)",
-      "d": "Control target in Zone 1. Positive = controller maintains slight grid import as safety buffer. Negative = controller slightly exports. Overridden when dynamic offset for Zone 1 is active."
+      "d": "Control target in Zone 1. Positive = controller maintains slight grid import as safety buffer. Negative = controller slightly exports. Overridden when dynamic offset for Zone 1 is active. Replaced by the Night Offset while dark, if enabled."
     },
     "z1_night_enabled": {
       "l": "Enable Night Offset",
@@ -330,7 +330,7 @@
     },
     "night_hysteresis": {
       "l": "Re-enable hysteresis (W)",
-      "d": "Night ends only once PV ≥ PV reserve + hysteresis; it still starts at PV < PV reserve. 0 = on and off threshold identical."
+      "d": "Night ends only once PV ≥ PV reserve + hysteresis; it still starts at PV < PV reserve. 0 = on and off threshold identical. Also applies to the Night Offset."
     },
     "periodic_enabled": {
       "l": "Enable Periodic Trigger",

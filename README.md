@@ -316,11 +316,11 @@ SOC-Zonenlogik mit allen Leistungs- und Offset-Parametern.
 | Max. Entladestrom (A) | Entladestrom in Zone 1 und in der Ruhe in Modus `'0'` (Zone 2 = 0 A, Surplus = 2 A) | 25–40 |
 | Hard Limit Z0 — Surplus (W) | Ausgangsleistungs-Obergrenze in Zone 0 (Surplus). Typisch: gesetzliches Maximum (z. B. 800 W). Höhere Werte als die Gerätegrenze des Solakon ONE (1200 W, `DEVICE_MAX_POWER`) werden darauf gedeckelt. | 800 |
 | Hard Limit Z1 — Entladung (W) | Ausgangsleistungs-Obergrenze in Zone 1 und Zone 2. In Zone 2 gilt `min(Z1, max(0, PV − Reserve))`. Wird als `max(Z0, Z1)` in die optionale Export-Limit-Entität geschrieben. | 800 |
-| Zone 1 Offset (W) | Statischer Zielwert in Zone 1. Bei aktivem Dyn. Offset überschrieben | 20–50 |
+| Zone 1 Offset (W) | Statischer Zielwert in Zone 1. Bei aktivem Dyn. Offset überschrieben, bei Dunkelheit mit aktiviertem Nacht-Offset ersetzt | 20–50 |
 | Zone 2 Offset (W) | Statischer Zielwert in Zone 2 | 10–30 |
 | Nacht-Offset aktivieren | Ersetzt im Zone-1-Zyklus bei Dunkelheit den Zone-1-Offset durch den Nacht-Offset | Aus |
 | Nacht-Offset Zone 1 (W) | Statischer Zielwert in Zone 1 bei Dunkelheit. Bei aktivem Dyn. Offset (Spalte Zone 1 Nacht) überschrieben | 0–30 |
-| PV-Ladereserve (W) | Ausgangsleistungs-Limit in Zone 2: `min(Hard-Limit Z1, max(0, PV − Reserve))`. Dient auch als Ausschaltschwelle der Nachtabschaltung | 30–100 |
+| PV-Ladereserve (W) | Ausgangsleistungs-Limit in Zone 2: `min(Hard-Limit Z1, max(0, PV − Reserve))`. Dient auch als Ausschaltschwelle der Nachtabschaltung und als Umschaltschwelle des Nacht-Offsets | 30–100 |
 
 Ein positiver Offset von z. B. 30 W lässt den Regler auf 30 W Netzbezug regeln (Sicherheitspuffer gegen versehentliche Einspeisung). Ein negativer Wert lässt den Regler gezielt leicht einspeisen.
 
@@ -526,6 +526,8 @@ Gilt für alle Zonen gemeinsam (Zeitfenster-Ebene, nicht pro Zone):
 
 Optionale Nachtabschaltung. Deaktiviert **nur Zone 2** wenn PV < PV-Ladereserve (aus den Zonen-Einstellungen). Die Nacht endet erst bei PV ≥ PV-Ladereserve + **Hysterese Einschalten** (Standard 0 W); dazwischen bleibt der letzte Zustand erhalten. Zone 1 (aggressive Entladung) und AC Laden laufen auch nachts weiter. Zone 2 wird nicht reaktiviert solange der Tarif-Block greift (Preis unter der Teuer-Schwelle).
 
+Dieselbe Dunkelheit mit denselben Schwellen schaltet den [Nacht-Offset](#-zonen) von Zone 1 — auch bei ausgeschalteter Nachtabschaltung.
+
 ---
 
 ### 🔧 Debug
@@ -682,11 +684,12 @@ Für Automationen sind die sprachneutralen Schlüssel die richtige Quelle: der Z
 Die Integration, wenn du neu anfängst: kein Helfer-Entitäten- und Script-Gerüst, Konfiguration im Panel statt in YAML, Multi-Instancing und Dynamic Offset schon eingebaut. Die Blueprints bleiben gepflegt und sind die bessere Wahl, wenn du eine laufende Installation hast, die du nicht anfassen willst. Parallelbetrieb auf demselben Wechselrichter geht nicht — beide schreiben auf dieselbe Fernsteuerungs-Entität.
 
 **Ich habe keine PV-Panels am Solakon angeschlossen — worauf muss ich achten?**
-Der Betrieb als reiner AC-Speicher (eigene PV-Anlage am Hausnetz, nichts am DC-Eingang des Geräts) funktioniert, aber vier Funktionen hängen am geräteeigenen Solar-Sensor und verhalten sich dann anders:
+Der Betrieb als reiner AC-Speicher (eigene PV-Anlage am Hausnetz, nichts am DC-Eingang des Geräts) funktioniert, aber fünf Funktionen hängen am geräteeigenen Solar-Sensor und verhalten sich dann anders:
 
 - **Überschuss (Zone 0) aus lassen.** Zone 0 rechnet ausschließlich mit der PV-Leistung des Geräts gegen den Hausverbrauch; ohne eigene Panels kann sie nicht eintreten. Sie hat aber Vorrang vor AC Laden — solange der Überschuss-Modus aktiv ist, startet AC Laden nicht.
 - **Surplus-Forecast-Erzwingung und Austritts-Sperre** hängen ebenfalls an Zone 0 und bleiben wirkungslos.
 - **Nachtabschaltung aus lassen.** Sie prüft `PV < PV-Ladereserve` — bei dauerhaft 0 W ist die Bedingung immer erfüllt und Zone 2 dauerhaft gesperrt.
+- **Nacht-Offset aus lassen.** Er schaltet bei `PV < PV-Ladereserve` — bei dauerhaft 0 W gilt er immer statt des Zone-1-Offsets.
 - **Periodischen Trigger einschalten.** Die Regelschleife läuft sonst nur auf Sensor-Änderungen, und von den schnell wechselnden Quellen bleibt ohne eigene PV nur der Netzsensor. Ohne periodischen Trigger reagiert die Regelung auf Lastsprünge entsprechend träge.
 
 Zone 2 gibt in diesem Aufbau folgerichtig 0 W aus — ihr Ausgang ist auf `PV − PV-Ladereserve` gedeckelt. Geladen wird über **AC Laden** oder **Tarif-Laden**.
@@ -698,7 +701,7 @@ Eine bekannte Ursache ist die Solakon-App: Läuft sie parallel, kann sie ihre ei
 So ist es gedacht. Die SOC-Schwellen sind keine Zustandsgrenzen, sondern Eintritts- bzw. Austrittsbedingungen mit einem breiten Hystereseband dazwischen: Die **Zone-1-Schwelle startet** den Zyklus (Fall A), beendet wird er ausschließlich von der **Zone-3-Schwelle** (Fall B). Ohne diesen Abstand würde der Zyklus an der Zone-1-Schwelle dauernd ein- und ausschalten. Zone 2 ist entsprechend kein Zustand, in den man beim Unterschreiten der Zone-1-Schwelle fällt, sondern das Verhalten, solange **kein** Zyklus läuft.
 
 **Der Akku entlädt nachts, obwohl keine Sonne scheint — ist das ein Fehler?**
-Nein, gleiche Ursache: Ein einmal gestarteter Zone-1-Zyklus läuft unabhängig von der Tageszeit bis zur Zone-3-Schwelle weiter. Die Nachtabschaltung (**Nacht**-Tab) greift bei `PV < PV-Ladereserve` und wirkt ausschließlich auf Zone 2, also auf den zyklusfreien Betrieb. Davon zu unterscheiden ist eine dauerhafte Restentladung von rund 10 W: Der Wechselrichter kann nicht vollständig abschalten — Firmware-Eigenschaft, über die Regelung nicht beeinflussbar.
+Nein, gleiche Ursache: Ein einmal gestarteter Zone-1-Zyklus läuft unabhängig von der Tageszeit bis zur Zone-3-Schwelle weiter. Die Nachtabschaltung (**Nacht**-Tab) greift bei `PV < PV-Ladereserve` und wirkt ausschließlich auf Zone 2, also auf den zyklusfreien Betrieb. Wie viel der Zyklus nachts ins Netz abgibt, bestimmt der Zone-1-Offset; mit dem Nacht-Offset (Zonen-Tab) gilt bei Dunkelheit ein eigener Wert, etwa positiv statt negativ. Davon zu unterscheiden ist eine dauerhafte Restentladung von rund 10 W: Der Wechselrichter kann nicht vollständig abschalten — Firmware-Eigenschaft, über die Regelung nicht beeinflussbar.
 
 **Die Batterie entleert sich zu stark.**
 Der Hebel ist die **Zone-3-Schwelle** — sie beendet den Zyklus. Die Zone-1-Schwelle anzuheben hilft nicht: sie verzögert nur den Start des nächsten Zyklus und stoppt keinen laufenden.

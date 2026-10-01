@@ -79,6 +79,7 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
     zone1_limit: 50, zone3_limit: 20, discharge_max: 40,
     hard_limit_z0: 800, hard_limit_z1: 800,
     offset_1: 30, offset_2: 10, pv_reserve: 50,
+    z1_night_enabled: false, offset_1_night: 30,
     surplus_enabled: false, surplus_soc_threshold: 95, surplus_soc_hyst: 5, surplus_pv_hyst: 50,
     surplus_forecast_enabled: false, surplus_forecast_threshold: 5000,
     surplus_lock_enabled: false, surplus_lock_sensor: "", surplus_lock_factor: 1.5,
@@ -92,6 +93,7 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
     periodic_enabled: false, periodic_interval: 10,
     self_adjust_enabled: false, self_adjust_tolerance: 2,
     dyn_z1_enabled: false, dyn_z1_min: 30, dyn_z1_max: 250, dyn_z1_noise: 15, dyn_z1_factor: 1.5, dyn_z1_negative: false,
+    dyn_z1_night_enabled: false, dyn_z1_night_min: 30, dyn_z1_night_max: 250, dyn_z1_night_noise: 15, dyn_z1_night_factor: 1.5, dyn_z1_night_negative: false,
     dyn_z2_enabled: false, dyn_z2_min: 30, dyn_z2_max: 250, dyn_z2_noise: 15, dyn_z2_factor: 1.5, dyn_z2_negative: false,
     dyn_ac_enabled: false, dyn_ac_min: 30, dyn_ac_max: 250, dyn_ac_noise: 15, dyn_ac_factor: 1.5, dyn_ac_negative: false,
   };
@@ -163,7 +165,7 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
       solar: 850, soc: o.soc, cycle_active: o.cycle_active, surplus_active: false,
       ac_charge: false, tariff_charge: false, regulation_enabled: o.regulation_enabled ?? true, stddev: 8.4, stddev_raw: 8.4,
       dyn_z1_enabled: false, dyn_z2_enabled: false, dyn_ac_enabled: false,
-      dyn_z1: 0, dyn_z2: 0, dyn_ac: 0, active_fall: o.active_fall, is_night: false,
+      dyn_z1: 0, dyn_z1_night: 0, dyn_z2: 0, dyn_ac: 0, active_fall: o.active_fall, is_night: false,
       operating_state: mkOperatingState(o), discharge_locked: o.discharge_locked ?? false,
       forecast_tariff_suppressed: false, forecast_surplus_forced: false, forecast_exit_lock: false, allocated_power: 400,
     };
@@ -202,13 +204,15 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
   const OFFSET_SOURCES = {
     ac: ["dyn_ac_enabled", "ac_offset", "dyn_ac"],
     z1: ["dyn_z1_enabled", "offset_1", "dyn_z1"],
+    z1_night: ["dyn_z1_night_enabled", "offset_1_night", "dyn_z1_night"],
     z2: ["dyn_z2_enabled", "offset_2", "dyn_z2"],
   };
   const KWH_SCALE = { wh: 0.001, mwh: 1000 };
   function computeSnapshotExtras(entryId) {
     const inst = INSTANCES[entryId];
     const st = inst.status, s = inst.settings;
-    const zone = st.ac_charge ? "ac" : st.cycle_active ? "z1" : "z2";
+    const night = !!(st.dark && s.z1_night_enabled);
+    const zone = st.ac_charge ? "ac" : st.cycle_active ? (night ? "z1_night" : "z1") : "z2";
     const [enabledKey, staticKey, dynKey] = OFFSET_SOURCES[zone];
     const dynamic = !!s[enabledKey];
     const capSensor = (distConfig[inst.grid_sensor] || {})[`inst_${entryId}_capacity_sensor`];

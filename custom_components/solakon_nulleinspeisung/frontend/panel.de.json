@@ -24,7 +24,7 @@
     },
     "zones": {
       "summary": "SOC-Zonenlogik — Verhalten abhängig vom Batterieladestand",
-      "text": "Zone 0 (Überschuss, optional): SOC ≥ Export-Schwelle UND PV-Überschuss → Ausgangsleistung auf Hard-Limit-Z0. Entladestrom 2 A. PI-Integral eingefroren. Setzt immer auf einem aktiven Zone-1-Zyklus auf; beim Austritt wird die Zone aus dem SOC neu abgeleitet.\n\nZone 1 (aggressiv): SOC > Zone-1-Schwelle → hoher Entladestrom, Offset 1. Läuft durch bis SOC ≤ Zone-3-Schwelle — kein Yo-Yo-Effekt.\n\nZone 2 (schonend): Zone-3 < SOC ≤ Zone-1 → 0 A Entladestrom, dynamisches Ausgangsleistungs-Limit (min(Hard-Limit-Z1, max(0, PV − Reserve))), Offset 2.\n\nZone 3 (Sicherheitsstopp): SOC ≤ Zone-3-Schwelle → Ausgangsleistung 0 W, Modus Disabled. AC Laden bleibt trotzdem möglich.\n\nMulti-Instancing: Lädt eine andere Instanz derselben Netzgruppe (AC oder Tarif), gilt in Zone 1 das Ausgangsleistungs-Limit von Zone 2 — die Batterie entlädt nicht, PV wird weiter eingespeist. Eine Netzgruppe lädt oder entlädt, nie beides."
+      "text": "Zone 0 (Überschuss, optional): SOC ≥ Export-Schwelle UND PV-Überschuss → Ausgangsleistung auf Hard-Limit-Z0. Entladestrom 2 A. PI-Integral eingefroren. Setzt immer auf einem aktiven Zone-1-Zyklus auf; beim Austritt wird die Zone aus dem SOC neu abgeleitet.\n\nZone 1 (aggressiv): SOC > Zone-1-Schwelle → hoher Entladestrom, Offset 1 (bei Dunkelheit optional Nacht-Offset). Läuft durch bis SOC ≤ Zone-3-Schwelle — kein Yo-Yo-Effekt.\n\nZone 2 (schonend): Zone-3 < SOC ≤ Zone-1 → 0 A Entladestrom, dynamisches Ausgangsleistungs-Limit (min(Hard-Limit-Z1, max(0, PV − Reserve))), Offset 2.\n\nZone 3 (Sicherheitsstopp): SOC ≤ Zone-3-Schwelle → Ausgangsleistung 0 W, Modus Disabled. AC Laden bleibt trotzdem möglich.\n\nMulti-Instancing: Lädt eine andere Instanz derselben Netzgruppe (AC oder Tarif), gilt in Zone 1 das Ausgangsleistungs-Limit von Zone 2 — die Batterie entlädt nicht, PV wird weiter eingespeist. Eine Netzgruppe lädt oder entlädt, nie beides."
     },
     "surplus": {
       "summary": "Surplus — Zone 0 aktivieren",
@@ -44,7 +44,7 @@
     },
     "night": {
       "summary": "Nachtabschaltung — Zone 2 bei PV < PV-Ladereserve deaktivieren, Einschalten mit Hysterese",
-      "text": "Betrifft ausschließlich Zone 2 (Fall F): Ausgangsleistung 0 W, Timer-Toggle, Modus → Disabled, Integral-Reset.\nZone 1 und AC Laden laufen auch nachts weiter.\n\nAusschaltschwelle: PV-Ladereserve aus den Zonen-Einstellungen. Einschaltschwelle: PV-Ladereserve + Hysterese (Standard 0 W). Dazwischen bleibt der letzte Zustand erhalten.\n\nReaktivierung: Sobald PV die Einschaltschwelle erreicht, greift Fall E (Integral-Reset, Timer-Toggle, Modus → '1') — sofern keine Tarifsperre aktiv ist."
+      "text": "Betrifft ausschließlich Zone 2 (Fall F): Ausgangsleistung 0 W, Timer-Toggle, Modus → Disabled, Integral-Reset.\nZone 1 und AC Laden laufen auch nachts weiter.\n\nAusschaltschwelle: PV-Ladereserve aus den Zonen-Einstellungen. Einschaltschwelle: PV-Ladereserve + Hysterese (Standard 0 W). Dazwischen bleibt der letzte Zustand erhalten.\n\nReaktivierung: Sobald PV die Einschaltschwelle erreicht, greift Fall E (Integral-Reset, Timer-Toggle, Modus → '1') — sofern keine Tarifsperre aktiv ist.\n\nDieselbe Dunkelheit (Ausschalt- und Einschaltschwelle wie oben) schaltet den Nacht-Offset von Zone 1 (Zonen-Tab) — auch bei ausgeschalteter Nachtabschaltung."
     },
     "debug": {
       "summary": "Debug — manuelle Eingriffe in den Regelzustand",
@@ -120,7 +120,7 @@
     },
     "pv_reserve": {
       "l": "PV-Ladereserve (W)",
-      "d": "Ausgangsleistungs-Limit in Zone 2: min(Hard-Limit-Z1, max(0, PV − Reserve)) — PV-basiertes Limit, durch Hard-Limit-Z1 gedeckelt. Gleichzeitig Ausschaltschwelle der Nachtabschaltung: Zone 2 deaktiviert wenn PV < Reserve (Einschalten ab Reserve + Nacht-Hysterese)."
+      "d": "Ausgangsleistungs-Limit in Zone 2: min(Hard-Limit-Z1, max(0, PV − Reserve)) — PV-basiertes Limit, durch Hard-Limit-Z1 gedeckelt. Gleichzeitig Ausschaltschwelle der Nachtabschaltung: Zone 2 deaktiviert wenn PV < Reserve (Einschalten ab Reserve + Nacht-Hysterese). Ebenso Umschaltschwelle des Nacht-Offsets."
     },
     "hard_limit_z0": {
       "l": "Hard Limit Zone 0 — Surplus (W)",
@@ -136,7 +136,7 @@
     },
     "offset_1": {
       "l": "Offset Zone 1 (W)",
-      "d": "Regelziel in Zone 1. Positiv = Regler hält leichten Netzbezug als Sicherheitspuffer. Negativ = Regler speist leicht ein. Wird überschrieben wenn Dyn. Offset für Zone 1 aktiv ist."
+      "d": "Regelziel in Zone 1. Positiv = Regler hält leichten Netzbezug als Sicherheitspuffer. Negativ = Regler speist leicht ein. Wird überschrieben wenn Dyn. Offset für Zone 1 aktiv ist. Bei Dunkelheit durch den Nacht-Offset ersetzt, wenn dieser aktiviert ist."
     },
     "z1_night_enabled": {
       "l": "Nacht-Offset aktivieren",
@@ -330,7 +330,7 @@
     },
     "night_hysteresis": {
       "l": "Hysterese Einschalten (W)",
-      "d": "Die Nacht endet erst ab PV ≥ PV-Ladereserve + Hysterese; sie beginnt weiterhin bei PV < PV-Ladereserve. 0 = Ein- und Ausschaltschwelle gleich."
+      "d": "Die Nacht endet erst ab PV ≥ PV-Ladereserve + Hysterese; sie beginnt weiterhin bei PV < PV-Ladereserve. 0 = Ein- und Ausschaltschwelle gleich. Gilt auch für den Nacht-Offset."
     },
     "periodic_enabled": {
       "l": "Periodischen Trigger aktivieren",
