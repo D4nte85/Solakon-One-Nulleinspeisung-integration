@@ -24,7 +24,7 @@ def _num_keys() -> set[str]:
     for prefix, k in re.findall(r'sensorFeatureFields\("([a-z0-9_]+)", "([a-z]+)"\)', PANEL):
         keys.add(f"{prefix}_{k}")
     templates = re.findall(r'\{ *k: *`dyn_\$\{prefix\}_([a-z]+)`, *t: *"num"', PANEL)
-    for prefix in re.findall(r'dynOffSection\("[a-z0-9_]+", "([a-z0-9]+)"', PANEL):
+    for prefix in re.findall(r'dynOffSection\("[a-z0-9_]+", "([a-z0-9_]+)"', PANEL):
         keys.update(f"dyn_{prefix}_{t}" for t in templates)
     return keys
 

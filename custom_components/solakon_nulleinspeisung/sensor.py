@@ -130,9 +130,9 @@ class GridStdDevSensor(CoordinatorSensor):
 
     @property
     def extra_state_attributes(self) -> dict:
-        """Fensterparameter und Rohwert; bei dynamischem Offset zusätzlich die drei Offsets."""
+        """Fensterparameter und Rohwert; bei dynamischem Offset zusätzlich die Offsets je Zone."""
         s = self._coordinator.settings
-        dyn = any(s.get(k, False) for k in ("dyn_z1_enabled", "dyn_z2_enabled", "dyn_ac_enabled"))
+        dyn = any(s.get(k, False) for k in ("dyn_z1_enabled", "dyn_z1_night_enabled", "dyn_z2_enabled", "dyn_ac_enabled"))
         attrs = {
             "window_seconds": s.get("stddev_window", 60),
             "sample_count": len(self._coordinator.group.sigma.samples),
@@ -142,6 +142,7 @@ class GridStdDevSensor(CoordinatorSensor):
         }
         if dyn:
             attrs["dyn_offset_z1"] = self._coordinator.dyn.z1
+            attrs["dyn_offset_z1_night"] = self._coordinator.dyn.z1_night
             attrs["dyn_offset_z2"] = self._coordinator.dyn.z2
             attrs["dyn_offset_ac"] = self._coordinator.dyn.ac
         return attrs

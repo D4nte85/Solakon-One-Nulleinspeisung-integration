@@ -44,7 +44,7 @@ from .const import (
     S_SURPLUS_FORECAST_ENABLED, S_SURPLUS_LOCK_ENABLED, S_AC_SOC_TARGET, S_AC_POWER_LIMIT,
     S_PERIODIC_ENABLED, S_PERIODIC_INTERVAL, S_TARIFF_ENABLED, S_PV_FORECAST_ENABLED,
     S_ZONE1_FORCE_ENABLED, S_REST_IN_DISCHARGE, S_DYN_Z1_ENABLED, S_DYN_Z2_ENABLED, S_DYN_AC_ENABLED,
-    S_PI_ENABLED,
+    S_PI_ENABLED, S_Z1_NIGHT_ENABLED,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -367,13 +367,18 @@ class SolakonCoordinator:
             self._regulation_on, self._cycle_blocked, self._control_state, self.discharge_locked, self.is_night,
         )
 
+    def _offset_zone(self) -> str:
+        """Offsetzone des Regelzustands; Nacht-Offset bei Dunkelheit, wenn eingeschaltet."""
+        night = self.night.dark and bool(self.settings.get(S_Z1_NIGHT_ENABLED, False))
+        return DynamicOffset.zone_of(self.ac_charge_active, self.cycle_active, night)
+
     def snapshot(self) -> dict[str, Any]:
         """Anzeigezustand unter internen Namen, ohne Live-Sensorwerte.
 
-        Offsetzone: AC-Laden, sonst Zone 1 bei aktivem Zyklus, sonst Zone 2.
+        Offsetzone: AC-Laden, sonst Zone 1 bei aktivem Zyklus (bei Dunkelheit Nacht-Offset), sonst Zone 2.
         Kapazität in kWh aus dem Verteilungs-Sensor der Instanz, None ohne gültigen Wert.
         """
-        offset_zone = DynamicOffset.zone_of(self.ac_charge_active, self.cycle_active)
+        offset_zone = self._offset_zone()
         offset_dynamic, offset_static, offset_value = self.dyn.offset(offset_zone, self.settings)
         cap_sensor = str(self.group.dist_cfg().get(f"inst_{self.entry.entry_id}_capacity_sensor", ""))
         return {
@@ -403,6 +408,7 @@ class SolakonCoordinator:
             "dyn_z2_enabled": self.settings.get(S_DYN_Z2_ENABLED, False),
             "dyn_ac_enabled": self.settings.get(S_DYN_AC_ENABLED, False),
             "dyn_offset_z1": self.dyn.z1,
+            "dyn_offset_z1_night": self.dyn.z1_night,
             "dyn_offset_z2": self.dyn.z2,
             "dyn_offset_ac": self.dyn.ac,
             "active_fall": self.active_fall,
@@ -963,7 +969,7 @@ class SolakonCoordinator:
         sister_charging = self.group.sister_charging(self)
         capped = sister_charging and self.cycle_active and mode == MODE_DISCHARGE
 
-        target_offset = self.dyn.value(DynamicOffset.zone_of(self.ac_charge_active, self.cycle_active), self.settings)
+        target_offset = self.dyn.value(self._offset_zone(), self.settings)
 
         # ── 11b. Timeout-Reset ───────────────────────────────────────────────
         # Entfällt wenn ein Fall in diesem Zyklus bereits getoggelt hat

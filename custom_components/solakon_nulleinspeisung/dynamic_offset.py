@@ -5,8 +5,10 @@ from collections import deque
 from typing import Any
 
 from .const import (
-    S_STDDEV_WINDOW, S_STDDEV_TRIM_COUNT, S_OFFSET_1, S_OFFSET_2, S_AC_OFFSET,
+    S_STDDEV_WINDOW, S_STDDEV_TRIM_COUNT, S_OFFSET_1, S_OFFSET_2, S_AC_OFFSET, S_OFFSET_1_NIGHT,
     S_DYN_Z1_ENABLED, S_DYN_Z1_MIN, S_DYN_Z1_MAX, S_DYN_Z1_NOISE, S_DYN_Z1_FACTOR, S_DYN_Z1_NEGATIVE,
+    S_DYN_Z1_NIGHT_ENABLED, S_DYN_Z1_NIGHT_MIN, S_DYN_Z1_NIGHT_MAX, S_DYN_Z1_NIGHT_NOISE, S_DYN_Z1_NIGHT_FACTOR,
+    S_DYN_Z1_NIGHT_NEGATIVE,
     S_DYN_Z2_ENABLED, S_DYN_Z2_MIN, S_DYN_Z2_MAX, S_DYN_Z2_NOISE, S_DYN_Z2_FACTOR, S_DYN_Z2_NEGATIVE,
     S_DYN_AC_ENABLED, S_DYN_AC_MIN, S_DYN_AC_MAX, S_DYN_AC_NOISE, S_DYN_AC_FACTOR, S_DYN_AC_NEGATIVE,
 )
@@ -15,6 +17,8 @@ from .pi import clamp as _clamp
 # Offset-Parameter je Zone: (Min, Max, Rauschen, Faktor, Negativ) und ihre Casts.
 DYN_OFFSETS = {
     "z1": (S_DYN_Z1_MIN, S_DYN_Z1_MAX, S_DYN_Z1_NOISE, S_DYN_Z1_FACTOR, S_DYN_Z1_NEGATIVE),
+    "z1_night": (S_DYN_Z1_NIGHT_MIN, S_DYN_Z1_NIGHT_MAX, S_DYN_Z1_NIGHT_NOISE, S_DYN_Z1_NIGHT_FACTOR,
+                 S_DYN_Z1_NIGHT_NEGATIVE),
     "z2": (S_DYN_Z2_MIN, S_DYN_Z2_MAX, S_DYN_Z2_NOISE, S_DYN_Z2_FACTOR, S_DYN_Z2_NEGATIVE),
     "ac": (S_DYN_AC_MIN, S_DYN_AC_MAX, S_DYN_AC_NOISE, S_DYN_AC_FACTOR, S_DYN_AC_NEGATIVE),
 }
@@ -24,6 +28,7 @@ DYN_CASTS = (int, int, float, float, bool)
 OFFSET_SOURCES = {
     "ac": (S_DYN_AC_ENABLED, S_AC_OFFSET),
     "z1": (S_DYN_Z1_ENABLED, S_OFFSET_1),
+    "z1_night": (S_DYN_Z1_NIGHT_ENABLED, S_OFFSET_1_NIGHT),
     "z2": (S_DYN_Z2_ENABLED, S_OFFSET_2),
 }
 
@@ -96,6 +101,7 @@ class DynamicOffset:
         self.stddev: float = 0.0
         self.stddev_raw: float = 0.0
         self.z1: float = 0.0
+        self.z1_night: float = 0.0
         self.z2: float = 0.0
         self.ac: float = 0.0
 
@@ -121,6 +127,10 @@ class DynamicOffset:
         return float(self.offset(zone, settings)[2])
 
     @staticmethod
-    def zone_of(ac_charge: bool, cycle: bool) -> str:
-        """Offsetzone des Regelzustands: AC-Laden `ac`, sonst Zyklus `z1`, sonst `z2`."""
-        return "ac" if ac_charge else "z1" if cycle else "z2"
+    def zone_of(ac_charge: bool, cycle: bool, night: bool) -> str:
+        """Offsetzone des Regelzustands: AC-Laden `ac`, sonst Zyklus `z1_night` bei `night`, sonst `z1`, sonst `z2`."""
+        if ac_charge:
+            return "ac"
+        if cycle:
+            return "z1_night" if night else "z1"
+        return "z2"

@@ -1,0 +1,22 @@
+titel: Zone-1-Zyklus regelt bei Dunkelheit auf den Nacht-Offset, bei PV zurück auf den Zone-1-Offset
+bezug: 2026-10-01-discussion-49-offset-dunkelheit-design
+# Zone-1-Zyklus mit Stellwertrechnung, Netz auf 0 W, Ist-Leistung 300 W.
+# Dunkel (PV 0 < PV-Ladereserve 50): Ziel +50 W → Sollwert 300 + (0 − 50) = 250 W.
+# Hell (PV 200 ≥ 50): Ziel −50 W → Sollwert 300 + (0 + 50) = 350 W.
+netz: 0
+instanzen:
+  - prefix: a
+    settings: {regulation_enabled: true, pi_enabled: false, offset_1: -50,
+               z1_night_enabled: true, offset_1_night: 50}
+    flags: {cycle_active: true}
+    sensoren: {soc: 80, solar: 0, modus: "1", leistung: 300, ist: 300}
+    folgt_ist: null
+schritte:
+  - nach: 0
+  - nach: 30
+    setzen: {a.solar: 200, a.leistung: 300, a.ist: 300}
+erwartet:
+  - schritt: 1
+    aufruf: {entity: a.leistung, wert_max: 260}
+  - schritt: 2
+    aufruf: {entity: a.leistung, wert_min: 340}

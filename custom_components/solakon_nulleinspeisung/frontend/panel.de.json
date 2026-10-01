@@ -40,7 +40,7 @@
     },
     "dynoff": {
       "summary": "Dynamic Offset — automatisch aus Netz-Volatilität berechnet",
-      "text": "Berechnet den Nullpunkt-Offset aus der Standardabweichung der Netzleistung über das konfigurierte Zeitfenster.\n\nFormel: offset = clamp(min + max(0, (StdDev − Rausch) × Faktor), min, max)\n\nBeispiel (min=30, max=250, noise=15, factor=1.5):\n• StdDev 5 W → 30 W (Minimum)\n• StdDev 30 W → 52 W\n• StdDev 80 W → 128 W\n• StdDev 160 W → 248 W\n• StdDev ab 162 W → 250 W (Maximum)\n\nJede Zone (Zone 1, Zone 2, Zone AC) ist einzeln aktivierbar und überschreibt den statischen Offset der jeweiligen Zone.\n\nDer StdDev-Sensor wird intern berechnet — kein externer Statistik-Sensor erforderlich.\n\nMehrere Instanzen am selben Netzsensor: eine Instanz (der Gruppen-Leader) pflegt den StdDev-Ringpuffer, alle anderen übernehmen ihren Wert — verhindert unabhängige, leicht phasenversetzte StdDev-Berechnungen pro Instanz.\n\nTrimmen (stddev_trim_count): schließt die N höchsten UND die N niedrigsten Einzelmesswerte im Fenster vor der Berechnung aus — pro Seite, nicht insgesamt (N=5 → 10 Samples ausgeschlossen). Als Anzahl Samples, nicht Prozent, da die Sample-Zahl im Fenster von der Update-Rate des Netzsensors abhängt. Trennt kurze, seltene Lastspitzen (z. B. Kompressor-/Pumpen-Anlaufstrom für wenige Sekunden) von echter Dauerunruhe: ein Puls, der nur eine Minderheit der Samples füllt, fällt komplett raus; eine Schwankung über den Großteil des Fensters übersteht das Trimmen unverändert und bewegt den Offset weiterhin. Standard 0 = kein Trimmen. Wirkung direkt vergleichbar über den zweiten StdDev-Wert (roh, ungetrimmt) in der Statusanzeige."
+      "text": "Berechnet den Nullpunkt-Offset aus der Standardabweichung der Netzleistung über das konfigurierte Zeitfenster.\n\nFormel: offset = clamp(min + max(0, (StdDev − Rausch) × Faktor), min, max)\n\nBeispiel (min=30, max=250, noise=15, factor=1.5):\n• StdDev 5 W → 30 W (Minimum)\n• StdDev 30 W → 52 W\n• StdDev 80 W → 128 W\n• StdDev 160 W → 248 W\n• StdDev ab 162 W → 250 W (Maximum)\n\nJede Zone (Zone 1, Zone 1 Nacht, Zone 2, Zone AC) ist einzeln aktivierbar und überschreibt den statischen Offset der jeweiligen Zone. Zone 1 Nacht wirkt nur bei eingeschaltetem Nacht-Offset (Zonen-Tab).\n\nDer StdDev-Sensor wird intern berechnet — kein externer Statistik-Sensor erforderlich.\n\nMehrere Instanzen am selben Netzsensor: eine Instanz (der Gruppen-Leader) pflegt den StdDev-Ringpuffer, alle anderen übernehmen ihren Wert — verhindert unabhängige, leicht phasenversetzte StdDev-Berechnungen pro Instanz.\n\nTrimmen (stddev_trim_count): schließt die N höchsten UND die N niedrigsten Einzelmesswerte im Fenster vor der Berechnung aus — pro Seite, nicht insgesamt (N=5 → 10 Samples ausgeschlossen). Als Anzahl Samples, nicht Prozent, da die Sample-Zahl im Fenster von der Update-Rate des Netzsensors abhängt. Trennt kurze, seltene Lastspitzen (z. B. Kompressor-/Pumpen-Anlaufstrom für wenige Sekunden) von echter Dauerunruhe: ein Puls, der nur eine Minderheit der Samples füllt, fällt komplett raus; eine Schwankung über den Großteil des Fensters übersteht das Trimmen unverändert und bewegt den Offset weiterhin. Standard 0 = kein Trimmen. Wirkung direkt vergleichbar über den zweiten StdDev-Wert (roh, ungetrimmt) in der Statusanzeige."
     },
     "night": {
       "summary": "Nachtabschaltung — Zone 2 bei PV < PV-Ladereserve deaktivieren, Einschalten mit Hysterese",
@@ -61,6 +61,7 @@
     "zones_soc":        "SOC-Grenzen",
     "zones_power":      "Leistungsgrenzen",
     "zones_offsets":    "Offsets",
+    "zones_night_offset": "Nacht-Offset",
     "zones_force":      "Nacht-Forcierung",
     "surplus_soc":      "SOC-Bedingung",
     "surplus_pv":       "PV-Bedingung",
@@ -71,6 +72,7 @@
     "tariff_charge":    "Laden",
     "tariff_forecast":  "PV-Vorhersage",
     "dynoff_z1":        "Zone 1",
+    "dynoff_z1_night":  "Zone 1 Nacht",
     "dynoff_z2":        "Zone 2",
     "dynoff_ac":        "Zone AC Laden",
     "periodic":         "Periodischer Trigger",
@@ -135,6 +137,14 @@
     "offset_1": {
       "l": "Offset Zone 1 (W)",
       "d": "Regelziel in Zone 1. Positiv = Regler hält leichten Netzbezug als Sicherheitspuffer. Negativ = Regler speist leicht ein. Wird überschrieben wenn Dyn. Offset für Zone 1 aktiv ist."
+    },
+    "z1_night_enabled": {
+      "l": "Nacht-Offset aktivieren",
+      "d": "Ersetzt im Zone-1-Zyklus bei Dunkelheit den Zone-1-Offset durch den Nacht-Offset, statisch oder dynamisch (Tab Dyn. Offset, Spalte Zone 1 Nacht). Dunkelheit beginnt bei PV < PV-Ladereserve und endet ab PV ≥ PV-Ladereserve + Hysterese Einschalten (Nacht-Tab); keine Uhrzeit, unabhängig von der Nachtabschaltung."
+    },
+    "offset_1_night": {
+      "l": "Nacht-Offset Zone 1 (W)",
+      "d": "Regelziel in Zone 1 bei Dunkelheit, z. B. positiv für leichten Netzbezug statt Einspeisung aus der Batterie. Wird überschrieben wenn Dyn. Offset für Zone 1 Nacht aktiv ist."
     },
     "offset_2": {
       "l": "Offset Zone 2 (W)",
@@ -296,6 +306,12 @@
     "dyn_z1_noise":    { "l": "Rausch-Schwelle (W)", "d": "StdDev unterhalb dieser Schwelle wird als Messrauschen gewertet und löst keinen Offset-Anstieg aus." },
     "dyn_z1_factor":   { "l": "Volatilitäts-Faktor", "d": "Verstärkung oberhalb der Rausch-Schwelle. Formel: buffer = (StdDev − Rausch) × Faktor." },
     "dyn_z1_negative": { "l": "Negativer Offset", "d": "Negiert den berechneten Offset (× −1). Das Regelziel liegt dann unterhalb von 0 W." },
+    "dyn_z1_night_enabled":  { "l": "Aktivieren", "d": "Berechnet den Nacht-Offset dynamisch aus der Netz-StdDev statt des statischen Nacht-Offsets. Wirkt nur bei eingeschaltetem Nacht-Offset (Zonen-Tab)." },
+    "dyn_z1_night_min":      { "l": "Min. Offset (W)", "d": "Grundpuffer bei ruhigem Netz (StdDev ≤ Rausch-Schwelle). Offset sinkt nie unter diesen Wert." },
+    "dyn_z1_night_max":      { "l": "Max. Offset (W)", "d": "Obergrenze des Offsets. Offset steigt nie über diesen Wert, auch bei sehr hoher StdDev." },
+    "dyn_z1_night_noise":    { "l": "Rausch-Schwelle (W)", "d": "StdDev unterhalb dieser Schwelle wird als Messrauschen gewertet und löst keinen Offset-Anstieg aus." },
+    "dyn_z1_night_factor":   { "l": "Volatilitäts-Faktor", "d": "Verstärkung oberhalb der Rausch-Schwelle. Formel: buffer = (StdDev − Rausch) × Faktor." },
+    "dyn_z1_night_negative": { "l": "Negativer Offset", "d": "Negiert den berechneten Offset (× −1). Das Regelziel liegt dann unterhalb von 0 W." },
     "dyn_z2_enabled":  { "l": "Aktivieren", "d": "Berechnet den Offset dynamisch aus der Netz-StdDev statt des statischen Werts. Überschreibt den statischen Zone-2-Offset." },
     "dyn_z2_min":      { "l": "Min. Offset (W)", "d": "Grundpuffer bei ruhigem Netz (StdDev ≤ Rausch-Schwelle). Offset sinkt nie unter diesen Wert." },
     "dyn_z2_max":      { "l": "Max. Offset (W)", "d": "Obergrenze des Offsets. Offset steigt nie über diesen Wert, auch bei sehr hoher StdDev." },
@@ -384,6 +400,7 @@
     "flag_exit_lock":    "Austritts-Sperre",
     "offset_zone_ac":    "Zone AC Laden",
     "offset_zone_1":     "Zone 1",
+    "offset_zone_1_night": "Zone 1 Nacht",
     "offset_zone_2":     "Zone 2",
     "dyn_tag":           "⚡ dynamisch",
     "dyn_inactive":      "dyn. inaktiv",

@@ -136,6 +136,8 @@ S_HARD_LIMIT_Z0  = "hard_limit_z0"
 S_HARD_LIMIT_Z1  = "hard_limit_z1"
 S_OFFSET_1      = "offset_1"
 S_OFFSET_2      = "offset_2"
+S_Z1_NIGHT_ENABLED = "z1_night_enabled"
+S_OFFSET_1_NIGHT   = "offset_1_night"
 S_PV_RESERVE    = "pv_reserve"
 
 S_SURPLUS_ENABLED       = "surplus_enabled"
@@ -198,6 +200,13 @@ S_DYN_Z1_MAX      = "dyn_z1_max"
 S_DYN_Z1_NOISE    = "dyn_z1_noise"
 S_DYN_Z1_FACTOR   = "dyn_z1_factor"
 S_DYN_Z1_NEGATIVE = "dyn_z1_negative"
+
+S_DYN_Z1_NIGHT_ENABLED  = "dyn_z1_night_enabled"
+S_DYN_Z1_NIGHT_MIN      = "dyn_z1_night_min"
+S_DYN_Z1_NIGHT_MAX      = "dyn_z1_night_max"
+S_DYN_Z1_NIGHT_NOISE    = "dyn_z1_night_noise"
+S_DYN_Z1_NIGHT_FACTOR   = "dyn_z1_night_factor"
+S_DYN_Z1_NIGHT_NEGATIVE = "dyn_z1_night_negative"
 
 S_DYN_Z2_ENABLED  = "dyn_z2_enabled"
 S_DYN_Z2_MIN      = "dyn_z2_min"
@@ -290,6 +299,8 @@ SETTINGS_SCHEMA: dict[str, Field] = {
     S_HARD_LIMIT_Z1: _int(800, POWER, 100, 1200, 50),
     S_OFFSET_1:      _int(30, SIGNED, -200, 300, 1),
     S_OFFSET_2:      _int(10, SIGNED, -200, 300, 1),
+    S_Z1_NIGHT_ENABLED: _bool(),
+    S_OFFSET_1_NIGHT:   _int(30, SIGNED, -200, 300, 1),
     S_PV_RESERVE:    _int(50, AMOUNT, 0, 500, 10),
 
     S_SURPLUS_ENABLED:            _bool(),
@@ -339,6 +350,7 @@ SETTINGS_SCHEMA: dict[str, Field] = {
     S_SELF_ADJUST_TOL: _int(2, AMOUNT, 1, 50, 1),
 
     **_dyn_offset("z1"),
+    **_dyn_offset("z1_night"),
     **_dyn_offset("z2"),
     **_dyn_offset("ac"),
 }

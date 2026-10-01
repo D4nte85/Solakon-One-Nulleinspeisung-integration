@@ -87,7 +87,7 @@ Das Verhalten wird abhängig vom Batterie-Ladestand in vier Zonen eingeteilt:
 | Zone | Bedingung | Modus | Max. Entladestrom | Regelziel | Besonderheiten |
 |------|-----------|-------|-------------------|-----------|----------------|
 | **Zone 0** | SOC ≥ Export-Schwelle UND PV-Überschuss | `'1'` | 2 A (Stabilitätspuffer) | Hard Limit Z0 | Optional. PI-Integral eingefroren. SOC- und PV-Hysterese verhindern Flackern. |
-| **Zone 1** | SOC > Zone-1-Schwelle | `'1'` | Konfigurierter Maximalwert | 0 W + Offset 1 | Läuft bis Zone-3-Schwelle — kein Yo-Yo-Effekt. Auch nachts aktiv. Lädt eine andere Instanz derselben Netzgruppe, gilt das Ausgangsleistungs-Limit von Zone 2 ([Eine Energierichtung je Netzgruppe](#eine-energierichtung-je-netzgruppe)). |
+| **Zone 1** | SOC > Zone-1-Schwelle | `'1'` | Konfigurierter Maximalwert | 0 W + Offset 1 (bei Dunkelheit optional Nacht-Offset) | Läuft bis Zone-3-Schwelle — kein Yo-Yo-Effekt. Auch nachts aktiv. Lädt eine andere Instanz derselben Netzgruppe, gilt das Ausgangsleistungs-Limit von Zone 2 ([Eine Energierichtung je Netzgruppe](#eine-energierichtung-je-netzgruppe)). |
 | **Zone 2** | Zone-3 < SOC ≤ Zone-1 | `'1'` | 0 A | 0 W + Offset 2 | Ausgangsleistungs-Limit: `min(Hard-Limit Z1, max(0, PV − Reserve))`. Optional: Nachtabschaltung. |
 | **Zone 3** | SOC ≤ Zone-3-Schwelle | `'0'` (Disabled), außer AC Laden aktiv → `'3'` | Max. Entladestrom (AC Laden: 0 A) | — | Ausgangsleistung 0 W. Vollständiger Batterieschutz. AC Laden bleibt möglich. |
 
@@ -99,7 +99,7 @@ Das Verhalten wird abhängig vom Batterie-Ladestand in vier Zonen eingeteilt:
 
 **💹 Tarif-Arbitrage** — Wertet einen externen Strompreis-Sensor aus und lädt bei günstigem Tarif automatisch auf, sperrt die Entladung unterhalb der Teuer-Schwelle (günstig + mittel) in Zone 1 und Zone 2, und gibt sie bei teurem Tarif wieder frei.
 
-**📈 Dynamic Offset** — Berechnet den Nullpunkt-Offset automatisch aus der Netz-Volatilität (Standardabweichung). Ersetzt den separaten Dynamic-Offset-Blueprint — alle Parameter sind pro Zone (Zone 1, Zone 2, Zone AC) einzeln konfigurierbar, inklusive optionalem negativem Offset.
+**📈 Dynamic Offset** — Berechnet den Nullpunkt-Offset automatisch aus der Netz-Volatilität (Standardabweichung). Ersetzt den separaten Dynamic-Offset-Blueprint — alle Parameter sind pro Zone (Zone 1, Zone 1 Nacht, Zone 2, Zone AC) einzeln konfigurierbar, inklusive optionalem negativem Offset.
 
 **🌙 Nachtabschaltung** — Unterdrückt in Zone 2 den Entladebetrieb unterhalb einer konfigurierbaren PV-Erzeugungsschwelle. Zone 1 und AC Laden laufen auch nachts weiter.
 
@@ -277,7 +277,7 @@ Alle Eingabefelder für Entity-IDs (z. B. Kapazitäts-, Vorhersage- und Preis-Se
 
 ### 📊 Status
 
-Echtzeit-Übersicht aller Regelzustände: aktive Zone mit farblichem Banner (Zone 0–3), Netzleistung, Solarleistung, Ausgangsleistung, SOC, Standardabweichung der Netzleistung roh und getrimmt (Stabilitätsindikator, getrimmt ausgegraut bei Trim 0), zugeteiltes Zone-1-Limit, PI-Integral-Wert (ausgegraut bei ausgeschaltetem Entlade-PI), aktiver Offset (Zone 1 / Zone 2 / Zone AC) mit Quelle (dynamisch / statisch), Zeitabstand seit letzter Regelaktion und seit letztem Moduswechsel, letzte Aktion und etwaige Fehlermeldungen, Status-Flags: PI-Regler (grün bei eingeschaltetem Entlade-PI), Zyklus, Surplus, AC Laden, Tarif-Laden, Nacht, PV→Tarif, PV→Surplus, Austritts-Sperre. Rein lesend — manuelle Eingriffe liegen im **Debug**-Tab.
+Echtzeit-Übersicht aller Regelzustände: aktive Zone mit farblichem Banner (Zone 0–3), Netzleistung, Solarleistung, Ausgangsleistung, SOC, Standardabweichung der Netzleistung roh und getrimmt (Stabilitätsindikator, getrimmt ausgegraut bei Trim 0), zugeteiltes Zone-1-Limit, PI-Integral-Wert (ausgegraut bei ausgeschaltetem Entlade-PI), aktiver Offset (Zone 1 / Zone 1 Nacht / Zone 2 / Zone AC) mit Quelle (dynamisch / statisch), Zeitabstand seit letzter Regelaktion und seit letztem Moduswechsel, letzte Aktion und etwaige Fehlermeldungen, Status-Flags: PI-Regler (grün bei eingeschaltetem Entlade-PI), Zyklus, Surplus, AC Laden, Tarif-Laden, Nacht, PV→Tarif, PV→Surplus, Austritts-Sperre. Rein lesend — manuelle Eingriffe liegen im **Debug**-Tab.
 
 ---
 
@@ -318,9 +318,13 @@ SOC-Zonenlogik mit allen Leistungs- und Offset-Parametern.
 | Hard Limit Z1 — Entladung (W) | Ausgangsleistungs-Obergrenze in Zone 1 und Zone 2. In Zone 2 gilt `min(Z1, max(0, PV − Reserve))`. Wird als `max(Z0, Z1)` in die optionale Export-Limit-Entität geschrieben. | 800 |
 | Zone 1 Offset (W) | Statischer Zielwert in Zone 1. Bei aktivem Dyn. Offset überschrieben | 20–50 |
 | Zone 2 Offset (W) | Statischer Zielwert in Zone 2 | 10–30 |
+| Nacht-Offset aktivieren | Ersetzt im Zone-1-Zyklus bei Dunkelheit den Zone-1-Offset durch den Nacht-Offset | Aus |
+| Nacht-Offset Zone 1 (W) | Statischer Zielwert in Zone 1 bei Dunkelheit. Bei aktivem Dyn. Offset (Spalte Zone 1 Nacht) überschrieben | 0–30 |
 | PV-Ladereserve (W) | Ausgangsleistungs-Limit in Zone 2: `min(Hard-Limit Z1, max(0, PV − Reserve))`. Dient auch als Ausschaltschwelle der Nachtabschaltung | 30–100 |
 
 Ein positiver Offset von z. B. 30 W lässt den Regler auf 30 W Netzbezug regeln (Sicherheitspuffer gegen versehentliche Einspeisung). Ein negativer Wert lässt den Regler gezielt leicht einspeisen.
+
+**Nacht-Offset (optional):** Eigener Satz statischer und dynamischer Zone-1-Werte, der im Zone-1-Zyklus bei Dunkelheit an die Stelle des Zone-1-Offsets tritt — etwa negativ am Tag, positiv in der Nacht, damit nachts keine Batterieenergie ins Netz geht. Dunkelheit beginnt bei PV < PV-Ladereserve und endet ab PV ≥ PV-Ladereserve + Hysterese Einschalten (**Nacht**-Tab). Keine Uhrzeit, unabhängig von der Nachtabschaltung. Zone 2 und AC Laden sind nicht betroffen; nachts ist Zone 2 ohnehin auf 0 W gedeckelt.
 
 **Wichtig:** Zone-1-Schwelle muss größer als Zone-3-Schwelle sein, und bei aktiviertem Surplus muss die Export-Schwelle über der Zone-1-Schwelle liegen. Bei aktivierter Nacht-Forcierung muss deren Mindest-SOC strikt zwischen Zone-3- und Zone-1-Schwelle liegen. Die Integration prüft alles in jedem Regelzyklus und pausiert mit Fehlermeldung, solange die Grenzen ungültig sind.
 
@@ -496,7 +500,7 @@ offset_out        = −offset_abs  (Negativer Offset: Ein)
 | Sehr unruhig | 160 W | 248 W |
 | Extrem | ab 162 W | 250 W *(Maximum)* |
 
-Jede Zone (Zone 1, Zone 2, Zone AC) hat einen eigenen Parameterblock:
+Jede Zone (Zone 1, Zone 1 Nacht, Zone 2, Zone AC) hat einen eigenen Parameterblock. Zone 1 Nacht wirkt nur bei eingeschaltetem Nacht-Offset (Zonen-Tab):
 
 | Parameter | Beschreibung | Empfehlung |
 |-----------|-------------|------------|

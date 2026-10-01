@@ -122,6 +122,13 @@ const TAB_LAYOUT = {
         ],
       },
       {
+        tk: "zones_night_offset", icon: "🌙", color: "#4338ca",
+        fields: [
+          { k: "z1_night_enabled", t: "bool" },
+          { k: "offset_1_night",   t: "num" },
+        ],
+      },
+      {
         tk: "zones_force", icon: "🌙", color: "#4338ca",
         fields: [
           ...sensorFeatureFields("zone1_force", "threshold"),
@@ -233,6 +240,7 @@ const TAB_LAYOUT = {
     ],
     cols: [
       dynOffSection("dynoff_z1", "z1", "⚡", "#16a34a"),
+      dynOffSection("dynoff_z1_night", "z1_night", "🌙", "#4338ca"),
       dynOffSection("dynoff_z2", "z2", "🔋", "#0891b2"),
       dynOffSection("dynoff_ac", "ac", "⚡", "#7c3aed"),
     ],
@@ -1274,7 +1282,7 @@ ${this._textsMissing ? `
   _statusTexts(st) {
     const s = this._t.status || {};
     const d = this._t.debug || {};
-    const offsetZoneKey = { ac: "offset_zone_ac", z1: "offset_zone_1" }[st.offset_zone] || "offset_zone_2";
+    const offsetZoneKey = { ac: "offset_zone_ac", z1: "offset_zone_1", z1_night: "offset_zone_1_night" }[st.offset_zone] || "offset_zone_2";
     const offsetStatic  = st.offset_static ?? "—";
     return {
       "st-active-fall":  this._es("active_fall", st.active_fall),

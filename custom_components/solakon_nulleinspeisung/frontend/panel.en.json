@@ -40,7 +40,7 @@
     },
     "dynoff": {
       "summary": "Dynamic Offset — automatically calculated from grid volatility",
-      "text": "Calculates the zero-point offset from the standard deviation of grid power over the configured time window.\n\nFormula: offset = clamp(min + max(0, (StdDev − noise) × factor), min, max)\n\nExample (min=30, max=250, noise=15, factor=1.5):\n• StdDev 5 W → 30 W (minimum)\n• StdDev 30 W → 52 W\n• StdDev 80 W → 128 W\n• StdDev 160 W → 248 W\n• StdDev from 162 W → 250 W (maximum)\n\nEach zone (Zone 1, Zone 2, Zone AC) can be enabled individually and overrides the static offset of that zone.\n\nThe StdDev sensor is calculated internally — no external statistics sensor required.\n\nMultiple instances on the same grid sensor: one instance (the group leader) maintains the StdDev ring buffer, all others adopt its value — prevents independent, slightly phase-shifted StdDev calculations per instance.\n\nTrimming (stddev_trim_count): excludes the N highest AND the N lowest individual readings in the window before the calculation — per side, not in total (N=5 → 10 samples excluded). Expressed as a sample count, not a percentage, since the number of samples in the window depends on the grid sensor's update rate. Separates short, rare load spikes (e.g. a compressor or pump inrush lasting a few seconds) from genuine sustained volatility: a spike that fills only a minority of the window's samples falls out entirely; a fluctuation affecting most of the window survives trimming unchanged and still moves the offset. Default 0 = no trimming. Effect directly comparable via the second StdDev value (raw, untrimmed) in the status display."
+      "text": "Calculates the zero-point offset from the standard deviation of grid power over the configured time window.\n\nFormula: offset = clamp(min + max(0, (StdDev − noise) × factor), min, max)\n\nExample (min=30, max=250, noise=15, factor=1.5):\n• StdDev 5 W → 30 W (minimum)\n• StdDev 30 W → 52 W\n• StdDev 80 W → 128 W\n• StdDev 160 W → 248 W\n• StdDev from 162 W → 250 W (maximum)\n\nEach zone (Zone 1, Zone 1 Night, Zone 2, Zone AC) can be enabled individually and overrides the static offset of that zone. Zone 1 Night only applies while the Night Offset is enabled (Zones tab).\n\nThe StdDev sensor is calculated internally — no external statistics sensor required.\n\nMultiple instances on the same grid sensor: one instance (the group leader) maintains the StdDev ring buffer, all others adopt its value — prevents independent, slightly phase-shifted StdDev calculations per instance.\n\nTrimming (stddev_trim_count): excludes the N highest AND the N lowest individual readings in the window before the calculation — per side, not in total (N=5 → 10 samples excluded). Expressed as a sample count, not a percentage, since the number of samples in the window depends on the grid sensor's update rate. Separates short, rare load spikes (e.g. a compressor or pump inrush lasting a few seconds) from genuine sustained volatility: a spike that fills only a minority of the window's samples falls out entirely; a fluctuation affecting most of the window survives trimming unchanged and still moves the offset. Default 0 = no trimming. Effect directly comparable via the second StdDev value (raw, untrimmed) in the status display."
     },
     "night": {
       "summary": "Night Shutdown — disable Zone 2 when PV < PV reserve, re-enable with hysteresis",
@@ -61,6 +61,7 @@
     "zones_soc":        "SOC Limits",
     "zones_power":      "Power Limits",
     "zones_offsets":    "Offsets",
+    "zones_night_offset": "Night Offset",
     "zones_force":      "Night Forcing",
     "surplus_soc":      "SOC Condition",
     "surplus_pv":       "PV Condition",
@@ -71,6 +72,7 @@
     "tariff_charge":    "Charging",
     "tariff_forecast":  "PV Forecast",
     "dynoff_z1":        "Zone 1",
+    "dynoff_z1_night":  "Zone 1 Night",
     "dynoff_z2":        "Zone 2",
     "dynoff_ac":        "Zone AC Charge",
     "periodic":         "Periodic Trigger",
@@ -135,6 +137,14 @@
     "offset_1": {
       "l": "Offset Zone 1 (W)",
       "d": "Control target in Zone 1. Positive = controller maintains slight grid import as safety buffer. Negative = controller slightly exports. Overridden when dynamic offset for Zone 1 is active."
+    },
+    "z1_night_enabled": {
+      "l": "Enable Night Offset",
+      "d": "In the Zone 1 cycle, replaces the Zone-1 offset with the Night Offset while it is dark, static or dynamic (Dyn. Offset tab, column Zone 1 Night). Darkness starts at PV < PV reserve and ends at PV ≥ PV reserve + re-enable hysteresis (Night tab); no time of day, independent of night shutdown."
+    },
+    "offset_1_night": {
+      "l": "Night Offset Zone 1 (W)",
+      "d": "Control target in Zone 1 while it is dark, e.g. positive for slight grid import instead of exporting battery energy. Overridden when dynamic offset for Zone 1 Night is active."
     },
     "offset_2": {
       "l": "Offset Zone 2 (W)",
@@ -296,6 +306,12 @@
     "dyn_z1_noise":    { "l": "Noise Threshold (W)", "d": "StdDev below this threshold is treated as measurement noise and does not trigger an offset increase." },
     "dyn_z1_factor":   { "l": "Volatility Factor", "d": "Gain above the noise threshold. Formula: buffer = (StdDev − noise) × factor." },
     "dyn_z1_negative": { "l": "Negative Offset", "d": "Negates the calculated offset (× −1). The control target then lies below 0 W." },
+    "dyn_z1_night_enabled":  { "l": "Enable", "d": "Calculates the Night Offset dynamically from the grid StdDev instead of the static Night Offset. Only effective while the Night Offset is enabled (Zones tab)." },
+    "dyn_z1_night_min":      { "l": "Min. Offset (W)", "d": "Base buffer with a calm grid (StdDev ≤ noise threshold). Offset never falls below this value." },
+    "dyn_z1_night_max":      { "l": "Max. Offset (W)", "d": "Upper ceiling of the offset. Offset never exceeds this value, even at very high StdDev." },
+    "dyn_z1_night_noise":    { "l": "Noise Threshold (W)", "d": "StdDev below this threshold is treated as measurement noise and does not trigger an offset increase." },
+    "dyn_z1_night_factor":   { "l": "Volatility Factor", "d": "Gain above the noise threshold. Formula: buffer = (StdDev − noise) × factor." },
+    "dyn_z1_night_negative": { "l": "Negative Offset", "d": "Negates the calculated offset (× −1). The control target then lies below 0 W." },
     "dyn_z2_enabled":  { "l": "Enable", "d": "Calculates the offset dynamically from the grid StdDev instead of the static value. Overrides the static Zone-2 offset." },
     "dyn_z2_min":      { "l": "Min. Offset (W)", "d": "Base buffer with a calm grid (StdDev ≤ noise threshold). Offset never falls below this value." },
     "dyn_z2_max":      { "l": "Max. Offset (W)", "d": "Upper ceiling of the offset. Offset never exceeds this value, even at very high StdDev." },
@@ -384,6 +400,7 @@
     "flag_exit_lock":    "Exit Lock",
     "offset_zone_ac":    "Zone AC Charge",
     "offset_zone_1":     "Zone 1",
+    "offset_zone_1_night": "Zone 1 Night",
     "offset_zone_2":     "Zone 2",
     "dyn_tag":           "⚡ dynamic",
     "dyn_inactive":      "dyn. inactive",
