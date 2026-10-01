@@ -88,8 +88,8 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
     tariff_enabled: false, tariff_price_sensor: "", tariff_cheap_threshold: 10, tariff_exp_threshold: 25,
     tariff_soc_target: 90, tariff_soc_hyst: 3, tariff_power: 800, tariff_cheap_entity: "", tariff_exp_entity: "",
     pv_forecast_enabled: false, pv_forecast_sensor: "", pv_forecast_threshold: 5000,
-    zone1_force_enabled: false, zone1_force_sensor: "", zone1_force_threshold: 5000,
-    night_enabled: false,
+    zone1_force_enabled: false, zone1_force_sensor: "", zone1_force_threshold: 5000, zone1_force_min_soc: 20,
+    night_enabled: false, night_hysteresis: 0, rest_in_discharge: false,
     periodic_enabled: false, periodic_interval: 10,
     self_adjust_enabled: false, self_adjust_tolerance: 2,
     dyn_z1_enabled: false, dyn_z1_min: 30, dyn_z1_max: 250, dyn_z1_noise: 15, dyn_z1_factor: 1.5, dyn_z1_negative: false,
@@ -158,7 +158,7 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
 
   function mkStatus(o) {
     return {
-      zone: o.zone, zone_label: `Zone ${o.zone}`, mode_label: "INV Discharge PV Priority",
+      zone: o.zone, zone_label: `Zone ${o.zone}`, mode_key: "discharge", mode_label: "INV Discharge PV Priority",
       last_action: "Output → " + o.actual_power + " W", last_action_ts: now() - 12,
       last_output_ts: now() - 12, mode_label_ts: now() - 340,
       last_error: o.last_error ?? null, integral: 4.2, grid: o.grid, actual_power: o.actual_power,
