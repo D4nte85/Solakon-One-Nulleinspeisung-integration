@@ -5,6 +5,8 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+## [3.3.1] – 2026-10-01
+
 ### Hinzugefügt
 
 - **Nacht-Offset für Zone 1 (Discussion #49):** Optionaler Satz statischer und dynamischer Zone-1-Offsetwerte, der im Zone-1-Zyklus bei Dunkelheit an die Stelle des Zone-1-Offsets tritt. Dunkelheit ist PV < PV-Ladereserve, zurück ab PV-Ladereserve + Hysterese Einschalten, unabhängig von der Nachtabschaltung. Schalter und statischer Wert im Zonen-Tab, dynamische Werte als Spalte „Zone 1 Nacht“ im Tab Dyn. Offset, Status zeigt „Zone 1 Nacht“.
