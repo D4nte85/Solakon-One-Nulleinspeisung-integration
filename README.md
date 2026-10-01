@@ -95,7 +95,7 @@ Das Verhalten wird abhängig vom Batterie-Ladestand in vier Zonen eingeteilt:
 
 **☀️ Surplus (Zone 0)** — Wenn PV-Erzeugung den Eigenbedarf um mehr als eine konfigurierbare Hysterese übersteigt und der SOC eine Zielschwelle erreicht hat, wird der Wechselrichter über den Nullpunkt hinaus angesteuert. Ein SOC-Hysterese-Band und eine PV-Hysterese verhindern Flackern beim Ein- und Ausschalten.
 
-**⚡ AC-Laden** — Steuert den Wechselrichter in den Lademodus, wenn der SOC unter ein Ziel fällt und externer Überschuss erkannt wird (`Grid + ΣOutput_entladend < min(ac_offset, 0) − Hysterese`, Σ über alle Instanzen im Entlademodus). Kein PI: [Stellwertrechnung auf Ist-Basis](#-ac-laden) mit eigenem Offset, Mindestladeleistung und konfigurierbarer Leistungsobergrenze.
+**⚡ AC-Laden** — Steuert den Wechselrichter in den Lademodus, wenn der SOC unter ein Ziel fällt und externer Überschuss erkannt wird (`Grid + ΣOutput_entladend < min(ac_offset, 0) − Hysterese`, Σ über alle Instanzen im Entlademodus, je Instanz das Größere aus Ist-Leistung und Ausgangsleistung). Kein PI: [Stellwertrechnung auf Ist-Basis](#-ac-laden) mit eigenem Offset, Mindestladeleistung und konfigurierbarer Leistungsobergrenze.
 
 **💹 Tarif-Arbitrage** — Wertet einen externen Strompreis-Sensor aus und lädt bei günstigem Tarif automatisch auf, sperrt die Entladung unterhalb der Teuer-Schwelle (günstig + mittel) in Zone 1 und Zone 2, und gibt sie bei teurem Tarif wieder frei.
 
@@ -412,7 +412,7 @@ Optionales Laden bei erkanntem externem Überschuss. Aktiv in Zone 1 und Zone 2.
 
 > Eintritt und Abbruch liegen symmetrisch um den Offset, je eine Hysterese darunter und darüber; sie können sich auch bei stark negativem (dynamischem) Offset nicht überkreuzen. Bei positivem Offset bleibt der Eintritt bei −Hysterese: AC-Laden startet nur bei externem Überschuss.
 
-> Der Modus-Guard `≠ '3'` verhindert einen Re-Eintritt wenn AC Laden bereits aktiv ist. `ΣOutput_entladend` ist im Einzelbetrieb die eigene Ausgangsleistung, im Multi-Instancing-Betrieb die eigene Ausgangsleistung plus die Ausgangsleistung aller Schwester-Instanzen, die in Modus `'1'` entladen (nicht ruhend) — sonst würde eine Instanz die Entladung einer Schwester-Instanz als externen Netzüberschuss werten und aus dem Netz genau das nachladen, was die Schwester gerade einspeist.
+> Der Modus-Guard `≠ '3'` verhindert einen Re-Eintritt wenn AC Laden bereits aktiv ist. `ΣOutput_entladend` zählt je Instanz das Größere aus Ist-Leistung und Ausgangsleistung, die Ausgangsleistung nur in Modus `'1'` (nicht ruhend). Die Ist-Leistung hinkt dem Schreibbefehl um ein Pollintervall nach; nach einem Lastabwurf ergäbe sie allein einen scheinbaren Überschuss. Summiert werden im Einzelbetrieb die eigene Instanz, im Multi-Instancing-Betrieb zusätzlich alle Schwester-Instanzen, die in Modus `'1'` entladen (nicht ruhend) — sonst würde eine Instanz die Entladung einer Schwester-Instanz als externen Netzüberschuss werten und aus dem Netz genau das nachladen, was die Schwester gerade einspeist.
 
 > Nach dem Eintritt deckelt jede andere Instanz der Netzgruppe ihre Zone-1-Entladung auf PV − Reserve, solange diese Instanz lädt — siehe [Eine Energierichtung je Netzgruppe](#eine-energierichtung-je-netzgruppe).
 
@@ -572,7 +572,7 @@ Die Regellogik arbeitet mit einer geordneten Liste von Falls. Die Reihenfolge is
 - Fall D verzichtet auf die Zone-3-Schwelle, wenn eine AC-/Tarif-Lade-Session aktiv ist — Laden muss bei jedem SOC möglich sein, sonst bleibt der Modus bei niedrigem SOC dauerhaft auf `'0'` hängen, obwohl `ac_charge_active`/`tariff_charge_active` noch `True` sind (z. B. nach Deaktivieren/Reaktivieren der Regelung während laufendem Laden).
 - Fall E ist gegen den Tarif-Block (Preis < Teuer) geblockt — verhindert, dass Zone 2 bei gesperrter Entladung neu startet.
 - Falls GT und G sind gegen aktiven Überschuss geblockt — Zone-0-Einspeisung hat absoluten Vorrang vor Tarif-Laden und AC Laden.
-- Fall G verwendet `ΣOutput_entladend` (eigene Ausgangsleistung plus die aller in Modus `'1'` entladenden Schwester-Instanzen, Einzelbetrieb = eigene Ausgangsleistung) statt des Eigenanteils — sonst würde eine Instanz die Entladung einer Schwester-Instanz als externen Netzüberschuss werten und daraufhin genau diese Menge aus dem Netz nachladen (Batterie-zu-Batterie-Umpumpen im Multi-Instancing-Betrieb).
+- Fall G verwendet `ΣOutput_entladend` (eigene Instanz plus alle in Modus `'1'` entladenden Schwester-Instanzen, je Instanz das Größere aus Ist-Leistung und Ausgangsleistung) statt des Eigenanteils — sonst würde eine Instanz die Entladung einer Schwester-Instanz als externen Netzüberschuss werten und daraufhin genau diese Menge aus dem Netz nachladen (Batterie-zu-Batterie-Umpumpen im Multi-Instancing-Betrieb).
 - Nach dem Eintritt verhindert das Ausgangsleistungs-Limit der übrigen Instanzen das Umpumpen: solange eine Instanz der Netzgruppe AC- oder Tarif-lädt, gilt in Zone 1 das Limit von Zone 2 (PV − Reserve).
 
 ---
@@ -747,7 +747,7 @@ P-Faktor reduzieren oder Wartezeit erhöhen. Der Standardabweichungs-Sensor im S
 Zone-3-Schwelle im Zonen-Tab prüfen. Wert muss kleiner als Zone-1-Schwelle sein.
 
 **AC Laden startet nicht trotz Überschuss**
-Der Reihe nach prüfen: Ist Zone 0 (Surplus) aktiv? Die blockiert AC Laden. Ist AC Laden im Tab aktiviert? Liegt `(Grid + ΣOutput_entladend)` unter `min(Offset, 0) − Hysterese` — im Multi-Instancing-Betrieb zählen die eigene Ausgangsleistung und alle entladenden Schwester-Instanzen? Ist der SOC unter dem Ladeziel? Das Status-Flag „AC Laden aktiv“ zeigt das Ergebnis.
+Der Reihe nach prüfen: Ist Zone 0 (Surplus) aktiv? Die blockiert AC Laden. Ist AC Laden im Tab aktiviert? Liegt `(Grid + ΣOutput_entladend)` unter `min(Offset, 0) − Hysterese` — je Instanz zählt das Größere aus Ist-Leistung und Ausgangsleistung, im Multi-Instancing-Betrieb auch alle entladenden Schwester-Instanzen? Ist der SOC unter dem Ladeziel? Das Status-Flag „AC Laden aktiv“ zeigt das Ergebnis.
 
 **AC Laden bricht sofort wieder ab**
 Hysterese zu klein — Grid-Wert schwankt bereits über der Abbruch-Schwelle. Hysterese erhöhen oder P/I kleiner setzen.

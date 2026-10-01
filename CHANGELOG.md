@@ -5,6 +5,10 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+### Behoben
+
+- **Fall G nach Lastabwurf (Issue #50):** Der Eintritt verrechnete den frischen Netzwert mit der zuletzt gepollten Ist-Leistung. Nach einem Lastabwurf zeigte die Ist-Leistung noch den Stand vor dem Hochregeln; der scheinbare Überschuss startete AC-Laden, Fall G schrieb 0 W, und bis Fall H blieb Netzbezug. `ΣOutput_entladend` zählt je Instanz jetzt das Größere aus Ist-Leistung und Ausgangsleistung, die Ausgangsleistung nur in Modus `'1'` (nicht ruhend). Folgt ein Gerät dem Sollwert nicht, tritt Fall G einen Regelzyklus später ein. Betrifft auch den Einzelbetrieb.
+
 ## [3.3.0] – 2026-09-28
 
 Stabile Fassung von 3.3.0-beta.1 bis 3.3.0-beta.3. Enthält die Änderungen unten und alle Änderungen der drei Beta-Abschnitte.

@@ -1,0 +1,21 @@
+titel: Fall G tritt nach Lastabwurf aus frischem Netzwert und veralteter Ist-Leistung ein
+bezug: issue-50-fall-g-veraltete-ist-leistung
+offen: false
+# AC-Laden an, Offset −50, Hysterese 300: Eintritt G bei Netz + ΣAbgabe < −350.
+# Sollwert 800 W, der Ist-Sensor meldet noch 200 W vom Stand vor dem Hochregeln.
+# Netz −900 W nach Lastabwurf: −900 + 200 = −700 W gilt als Überschuss, real −900 + 800 = −100 W.
+netz: -900
+instanzen:
+  - prefix: a
+    settings: {regulation_enabled: true, ac_enabled: true, ac_offset: -50, ac_hysteresis: 300}
+    flags: {cycle_active: true}
+    sensoren: {soc: 50, modus: "1", ist: 200, leistung: 800}
+    folgt_ist: 0
+schritte:
+  - nach: 0
+erwartet:
+  - schritt: 1
+    instanz: a
+    zustand: {ac_charge_active: false}
+  - schritt: 1
+    kein_aufruf: {entity: select.a_mode, wert: "3"}

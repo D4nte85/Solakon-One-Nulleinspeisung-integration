@@ -897,7 +897,8 @@ class SolakonCoordinator:
             ac_hysteresis=cs.ac_hysteresis, ac_offset=ac_offset,
             tariff=tariff, tariff_soc=cs.tariff_soc, tariff_soc_hyst=cs.tariff_soc_hyst,
             tariff_power=cs.tariff_power,
-            is_night=is_night, total_actual=total_actual,
+            is_night=is_night,
+            total_output=self.group.discharge_output(self, actual, self.output_setpoint()),
             zone1_forced=self.zone1_forced,
         )
         if fall_executed:

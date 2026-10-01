@@ -152,6 +152,14 @@ class NetGroup:
         """Summe der Ist-Leistung im Entlade-Pool; der eigene Wert zählt immer."""
         return pool_sum(self.discharge_pool(), me, own_actual, lambda m: m.actual_power())
 
+    def discharge_output(self, me: Member, own_actual: float, own_setpoint: float) -> float:
+        """Summe von max(Ist-Leistung, Sollwert) im Entlade-Pool; die eigene Ist-Leistung zählt immer, der eigene Sollwert nur im Pool."""
+        own = max(own_actual, own_setpoint) if me.in_discharge_pool() else own_actual
+        return pool_sum(
+            self.discharge_pool(), me, own,
+            lambda m: max(m.actual_power(), m.output_setpoint()),
+        )
+
     def ac_actual(self, me: Member, own_actual: float) -> float:
         """Summe der Ist-Leistung im AC-Pool; der eigene Wert zählt immer."""
         return pool_sum(self.ac_pool(), me, own_actual, lambda m: m.actual_power())

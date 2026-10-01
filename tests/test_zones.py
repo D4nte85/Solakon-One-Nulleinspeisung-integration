@@ -13,7 +13,7 @@ tariff = importlib.import_module(h.PKG + ".tariff")
 
 # Ruhe in Modus '0' bei SOC in Zone 2, Nacht, keine Session: kein Fall greift.
 BASE = zones.ZoneInputs(
-    soc=40, grid=0, actual=0, total_actual=0, mode="0",
+    soc=40, grid=0, actual=0, total_output=0, mode="0",
     zone1_limit=60, zone3_limit=20,
     surplus_enabled=False, new_surplus=False,
     ac_enabled=False, ac_soc_target=90, ac_hysteresis=50, ac_offset=-50,

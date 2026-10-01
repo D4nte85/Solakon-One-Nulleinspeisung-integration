@@ -55,7 +55,7 @@ class ZoneInputs:
     soc: float
     grid: float
     actual: float
-    total_actual: float
+    total_output: float
     mode: str
     zone1_limit: int
     zone3_limit: int
@@ -371,7 +371,7 @@ def decide(inp: ZoneInputs) -> FallDecision | None:
 
     # ── Fall G: AC Laden Start ───────────────────────────────────────────────
     # Surplus hat Vorrang — kein AC Laden während Zone 0 aktiv
-    # total_actual summiert über alle entladenden Instanzen (Einzelbetrieb: eigener Wert)
+    # total_output summiert max(Ist-Leistung, Sollwert) über alle entladenden Instanzen (Einzelbetrieb: eigener Wert)
     # Schwelle symmetrisch zu Fall H um den Offset, bei positivem Offset Bezug 0
     if (
         inp.ac_enabled
@@ -380,7 +380,7 @@ def decide(inp: ZoneInputs) -> FallDecision | None:
         and not inp.surplus_active
         and soc < inp.ac_soc_target
         and mode != MODE_AC_CHARGE
-        and (inp.grid + inp.total_actual) < min(inp.ac_offset, 0) - inp.ac_hysteresis
+        and (inp.grid + inp.total_output) < min(inp.ac_offset, 0) - inp.ac_hysteresis
     ):
         return FallDecision("G", {
             "flags": FlagUpdate(ac_charge_active=True), "output": 0,
