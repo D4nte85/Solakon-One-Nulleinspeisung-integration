@@ -214,8 +214,8 @@ def test_zone1_forcierung_grenzen(kw, erwartet):
 # Nicht in Zone 0, PV 0, PV-0-Eintritt scharf, Lastanteil 0.
 SN = dict(
     armed=True, surplus_enabled=True, surplus_active=False, forced=False, exit_lock=False,
-    solar=0, soc=95, actual=0, prev_actual=0, total_actual=0, grid=0, error_share=1.0,
-    surplus_threshold=90, surplus_soc_hyst=2, surplus_pv_hyst=50,
+    solar=0, soc=95, actual=0, prev_actual=0, total_actual=0, total_output=0, grid=0,
+    error_share=1.0, surplus_threshold=90, surplus_soc_hyst=2, surplus_pv_hyst=50,
 )
 
 
@@ -225,9 +225,12 @@ def _sn(**kw):
 
 @pytest.mark.parametrize("kw, erwartet", [
     # Eintritt über Lastanteil + PV-Hysterese: 200 + 100 + 50 = 350
-    (dict(solar=351, total_actual=200, grid=100), True),
-    (dict(solar=350, total_actual=200, grid=100), False),
-    (dict(solar=351, total_actual=200, grid=100, soc=89), False),
+    (dict(solar=351, total_output=200, grid=100), True),
+    (dict(solar=350, total_output=200, grid=100), False),
+    (dict(solar=351, total_output=200, grid=100, soc=89), False),
+    # Der Eintritt rechnet mit der Ausgangsleistung, nicht mit der Ist-Leistung (Issue #50)
+    (dict(solar=351, total_actual=0, total_output=200, grid=100), True),
+    (dict(solar=200, total_actual=0, total_output=200, grid=100), False),
     # Eintritt bei PV 0 nur scharf und ohne Ausgang in diesem und dem vorigen Zyklus
     (dict(), True),
     (dict(armed=False), False),
@@ -248,6 +251,8 @@ def test_ueberschuss_eintritt(kw, erwartet):
     # Verbrauchsaustritt: PV ≤ Lastanteil − PV-Hysterese (300 − 50)
     (dict(solar=250, total_actual=200, grid=100), False),
     (dict(solar=251, total_actual=200, grid=100), True),
+    # Der Austritt rechnet mit der Ist-Leistung, der feste Zone-0-Sollwert zählt nicht
+    (dict(solar=251, total_actual=200, total_output=800, grid=100), True),
     # Exit-Lock sperrt nur den Verbrauchsterm (Issue #7)
     (dict(solar=250, total_actual=200, grid=100, exit_lock=True), True),
     (dict(soc=87, solar=1000, exit_lock=True), False),

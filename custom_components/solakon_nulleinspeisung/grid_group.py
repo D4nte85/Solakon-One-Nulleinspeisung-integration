@@ -57,6 +57,16 @@ def pool_sum(
     return own_value + sum(reader(m) for m in pool.values() if m is not me)
 
 
+def discharge_estimate(m: Member, actual: float, setpoint: float) -> float:
+    """Abgabe einer entladenden Instanz: max(Ist-Leistung, Sollwert), im Surplus die Ist-Leistung, solange sie nicht negativ ist."""
+    # Im Surplus steht der Sollwert fest auf dem Zone-0-Limit, das Gerät gibt nur ab,
+    # was PV und Entladestrom hergeben. Eine negative Ist-Leistung in Modus '1' ist ein
+    # veralteter Ladewert, dann gilt wieder der Sollwert.
+    if m.surplus_active and actual >= 0:
+        return actual
+    return max(actual, setpoint)
+
+
 def _socs(active: dict[str, Member], me: Member, own_soc: float) -> dict[str, float] | None:
     """SOC je Mitglied in `active`, eigener Wert `own_soc`; `None` beim ersten nicht verfügbaren."""
     socs: dict[str, float] = {}
@@ -153,11 +163,11 @@ class NetGroup:
         return pool_sum(self.discharge_pool(), me, own_actual, lambda m: m.actual_power())
 
     def discharge_output(self, me: Member, own_actual: float, own_setpoint: float) -> float:
-        """Summe von max(Ist-Leistung, Sollwert) im Entlade-Pool; die eigene Ist-Leistung zählt immer, der eigene Sollwert nur im Pool."""
-        own = max(own_actual, own_setpoint) if me.in_discharge_pool() else own_actual
+        """Summe der Abgabe im Entlade-Pool laut `discharge_estimate`; die eigene Ist-Leistung zählt immer, der eigene Sollwert nur im Pool."""
+        own = discharge_estimate(me, own_actual, own_setpoint) if me.in_discharge_pool() else own_actual
         return pool_sum(
             self.discharge_pool(), me, own,
-            lambda m: max(m.actual_power(), m.output_setpoint()),
+            lambda m: discharge_estimate(m, m.actual_power(), m.output_setpoint()),
         )
 
     def ac_actual(self, me: Member, own_actual: float) -> float:

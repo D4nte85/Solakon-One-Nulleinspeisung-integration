@@ -8,6 +8,7 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 ### Behoben
 
 - **Fall G nach Lastabwurf (Issue #50):** Der Eintritt verrechnete den frischen Netzwert mit der zuletzt gepollten Ist-Leistung. Nach einem Lastabwurf zeigte die Ist-Leistung noch den Stand vor dem Hochregeln; der scheinbare Überschuss startete AC-Laden, Fall G schrieb 0 W, und bis Fall H blieb Netzbezug. `ΣOutput_entladend` zählt je Instanz jetzt das Größere aus Ist-Leistung und Ausgangsleistung, die Ausgangsleistung nur in Modus `'1'` (nicht ruhend). Folgt ein Gerät dem Sollwert nicht, tritt Fall G einen Regelzyklus später ein. Betrifft auch den Einzelbetrieb.
+- **Surplus-Eintritt nach Lastabwurf (Issue #50):** Der Verbrauchsbezug des Eintritts verrechnete den frischen Netzwert ebenso mit der zuletzt gepollten Ist-Leistung; nach einem Lastabwurf trat Zone 0 ohne echten Überschuss ein und blieb im Hysterese-Band. Der Eintritt zählt jetzt `ΣOutput_entladend` wie Fall G, der Austritt weiter die Ist-Leistung, weil in Zone 0 die Ausgangsleistung fest auf Hard Limit Z0 steht. In `ΣOutput_entladend` zählt eine Instanz im Surplus aus demselben Grund mit ihrer Ist-Leistung, solange diese nicht negativ ist; das betrifft auch Fall G.
 
 ## [3.3.0] – 2026-09-28
 

@@ -114,6 +114,18 @@ def test_discharge_actual_summiert_entlade_pool():
     assert g.discharge_actual(a, 10) == 110
 
 
+def test_discharge_output_im_surplus_nur_ist_leistung():
+    # b im Surplus zählt mit der Ist-Leistung statt mit dem festen Zone-0-Sollwert
+    a, b = M("a", actual=100, setpoint=300), M("b", actual=300, setpoint=800, surplus_active=True)
+    c = M("c", actual=200, setpoint=500)
+    _, g = _group(a, b, c)
+    assert g.discharge_output(b, 300, 800) == 300 + 300 + 500
+    assert g.discharge_output(a, 100, 300) == 300 + 300 + 500
+    # Eine negative Ist-Leistung im Surplus ist ein veralteter Ladewert, dann zählt der Sollwert
+    b.actual = -1200
+    assert g.discharge_output(a, 100, 300) == 300 + 800 + 500
+
+
 def test_ac_actual_summiert_ac_pool():
     a, b = M("a", actual=999), M("b", actual=100)
     c = M("c", actual=-50, discharge=False, ac_charge_active=True)

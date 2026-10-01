@@ -150,8 +150,8 @@ def forecast_flags(
 
 def surplus_step(
     *, armed: bool, surplus_enabled: bool, surplus_active: bool, forced: bool, exit_lock: bool,
-    solar: float, soc: float, actual: float, prev_actual: float, total_actual: float, grid: float,
-    error_share: float, surplus_threshold: float, surplus_soc_hyst: float, surplus_pv_hyst: float,
+    solar: float, soc: float, actual: float, prev_actual: float, total_actual: float,
+    total_output: float, grid: float, error_share: float, surplus_threshold: float, surplus_soc_hyst: float, surplus_pv_hyst: float,
 ) -> tuple[bool, bool]:
     """Surplus-Ein- und -Austritt mit PV-0-Entprellung; liefert (new_surplus, armed)."""
     if not surplus_enabled:
@@ -159,14 +159,18 @@ def surplus_step(
     if solar > 0:
         armed = True
 
-    # Lastanteil dieser Instanz für Ein- und Austritt: (Σactual + grid) × error_share.
+    # Lastanteil dieser Instanz: (Σ + grid) × error_share. Der Eintritt summiert
+    # max(Ist-Leistung, Sollwert), weil die Ist-Leistung nach einer Erhöhung noch den
+    # alten Stand zeigen kann. Der Austritt summiert die Ist-Leistung: In
+    # Zone 0 steht der Sollwert fest, das Gerät gibt nur ab, was PV und Entladestrom hergeben.
+    entry_share = (total_output + grid) * error_share
     consumption_share = (total_actual + grid) * error_share
     pv_hyst_share = surplus_pv_hyst * error_share
 
     normal_entry = (
         soc >= surplus_threshold
         and (
-            solar > (consumption_share + pv_hyst_share)
+            solar > (entry_share + pv_hyst_share)
             or (
                 solar == 0
                 and actual == 0
