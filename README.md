@@ -528,6 +528,11 @@ Optionale Nachtabschaltung. Deaktiviert **nur Zone 2** wenn PV < PV-Ladereserve 
 
 Dieselbe Dunkelheit mit denselben Schwellen schaltet den [Nacht-Offset](#-zonen) von Zone 1 — auch bei ausgeschalteter Nachtabschaltung.
 
+| Parameter | Beschreibung | Empfehlung |
+|-----------|-------------|------------|
+| Nachtabschaltung aktivieren | Zone 2 bei PV < PV-Ladereserve deaktivieren; Zone 1 und AC Laden laufen weiter | — |
+| Hysterese Einschalten (W) | Die Nacht endet erst ab PV ≥ PV-Ladereserve + Hysterese. Gilt auch für den Nacht-Offset. 0 = Ein- und Ausschaltschwelle gleich | — |
+
 ---
 
 ### 🔧 Debug
