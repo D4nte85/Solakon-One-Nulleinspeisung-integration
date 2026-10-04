@@ -17,5 +17,6 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
           cache-dependency-path: tests/requirements.txt
+      - run: pipx run ruff check --select F custom_components tests
       - run: pip install -r tests/requirements.txt
       - run: pytest -q -p no:cacheprovider tests

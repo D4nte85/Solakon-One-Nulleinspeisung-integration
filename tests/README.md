@@ -36,6 +36,15 @@ git clone https://github.com/solakon-de/solakon-one-homeassistant tests/geraet-i
 git -C tests/geraet-integration pull --tags && git -C tests/geraet-integration describe --tags
 ```
 
+## CI
+
+Bei Push und Pull Request laufen `tests.yml` (`ruff check --select F` und `pytest` unter
+Python 3.12 und 3.14) und `validate.yml` (HACS ohne Brands, `hassfest`). `ruff` prüft nur die
+pyflakes-Regeln: undefinierte Namen, unbenutzte Importe und Variablen, auch in Zweigen, die
+die Tests selten erreichen. `hassfest` prüft `manifest.json` und das Schema der
+Übersetzungsdateien, die `pytest` über die HA-Stubs nicht sieht. Gleiche Schlüssel in `de`
+und `en` prüft `test_translations.py`.
+
 ## Reproduktionsszenarien
 
 Eine Datei je Fehlervorgang unter `tests/repro/`, benannt wie die Bugfix-Seite
