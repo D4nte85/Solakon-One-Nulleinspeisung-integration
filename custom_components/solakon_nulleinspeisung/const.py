@@ -93,12 +93,13 @@ OPERATING_STATES = [
     "pv_direct",
 ]
 
-# Fall-Schlüssel des Regelzyklus, Reihenfolge wie im Zyklus durchlaufen.
+# Zustände des Sensors active_fall: Fall-Schlüssel des Regelzyklus kleingeschrieben,
+# weil HA in Übersetzungsschlüsseln nur [a-z0-9-_] erlaubt. Reihenfolge wie im Zyklus.
 FALL_KEYS = [
-    "0A", "0B",
-    "A", "B", "C", "D", "E", "F",
-    "G", "H", "I",
-    "GT", "HT", "TM",
+    "0a", "0b",
+    "a", "b", "c", "d", "e", "f",
+    "g", "h", "i",
+    "gt", "ht", "tm",
 ]
 
 # Modus-Schlüssel des Betriebsmodus-Sensors.

@@ -93,20 +93,20 @@
       "active_fall": {
         "name": "Aktiver Fall",
         "state": {
-          "0A": "Zone 0: Überschuss Start",
-          "0B": "Zone 0: Überschuss Ende",
-          "A": "Zone 1: Zyklus Start",
-          "B": "Zone 3: Stopp (Zyklus aktiv)",
-          "C": "Zone 3: Stopp",
-          "D": "Recovery: Modus wiederhergestellt",
-          "E": "Zone 2: Regelung aktiv",
-          "F": "Nacht: Abschaltung",
-          "G": "AC Laden: Start",
-          "H": "AC Laden: Ende",
-          "I": "Safety: Modus-Korrektur",
-          "GT": "Tarif-Laden: Start",
-          "HT": "Tarif-Laden: Ende",
-          "TM": "Tarifsperre: Preis nicht teuer"
+          "0a": "Zone 0: Überschuss Start",
+          "0b": "Zone 0: Überschuss Ende",
+          "a": "Zone 1: Zyklus Start",
+          "b": "Zone 3: Stopp (Zyklus aktiv)",
+          "c": "Zone 3: Stopp",
+          "d": "Recovery: Modus wiederhergestellt",
+          "e": "Zone 2: Regelung aktiv",
+          "f": "Nacht: Abschaltung",
+          "g": "AC Laden: Start",
+          "h": "AC Laden: Ende",
+          "i": "Safety: Modus-Korrektur",
+          "gt": "Tarif-Laden: Start",
+          "ht": "Tarif-Laden: Ende",
+          "tm": "Tarifsperre: Preis nicht teuer"
         }
       },
       "mode_label": {

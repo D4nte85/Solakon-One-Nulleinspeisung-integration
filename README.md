@@ -639,7 +639,7 @@ Alle Entitätsnamen kommen aus den Übersetzungen und erscheinen in der Sprache 
 | `sensor.solakon_one_betriebsmodus` | Sensor | Gerätemodus als übersetzter Enum-Sensor — `waiting`, `disabled`, `discharge`, `ac_charge`, `disabled_regulation_off`, `unknown` |
 | `sensor.solakon_one_letzte_aktion` | Sensor | Letzter Logeintrag der Steuerlogik, in der Sprache der Instanz. Sprachneutral auswertbar über das Attribut `action_key`; die Werte der Meldung stehen als weitere Attribute daneben |
 | `sensor.solakon_one_netz_standardabweichung` | Sensor | Netz-Stabw. in W über das konfigurierte Fenster (getrimmt, falls konfiguriert); Rohwert als Attribut `stddev_raw` |
-| `sensor.solakon_one_aktiver_fall` | Sensor | Zuletzt ausgeführter Fall als übersetzter Enum-Sensor — der Zustandswert ist der Fall-Schlüssel (`0A`, `A`, `B`, … `TM`), die Anzeige kommt aus den Übersetzungen |
+| `sensor.solakon_one_aktiver_fall` | Sensor | Zuletzt ausgeführter Fall als übersetzter Enum-Sensor — der Zustandswert ist der kleingeschriebene Fall-Schlüssel (`0a`, `a`, `b`, … `tm`), die Anzeige kommt aus den Übersetzungen |
 | `sensor.solakon_one_pi_integral` | Sensor | Aktueller I-Anteil des PI-Reglers |
 | `sensor.solakon_one_uberschussleistung` | Sensor | Verwertbarer PV-Überschuss in W — `min(aktuell geltendes Hard-Limit, PV-Leistung) − Ausgangsleistung`, geklemmt auf ≥0. Zeigt die Leistung, die über das aktuelle Hard-Limit oder die verfügbare Sonne hinaus **nicht** mehr sinnvoll ausgegeben werden kann, ohne den Akku zu belasten — z. B. für eine Automation, die bei Überschuss einen Zusatzverbraucher schaltet |
 | `switch.solakon_one_regelung_aktiv` | Switch | Hauptschalter — aktiviert/deaktiviert den Schreibteil |

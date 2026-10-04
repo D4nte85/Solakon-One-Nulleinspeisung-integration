@@ -53,3 +53,8 @@ def test_globaler_sensor_trigger_bei_parallelem_setup(monkeypatch):
 
     asyncio.run(run())
     assert {p: _triggers(hass, p) for p in "ab"} == {"a": ["tariff"], "b": ["tariff"]}
+
+
+def test_config_schema_nur_ueber_config_entry():
+    """async_setup verlangt ein CONFIG_SCHEMA (hassfest config_schema)."""
+    assert hasattr(h.integration, "CONFIG_SCHEMA")

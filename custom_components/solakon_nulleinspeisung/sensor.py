@@ -160,7 +160,7 @@ async def async_setup_entry(
                           icon="mdi:information-outline", **_enum(MODE_KEYS), **DIAG),
         LastActionSensor(coord),
         GridStdDevSensor(coord),
-        CoordinatorSensor(coord, "active_fall", lambda c: c.active_fall or None,
+        CoordinatorSensor(coord, "active_fall", lambda c: c.active_fall.lower() or None,
                           icon="mdi:state-machine", **_enum(FALL_KEYS), **DIAG),
         CoordinatorSensor(coord, "integral", lambda c: round(c.integral, 1),
                           icon="mdi:chart-bell-curve", suggested_display_precision=1, **POWER, **DIAG),

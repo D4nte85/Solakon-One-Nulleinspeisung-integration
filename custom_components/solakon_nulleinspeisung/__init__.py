@@ -13,6 +13,7 @@ from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
+import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.storage import Store
 
 from .const import (
@@ -29,6 +30,9 @@ _LOGGER = logging.getLogger(__name__)
 # Integrationsweite `hass.data`-Schlüssel (ohne DOMAIN-Präfix), entfernt mit der letzten Instanz.
 DATA_KEYS = ("panel_registered", "ws_registered", *group_store.DATA_KEYS)
 PANEL_JS_URL = f"/{DOMAIN}/panel.js"
+
+# Keine YAML-Konfiguration; async_setup liefert nur Panel und Übersetzungen aus.
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 # Schlüssel des WS-Status: Name im Panel oder Paar (Panel, Schnappschuss).
 WS_STATUS_KEYS = (

@@ -1285,7 +1285,7 @@ ${this._textsMissing ? `
     const offsetZoneKey = { ac: "offset_zone_ac", z1: "offset_zone_1", z1_night: "offset_zone_1_night" }[st.offset_zone] || "offset_zone_2";
     const offsetStatic  = st.offset_static ?? "—";
     return {
-      "st-active-fall":  this._es("active_fall", st.active_fall),
+      "st-active-fall":  this._es("active_fall", st.active_fall?.toLowerCase()),
       "st-grid":         `${(st.grid ?? 0).toFixed(0)} W`,
       "st-actual":       `${st.actual_power ?? "—"} W`,
       "st-solar":        `${st.solar ?? "—"} W`,

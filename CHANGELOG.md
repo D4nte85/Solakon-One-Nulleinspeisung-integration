@@ -5,6 +5,14 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+### Geändert
+
+- **Zustandswerte von „Aktiver Fall“ kleingeschrieben:** Home Assistant erlaubt in Übersetzungsschlüsseln nur `[a-z0-9-_]`; `hassfest` wies die Schlüssel `0A` … `TM` zurück. Der Sensor meldet jetzt `0a`, `a`, `b`, … `tm`, die angezeigten Texte bleiben gleich. **Was bricht:** Automationen, die auf den Rohwert des Sensors prüfen (etwa `state: "F"`), müssen auf den kleingeschriebenen Schlüssel umgestellt werden. Im Panel und in den Meldungen bleibt die Fallkennung großgeschrieben.
+
+### Behoben
+
+- **`CONFIG_SCHEMA` ergänzt:** Die Integration definiert `async_setup`, aber kein `CONFIG_SCHEMA`; `hassfest` warnte darüber. Sie erklärt jetzt ausdrücklich, dass sie nur über die Oberfläche eingerichtet wird. Keine Verhaltensänderung.
+
 ## [3.3.1] – 2026-10-01
 
 ### Hinzugefügt

@@ -290,6 +290,8 @@ def install() -> None:
             async_track_time_interval=async_track_time_interval)
     _module("homeassistant.helpers.state", state_as_number=state_as_number)
     _module("homeassistant.helpers.storage", Store=Store)
+    _module("homeassistant.helpers.config_validation",
+            config_entry_only_config_schema=lambda domain: {})
     _module("homeassistant.util.dt", now=dt_now, utc_from_timestamp=utc_from_timestamp)
     _module("homeassistant.helpers.entity", Entity=Entity)
     _module("homeassistant.helpers.entity_platform", AddEntitiesCallback=object)

@@ -93,20 +93,20 @@
       "active_fall": {
         "name": "Active case",
         "state": {
-          "0A": "Zone 0: surplus start",
-          "0B": "Zone 0: surplus end",
-          "A": "Zone 1: discharge cycle start",
-          "B": "Zone 3: stop (cycle active)",
-          "C": "Zone 3: stop",
-          "D": "Recovery: mode restored",
-          "E": "Zone 2: control active",
-          "F": "Night: shutdown",
-          "G": "AC charging: start",
-          "H": "AC charging: end",
-          "I": "Safety: mode correction",
-          "GT": "Tariff charging: start",
-          "HT": "Tariff charging: end",
-          "TM": "Tariff Lock: price not expensive"
+          "0a": "Zone 0: surplus start",
+          "0b": "Zone 0: surplus end",
+          "a": "Zone 1: discharge cycle start",
+          "b": "Zone 3: stop (cycle active)",
+          "c": "Zone 3: stop",
+          "d": "Recovery: mode restored",
+          "e": "Zone 2: control active",
+          "f": "Night: shutdown",
+          "g": "AC charging: start",
+          "h": "AC charging: end",
+          "i": "Safety: mode correction",
+          "gt": "Tariff charging: start",
+          "ht": "Tariff charging: end",
+          "tm": "Tariff Lock: price not expensive"
         }
       },
       "mode_label": {
