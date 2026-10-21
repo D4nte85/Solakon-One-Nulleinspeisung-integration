@@ -12,7 +12,6 @@ jobs:
       - uses: hacs/action@main
         with:
           category: integration
-          ignore: brands
 
   hassfest:
     runs-on: ubuntu-latest

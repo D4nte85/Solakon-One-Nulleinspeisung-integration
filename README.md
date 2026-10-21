@@ -1,7 +1,7 @@
 # ⚡ Solakon ONE Nulleinspeisung
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz)
-[![HA Version](https://img.shields.io/badge/Home%20Assistant-2024.1%2B-blue)](https://www.home-assistant.io)
+[![HA Version](https://img.shields.io/badge/Home%20Assistant-2024.12%2B-blue)](https://www.home-assistant.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-Support-ff5e5b?logo=ko-fi&logoColor=white)](https://ko-fi.com/d4nte85)
 
@@ -207,7 +207,7 @@ Im Panel wird bei mehreren Instanzen ein zusätzlicher **Verteilungs-Tab** einge
 
 ## Voraussetzungen
 
-- Home Assistant 2024.1 oder neuer
+- Home Assistant 2024.12 oder neuer
 - [HACS](https://hacs.xyz) installiert
 - Solakon ONE Wechselrichter mit der offiziellen [Solakon-ONE-Integration](https://github.com/solakon-de/solakon-one-homeassistant) in HA (siehe Hinweis ganz oben)
 - Sensor für die Netzleistung (z. B. Shelly 3EM, Shelly PM) — **positiv = Bezug, negativ = Einspeisung**
