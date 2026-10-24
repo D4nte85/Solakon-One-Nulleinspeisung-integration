@@ -1,6 +1,6 @@
 # ⚡ Solakon ONE Nulleinspeisung
 
-[![HACS Custom](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz)
+[![HACS Default](https://img.shields.io/badge/HACS-Default-41BDF5.svg)](https://hacs.xyz)
 [![HA Version](https://img.shields.io/badge/Home%20Assistant-2024.12%2B-blue)](https://www.home-assistant.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-Support-ff5e5b?logo=ko-fi&logoColor=white)](https://ko-fi.com/d4nte85)
@@ -242,6 +242,14 @@ Die folgenden Solakon-Entitäten müssen in HA vorhanden sein und werden beim Ei
 ## Installation
 
 ### Über HACS (empfohlen)
+
+Die Integration steht im HACS-Standardkatalog.
+
+1. HACS öffnen und nach **Solakon ONE Nulleinspeisung** suchen
+2. Die Integration öffnen → **Herunterladen**
+3. Home Assistant neu starten
+
+Erscheint sie in der Suche nicht, etwa bei einer älteren HACS-Version, als benutzerdefiniertes Repository hinzufügen:
 
 1. HACS öffnen → **Integrationen** → drei Punkte oben rechts → **Benutzerdefiniertes Repository hinzufügen**
 2. URL eintragen: `https://github.com/D4nte85/Solakon-One-Nulleinspeisung-integration`
