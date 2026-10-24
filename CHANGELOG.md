@@ -5,6 +5,8 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+## [3.4.1] – 2026-10-24
+
 ### Geändert
 
 - **Ausschalten setzt den Entladestrom auf 40 A:** Beim Ausschalten der Regelung schrieb die Integration „Max. Entladestrom Zone 1“, der danach im Gerät stehen blieb. Jetzt stellt sie den Gerätestandard von 40 A wieder her, bevor sie in Modus `'0'` wechselt; nach dem Wiedereinschalten gleicht der Regelzyklus den Entladestrom wie bisher ab.
