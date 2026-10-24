@@ -310,7 +310,9 @@ Kern des Regelkreises. Oben die für beide Entladeverfahren geltenden Werte (Tot
 ```
 Stellwert_i = Fehler-Anteil_i × (Σ Ist-Entladeleistung des Entlade-Pools + grid − Offset)
 ```
+
 Geklemmt auf 0 … Zone-1/2-Limit (mit Richtungssperre). Gate, Totband und Stillstandsprüfung bleiben wie beim PI; eine Mindestleistung gibt es nicht. Solange die Ist-Leistung mehr als 15 W unter der Ausgangsleistung liegt, wird nur gesenkt — dieselbe Regel wie im AC-Laden; das Anstiegsverhalten beim Entladen ist nicht gemessen.
+
 ---
 
 ### 🔋 Zonen
