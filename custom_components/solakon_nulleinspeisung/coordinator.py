@@ -40,7 +40,7 @@ from .const import (
     CONF_ACTUAL_SENSOR, CONF_SOLAR_SENSOR, CONF_SOC_SENSOR, CONF_TIMEOUT_COUNTDOWN,
     CONF_ACTIVE_POWER, CONF_DISCHARGE_CURRENT, CONF_TIMEOUT_SET, CONF_MODE_SELECT,
     CONF_EXPORT_LIMIT, MODE_DISABLED, MODE_DISCHARGE, MODE_AC_CHARGE, S_REGULATION_ENABLED,
-    S_ZONE3_LIMIT, S_DISCHARGE_MAX, S_HARD_LIMIT_Z0, S_HARD_LIMIT_Z1, S_PV_RESERVE,
+    S_ZONE3_LIMIT, DEVICE_MAX_CURRENT, S_HARD_LIMIT_Z0, S_HARD_LIMIT_Z1, S_PV_RESERVE,
     S_SURPLUS_FORECAST_ENABLED, S_SURPLUS_LOCK_ENABLED, S_AC_SOC_TARGET, S_AC_POWER_LIMIT,
     S_PERIODIC_ENABLED, S_PERIODIC_INTERVAL, S_TARIFF_ENABLED, S_PV_FORECAST_ENABLED,
     S_ZONE1_FORCE_ENABLED, S_REST_IN_DISCHARGE, S_DYN_Z1_ENABLED, S_DYN_Z2_ENABLED, S_DYN_AC_ENABLED,
@@ -666,7 +666,7 @@ class SolakonCoordinator:
             async with self._lock:
                 _LOGGER.info("Solakon: Regelung wird deaktiviert — setze Output 0, Modus Disabled")
                 await self._transition(output=0, wait=False, timer=False)
-                await self._set_discharge(self._setting(S_DISCHARGE_MAX, float))
+                await self._set_discharge(DEVICE_MAX_CURRENT)
                 await self._transition(mode=MODE_DISABLED)
                 self.display.set_mode("disabled_regulation_off", self.hass.config.language)
 

@@ -213,7 +213,7 @@ def b3(c: Ctx):
     strom = c.entladestrom()
     dmax = c.settings[C.S_DISCHARGE_MAX]
     if c.aus_seit is not None:
-        soll, lage = dmax, "Regelung aus"
+        soll, lage = C.DEVICE_MAX_CURRENT, "Regelung aus"
     elif not c.normal():
         return None
     elif c.lade_session():
