@@ -215,9 +215,8 @@ Im Panel wird bei mehreren Instanzen ein zusätzlicher **Verteilungs-Tab** einge
 **Wichtig — einmalige Einstellung in der App:** Die Fernsteuerung der Solakon-Integration kennt kein echtes „Disabled" — `'0'` schaltet die Fernsteuerung ab, danach greifen die Einstellungen des Geräts. Die Regelung nutzt das bewusst als definierten Fallback, etwa in Zone 3. Damit das Gerät dort nichts ausgibt und PV-Leistung in den Akku lädt, einmalig in der Solakon-App einstellen:
 
 - **Standard-Ausgangsleistung 0 W** (oder ein 0-W-Zeitplan für 24 Stunden)
-- **Überschussladung aktivieren**
 - keine anderen Zeit- oder Energiepläne
-- kein Smart Meter in der App — sonst regelt das Gerät in Modus `'0'` selbst auf Nulleinspeisung, bis zum Export-Limit
+- kein Smart Meter in der App — sonst regelt das Gerät in Modus `'0'` selbst auf Nulleinspeisung, bis zum Export-Limit. Die App-Option „Überschussladung" ist genau diese Regelung. Ohne Smart Meter blendet die App sie aus, und das Gerät lädt PV-Leistung auch so in den Akku.
 
 Die App wird nur für diese Einstellung gebraucht, danach läuft das Gerät ohne sie. Lädt der Akku in Zone 3 bei PV-Leistung nicht, fehlt meist eine dieser Einstellungen.
 
