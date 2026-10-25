@@ -42,7 +42,8 @@ INSTANZ_SENSOREN = {
     "export":       ("number.{p}_export", _G["export"], 800),
     "kapazitaet":   ("sensor.{p}_capacity", "kWh", 2.0),
 }
-FLAGS = ("cycle_active", "surplus_active", "ac_charge_active", "tariff_charge_active", "solar_zero_entry_armed")
+FLAGS = ("cycle_active", "surplus_active", "ac_charge_active", "tariff_charge_active", "grid_charge_active",
+         "solar_zero_entry_armed")
 
 
 class SzenarioFehler(Exception):

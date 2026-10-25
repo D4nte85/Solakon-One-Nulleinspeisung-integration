@@ -26,8 +26,8 @@ from .limits import PowerLimits, power_limits
 from .messages import CycleMessages
 from .output import Actual, Output, Stall
 from .schema import (
-    CycleSettings, InvalidSettings, SolakonSettingsStore, check, cycle_settings, notify_reset, sanitize,
-    soc_conflict,
+    CycleSettings, InvalidSettings, SolakonSettingsStore, check, couple_target, cycle_settings, notify_reset,
+    sanitize, soc_conflict,
 )
 from .tariff import Tariff, forecast_suppressed
 from .timeout import Timeout
@@ -44,7 +44,7 @@ from .const import (
     S_SURPLUS_FORECAST_ENABLED, S_SURPLUS_LOCK_ENABLED, S_AC_SOC_TARGET, S_AC_POWER_LIMIT,
     S_PERIODIC_ENABLED, S_PERIODIC_INTERVAL, S_TARIFF_ENABLED, S_PV_FORECAST_ENABLED,
     S_ZONE1_FORCE_ENABLED, S_REST_IN_DISCHARGE, S_DYN_Z1_ENABLED, S_DYN_Z2_ENABLED, S_DYN_AC_ENABLED,
-    S_PI_ENABLED, S_Z1_NIGHT_ENABLED,
+    S_PI_ENABLED, S_Z1_NIGHT_ENABLED, S_TARGET_CHARGE_ENABLED,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -56,6 +56,7 @@ PERSISTED_FLAGS = (
     ("surplus_active", "surplus_active", False),
     ("ac_charge_active", "ac_charge_active", False),
     ("tariff_charge_active", "tariff_charge_active", False),
+    ("grid_charge_active", "grid_charge_active", False),
     ("solar_zero_entry_armed", "surplus.armed", True),
 )
 
@@ -104,6 +105,9 @@ class SolakonCoordinator:
         self.surplus_active: bool = False
         self.ac_charge_active: bool = False
         self.tariff_charge_active: bool = False
+        self.grid_charge_active: bool = False
+        # Aufladen des Zielladens: Zielladen an, SOC unter dem Ziel-SOC.
+        self.charging_to_target: bool = False
         # Ruhezustand: Output 0 im Ruhemodus, keine PI-Regelung.
         self.resting: bool = False
         self.is_night: bool = False
@@ -297,7 +301,7 @@ class SolakonCoordinator:
     def _control_state(self) -> str:
         """Regelzustand der Instanz laut `zones.control_state`."""
         return control_state(self.surplus_active, self.tariff_charge_active, self.ac_charge_active,
-                             self.cycle_active)
+                             self.cycle_active, self.grid_charge_active)
 
     def _at_rest(self, mode: str) -> bool:
         """Ruht die Instanz in `mode`, laut `zones.at_rest`."""
@@ -365,6 +369,7 @@ class SolakonCoordinator:
         """Betriebszustand aus den Zustandsflags nachziehen; True bei Wechsel."""
         return self.display.update_state(
             self._regulation_on, self._cycle_blocked, self._control_state, self.discharge_locked, self.is_night,
+            self._setting(S_TARGET_CHARGE_ENABLED, bool), self.charging_to_target,
         )
 
     def _offset_zone(self) -> str:
@@ -401,6 +406,7 @@ class SolakonCoordinator:
             "surplus_active": self.surplus_active,
             "ac_charge_active": self.ac_charge_active,
             "tariff_charge_active": self.tariff_charge_active,
+            "grid_charge_active": self.grid_charge_active,
             "regulation_enabled": self.settings.get(S_REGULATION_ENABLED, False),
             "grid_stddev": self.dyn.stddev,
             "grid_stddev_raw": self.dyn.stddev_raw,
@@ -566,6 +572,8 @@ class SolakonCoordinator:
                 self.ac_charge_active = flags.ac_charge_active
             if flags.tariff_charge_active is not None:
                 self.tariff_charge_active = flags.tariff_charge_active
+            if flags.grid_charge_active is not None:
+                self.grid_charge_active = flags.grid_charge_active
         if timer and timer_first:
             await self.timeout.toggle()
         if output is not None:
@@ -652,23 +660,21 @@ class SolakonCoordinator:
             self._untrack(name)
 
     async def async_update_settings(self, changes: dict[str, Any]) -> None:
-        """Änderungen prüfen, übernehmen und speichern; InvalidSettings, wenn eine das Schema verletzt."""
+        """Änderungen prüfen, mit der Kopplung von Zielladen und Regelung übernehmen und speichern.
+
+        InvalidSettings, wenn eine Änderung das Schema verletzt.
+        """
         if findings := check(changes, SETTINGS_SCHEMA):
             raise InvalidSettings(findings)
+        changes = couple_target(self.settings, changes)
         turning_off = (
             self._regulation_on
             and S_REGULATION_ENABLED in changes
             and not changes[S_REGULATION_ENABLED]
         )
         if turning_off:
-            # Aufräum-Sequenz solange regulation_enabled noch True ist,
-            # danach blockt der Guard alle Modbus-Schreibbefehle
             async with self._lock:
-                _LOGGER.info("Solakon: Regelung wird deaktiviert — setze Output 0, Modus Disabled")
-                await self._transition(output=0, wait=False, timer=False)
-                await self._set_discharge(DEVICE_MAX_CURRENT)
-                await self._transition(mode=MODE_DISABLED)
-                self.display.set_mode("disabled_regulation_off", self.hass.config.language)
+                await self._switch_off_sequence()
 
         before = {name: self._tracker_input(name) for name, _ in TRACKERS}
 
@@ -689,6 +695,14 @@ class SolakonCoordinator:
         # Neuen Zustand sofort anwenden
         if self._regulation_on:
             self.request_regulation()
+
+    async def _switch_off_sequence(self) -> None:
+        """Abschaltpfad bei noch aktiver Regelung: Output 0, Entladestrom auf Gerätemaximum, Modus '0'."""
+        _LOGGER.info("Solakon: Regelung wird deaktiviert — setze Output 0, Modus Disabled")
+        await self._transition(output=0, wait=False, timer=False)
+        await self._set_discharge(DEVICE_MAX_CURRENT)
+        await self._transition(mode=MODE_DISABLED)
+        self.display.set_mode("disabled_regulation_off", self.hass.config.language)
 
     def schedule_save(self) -> None:
         """Settings und Zustandsflags nach 5 s speichern."""
@@ -894,6 +908,7 @@ class SolakonCoordinator:
             night_hysteresis=cs.night_hysteresis, night_enabled=cs.night_enabled,
         )
         self.is_night = is_night
+        self.charging_to_target = cs.target_enabled and soc < cs.target_soc
 
         # ── 9. Falls / Zonenwechsel ──────────────────────────────────────────
         fall_executed = await self._execute_falls(
@@ -907,14 +922,21 @@ class SolakonCoordinator:
             is_night=is_night,
             total_output=self.group.discharge_output(self, actual, self.output_setpoint()),
             zone1_forced=self.zone1_forced,
+            target_enabled=cs.target_enabled, target_soc=cs.target_soc,
+            battery_priority=cs.battery_priority, source_ac=cs.source_ac, source_tariff=cs.source_tariff,
+            grid_charge_enabled=cs.grid_charge_enabled, grid_charge_power=limits.ac,
         )
         if fall_executed:
             self.active_fall = fall_executed
+        # Fall ZE hat die Regelung abgeschaltet: Entladepause.
+        if not self._regulation_on:
+            self._end_cycle()
+            return
 
         # Zustand hinter Fall TM: die Sperre selbst mit den Flags nach den Falls,
         # nicht ihr Auslöser.
         self.discharge_locked = tariff.discharge_locked(
-            self.tariff_charge_active or self.ac_charge_active, self.surplus_active)
+            self.tariff_charge_active or self.ac_charge_active or self.grid_charge_active, self.surplus_active)
 
         # ── 10. Entladestrom mit Regelzustand abgleichen ─────────────────────
         mode = self._str(cfg[CONF_MODE_SELECT])
@@ -930,12 +952,16 @@ class SolakonCoordinator:
                         prev_flags=prev_flags)
 
     async def _execute_falls(self, **v) -> str | None:
-        """Fall per `zones.decide` bestimmen, Übergang und Aktionstext ausführen, Kennung zurückgeben."""
+        """Fall per `zones.decide` bestimmen, Übergang und Aktionstext ausführen, Kennung zurückgeben.
+
+        Ein Fall mit `regulation_off` fährt danach den Abschaltpfad und speichert die Regelung als aus.
+        """
         d = decide(ZoneInputs(
             **v,
             surplus_active=self.surplus_active,
             ac_charge_active=self.ac_charge_active,
             tariff_charge_active=self.tariff_charge_active,
+            grid_charge_active=self.grid_charge_active,
             cycle_active=self.cycle_active,
             at_rest=self._at_rest(v["mode"]),
         ))
@@ -945,6 +971,10 @@ class SolakonCoordinator:
         if d.warn:
             self._messages.warn(d.warn)
         self._set_last_action(d.action, **d.params)
+        if d.regulation_off:
+            await self._switch_off_sequence()
+            self.settings[S_REGULATION_ENABLED] = False
+            await self._store.async_save(self._store_data())
         return d.name
 
     async def _run_pi_phase(
@@ -966,8 +996,14 @@ class SolakonCoordinator:
         solar = read_scaled(self.hass, cfg[CONF_SOLAR_SENSOR], UNIT_SCALE_W).value
 
         # Eine Energierichtung je Netzgruppe: lädt eine Schwester, entlädt Zone 1 nur PV.
-        sister_charging = self.group.sister_charging(self)
-        capped = sister_charging and self.cycle_active and mode == MODE_DISCHARGE
+        # Ebenso beim Aufladen mit Hausvorrang.
+        if self.group.sister_charging(self):
+            cap_reason = "sister_charging"
+        elif self.charging_to_target and not cs.battery_priority:
+            cap_reason = "house_priority"
+        else:
+            cap_reason = ""
+        capped = cap_reason if self.cycle_active and mode == MODE_DISCHARGE else ""
 
         target_offset = self.dyn.value(self._offset_zone(), self.settings)
 
@@ -983,7 +1019,7 @@ class SolakonCoordinator:
         if missing is not None:
             self._messages.fail(("err_core_sensor", {"sensor": missing}))
             return True
-        dynamic_max = limits.pi_max(mode, self.cycle_active, solar, sister_charging)
+        dynamic_max = limits.pi_max(mode, self.cycle_active, solar, bool(cap_reason))
 
         # Einzige CONF_ACTIVE_POWER-Lesung dieses Zyklus, nach dem letzten Await vor
         # der PI-Entscheidung. Gemeinsam genutzt von Gate, PI-Basis und Log-Zeile.
@@ -1000,8 +1036,8 @@ class SolakonCoordinator:
         d = decide_path(PathInputs(
             grid=grid, current_power=current_power, tolerance=cs.tolerance,
             surplus_active=self.surplus_active, ac_charge_active=self.ac_charge_active,
-            tariff_charge_active=self.tariff_charge_active, capped=capped,
-            zone0_power=limits.zone0, tariff_power=cs.tariff_power,
+            tariff_charge_active=self.tariff_charge_active, grid_charge_active=self.grid_charge_active,
+            capped=capped, zone0_power=limits.zone0, tariff_power=cs.tariff_power, grid_charge_power=limits.ac,
             ac_offset=ac_offset, ac_limit=limits.ac, ac_min_charge=cs.ac_min_power,
             ac_share=ac_error_share,
             ac_charge=-actual, ac_pool_charge=-self.group.ac_actual(self, actual),
@@ -1026,8 +1062,8 @@ class SolakonCoordinator:
             await self._handle_output_stall(d.value)
         elif d.kind == STALL_RESET:
             self.out.reset_stall()
-        if d.sister_note and self.last_action_key != "act_zone1_sister_charging":
-            self._set_last_action("act_zone1_sister_charging")
+        if d.cap_note and self.last_action_key != f"act_zone1_{d.cap_note}":
+            self._set_last_action(f"act_zone1_{d.cap_note}")
         return False
 
     def _end_cycle(

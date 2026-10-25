@@ -76,7 +76,9 @@
         "name": "Operating state",
         "state": {
           "disabled": "Control inactive",
+          "discharge_pause": "Discharge pause",
           "blocked": "Control blocked",
+          "target_charging": "Target charging: charging",
           "exporting": "Surplus export",
           "tariff_charging": "Tariff charging",
           "ac_charging": "AC charging",
@@ -106,7 +108,11 @@
           "i": "Safety: mode correction",
           "gt": "Tariff charging: start",
           "ht": "Tariff charging: end",
-          "tm": "Tariff Lock: price not expensive"
+          "tm": "Tariff Lock: price not expensive",
+          "ze": "Target charging: target SOC reached",
+          "gn": "Grid charging: start",
+          "hn": "Grid charging: end",
+          "zb": "Target charging: battery priority"
         }
       },
       "mode_label": {
@@ -147,6 +153,9 @@
       "tariff_charge_active": {
         "name": "Tariff charging active"
       },
+      "grid_charge_active": {
+        "name": "Grid charging active"
+      },
       "is_night": {
         "name": "Night shutdown"
       },
@@ -169,6 +178,12 @@
       },
       "regulation_enabled": {
         "name": "Control active"
+      },
+      "target_charge_enabled": {
+        "name": "Target charging"
+      },
+      "target_grid_charge": {
+        "name": "Grid charging"
       }
     }
   }

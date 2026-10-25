@@ -82,7 +82,9 @@ TARIFF_UNIT_SUSPECT_SECONDS = 21600
 # Uebersetzungen (translations, panel.*.json) uebereinstimmen.
 OPERATING_STATES = [
     "disabled",
+    "discharge_pause",
     "blocked",
+    "target_charging",
     "exporting",
     "tariff_charging",
     "ac_charging",
@@ -100,6 +102,7 @@ FALL_KEYS = [
     "a", "b", "c", "d", "e", "f",
     "g", "h", "i",
     "gt", "ht", "tm",
+    "ze", "gn", "hn", "zb",
 ]
 
 # Modus-Schlüssel des Betriebsmodus-Sensors.
@@ -191,6 +194,16 @@ S_REST_IN_DISCHARGE = "rest_in_discharge"
 
 S_PERIODIC_ENABLED  = "periodic_enabled"
 S_PERIODIC_INTERVAL = "periodic_interval"
+
+# Zielladen: Aufladen bis zum Ziel-SOC, danach Entladepause (Regelung aus).
+S_TARGET_CHARGE_ENABLED   = "target_charge_enabled"
+S_TARGET_SOC              = "target_soc"
+# Aus: Hausvorrang (Ausgang auf PV − Reserve gedeckelt); an: Batterievorrang (Fall ZB).
+S_TARGET_BATTERY_PRIORITY = "target_battery_priority"
+S_TARGET_SOURCE_AC        = "target_source_ac"
+S_TARGET_SOURCE_TARIFF    = "target_source_tariff"
+# Netz-Laden mit der Max. Ladeleistung, Fälle GN/HN.
+S_TARGET_GRID_CHARGE      = "target_grid_charge"
 
 S_SELF_ADJUST     = "self_adjust_enabled"
 S_SELF_ADJUST_TOL = "self_adjust_tolerance"
@@ -346,6 +359,13 @@ SETTINGS_SCHEMA: dict[str, Field] = {
 
     S_PERIODIC_ENABLED:  _bool(),
     S_PERIODIC_INTERVAL: _int(10, POSITIVE, 5, 300, 5),
+
+    S_TARGET_CHARGE_ENABLED:   _bool(),
+    S_TARGET_SOC:              _int(70, PERCENT, 10, 100, 1),
+    S_TARGET_BATTERY_PRIORITY: _bool(),
+    S_TARGET_SOURCE_AC:        _bool(True),
+    S_TARGET_SOURCE_TARIFF:    _bool(True),
+    S_TARGET_GRID_CHARGE:      _bool(),
 
     S_SELF_ADJUST:     _bool(),
     S_SELF_ADJUST_TOL: _int(2, AMOUNT, 1, 50, 1),

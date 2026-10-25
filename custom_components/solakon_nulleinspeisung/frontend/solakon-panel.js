@@ -22,8 +22,12 @@ const TABS = [
   { id: "tariff"   },
   { id: "dynoff"   },
   { id: "night"    },
+  { id: "target"   },
   { id: "debug"    },
 ];
+
+// Settings, deren Änderung serverseitig weitere Settings mitschaltet: Zielladen und Regelung.
+const COUPLED_KEYS = ["regulation_enabled", "target_charge_enabled"];
 
 // Verteilungsmodi in Anzeigereihenfolge; Text je Modus unter `dist.mode_<modus>`.
 // Beschriftung der Verteilungsfelder in den Panel-Texten, für Fehlermeldungen.
@@ -40,6 +44,7 @@ const TAB_ICONS = {
   tariff:   "💹",
   dynoff:   "📈",
   night:    "🌙",
+  target:   "🎯",
   debug:    "🔧",
 };
 
@@ -250,6 +255,30 @@ const TAB_LAYOUT = {
     top: [
       { k: "night_enabled", t: "bool" },
       { k: "night_hysteresis", t: "num" },
+    ],
+  },
+
+  target: {
+    top: [
+      { k: "target_charge_enabled", t: "bool" },
+      { k: "target_charge_note",    t: "note" },
+    ],
+    cols: [
+      {
+        tk: "target_goal", icon: "🎯", color: "#16a34a",
+        fields: [
+          { k: "target_soc", t: "num" },
+        ],
+      },
+      {
+        tk: "target_sources", icon: "🔌", color: "#7c3aed",
+        fields: [
+          { k: "target_battery_priority", t: "bool" },
+          { k: "target_source_ac",        t: "bool" },
+          { k: "target_source_tariff",    t: "bool" },
+          { k: "target_grid_charge",      t: "bool" },
+        ],
+      },
     ],
   },
 };
@@ -772,6 +801,8 @@ class SolakonPanel extends HTMLElement {
     try {
       await this._forInstance(() => this._ws("get_status", { language: this._locale }), status => {
         this._status = status;
+        // Regelung serverseitig umgeschaltet (Fall ZE, Schalter-Entität): Settings neu laden.
+        if (status.regulation_enabled !== this._cfg.saved.regulation_enabled) this._loadConfig();
         this._updateStatusView();
         this._updateRegBanner();
       });
@@ -1252,6 +1283,7 @@ ${this._textsMissing ? `
               <div class="mode-lbl">${s.active_modules_lbl || ""}</div>
               <div class="flag-row" id="st-flags"></div>
             </div>
+            <div id="st-target-cell">${this._modeCellHtml(s.target_lbl || "", "st-target")}</div>
             ${this._modeCellHtml(this._en("active_fall"), "st-active-fall")}
             ${this._modeCellHtml(this._en("mode_label"), "st-mode")}
             ${this._modeCellHtml(this._en("last_action"), "st-action")}
@@ -1284,7 +1316,10 @@ ${this._textsMissing ? `
     const d = this._t.debug || {};
     const offsetZoneKey = { ac: "offset_zone_ac", z1: "offset_zone_1", z1_night: "offset_zone_1_night" }[st.offset_zone] || "offset_zone_2";
     const offsetStatic  = st.offset_static ?? "—";
+    const phase = this._es("operating_state", st.operating_state);
     return {
+      "st-target":       st.operating_state === "target_charging"
+                           ? `${phase} (${st.soc ?? "—"} % / ${this._cfg.saved.target_soc ?? "—"} %)` : phase,
       "st-active-fall":  this._es("active_fall", st.active_fall?.toLowerCase()),
       "st-grid":         `${(st.grid ?? 0).toFixed(0)} W`,
       "st-actual":       `${st.actual_power ?? "—"} W`,
@@ -1330,6 +1365,7 @@ ${this._textsMissing ? `
       [s.flag_surplus     || "",        st.surplus_active],
       [s.flag_ac          || "",             st.ac_charge],
       [s.flag_tariff      || "",         st.tariff_charge],
+      [s.flag_grid_charge || "",         st.grid_charge],
       [s.flag_night       || "",          st.is_night],
       [s.flag_pv_tariff   || "",      st.forecast_tariff_suppressed],
       [s.flag_pv_surplus  || "",     st.forecast_surplus_forced],
@@ -1337,6 +1373,8 @@ ${this._textsMissing ? `
     ].map(([n, v]) => `<span class="flag ${v ? "on" : "off"}">${v ? "●" : "○"} ${n}</span>`).join("");
 
     this._applyTexts(this._statusTexts(st));
+    const targetCell = this.shadowRoot.getElementById("st-target-cell");
+    if (targetCell) targetCell.style.display = this._cfg.saved.target_charge_enabled ? "" : "none";
     const srcEl = this.shadowRoot.getElementById("st-offset-src");
     const staticLbl = `${s.static_tag || ""}: ${st.offset_static ?? "—"} W`;
     if (srcEl) srcEl.innerHTML = st.offset_dynamic
@@ -1453,10 +1491,12 @@ ${this._textsMissing ? `
   async _saveSettings() {
     if (!this._cfg.isDirty) return;
     const toast = this._t.toast || {};
+    const coupled = COUPLED_KEYS.some(k => k in this._cfg.dirty);
     await this._wsAction(async () => {
       await this._forInstance(() => this._ws("save_config", { changes: this._cfg.dirty }), () => {
         this._cfg.reset(this._cfg.merged());
         this._renderActiveTab();
+        if (coupled) this._loadConfig();
       });
       this._showToast(toast.settings_saved || "");
     });
@@ -1467,6 +1507,7 @@ ${this._textsMissing ? `
     const toast = this._t.toast || {};
     const current = await this._forInstance(() => this._ws("save_config", { changes: { [key]: on } }), () => {
       this._cfg.saved[key] = on;
+      if (COUPLED_KEYS.includes(key)) this._loadConfig();
     });
     this._showToast(on ? (toast[toastOn] || "") : (toast[toastOff] || ""));
     return current;

@@ -39,7 +39,7 @@ WS_STATUS_KEYS = (
     ("zone", "current_zone"), "zone_label", "mode_key", "mode_label", "last_action", "last_action_ts",
     "last_output_ts", "mode_label_ts", "last_error", "integral",
     "cycle_active", "surplus_active", ("ac_charge", "ac_charge_active"),
-    ("tariff_charge", "tariff_charge_active"), "regulation_enabled",
+    ("tariff_charge", "tariff_charge_active"), ("grid_charge", "grid_charge_active"), "regulation_enabled",
     ("stddev", "grid_stddev"), ("stddev_raw", "grid_stddev_raw"),
     "dyn_z1_enabled", "dyn_z2_enabled", "dyn_ac_enabled",
     ("dyn_z1", "dyn_offset_z1"), ("dyn_z1_night", "dyn_offset_z1_night"),

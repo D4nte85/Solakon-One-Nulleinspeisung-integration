@@ -11,6 +11,7 @@ from tests import harness as h
 from tests.ha_stubs import ActiveConnection
 
 schema = importlib.import_module(h.PKG + ".schema")
+const = h.const
 C = h.const
 S = C.SETTINGS_SCHEMA
 DIST = (C.DIST_SCHEMA, C.DIST_INST_FIELDS)
@@ -201,3 +202,28 @@ def test_soc_conflict(kw, erwartet):
     settings = {**C.SETTINGS_DEFAULTS}
     cs = schema.cycle_settings(settings)._replace(**{**_SOC, **kw})
     assert schema.soc_conflict(cs) == erwartet
+
+
+# ── Kopplung Zielladen und Regelung ──────────────────────────────────────────
+
+R, T, N = "regulation_enabled", "target_charge_enabled", "target_grid_charge"
+
+
+@pytest.mark.parametrize("before, changes, after", [
+    # Zielladen an → Regelung an
+    ({R: False, T: False}, {T: True}, {T: True, R: True}),
+    # Zielladen aus → Regelung an, Netz-Laden aus, auch während des Aufladens
+    ({R: False, T: True}, {T: False}, {T: False, R: True, N: False}),
+    ({R: True, T: True}, {T: False}, {T: False, R: True, N: False}),
+    # Regelung an in der Entladepause → Zielladen aus, Netz-Laden aus
+    ({R: False, T: True}, {R: True}, {R: True, T: False, N: False}),
+    # Regelung aus während des Aufladens: vorgezogene Entladepause, keine Kopplung
+    ({R: True, T: True}, {R: False}, {R: False}),
+    # Vollständige Settings ohne Wechsel: keine Kopplung
+    ({R: False, T: True}, {R: False, T: True}, {R: False, T: True}),
+    # ohne Zielladen: Regelung schalten bleibt einfach
+    ({R: False, T: False}, {R: True}, {R: True}),
+])
+def test_kopplung_einmal_aus_dem_alten_stand(before, changes, after):
+    settings = {**const.SETTINGS_DEFAULTS, **before}
+    assert schema.couple_target(settings, changes) == after

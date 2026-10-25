@@ -76,7 +76,9 @@
         "name": "Betriebszustand",
         "state": {
           "disabled": "Regelung inaktiv",
+          "discharge_pause": "Entladepause",
           "blocked": "Regelung blockiert",
+          "target_charging": "Zielladen: Aufladen",
           "exporting": "Surplus",
           "tariff_charging": "Tarif-Laden",
           "ac_charging": "AC-Laden",
@@ -106,7 +108,11 @@
           "i": "Safety: Modus-Korrektur",
           "gt": "Tarif-Laden: Start",
           "ht": "Tarif-Laden: Ende",
-          "tm": "Tarifsperre: Preis nicht teuer"
+          "tm": "Tarifsperre: Preis nicht teuer",
+          "ze": "Zielladen: Ziel-SOC erreicht",
+          "gn": "Netz-Laden: Start",
+          "hn": "Netz-Laden: Ende",
+          "zb": "Zielladen: Batterievorrang"
         }
       },
       "mode_label": {
@@ -147,6 +153,9 @@
       "tariff_charge_active": {
         "name": "Tarif-Laden aktiv"
       },
+      "grid_charge_active": {
+        "name": "Netz-Laden aktiv"
+      },
       "is_night": {
         "name": "Nachtabschaltung"
       },
@@ -169,6 +178,12 @@
       },
       "regulation_enabled": {
         "name": "Regelung aktiv"
+      },
+      "target_charge_enabled": {
+        "name": "Zielladen"
+      },
+      "target_grid_charge": {
+        "name": "Netz-Laden"
       }
     }
   }

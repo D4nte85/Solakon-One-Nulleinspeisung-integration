@@ -5,6 +5,11 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+### Hinzugefügt
+
+- **Zielladen mit Entladepause und Netz-Laden (Issue #53):** Neuer Tab „Zielladen“ und Schalter-Entitäten „Zielladen“ und „Netz-Laden“. Zielladen an schaltet die Regelung ein, die Batterie lädt bis zum Ziel-SOC (Standard 70 %) über die zugeschalteten Ladequellen; Surplus ist dabei gesperrt, AC Laden und Tarif-Laden starten nur mit Zuschaltung. Am Ziel schaltet Fall ZE die Regelung über den bisherigen Abschaltpfad ab: Entladepause, die Neustarts übersteht und erst mit Zielladen aus oder Regelung an endet; beides schaltet Zielladen und Netz-Laden aus. PV lädt mit Hausvorrang (Ausgang auch mit Zyklus auf PV − PV-Ladereserve gedeckelt) oder mit Batterievorrang (Fall ZB, 0 W im Ruhemodus). Netz-Laden (Fälle GN/HN) lädt sofort mit der Max. Ladeleistung, hat Vorrang vor dem Tarif-Laden und zählt in der Netzgruppe als Lade-Session. Neue Betriebszustände `target_charging` und `discharge_pause`, Diagnose-Binärsensor „Netz-Laden aktiv“. Anwendungsfälle: Winterpause und Unwetter-Vorsorge per Automation (README-FAQ mit Beispiel). Bei ausgeschaltetem Zielladen ändert sich nichts (`const.py`, `schema.py`, `zones.py`, `paths.py`, `limits.py`, `grid_group.py`, `coordinator.py`, `display.py`, `switch.py`, `binary_sensor.py`, Panel).
+- **Panel lädt Settings bei serverseitigem Regelungswechsel neu:** Schaltet Fall ZE, eine Schalter-Entität oder die Kopplung des Zielladens die Regelung um, zeigt die Regelungsleiste das nach dem nächsten Statusabruf; vorher blieb der zuletzt im Panel gespeicherte Stand stehen (`solakon-panel.js`).
+
 ## [3.4.1] – 2026-10-24
 
 ### Geändert

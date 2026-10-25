@@ -153,7 +153,8 @@ def test_gt_startet_nicht_neben_laufender_ac_session():
 def test_i_loescht_flags_und_laesst_modus_stehen():
     d = _decide(ac_enabled=True, ac_charge_active=True, mode="1", at_rest=False)
     assert d.transition == {"reset_integral": True,
-                            "flags": zones.FlagUpdate(ac_charge_active=False, tariff_charge_active=False)}
+                            "flags": zones.FlagUpdate(ac_charge_active=False, tariff_charge_active=False,
+                                                      grid_charge_active=False)}
     assert (d.action, d.warn) == ("act_fall_i_session", None)
 
 
@@ -371,3 +372,98 @@ def test_at_rest(mode, rest_in_discharge, resting, expected):
 ])
 def test_required_discharge(state, mode, expected):
     assert zones.required_discharge(state, mode, 40) == expected
+
+
+# ── Zielladen ────────────────────────────────────────────────────────────────
+
+# Aufladen: Zielladen an, SOC 40 unter dem Ziel-SOC 70.
+TARGET = dict(target_enabled=True, target_soc=70)
+
+
+@pytest.mark.parametrize("kw, name", [
+    (dict(soc=70), "ZE"),
+    (dict(grid_charge_enabled=True), "GN"),
+    (dict(grid_charge_active=True, grid_charge_enabled=False, mode="3", at_rest=False), "HN"),
+    (dict(target_enabled=False, grid_charge_active=True, grid_charge_enabled=True, mode="3", at_rest=False), "HN"),
+    (dict(battery_priority=True, mode="1", at_rest=False, is_night=False), "ZB"),
+])
+def test_zielladen_je_fall_ein_treffer(kw, name):
+    assert _decide(**{**TARGET, **kw}).name == name
+
+
+def test_ze_vor_allem_setzt_flags_zurueck_und_schaltet_regelung_ab():
+    d = _decide(**TARGET, soc=80, surplus_enabled=True, new_surplus=True, surplus_active=True,
+                cycle_active=True, tariff_charge_active=True, mode="3", at_rest=False)
+    assert (d.name, d.regulation_off, d.action, d.params) == ("ZE", True, "act_fall_ze", {"soc": 80})
+    assert d.transition == {"reset_integral": True, "timer": False, "flags": zones.FlagUpdate(
+        cycle_active=False, surplus_active=False, ac_charge_active=False,
+        tariff_charge_active=False, grid_charge_active=False)}
+
+
+def test_gn_vor_gt_mit_max_ladeleistung():
+    d = _decide(**TARGET, grid_charge_enabled=True, grid_charge_power=1000,
+                below_cheap=True, below_exp=True, mode="1", at_rest=True)
+    assert d.name == "GN"
+    assert d.transition == {"flags": zones.FlagUpdate(grid_charge_active=True), "output": 1000,
+                            "ac_charge_mode": True, "timer_first": True, "mode": "3"}
+
+
+def test_zb_vor_tarifsperre():
+    assert _decide(**TARGET, battery_priority=True, mode="1", at_rest=False,
+                   below_exp=True, at_least_cheap=False).name == "ZB"
+
+
+def test_zb_ruht_wie_tm():
+    d = _decide(**TARGET, battery_priority=True, mode="1", at_rest=False, cycle_active=True)
+    assert d.transition == {"reset_integral": True, "flags": zones.FlagUpdate(cycle_active=False),
+                            "output": 0, "rest": True}
+
+
+@pytest.mark.parametrize("kw", [
+    dict(surplus_enabled=True, new_surplus=True),                         # 0A
+    dict(soc=65, battery_priority=True, is_night=False),                  # A nach ZB: kein Pendeln
+    dict(battery_priority=True, is_night=False),                          # E
+    dict(battery_priority=True, cycle_active=True),                       # D
+    dict(source_ac=False, ac_enabled=True, grid=-200, mode="1", below_exp=True),         # G
+    dict(source_tariff=False, below_cheap=True, below_exp=True, mode="1"),               # GT
+])
+def test_zielladen_sperrt(kw):
+    assert _decide(**{**TARGET, **kw}) is None
+
+
+def test_ohne_zielladen_keine_sperre():
+    assert _decide(surplus_enabled=True, new_surplus=True, source_ac=False,
+                   battery_priority=True).name == "0A"
+
+
+def test_hausvorrang_startet_a():
+    assert _decide(**TARGET, soc=65).name == "A"
+
+
+@pytest.mark.parametrize("kw, name", [
+    (dict(surplus_active=True, new_surplus=True, cycle_active=True, mode="1", at_rest=False), "0B"),
+    (dict(tariff_charge_active=True, below_cheap=True, source_tariff=False, mode="3", at_rest=False), "HT"),
+    (dict(ac_charge_active=True, ac_enabled=True, source_ac=False, mode="3", at_rest=False), "H"),
+])
+def test_aufladen_beendet_laufende_zustaende(kw, name):
+    assert _decide(**{**TARGET, **kw}).name == name
+
+
+def test_i_faengt_netz_laden_neben_tarif_laden():
+    d = _decide(**TARGET, grid_charge_active=True, grid_charge_enabled=True, tariff_charge_active=True,
+                below_cheap=True, mode="3", at_rest=False)
+    assert (d.name, d.warn) == ("I", ("warn_double_session", {}))
+
+
+def test_i_faengt_netz_laden_ohne_modus_3():
+    d = _decide(**TARGET, grid_charge_active=True, grid_charge_enabled=True, mode="1", at_rest=False)
+    assert d.name == "I"
+
+
+def test_d_folgt_netz_laden_auch_unter_zone3():
+    d = _decide(**TARGET, grid_charge_active=True, grid_charge_enabled=True, soc=15)
+    assert (d.name, d.transition) == ("D", {"mode": "3"})
+
+
+def test_control_state_netz_laden():
+    assert zones.control_state(False, False, False, True, grid_charge=True) == "grid_charge"

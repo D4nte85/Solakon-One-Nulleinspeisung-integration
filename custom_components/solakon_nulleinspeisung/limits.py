@@ -29,14 +29,15 @@ class PowerLimits:
         """Verwertbarer PV-Überschuss: Minimum aus Hard-Limit der Zone und PV minus Ist-Leistung, geklemmt auf ≥0."""
         return max(0.0, min(self.zone_max(surplus_active), solar) - actual)
 
-    def pi_max(self, mode: str, cycle_active: bool, solar: float, sister_charging: bool = False) -> float:
+    def pi_max(self, mode: str, cycle_active: bool, solar: float, pv_capped: bool = False) -> float:
         """Obergrenze des PI: AC-Grenze in Modus '3', Zone-1/2-Limit mit Zyklus, sonst zusätzlich PV minus Reserve.
 
-        Lädt eine Schwesterinstanz, gilt auch mit Zyklus der Deckel PV minus Reserve.
+        Mit `pv_capped` gilt auch mit Zyklus der Deckel PV minus Reserve: wenn eine
+        Schwesterinstanz lädt oder das Zielladen mit Hausvorrang auflädt.
         """
         if mode == MODE_AC_CHARGE:
             return self.ac
-        if cycle_active and not sister_charging:
+        if cycle_active and not pv_capped:
             return self.zone12
         return min(self.zone12, max(0, solar - self.pv_reserve))
 

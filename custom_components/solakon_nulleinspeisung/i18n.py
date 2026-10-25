@@ -58,6 +58,10 @@ _TEXTS: dict[str, dict[str, str]] = {
         "de": "Tarif-Laden: {power:.0f} W",
         "en": "Tariff charging: {power:.0f} W",
     },
+    "act_grid_charge_power": {
+        "de": "Netz-Laden: {power:.0f} W",
+        "en": "Grid charging: {power:.0f} W",
+    },
     "act_pi": {
         "de": "PI: {frm:.0f} → {to:.0f} W",
         "en": "PI: {frm:.0f} → {to:.0f} W",
@@ -77,6 +81,18 @@ _TEXTS: dict[str, dict[str, str]] = {
     "act_zone1_sister_charging": {
         "de": "Zone 1: Batterieentladung gesperrt — Schwesterinstanz lädt",
         "en": "Zone 1: battery discharge blocked — sister instance charging",
+    },
+    "act_pi_house_priority": {
+        "de": "Zone 1: auf PV gedeckelt — Zielladen mit Hausvorrang (PI: {frm:.0f} → {to:.0f} W)",
+        "en": "Zone 1: capped to PV — target charging with house priority (PI: {frm:.0f} → {to:.0f} W)",
+    },
+    "act_discharge_setpoint_house_priority": {
+        "de": "Zone 1: auf PV gedeckelt — Zielladen mit Hausvorrang (Stellwert: {frm:.0f} → {to:.0f} W)",
+        "en": "Zone 1: capped to PV — target charging with house priority (setpoint: {frm:.0f} → {to:.0f} W)",
+    },
+    "act_zone1_house_priority": {
+        "de": "Zone 1: auf PV gedeckelt — Zielladen mit Hausvorrang",
+        "en": "Zone 1: capped to PV — target charging with house priority",
     },
     "act_surplus_on": {
         "de": "Zone 0: Surplus aktiviert",
@@ -141,6 +157,22 @@ _TEXTS: dict[str, dict[str, str]] = {
     "act_fall_tm": {
         "de": "Tarifsperre (Preis {price:.1f})",
         "en": "Tariff Lock (price {price:.1f})",
+    },
+    "act_fall_ze": {
+        "de": "Fall ZE: Ziel-SOC erreicht (SOC {soc:.0f}%) — Entladepause",
+        "en": "Case ZE: target SOC reached (SOC {soc:.0f}%) — discharge pause",
+    },
+    "act_fall_gn": {
+        "de": "Fall GN: Netz-Laden Start (SOC {soc:.0f}%)",
+        "en": "Case GN: grid charging start (SOC {soc:.0f}%)",
+    },
+    "act_fall_hn": {
+        "de": "Fall HN: Netz-Laden beendet",
+        "en": "Case HN: grid charging ended",
+    },
+    "act_fall_zb": {
+        "de": "Fall ZB: Batterievorrang (SOC {soc:.0f}%)",
+        "en": "Case ZB: battery priority (SOC {soc:.0f}%)",
     },
 
     # ── Harte Fehler ─────────────────────────────────────────────────────────

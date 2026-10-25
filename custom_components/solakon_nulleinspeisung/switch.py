@@ -6,7 +6,9 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN, S_REGULATION_ENABLED, S_TARIFF_ENABLED
+from .const import (
+    DOMAIN, S_REGULATION_ENABLED, S_TARGET_CHARGE_ENABLED, S_TARGET_GRID_CHARGE, S_TARIFF_ENABLED,
+)
 from .coordinator import SolakonCoordinator
 from .entity_base import SolakonEntity
 
@@ -40,4 +42,6 @@ async def async_setup_entry(
     add([
         SettingSwitch(coord, S_REGULATION_ENABLED, "mdi:power"),
         SettingSwitch(coord, S_TARIFF_ENABLED,     "mdi:currency-eur"),
+        SettingSwitch(coord, S_TARGET_CHARGE_ENABLED, "mdi:battery-arrow-up-outline"),
+        SettingSwitch(coord, S_TARGET_GRID_CHARGE,    "mdi:transmission-tower-import"),
     ])

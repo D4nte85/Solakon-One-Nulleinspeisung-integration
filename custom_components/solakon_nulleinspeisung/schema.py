@@ -11,13 +11,15 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 
 from .const import (
-    Field,
+    Field, S_REGULATION_ENABLED,
     S_AC_ENABLED, S_AC_HYSTERESIS, S_AC_MIN_POWER, S_AC_POWER_LIMIT, S_AC_SOC_TARGET,
     S_DISCHARGE_MAX, S_HARD_LIMIT_Z0, S_HARD_LIMIT_Z1, S_I_FACTOR, S_NIGHT_ENABLED,
     S_NIGHT_HYSTERESIS, S_PI_ENABLED, S_PV_FORECAST_ENABLED, S_PV_FORECAST_SENSOR, S_PV_FORECAST_THRESHOLD,
     S_PV_RESERVE, S_P_FACTOR, S_SURPLUS_ENABLED, S_SURPLUS_FORECAST_ENABLED,
     S_SURPLUS_FORECAST_THRESHOLD, S_SURPLUS_LOCK_ENABLED, S_SURPLUS_LOCK_FACTOR, S_SURPLUS_PV_HYST,
-    S_SURPLUS_SOC_HYST, S_SURPLUS_SOC_THRESHOLD, S_TARIFF_CHEAP_THRESHOLD, S_TARIFF_ENABLED,
+    S_SURPLUS_SOC_HYST, S_SURPLUS_SOC_THRESHOLD, S_TARGET_BATTERY_PRIORITY, S_TARGET_CHARGE_ENABLED,
+    S_TARGET_GRID_CHARGE, S_TARGET_SOC, S_TARGET_SOURCE_AC, S_TARGET_SOURCE_TARIFF,
+    S_TARIFF_CHEAP_THRESHOLD, S_TARIFF_ENABLED,
     S_TARIFF_EXP_THRESHOLD, S_TARIFF_POWER, S_TARIFF_SOC_HYST, S_TARIFF_SOC_TARGET, S_TOLERANCE,
     S_ZONE1_FORCE_ENABLED, S_ZONE1_FORCE_MIN_SOC, S_ZONE1_FORCE_THRESHOLD, S_ZONE1_LIMIT,
     S_ZONE3_LIMIT,
@@ -64,6 +66,12 @@ CYCLE_SETTINGS = (
     ("zone1_force_min_soc", S_ZONE1_FORCE_MIN_SOC, int),
     ("night_enabled", S_NIGHT_ENABLED, bool),
     ("night_hysteresis", S_NIGHT_HYSTERESIS, int),
+    ("target_enabled", S_TARGET_CHARGE_ENABLED, bool),
+    ("target_soc", S_TARGET_SOC, int),
+    ("battery_priority", S_TARGET_BATTERY_PRIORITY, bool),
+    ("source_ac", S_TARGET_SOURCE_AC, bool),
+    ("source_tariff", S_TARGET_SOURCE_TARIFF, bool),
+    ("grid_charge_enabled", S_TARGET_GRID_CHARGE, bool),
 )
 CycleSettings = namedtuple("CycleSettings", [field for field, _, _ in CYCLE_SETTINGS])
 
@@ -89,6 +97,28 @@ def soc_conflict(cs: CycleSettings) -> str | None:
     if cs.zone1_force_enabled and not (cs.zone3_limit < cs.zone1_force_min_soc < cs.zone1_limit):
         return "err_soc_zone1_force"
     return None
+
+
+def couple_target(settings: dict[str, Any], changes: dict[str, Any]) -> dict[str, Any]:
+    """`changes` mit der Kopplung von Zielladen und Regelung, einmal aus dem alten Stand gerechnet.
+
+    Zielladen an → Regelung an. Zielladen aus → Regelung an, Netz-Laden aus.
+    Regelung an bei Zielladen an und Regelung aus → Zielladen aus, Netz-Laden aus.
+    """
+    target_old = bool(settings[S_TARGET_CHARGE_ENABLED])
+    regulation_old = bool(settings[S_REGULATION_ENABLED])
+    target_new = bool(changes.get(S_TARGET_CHARGE_ENABLED, target_old))
+    regulation_new = bool(changes.get(S_REGULATION_ENABLED, regulation_old))
+    coupled = dict(changes)
+    if target_new and not target_old:
+        coupled[S_REGULATION_ENABLED] = True
+    elif target_old and not target_new:
+        coupled[S_REGULATION_ENABLED] = True
+        coupled[S_TARGET_GRID_CHARGE] = False
+    elif target_old and regulation_new and not regulation_old:
+        coupled[S_TARGET_CHARGE_ENABLED] = False
+        coupled[S_TARGET_GRID_CHARGE] = False
+    return coupled
 
 class InvalidSettings(Exception):
     """Änderungen verletzen das Schema; `findings` nennt je Schlüssel den Grund."""

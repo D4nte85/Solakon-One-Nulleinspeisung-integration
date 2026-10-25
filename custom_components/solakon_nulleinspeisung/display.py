@@ -10,6 +10,7 @@ from .const import MODE_AC_CHARGE, MODE_DISABLED, MODE_DISCHARGE
 OPERATING_BY_STATE = {
     "surplus": "exporting",
     "tariff_charge": "tariff_charging",
+    "grid_charge": "target_charging",
     "ac_charge": "ac_charging",
     "cycle": "battery_supply",
     "pv": "pv_direct",
@@ -74,18 +75,21 @@ class Display:
 
     def update_state(
         self, regulation_on: bool, blocked: bool, control: str, discharge_locked: bool, is_night: bool,
+        target_enabled: bool = False, charging_to_target: bool = False,
     ) -> bool:
         """Betriebszustand aus den Zustandsflags und der Anzeigezone; True bei Wechsel.
 
         Erster zutreffender Zustand gewinnt, Reihenfolge wie in OPERATING_STATES.
-        Anders als `active_fall`, das den zuletzt ausgeführten Übergang hält,
-        beschreibt der Zustand, was gerade gilt.
+        Regelung aus mit Zielladen an ist die Entladepause. Anders als `active_fall`,
+        das den zuletzt ausgeführten Übergang hält, beschreibt der Zustand, was gerade gilt.
         """
         if not regulation_on:
-            state = "disabled"
+            state = "discharge_pause" if target_enabled else "disabled"
         elif blocked:
             state = "blocked"
-        elif control in ("surplus", "tariff_charge", "ac_charge"):
+        elif charging_to_target:
+            state = "target_charging"
+        elif control in ("surplus", "tariff_charge", "grid_charge", "ac_charge"):
             state = OPERATING_BY_STATE[control]
         elif discharge_locked:
             state = "discharge_locked"

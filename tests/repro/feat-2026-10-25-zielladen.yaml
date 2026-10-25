@@ -1,0 +1,58 @@
+titel: Zielladen lädt per Netz-Laden auf den Ziel-SOC, schaltet die Regelung ab und bleibt in der Entladepause, auch nach einem Neustart
+bezug: 2026-10-25-zielladen-design
+# Instanz a: Aufladen mit Netz-Laden (Modus 3, Max. Ladeleistung 800 W), bei SOC 70 % Fall ZE:
+# Output 0, Modus 0, Regelung aus. Danach keine Schreibbefehle mehr.
+# Regelung von Hand an beendet die Entladepause und schaltet das Zielladen aus: kein Aufladen mehr bei SOC 69 %.
+# Instanz b steht nach einem Neustart mit gespeichertem Zielladen an und Regelung aus in der Entladepause.
+netz: 100
+instanzen:
+  - prefix: a
+    settings: {regulation_enabled: true, target_charge_enabled: true, target_soc: 70,
+               target_grid_charge: true}
+    sensoren: {soc: 40, solar: 0, modus: "0"}
+  - prefix: b
+    netzsensor: sensor.grid_other
+    settings: {regulation_enabled: false, target_charge_enabled: true}
+    sensoren: {soc: 70, solar: 0, modus: "0"}
+schritte:
+  - nach: 0
+  - nach: 30
+    setzen: {a.soc: 70}
+  - nach: 30
+    setzen: {a.soc: 69, netz: 300}
+    wer: all
+  - nach: 30
+    settings: {regulation_enabled: true}
+erwartet:
+  - schritt: 1
+    aufruf: {entity: select.a_mode, wert: "3"}
+  - schritt: 1
+    aufruf: {entity: a.leistung, wert: 800}
+  - schritt: 1
+    instanz: a
+    zustand: {operating_state: target_charging, active_fall: GN, grid_charge_active: true}
+  - schritt: 2
+    aufruf: {entity: select.a_mode, wert: "0"}
+  - schritt: 2
+    aufruf: {entity: a.leistung, wert: 0}
+  - schritt: 2
+    instanz: a
+    zustand: {operating_state: discharge_pause, active_fall: ZE, grid_charge_active: false}
+  - schritt: 3
+    kein_aufruf: {entity: a.leistung}
+  - schritt: 3
+    kein_aufruf: {entity: select.a_mode}
+  - schritt: 3
+    kein_aufruf: {entity: b.leistung}
+  - schritt: 3
+    instanz: a
+    zustand: {operating_state: discharge_pause}
+  - schritt: 3
+    instanz: b
+    zustand: {operating_state: discharge_pause}
+  - schritt: 4
+    instanz: a
+    zustand_nicht: {operating_state: discharge_pause}
+  - schritt: 4
+    instanz: a
+    zustand_nicht: {operating_state: target_charging}

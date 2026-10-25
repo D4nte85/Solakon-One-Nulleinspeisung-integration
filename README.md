@@ -46,6 +46,7 @@ Die Integration regelt die Ausgangsleistung des Wechselrichters über einen **PI
   - [Tarif](#-tarif)
   - [Dyn. Offset](#-dyn-offset)
   - [Nacht](#-nacht)
+  - [Zielladen](#-zielladen)
   - [Debug](#-debug)
 - [SOC-Zonen und Steuerlogik (Falls)](#soc-zonen-und-steuerlogik-falls)
 - [PI-Regler Einstellung](#pi-regler-einstellung)
@@ -87,7 +88,7 @@ Das Verhalten wird abhängig vom Batterie-Ladestand in vier Zonen eingeteilt:
 | Zone | Bedingung | Modus | Max. Entladestrom | Regelziel | Besonderheiten |
 |------|-----------|-------|-------------------|-----------|----------------|
 | **Zone 0** | SOC ≥ Export-Schwelle UND PV-Überschuss | `'1'` | 2 A (Stabilitätspuffer) | Hard Limit Z0 | Optional. PI-Integral eingefroren. SOC- und PV-Hysterese verhindern Flackern. |
-| **Zone 1** | SOC > Zone-1-Schwelle | `'1'` | Konfigurierter Maximalwert | 0 W + Offset 1 (bei Dunkelheit optional Nacht-Offset) | Läuft bis Zone-3-Schwelle — kein Yo-Yo-Effekt. Auch nachts aktiv. Lädt eine andere Instanz derselben Netzgruppe, gilt das Ausgangsleistungs-Limit von Zone 2 ([Eine Energierichtung je Netzgruppe](#eine-energierichtung-je-netzgruppe)). |
+| **Zone 1** | SOC > Zone-1-Schwelle | `'1'` | Konfigurierter Maximalwert | 0 W + Offset 1 (bei Dunkelheit optional Nacht-Offset) | Läuft bis Zone-3-Schwelle — kein Yo-Yo-Effekt. Auch nachts aktiv. Lädt eine andere Instanz derselben Netzgruppe, gilt das Ausgangsleistungs-Limit von Zone 2 ([Eine Energierichtung je Netzgruppe](#eine-energierichtung-je-netzgruppe)), ebenso beim Aufladen des [Zielladens](#-zielladen) mit Hausvorrang. |
 | **Zone 2** | Zone-3 < SOC ≤ Zone-1 | `'1'` | 0 A | 0 W + Offset 2 | Ausgangsleistungs-Limit: `min(Hard-Limit Z1, max(0, PV − Reserve))`. Optional: Nachtabschaltung. |
 | **Zone 3** | SOC ≤ Zone-3-Schwelle | `'0'` (Disabled), außer AC Laden aktiv → `'3'` | Max. Entladestrom (AC Laden: 0 A) | — | Ausgangsleistung 0 W. Vollständiger Batterieschutz. AC Laden bleibt möglich. |
 
@@ -103,20 +104,23 @@ Das Verhalten wird abhängig vom Batterie-Ladestand in vier Zonen eingeteilt:
 
 **🌙 Nachtabschaltung** — Unterdrückt in Zone 2 den Entladebetrieb unterhalb einer konfigurierbaren PV-Erzeugungsschwelle. Zone 1 und AC Laden laufen auch nachts weiter.
 
+**🎯 Zielladen** — Lädt die Batterie über zuschaltbare Ladequellen (PV, AC Laden, Tarif-Laden, Netz-Laden) bis zum Ziel-SOC und schaltet danach die Regelung ab: Entladepause, bis Zielladen ausgeschaltet oder die Regelung wieder eingeschaltet wird. Für die Winterpause oder eine Unwetter-Vorsorge per Automation, siehe [Zielladen](#-zielladen).
+
 **Priorität und gegenseitige Blockierung der optionalen Module:**
 
 Die Module werden in fest definierter Prioritätsreihenfolge ausgewertet — ein aktives Modul höherer Priorität blockiert den Start niedrigerer Module:
 
 | Priorität | Modul | Blockiert |
 |:---------:|-------|-----------|
-| 1 (höchste) | ☀️ Surplus | Tarif-Laden (GT), Tarifsperre (TM), AC Laden (G) |
-| 2 | 💹 Tarif-Laden (günstig) | AC Laden (via Modus `'3'`), Tarifsperre |
-| 3 | 💹 Tarifsperre (< Teuer) | Zone-1-Start (Fall A), Zone-1/2-Recovery (Fall D), Zone-2-Start (Fall E) |
-| 4 | ⚡ AC Laden | Tarif-Laden (via Modus `'3'`), Tarifsperre |
-| 5 | 🌙 Nachtabschaltung | Zone-2-Start (Fall E) |
-| 6 (niedrigste) | Zone 1 / Zone 2 | — |
+| 1 (höchste) | 🎯 Zielladen (Aufladen) | Surplus (0A); AC Laden (G) und Tarif-Laden (GT) ohne Zuschaltung; bei Batterievorrang Zone-1/2-Start (A, E) |
+| 2 | ☀️ Surplus | Tarif-Laden (GT), Tarifsperre (TM), AC Laden (G) |
+| 3 | 💹 Tarif-Laden (günstig) | AC Laden (via Modus `'3'`), Tarifsperre |
+| 4 | 💹 Tarifsperre (< Teuer) | Zone-1-Start (Fall A), Zone-1/2-Recovery (Fall D), Zone-2-Start (Fall E) |
+| 5 | ⚡ AC Laden | Tarif-Laden (via Modus `'3'`), Tarifsperre |
+| 6 | 🌙 Nachtabschaltung | Zone-2-Start (Fall E) |
+| 7 (niedrigste) | Zone 1 / Zone 2 | — |
 
-AC Laden und Tarif-Laden blockieren sich gegenseitig über den Modus-Guard (`Modus ≠ '3'`). Surplus hat absoluten Vorrang — kein anderes optionales Modul kann während Zone 0 starten.
+AC Laden und Tarif-Laden blockieren sich gegenseitig über den Modus-Guard (`Modus ≠ '3'`). Surplus hat Vorrang vor allen übrigen optionalen Modulen — keines kann während Zone 0 starten. Nur das Aufladen des Zielladens sperrt Surplus; Netz-Laden hat Vorrang vor dem Tarif-Laden.
 
 ## Multi-Instancing
 
@@ -172,11 +176,11 @@ Dadurch gleicht sich die Aufteilung zwischen den Instanzen bei jedem Stelleingri
 
 ### Eine Energierichtung je Netzgruppe
 
-Instanzen einer Netzgruppe laden oder entladen, nie beides zugleich. Solange eine Instanz lädt (AC Laden oder Tarif-Laden), gilt für jede andere Instanz der Gruppe in Zone 1 das Ausgangsleistungs-Limit von Zone 2: `min(Hard-Limit Z1, max(0, PV − Reserve))`. Ihre Batterie entlädt dann nicht, PV wird weiter eingespeist. Der Zone-1-Zyklus bleibt aktiv; endet das Laden, gilt wieder das volle Limit, ohne neuen Start. Status und letzte Aktion zeigen „Zone 1: Batterieentladung gesperrt — Schwesterinstanz lädt“.
+Instanzen einer Netzgruppe laden oder entladen, nie beides zugleich. Solange eine Instanz lädt (AC Laden, Tarif-Laden oder Netz-Laden des Zielladens), gilt für jede andere Instanz der Gruppe in Zone 1 das Ausgangsleistungs-Limit von Zone 2: `min(Hard-Limit Z1, max(0, PV − Reserve))`. Ihre Batterie entlädt dann nicht, PV wird weiter eingespeist. Der Zone-1-Zyklus bleibt aktiv; endet das Laden, gilt wieder das volle Limit, ohne neuen Start. Status und letzte Aktion zeigen „Zone 1: Batterieentladung gesperrt — Schwesterinstanz lädt“.
 
 Ohne diese Sperre regeln beide Instanzen auf denselben Netzsensor: die entladende deckt die Ladeleistung der anderen als Hausverbrauch, die ladende wertet diese Entladung als Überschuss. Je nach Lage von AC-Offset und Offset 1 bleibt das Umpumpen stehen oder schaukelt sich bis an die Grenzen auf.
 
-AC Laden startet nur bei Überschuss ohne die Entladung der Schwester-Instanzen (`ΣOutput_entladend`, siehe [AC Laden](#-ac-laden)). Tarif-Laden startet und läuft immer. Solange es läuft, speisen die übrigen Instanzen in Zone 1 nur Solarstrom ein, ihre Batterie deckt die Tarif-Ladeleistung nicht.
+AC Laden startet nur bei Überschuss ohne die Entladung der Schwester-Instanzen (`ΣOutput_entladend`, siehe [AC Laden](#-ac-laden)). Tarif-Laden und Netz-Laden starten und laufen immer. Solange sie laufen, speisen die übrigen Instanzen in Zone 1 nur Solarstrom ein, ihre Batterie deckt die Tarif-Ladeleistung nicht.
 
 ### Leistungsverteilung konfigurieren
 
@@ -275,7 +279,7 @@ Im Einrichtungsformular werden zunächst ein **Instanzname** (z. B. „Speicher 
 
 ## Konfiguration im Sidebar-Panel
 
-Nach der Einrichtung erscheint in der HA-Seitenleiste der Eintrag **Solakon ONE**. Jede Instanz ist in zehn Tabs gegliedert. Änderungen werden erst nach Klick auf **💾 Speichern** übernommen — die Speicherleiste erscheint automatisch sobald ein Wert geändert wurde. Bei mehr als einer Instanz kommen zusätzlich eine **Übersichtsseite** und ein **Verteilungs-Tab** hinzu, siehe [Multi-Instancing](#multi-instancing).
+Nach der Einrichtung erscheint in der HA-Seitenleiste der Eintrag **Solakon ONE**. Jede Instanz ist in elf Tabs gegliedert. Änderungen werden erst nach Klick auf **💾 Speichern** übernommen — die Speicherleiste erscheint automatisch sobald ein Wert geändert wurde. Bei mehr als einer Instanz kommen zusätzlich eine **Übersichtsseite** und ein **Verteilungs-Tab** hinzu, siehe [Multi-Instancing](#multi-instancing).
 
 **Adminrechte:** Das Panel ist für jeden angemeldeten Home-Assistant-Benutzer sichtbar, alle Anzeigen sind frei lesbar. Schreibende Aktionen — Speichern der Einstellungen, Regelung ein/aus, Zyklus umschalten, Integral zurücksetzen und Speichern der Leistungsverteilung — erfordern dagegen ein Administratorkonto. Ohne Adminrechte quittiert das Panel diese Aktionen mit einer Fehlermeldung.
 
@@ -285,7 +289,7 @@ Alle Eingabefelder für Entity-IDs (z. B. Kapazitäts-, Vorhersage- und Preis-Se
 
 ### 📊 Status
 
-Echtzeit-Übersicht aller Regelzustände: aktive Zone mit farblichem Banner (Zone 0–3), Netzleistung, Solarleistung, Ausgangsleistung, SOC, Standardabweichung der Netzleistung roh und getrimmt (Stabilitätsindikator, getrimmt ausgegraut bei Trim 0), zugeteiltes Zone-1-Limit, PI-Integral-Wert (ausgegraut bei ausgeschaltetem Entlade-PI), aktiver Offset (Zone 1 / Zone 1 Nacht / Zone 2 / Zone AC) mit Quelle (dynamisch / statisch), Zeitabstand seit letzter Regelaktion und seit letztem Moduswechsel, letzte Aktion und etwaige Fehlermeldungen, Status-Flags: PI-Regler (grün bei eingeschaltetem Entlade-PI), Zyklus, Surplus, AC Laden, Tarif-Laden, Nacht, PV→Tarif, PV→Surplus, Austritts-Sperre. Rein lesend — manuelle Eingriffe liegen im **Debug**-Tab.
+Echtzeit-Übersicht aller Regelzustände: aktive Zone mit farblichem Banner (Zone 0–3), Netzleistung, Solarleistung, Ausgangsleistung, SOC, Standardabweichung der Netzleistung roh und getrimmt (Stabilitätsindikator, getrimmt ausgegraut bei Trim 0), zugeteiltes Zone-1-Limit, PI-Integral-Wert (ausgegraut bei ausgeschaltetem Entlade-PI), aktiver Offset (Zone 1 / Zone 1 Nacht / Zone 2 / Zone AC) mit Quelle (dynamisch / statisch), Zeitabstand seit letzter Regelaktion und seit letztem Moduswechsel, letzte Aktion und etwaige Fehlermeldungen, Status-Flags: PI-Regler (grün bei eingeschaltetem Entlade-PI), Zyklus, Surplus, AC Laden, Tarif-Laden, Netz-Laden, Nacht, PV→Tarif, PV→Surplus, Austritts-Sperre. Bei eingeschaltetem Zielladen zusätzlich dessen Phase: Aufladen mit SOC und Ziel-SOC oder Entladepause. Rein lesend — manuelle Eingriffe liegen im **Debug**-Tab.
 
 ---
 
@@ -368,7 +372,7 @@ Bündelt alle optionalen Entity-Picker-Felder dieser Instanz an einer Stelle, st
 
 ### ☀️ Überschuss
 
-Optionaler Surplus (Zone 0). **Hat absoluten Vorrang vor allen anderen optionalen Modulen** — Tarif-Laden, Tarifsperre (inkl. deren Recovery-Sperre) und AC Laden werden blockiert solange Zone 0 aktiv ist.
+Optionaler Surplus (Zone 0). **Hat Vorrang vor allen anderen optionalen Modulen außer dem Zielladen** — Tarif-Laden, Tarifsperre (inkl. deren Recovery-Sperre) und AC Laden werden blockiert solange Zone 0 aktiv ist. Während des Aufladens des [Zielladens](#-zielladen) startet Surplus nicht, ein laufendes Surplus endet sofort (Fall 0B).
 
 **Zone 0 ist ein Overlay über Zone 1:** Der Eintritt aktiviert immer auch den Zone-1-Zyklus (`cycle_active`), beim Austritt wird die Zone aus dem SOC neu abgeleitet (SOC > Zone-1-Schwelle → Zone 1 läuft weiter, sonst Zone 2). Deshalb muss die Export-Schwelle über der Zone-1-Schwelle liegen — die Integration prüft das in jedem Zyklus.
 
@@ -422,7 +426,7 @@ Optionaler Surplus (Zone 0). **Hat absoluten Vorrang vor allen anderen optionale
 
 Optionales Laden bei erkanntem externem Überschuss. Aktiv in Zone 1 und Zone 2. **Startet nicht wenn Surplus (Zone 0) oder Tarif-Laden aktiv ist.**
 
-**Eintritts-Bedingung:** SOC < Ladeziel UND kein Überschuss aktiv UND kein AC/Tarif-Laden aktiv UND Modus ≠ `'3'` UND (Grid + ΣOutput_entladend) < min(ac_offset, 0) − Hysterese
+**Eintritts-Bedingung:** SOC < Ladeziel UND kein Überschuss aktiv UND keine Lade-Session (AC, Tarif, Netz) aktiv UND Modus ≠ `'3'` UND (Grid + ΣOutput_entladend) < min(ac_offset, 0) − Hysterese
 
 > Eintritt und Abbruch liegen symmetrisch um den Offset, je eine Hysterese darunter und darüber; sie können sich auch bei stark negativem (dynamischem) Offset nicht überkreuzen. Bei positivem Offset bleibt der Eintritt bei −Hysterese: AC-Laden startet nur bei externem Überschuss.
 
@@ -430,7 +434,9 @@ Optionales Laden bei erkanntem externem Überschuss. Aktiv in Zone 1 und Zone 2.
 
 > Nach dem Eintritt deckelt jede andere Instanz der Netzgruppe ihre Zone-1-Entladung auf PV − Reserve, solange diese Instanz lädt — siehe [Eine Energierichtung je Netzgruppe](#eine-energierichtung-je-netzgruppe).
 
-**Abbruch-Bedingung:** Modus = `'3'` UND `ac_charge_active` UND kein Tarif-Laden UND (SOC ≥ Ladeziel ODER (Grid ≥ ac_offset + Hysterese UND eigener Output = 0 W))
+> Während des Aufladens des [Zielladens](#-zielladen) startet AC Laden nur, wenn es dort als Ladequelle zugeschaltet ist; der Schalter dieses Tabs muss zusätzlich an sein.
+
+**Abbruch-Bedingung:** Modus = `'3'` UND `ac_charge_active` UND kein Tarif-Laden UND (AC-Option aus ODER Aufladen des Zielladens ohne AC Laden als Ladequelle ODER SOC ≥ Ladeziel ODER (Grid ≥ ac_offset + Hysterese UND eigener Output = 0 W))
 
 > Der `Output = 0 W`-Guard verhindert Fehlauslösung, solange noch geladen wird. `actual_power_sensor` folgt derselben Vorzeichenkonvention wie der Netzsensor (positiv = Bezug, negativ = Einspeisung) — während aktivem AC-Laden ist er durchgehend deutlich negativ (Größenordnung der tatsächlichen Ladeleistung, nicht nur Rauschen nahe 0). Der frühere einseitige `≤ 0`-Vergleich war dadurch praktisch die gesamte Ladedauer erfüllt, unabhängig von der Ladeleistung. Der exakte Vergleich auf 0 W verlangt stattdessen, dass die Ladeleistung tatsächlich auf null heruntergeregelt ist, bevor der Grid-Zweig greift.
 
@@ -451,7 +457,7 @@ Regeln der Stellwertrechnung:
 |-----------|-------------|------------|
 | Aktivieren | Ein/Aus-Schalter | — |
 | Ladeziel SOC (%) | Laden stoppt bei diesem SOC | 80–95 |
-| Max. Ladeleistung (W) | Obergrenze der AC-Ladeleistung | 400–800 |
+| Max. Ladeleistung (W) | Obergrenze der AC-Ladeleistung; gilt auch als feste Leistung des Netz-Ladens im [Zielladen](#-zielladen) | 400–800 |
 | Mindestladeleistung (W) | Kleinster geschriebener Ladesollwert, darunter 0; 0 schaltet die Schwelle ab. 50 W gemessen, Änderung auf eigene Gefahr | 50 |
 | Hysterese (W) | Wirkt auf Eintritt und Austritt: Eintritt unter min(Offset, 0) − Hysterese, Austritt ab Offset + Hysterese | 30–80 |
 | Regel-Offset (W) | Zielwert während AC Laden (typisch negativ) | −80 bis −30 |
@@ -460,7 +466,7 @@ Regeln der Stellwertrechnung:
 
 ### 💹 Tarif
 
-Optionale Tarif-Arbitrage für dynamische Stromtarife (Tibber, aWATTar …). **Wird blockiert solange Surplus (Zone 0) aktiv ist.**
+Optionale Tarif-Arbitrage für dynamische Stromtarife (Tibber, aWATTar …). **Wird blockiert solange Surplus (Zone 0) aktiv ist.** Während des Aufladens des [Zielladens](#-zielladen) startet Tarif-Laden nur, wenn es dort als Ladequelle zugeschaltet ist; eine laufende Session ohne Zuschaltung endet (Fall HT). Netz-Laden hat Vorrang.
 
 Drei Preisstufen: **Günstig** (Preis < Günstig-Schwelle): Tarif-Laden mit fester Leistung bis SOC-Ziel — liegt der SOC am Ladeziel oder weniger als die SOC-Hysterese darunter, greift stattdessen die Tarifsperre. **Mittel** (Günstig ≤ Preis < Teuer): Tarifsperre — Zone 1 und Zone 2 gesperrt (Ausgangsleistung 0 W, Modus Disabled). Die Tarifsperre gilt für **beide** Stufen (günstig + mittel), also alles unterhalb der Teuer-Schwelle. Wenn der Preis die Teuer-Schwelle überschreitet, wird der Betrieb automatisch wiederhergestellt. **Teuer** (Preis ≥ Teuer-Schwelle): normale SOC-Logik, keine Einschränkung.
 
@@ -545,6 +551,32 @@ Dieselbe Dunkelheit mit denselben Schwellen schaltet den [Nacht-Offset](#-zonen)
 
 ---
 
+### 🎯 Zielladen
+
+Lädt die Batterie bis zum **Ziel-SOC** und schaltet danach die Regelung ab. Zwei Phasen, abgeleitet aus den beiden gespeicherten Schaltern „Zielladen“ und „Regelung aktiv“ — sie überstehen damit jeden Neustart:
+
+- **Aufladen** (Zielladen an, Regelung an, SOC < Ziel-SOC): Die Batterie lädt über die zugeschalteten Ladequellen. Surplus (Zone 0) ist gesperrt, ein laufendes Surplus endet sofort. AC Laden und Tarif-Laden starten nur, wenn sie hier zugeschaltet **und** in ihrem eigenen Tab eingeschaltet sind; eine laufende Session ohne Zuschaltung endet.
+- **Entladepause** (Zielladen an, Regelung aus): Bei SOC ≥ Ziel-SOC schaltet Fall ZE die Regelung über denselben Pfad ab wie der Schalter „Regelung aktiv“ — Ausgangsleistung 0 W, Entladestrom 40 A, Modus `'0'`. Das Gerät gibt im Standardzustand 0 W aus. Die Regelung von Hand während des Aufladens auszuschalten zieht die Entladepause vor.
+
+**Kopplung der Schalter:** Zielladen an schaltet die Regelung ein. Zielladen aus schaltet die Regelung ein und Netz-Laden aus — auch während des Aufladens. Regelung an während der Entladepause schaltet Zielladen und Netz-Laden aus. Beides stellt den normalen Betrieb her.
+
+**PV beim Aufladen:** Mit **Hausvorrang** (Standard) laufen Zone 1 und Zone 2 weiter, die Ausgangsleistung ist aber auch mit Zyklus auf `min(Hard-Limit Z1, max(0, PV − Reserve))` gedeckelt; die Batterie lädt nur die PV über dem Hausverbrauch. Mit **Batterievorrang** setzt Fall ZB Ausgangsleistung 0 W im Ruhemodus, die ganze PV geht in die Batterie und das Haus bezieht vom Netz; Zone-1- und Zone-2-Start (A, E) sind gesperrt.
+
+**Netz-Laden** (Fälle GN/HN) lädt sofort mit der Max. Ladeleistung aus dem [AC-Laden-Tab](#-ac-laden) im Modus `'3'`, ohne Preisbedingung, und hat Vorrang vor dem Tarif-Laden. Es endet am Ziel-SOC oder wenn Netz-Laden oder Zielladen ausgeschaltet wird. Netz-Laden zählt als Lade-Session für die [Energierichtung der Netzgruppe](#eine-energierichtung-je-netzgruppe). Wann aus dem Netz geladen wird, entscheiden Nutzer oder Automation über den Schalter.
+
+Ziel-SOC und Ladequellen lassen sich auch bei ausgeschaltetem Zielladen einstellen. Der Max-SOC des Geräts bleibt Obergrenze: liegt das Ziel darüber, wird es nie erreicht und die Entladepause tritt nicht ein.
+
+| Parameter | Beschreibung | Empfehlung |
+|-----------|-------------|------------|
+| Zielladen aktivieren | Ein/Aus — auch als Entität `switch.solakon_one_zielladen` | — |
+| Ziel-SOC (%) | Aufladen endet bei diesem SOC, danach Entladepause. 70 % lagert die Batterie im mittleren Ladebereich, der die Zellen über Wochen schont, mit Reserve gegen Selbstentladung | 70 (Winterpause), 100 (Unwetter-Vorsorge) |
+| Batterievorrang | Aus = Hausvorrang, An = Batterievorrang | Aus |
+| AC Laden als Ladequelle | AC Laden darf während des Aufladens starten | An |
+| Tarif-Laden als Ladequelle | Tarif-Laden darf während des Aufladens starten | An |
+| Netz-Laden | Lädt sofort mit der Max. Ladeleistung aus dem Netz — auch als Entität `switch.solakon_one_netz_laden`; geht mit dem Ende des Zielladens aus | Aus |
+
+---
+
 ### 🔧 Debug
 
 Manuelle Eingriffe in den laufenden Regelzustand. Jede Aktion wird im Status-Tab unter **Letzte Aktion** protokolliert.
@@ -566,35 +598,44 @@ Die Regellogik arbeitet mit einer geordneten Liste von Falls. Die Reihenfolge is
 
 | Fall | Bedingung | Aktion |
 |:-----|:----------|:-------|
-| **0A** — Surplus Start | `surplus_enabled` UND `new_surplus = True` UND `surplus_active = False` UND kein AC/Tarif-Laden | `surplus_active → True`, `cycle_active → True` (Zone 0 setzt auf Zone 1 auf). Integral eingefroren. Falls Modus ≠ `'1'`: Timer-Toggle + Modus → `'1'`. (Entladestrom 2 A setzt der zentrale Abgleich, siehe Hinweis 12.) |
-| **0B** — Surplus Ende | `surplus_active = True` UND (Überschuss-Option AUS **ODER** Austritts-Bedingung erfüllt) | `surplus_active → False`, `cycle_active → (SOC > Zone-1-Schwelle)` (Zone aus SOC neu abgeleitet). Integral = 0. Ausgangsleistung → 0 (analog Fall B/C/F/G/H). Das Ausschalten der Option erzwingt den Austritt, sonst bliebe `surplus_active` hängen und die Batterie auf 2 A gedrosselt. |
-| **A** — Zone 1 Start | (SOC > Zone-1-Schwelle **ODER** Nacht-Forcierung aktiv) UND `cycle_active = False` UND kein AC/Tarif-Laden UND kein aktiver Tarif-Block (gültiger Preis < Teuer) | `cycle_active → True`. Integral = 0. Timer-Toggle. Modus → `'1'`. |
-| **B** — Zone 3 Stop | SOC ≤ Zone-3-Schwelle UND `cycle_active = True` UND kein AC/Tarif-Laden | `cycle_active → False`. Integral = 0. Ausgangsleistung → 0 W. Timer-Toggle. Modus → `'0'`. |
-| **C** — Zone 3 Absicherung | SOC ≤ Zone-3-Schwelle UND `cycle_active = False` UND Modus ≠ `'0'` UND kein AC/Tarif-Laden | Ausgangsleistung → 0 W. Timer-Toggle. Modus → `'0'`. Kein Integral-Reset. |
-| **D** — Recovery | `(cycle_active = True ODER Lade-Session mit geltendem Ladegrund)` UND Modus ∉ `{'1','3'}` UND (SOC > Zone-3-Schwelle **ODER** Lade-Session mit geltendem Ladegrund) UND keine **Tarifsperre** (Preis < Teuer-Schwelle; greift nicht bei `ac_charge_active`, `tariff_charge_active` oder `surplus_active`) | Timer-Toggle. Modus → `'3'` (wenn eine Lade-Session mit geltendem Ladegrund läuft) sonst `'1'`. Kein Integral-Reset. Als *geltender Ladegrund* zählt `ac_charge_active` bei eingeschalteter AC-Option und `tariff_charge_active` bei ausgewiesenem Günstig-Preis — sonst räumt HT bzw. H die Session im selben Zyklus, und Recovery würde das Netzladen davor noch einmal anwerfen. |
-| **GT** — Tarif-Laden Start | Tarif aktiv UND Preis gültig UND Preis < Günstig-Schwelle UND SOC < Tarif-SOC-Ziel − SOC-Hysterese UND kein Tarif-Laden aktiv UND **kein AC-Laden aktiv** UND kein Überschuss aktiv UND Modus ≠ `'3'` | `tariff_charge_active → True`. Timer-Toggle. Ausgangsleistung → Tarif-Ladeleistung. Modus → `'3'`. |
-| **HT** — Tarif-Laden Ende | `tariff_charge_active = True` UND (**kein Günstig-Preis ausgewiesen** ODER SOC ≥ Tarif-SOC-Ziel) — der Ausweis fehlt bei Preis ≥ Günstig-Schwelle, abgeschalteter Tarif-Option, PV-Prognose-Unterdrückung und unlesbarem Preissensor | `tariff_charge_active → False`. Integral = 0. Ausgangsleistung 0 W. Timer-Toggle. Zone 1 → `'1'` / Zone 2 → `'0'`. |
-| **TM** — Tarifsperre | Tarif aktiv UND Preis gültig UND Preis < Teuer-Schwelle UND kein AC/Tarif-Laden UND kein Überschuss UND Modus = `'1'` | Integral = 0. `cycle_active → False`. Ausgangsleistung → 0 W. Timer-Toggle. Modus → `'0'`. Sperrt Zone 1 und Zone 2 (greift für günstig + mittel, d.h. alles unter Teuer-Schwelle). |
-| **G** — AC Laden Start | AC aktiv UND kein AC/Tarif-Laden aktiv UND kein Überschuss aktiv UND SOC < Ladeziel UND **Modus ≠ `'3'`** UND (Grid + ΣOutput_entladend) < min(ac_offset, 0) − Hysterese | `ac_charge_active → True`. Timer-Toggle. Ausgangsleistung → 0 W. Modus → `'3'`. |
-| **H** — AC Laden Ende | Modus = `'3'` UND `ac_charge_active = True` UND kein Tarif-Laden UND (**AC-Option AUS** ODER SOC ≥ Ladeziel ODER (Grid ≥ ac_offset + Hysterese UND eigener Output = 0 W)) | `ac_charge_active → False`. Integral = 0. Ausgangsleistung 0 W. Timer-Toggle. Zone 1 → `'1'` / Zone 2 → `'0'`. |
-| **I** — Safety | Modus und Lade-Session widersprechen sich, in einer von zwei Richtungen: **(a)** Modus = `'3'` UND kein AC- und kein Tarif-Laden; **(b)** eine Lade-Session läuft, aber Modus ≠ `'3'`, **oder** beide Lade-Flags sind zugleich gesetzt | **(a)** Integral = 0. Zone 1 → Timer-Toggle + `'1'` / Zone 2 → Timer-Toggle + `'0'` + 0 W. **(b)** Integral = 0. Beide Lade-Flags → `False`, Modus bleibt unangetastet. Waren beide Flags gesetzt, endet zusätzlich eine Meldung im Status-Tab. |
-| **E** — Zone 2 Start | Zone-3 < SOC ≤ Zone-1 UND `cycle_active = False` UND Modus = `'0'` UND kein AC/Tarif-Laden UND kein aktiver Tarif-Block (gültiger Preis < Teuer) UND kein Nacht | Integral = 0. Timer-Toggle. Modus → `'1'`. |
-| **F** — Nachtabschaltung | Nacht aktiv UND `cycle_active = False` UND Modus ≠ `'0'` UND kein AC/Tarif-Laden | Integral = 0. Ausgangsleistung → 0 W. Timer-Toggle. Modus → `'0'`. |
+| **ZE** — Ziel erreicht | Zielladen an UND SOC ≥ Ziel-SOC | Alle Zyklus- und Lade-Flags → `False`. Integral = 0. Regelung aus über den Abschaltpfad (Ausgangsleistung 0 W, Entladestrom 40 A, Modus `'0'`), gespeichert: **Entladepause**. |
+| **0A** — Surplus Start | `surplus_enabled` UND `new_surplus = True` UND `surplus_active = False` UND keine Lade-Session UND kein Aufladen des Zielladens | `surplus_active → True`, `cycle_active → True` (Zone 0 setzt auf Zone 1 auf). Integral eingefroren. Falls Modus ≠ `'1'`: Timer-Toggle + Modus → `'1'`. (Entladestrom 2 A setzt der zentrale Abgleich, siehe Hinweis 12.) |
+| **0B** — Surplus Ende | `surplus_active = True` UND (Überschuss-Option AUS **ODER** Austritts-Bedingung erfüllt **ODER** Aufladen des Zielladens) | `surplus_active → False`, `cycle_active → (SOC > Zone-1-Schwelle)` (Zone aus SOC neu abgeleitet). Integral = 0. Ausgangsleistung → 0 (analog Fall B/C/F/G/H). Das Ausschalten der Option erzwingt den Austritt, sonst bliebe `surplus_active` hängen und die Batterie auf 2 A gedrosselt. |
+| **A** — Zone 1 Start | (SOC > Zone-1-Schwelle **ODER** Nacht-Forcierung aktiv) UND `cycle_active = False` UND keine Lade-Session UND kein aktiver Tarif-Block (gültiger Preis < Teuer) UND kein Aufladen mit Batterievorrang | `cycle_active → True`. Integral = 0. Timer-Toggle. Modus → `'1'`. |
+| **B** — Zone 3 Stop | SOC ≤ Zone-3-Schwelle UND `cycle_active = True` UND keine Lade-Session | `cycle_active → False`. Integral = 0. Ausgangsleistung → 0 W. Timer-Toggle. Modus → `'0'`. |
+| **C** — Zone 3 Absicherung | SOC ≤ Zone-3-Schwelle UND `cycle_active = False` UND Modus ≠ `'0'` UND keine Lade-Session | Ausgangsleistung → 0 W. Timer-Toggle. Modus → `'0'`. Kein Integral-Reset. |
+| **D** — Recovery | `(cycle_active = True ODER Lade-Session mit geltendem Ladegrund)` UND Modus ∉ `{'1','3'}` UND (SOC > Zone-3-Schwelle **ODER** Lade-Session mit geltendem Ladegrund) UND keine **Tarifsperre** (Preis < Teuer-Schwelle; greift nicht bei einer Lade-Session oder `surplus_active`) UND ohne Lade-Session kein Aufladen mit Batterievorrang | Timer-Toggle. Modus → `'3'` (wenn eine Lade-Session mit geltendem Ladegrund läuft) sonst `'1'`. Kein Integral-Reset. Als *geltender Ladegrund* zählt `ac_charge_active` bei eingeschalteter AC-Option, `tariff_charge_active` bei ausgewiesenem Günstig-Preis und `grid_charge_active` bei eingeschaltetem Netz-Laden während des Aufladens — sonst räumt HT bzw. H die Session im selben Zyklus, und Recovery würde das Netzladen davor noch einmal anwerfen. |
+| **GN** — Netz-Laden Start | Aufladen des Zielladens UND Netz-Laden an UND keine Lade-Session UND kein Überschuss aktiv UND Modus ≠ `'3'` | `grid_charge_active → True`. Timer-Toggle. Ausgangsleistung → Max. Ladeleistung. Modus → `'3'`. |
+| **HN** — Netz-Laden Ende | `grid_charge_active = True` UND (SOC ≥ Ziel-SOC ODER Netz-Laden aus ODER Zielladen aus) | `grid_charge_active → False`. Integral = 0. Ausgangsleistung 0 W. Timer-Toggle. Zone 1 → `'1'` / Zone 2 → `'0'`. |
+| **GT** — Tarif-Laden Start | Tarif aktiv UND Preis gültig UND Preis < Günstig-Schwelle UND SOC < Tarif-SOC-Ziel − SOC-Hysterese UND kein Tarif-Laden aktiv UND **kein AC-Laden aktiv** UND kein Netz-Laden aktiv UND kein Überschuss aktiv UND Modus ≠ `'3'` UND (kein Aufladen des Zielladens ODER Tarif-Laden als Ladequelle zugeschaltet) | `tariff_charge_active → True`. Timer-Toggle. Ausgangsleistung → Tarif-Ladeleistung. Modus → `'3'`. |
+| **HT** — Tarif-Laden Ende | `tariff_charge_active = True` UND (**kein Günstig-Preis ausgewiesen** ODER SOC ≥ Tarif-SOC-Ziel ODER Aufladen des Zielladens ohne Tarif-Laden als Ladequelle) — der Ausweis fehlt bei Preis ≥ Günstig-Schwelle, abgeschalteter Tarif-Option, PV-Prognose-Unterdrückung und unlesbarem Preissensor | `tariff_charge_active → False`. Integral = 0. Ausgangsleistung 0 W. Timer-Toggle. Zone 1 → `'1'` / Zone 2 → `'0'`. |
+| **ZB** — Batterievorrang | Aufladen des Zielladens mit Batterievorrang UND keine Lade-Session UND Modus = `'1'` UND nicht im Ruhezustand | Integral = 0. `cycle_active → False`. Ausgangsleistung → 0 W. Timer-Toggle. Ruhemodus. Die ganze PV lädt die Batterie. |
+| **TM** — Tarifsperre | Tarif aktiv UND Preis gültig UND Preis < Teuer-Schwelle UND keine Lade-Session UND kein Überschuss UND Modus = `'1'` | Integral = 0. `cycle_active → False`. Ausgangsleistung → 0 W. Timer-Toggle. Modus → `'0'`. Sperrt Zone 1 und Zone 2 (greift für günstig + mittel, d.h. alles unter Teuer-Schwelle). |
+| **G** — AC Laden Start | AC aktiv UND keine Lade-Session aktiv UND kein Überschuss aktiv UND (kein Aufladen des Zielladens ODER AC Laden als Ladequelle zugeschaltet) UND SOC < Ladeziel UND **Modus ≠ `'3'`** UND (Grid + ΣOutput_entladend) < min(ac_offset, 0) − Hysterese | `ac_charge_active → True`. Timer-Toggle. Ausgangsleistung → 0 W. Modus → `'3'`. |
+| **H** — AC Laden Ende | Modus = `'3'` UND `ac_charge_active = True` UND kein Tarif-Laden UND (**AC-Option AUS** ODER Aufladen des Zielladens ohne AC Laden als Ladequelle ODER SOC ≥ Ladeziel ODER (Grid ≥ ac_offset + Hysterese UND eigener Output = 0 W)) | `ac_charge_active → False`. Integral = 0. Ausgangsleistung 0 W. Timer-Toggle. Zone 1 → `'1'` / Zone 2 → `'0'`. |
+| **I** — Safety | Modus und Lade-Session widersprechen sich, in einer von zwei Richtungen: **(a)** Modus = `'3'` UND keine Lade-Session (AC, Tarif, Netz); **(b)** eine Lade-Session läuft, aber Modus ≠ `'3'`, **oder** mehrere Lade-Flags sind zugleich gesetzt | **(a)** Integral = 0. Zone 1 → Timer-Toggle + `'1'` / Zone 2 → Timer-Toggle + `'0'` + 0 W. **(b)** Integral = 0. Alle Lade-Flags → `False`, Modus bleibt unangetastet. Waren mehrere Flags gesetzt, endet zusätzlich eine Meldung im Status-Tab. |
+| **E** — Zone 2 Start | Zone-3 < SOC ≤ Zone-1 UND `cycle_active = False` UND Modus = `'0'` UND keine Lade-Session UND kein aktiver Tarif-Block (gültiger Preis < Teuer) UND kein Nacht UND kein Aufladen mit Batterievorrang | Integral = 0. Timer-Toggle. Modus → `'1'`. |
+| **F** — Nachtabschaltung | Nacht aktiv UND `cycle_active = False` UND Modus ≠ `'0'` UND keine Lade-Session | Integral = 0. Ausgangsleistung → 0 W. Timer-Toggle. Modus → `'0'`. |
 
-> **Eine Tarifsperre für A, D, E und TM:** Fall TM, die Eintritts-Blockade der Falls A und E und die Sperre von Fall D prüfen dieselbe **Tarifsperre** — jeder Preis unter der Teuer-Schwelle, also günstig **und** mittel. Eine laufende Lade-Session (AC oder Tarif) und aktiver Surplus heben sie auf; so lässt Recovery die Lade-Session von Fall GT zu.
+> **Eine Tarifsperre für A, D, E und TM:** Fall TM, die Eintritts-Blockade der Falls A und E und die Sperre von Fall D prüfen dieselbe **Tarifsperre** — jeder Preis unter der Teuer-Schwelle, also günstig **und** mittel. Eine laufende Lade-Session (AC, Tarif oder Netz) und aktiver Surplus heben sie auf; so lässt Recovery die Lade-Session von Fall GT zu.
+
+> **Lade-Session** heißt hier AC Laden, Tarif-Laden oder Netz-Laden (`ac_charge_active`, `tariff_charge_active`, `grid_charge_active`).
 
 > **Session-Flags:** Die Falls A, B und C setzen zusätzlich `surplus_active`, `ac_charge_active` und `tariff_charge_active` auf `False` — sie stellen einen definierten Ausgangszustand her, statt nur ihr eigenes Flag zu ändern.
 
 **Reihenfolge-Begründungen:**
+- Fall ZE steht vor allen anderen: Am Ziel-SOC endet das Aufladen in jedem Zustand, auch aus einer Lade-Session oder aus Surplus.
+- Falls GN/HN stehen vor GT/HT: Ist Netz-Laden eingeschaltet, lädt die Instanz mit der Max. Ladeleistung, auch wenn gleichzeitig ein günstiger Preis Tarif-Laden mit der Tarif-Ladeleistung starten würde. Endet Netz-Laden bei noch günstigem Preis, startet GT im nächsten Zyklus.
+- Fall ZB steht direkt vor TM und hat dieselbe Mechanik. Fall A und E sind bei Batterievorrang gesperrt — sonst würde A einen Zyklus starten, den ZB im nächsten Zyklus wieder beendet.
 - Fall D liegt vor Falls G/H, damit Recovery nur Modus ∉ `{'1','3'}` prüft — der AC-Lade-Modus `'3'` wird durch Recovery nie überschrieben.
 - Fall I fängt jeden Widerspruch zwischen Modus und Lade-Flags auf — egal ob durch externe Modussetzung oder Fehlzustand entstanden. Bei einem Widerspruch gewinnt der **Modus**: er ist der beobachtete Zustand des Geräts, das Flag nur die Buchführung darüber. Eine so beendete Session wird nicht wieder aufgenommen, sie muss über Fall G oder GT neu eintreten.
 - Fall I steht hinter H und HT, nicht davor: eine Doppelsession, die deren Wertbedingungen erfüllt, wird regulär von ihnen beendet; I greift erst, wenn das nicht passiert.
-- Fall D ist gegen die Tarifsperre geblockt (außer bei aktiver AC-/Tarif-Lade-Session oder aktivem Surplus) — verhindert, dass Recovery die Tarifsperre durch Modus-Wiederherstellung umgeht; Zone 0 ist ausgenommen, weil Einspeisung bei vollem Speicher unabhängig vom Preis richtig ist (konsistent zu Fall TM).
-- Fall D verzichtet auf die Zone-3-Schwelle, wenn eine AC-/Tarif-Lade-Session aktiv ist — Laden muss bei jedem SOC möglich sein, sonst bleibt der Modus bei niedrigem SOC dauerhaft auf `'0'` hängen, obwohl `ac_charge_active`/`tariff_charge_active` noch `True` sind (z. B. nach Deaktivieren/Reaktivieren der Regelung während laufendem Laden).
+- Fall D ist gegen die Tarifsperre geblockt (außer bei aktiver Lade-Session — AC, Tarif oder Netz — oder aktivem Surplus) — verhindert, dass Recovery die Tarifsperre durch Modus-Wiederherstellung umgeht; Zone 0 ist ausgenommen, weil Einspeisung bei vollem Speicher unabhängig vom Preis richtig ist (konsistent zu Fall TM).
+- Fall D verzichtet auf die Zone-3-Schwelle, wenn eine Lade-Session (AC, Tarif oder Netz) aktiv ist — Laden muss bei jedem SOC möglich sein, sonst bleibt der Modus bei niedrigem SOC dauerhaft auf `'0'` hängen, obwohl `ac_charge_active`/`tariff_charge_active` noch `True` sind (z. B. nach Deaktivieren/Reaktivieren der Regelung während laufendem Laden).
 - Fall E ist gegen den Tarif-Block (Preis < Teuer) geblockt — verhindert, dass Zone 2 bei gesperrter Entladung neu startet.
-- Falls GT und G sind gegen aktiven Überschuss geblockt — Zone-0-Einspeisung hat absoluten Vorrang vor Tarif-Laden und AC Laden.
+- Falls GT und G sind gegen aktiven Überschuss geblockt — Zone-0-Einspeisung hat Vorrang vor Tarif-Laden und AC Laden.
 - Fall G verwendet `ΣOutput_entladend` (eigene Instanz plus alle in Modus `'1'` entladenden Schwester-Instanzen, je Instanz das Größere aus Ist-Leistung und Ausgangsleistung) statt des Eigenanteils — sonst würde eine Instanz die Entladung einer Schwester-Instanz als externen Netzüberschuss werten und daraufhin genau diese Menge aus dem Netz nachladen (Batterie-zu-Batterie-Umpumpen im Multi-Instancing-Betrieb).
-- Nach dem Eintritt verhindert das Ausgangsleistungs-Limit der übrigen Instanzen das Umpumpen: solange eine Instanz der Netzgruppe AC- oder Tarif-lädt, gilt in Zone 1 das Limit von Zone 2 (PV − Reserve).
+- Nach dem Eintritt verhindert das Ausgangsleistungs-Limit der übrigen Instanzen das Umpumpen: solange eine Instanz der Netzgruppe AC-, Tarif- oder Netz-lädt, gilt in Zone 1 das Limit von Zone 2 (PV − Reserve).
 
 ---
 
@@ -629,10 +670,10 @@ Typischer Arbeitsbereich: **0.03–0.08**. AC Laden und Tarif-Laden verwenden ke
 9. **Dynamic Offset.** Jede Zone wird einzeln aktiviert. Die Netz-Standardabweichung wird intern berechnet — kein externer Statistik-Sensor erforderlich. Nach dem ersten Start einige Minuten warten bis genug Samples gesammelt sind. Bei mehreren Instanzen am selben Netzsensor pflegt nur der Gruppen-Leader den Ringpuffer, alle anderen übernehmen seinen Wert. Optionales **Trimmen** (`stddev_trim_count`, Standard 0): schließt die N höchsten UND die N niedrigsten Einzelmesswerte im Fenster vor der Berechnung aus — pro Seite, nicht insgesamt (N=5 → 10 Samples ausgeschlossen). Trennt kurze, seltene Lastspitzen (z. B. Kompressor-/Pumpen-Anlaufstrom) von echter Dauerunruhe anhand des betroffenen Fensteranteils, nicht der Ereignisdauer — ein Puls, der nur eine Minderheit der Samples füllt, fällt komplett raus, eine Schwankung über den Großteil des Fensters bewegt den Offset weiterhin. Wert wird als Anzahl Samples angegeben, nicht als Prozent, weil die Sample-Zahl im Fenster von der Update-Rate des Netzsensors abhängt. Effekt live vergleichbar über den ungetrimmten Rohwert (Attribut `stddev_raw` am Netz-Stabw.-Sensor, bzw. „StdDev (roh)" im Panel).
 10. **Adaptive Wartezeit.** Liest die Ist-Leistung wiederholt nach einem Setpoint-Befehl statt einer festen Wartezeit zu schlafen. Die konfigurierte Wartezeit wird zum maximalen Timeout als Sicherheitsnetz.
 11. **Export-Limit-Sync.** Ist die optionale Netz-Ausgangsleistungsgrenze-Entität konfiguriert, schreibt jeder Regelzyklus `max(Hard-Limit-Z0, Hard-Limit-Z1)` in diese Entität — sofern er abweicht. Das verhindert, dass externe Eingriffe (App, andere Automation) das Hardware-Limit dauerhaft ändern.
-12. **Entladestrom-Abgleich.** Der maximale Entladestrom wird in jedem Zyklus zentral aus dem Regelzustand abgeleitet (Surplus → 2 A, AC-/Tarif-Laden → 0 A, Zone 1 → Max-Entladestrom, Zone 2 und Ruhe in Modus `'1'` → 0 A, sonst — Ruhe in Modus `'0'`, Tarifsperre — Max-Entladestrom, damit das Gerät beim Verlassen der Fernsteuerung nicht mit 0 A stehen bleibt) und mit dem Ist-Wert abgeglichen — vor dem PI-Gate, also auch im Disabled-Leerlauf. Das garantiert, dass ein Klemmwert (insb. die 2 A aus dem Surplus-Trick) nie über einen Zustandswechsel hinaus stehen bleibt und die Batterie drosselt; die einzelnen Falls setzen den Strom nicht mehr selbst.
-13. **`Regelung aktiv = Aus`.** Beim Ausschalten erzwingt die Integration Ausgang → 0 W, Entladestrom → 40 A (Gerätestandard) und Modus `'0'` — unabhängig vom Schalter **Ruhezustand in Modus 1** (Punkt 15), damit das Gerät die Fernsteuerung verlässt — innerhalb desselben Locks wie der Regelzyklus, damit kein laufender Zyklus den Disabled-Befehl überschreibt. Danach blockt der Guard jeden weiteren Schreibbefehl, auch den Entladestrom-Abgleich aus Punkt 12. Der Sensor „Betriebsmodus“ wird explizit auf `disabled_regulation_off` gesetzt. Die Flags `cycle_active` und `tariff_charge_active` bleiben bewusst erhalten, damit ein Aus/Ein-Wechsel den Regelkontext nicht verliert. Nach dem Wiedereinschalten fängt die Falltabelle jede Lage, die daraus entstehen kann: eine Lade-Session, deren Option inzwischen aus ist, beenden Fall HT bzw. H; einen Widerspruch zwischen Modus und Lade-Flags räumt Fall I. Gilt identisch für Switch-Entität und Panel-Button.
+12. **Entladestrom-Abgleich.** Der maximale Entladestrom wird in jedem Zyklus zentral aus dem Regelzustand abgeleitet (Surplus → 2 A, AC-, Tarif- und Netz-Laden → 0 A, Zone 1 → Max-Entladestrom, Zone 2 und Ruhe in Modus `'1'` → 0 A, sonst — Ruhe in Modus `'0'`, Tarifsperre — Max-Entladestrom, damit das Gerät beim Verlassen der Fernsteuerung nicht mit 0 A stehen bleibt) und mit dem Ist-Wert abgeglichen — vor dem PI-Gate, also auch im Disabled-Leerlauf. Das garantiert, dass ein Klemmwert (insb. die 2 A aus dem Surplus-Trick) nie über einen Zustandswechsel hinaus stehen bleibt und die Batterie drosselt; die einzelnen Falls setzen den Strom nicht mehr selbst.
+13. **`Regelung aktiv = Aus`.** Beim Ausschalten erzwingt die Integration Ausgang → 0 W, Entladestrom → 40 A (Gerätestandard) und Modus `'0'` — unabhängig vom Schalter **Ruhezustand in Modus 1** (Punkt 15), damit das Gerät die Fernsteuerung verlässt — innerhalb desselben Locks wie der Regelzyklus, damit kein laufender Zyklus den Disabled-Befehl überschreibt. Danach blockt der Guard jeden weiteren Schreibbefehl, auch den Entladestrom-Abgleich aus Punkt 12. Der Sensor „Betriebsmodus“ wird explizit auf `disabled_regulation_off` gesetzt. Die Flags `cycle_active` und `tariff_charge_active` bleiben bewusst erhalten, damit ein Aus/Ein-Wechsel den Regelkontext nicht verliert. Nach dem Wiedereinschalten fängt die Falltabelle jede Lage, die daraus entstehen kann: eine Lade-Session, deren Option inzwischen aus ist, beenden Fall HT bzw. H; einen Widerspruch zwischen Modus und Lade-Flags räumt Fall I. Gilt identisch für Switch-Entität und Panel-Button, und ebenso für Fall ZE, der die Regelung am Ziel-SOC des [Zielladens](#-zielladen) abschaltet. Bei eingeschaltetem Zielladen schaltet „Regelung aktiv = An“ zugleich Zielladen und Netz-Laden aus.
 14. **Ausgangs-Stillstandserkennung.** Steht der Sollwert am oberen Limit (`dynamic_max`) oder im Totband darunter und besteht der Netzfehler in dieselbe Richtung fort, kann die Entladeregelung nicht weiter hochregeln und schreibt nicht mehr. Bleibt der Wechselrichter in genau diesem Zustand stehen, ohne den Modus zu wechseln, erhält er von sich aus keinen neuen Befehl mehr — Fall D greift nicht, da er einen Modus außerhalb `'1'`/`'3'` voraussetzt. Die Regelung prüft deshalb in diesem gesättigten Zustand die **Ist-Leistung gegen den geschriebenen Sollwert**: weicht sie um mehr als **5 %** ab und steht der Messwert dabei **länger als fünf Minuten unverändert**, wird der Sollwert neu geschrieben und unter **Letzte Aktion** protokolliert. Hält die Abweichung an, wird der Wechselrichter nach weiteren fünf Minuten aus dem Regelmodus genommen — **Ausgangsleistung 0 W, Timer-Toggle, Modus Disabled** — und im nächsten Zyklus von **Fall D** regulär zurückgeholt (Timer-Toggle + Modus `'1'`), woraufhin die Entladeregelung wieder hochläuft. Das ist derselbe Weg, der einen aus dem Tritt geratenen Wechselrichter auch sonst wiederherstellt, und erzeugt eine echte Modus-Flanke statt den bestehenden Modus auf sich selbst zu schreiben. Zusätzlich erscheint eine Fehlermeldung im Status-Tab; das wiederholt sich im selben Abstand, bis der Ausgang dem Limit wieder folgt. Die Dauer stammt aus dem Zeitstempel der letzten Wertänderung des Ist-Sensors — er steht damit für „Wert seit dann unverändert" und macht eine eigene Uhr überflüssig; ein Ist-Sensor, der um den abweichenden Wert rauscht, löst entsprechend nicht aus. Die Prüfung gilt **ausschließlich** für diesen gesättigten Entlade-Zustand, mit PI-Regler wie mit Stellwertrechnung: Zone 0, AC Laden und Tarif-Laden halten den Ausgang bewusst unterhalb ihres jeweiligen Limits und sind ausgenommen, ebenso die Totbänder. Ohne konfigurierten oder verfügbaren Ist-Leistungssensor findet keine Prüfung statt. Gegenstück zur Nullungs-Bestätigung aus Punkt 10 — dort wird eine kommandierte 0 verifiziert, hier eine kommandierte Leistung.
-15. **Ruhezustand.** Alle Übergänge, in denen die Regelung ruht — Fall B, C, F, TM, Lade-Ende (HT, H) und Fall I ohne aktiven Zyklus, und Stillstands-Recovery aus Punkt 14 — schreiben Ausgangsleistung 0 W und den **Ruhemodus**. Standard ist Modus `'0'`; Modus `'0'` wird sonst nur von `Regelung aktiv = Aus` (Punkt 13) geschrieben. Mit dem Schalter **Ruhezustand in Modus 1** im Debug-Tab ist der Ruhemodus stattdessen `'1'` mit 0 W, Modus `'0'` wird dann nur noch beim Ausschalten der Regelung geschrieben. Die Ruhe in Modus `'1'` trägt ein eigenes Zustandsflag: in ihr läuft kein PI, die Instanz zählt nicht zum Entlade-Pool der Verteilung, Fall C, F und TM lösen nicht erneut aus, und Fall E, A, D, 0A, G und GT holen sie zurück wie aus Modus `'0'`. Der Betriebsmodus-Sensor zeigt `rest_discharge`. Gedacht für Geräte, die in Modus `'0'` trotz der [App-Einstellungen](#voraussetzungen) nicht laden. **Nicht empfohlen:** das Gerät verlässt die Fernsteuerung nur noch bei ausgeschalteter Regelung. Umschalten wirkt im nächsten Zyklus — eine ruhende Instanz wechselt dann einmal in den anderen Ruhemodus.
+15. **Ruhezustand.** Alle Übergänge, in denen die Regelung ruht — Fall B, C, F, TM, ZB, Lade-Ende (HT, H, HN) und Fall I ohne aktiven Zyklus, und Stillstands-Recovery aus Punkt 14 — schreiben Ausgangsleistung 0 W und den **Ruhemodus**. Standard ist Modus `'0'`; Modus `'0'` wird sonst nur von `Regelung aktiv = Aus` (Punkt 13) geschrieben. Mit dem Schalter **Ruhezustand in Modus 1** im Debug-Tab ist der Ruhemodus stattdessen `'1'` mit 0 W, Modus `'0'` wird dann nur noch beim Ausschalten der Regelung geschrieben. Die Ruhe in Modus `'1'` trägt ein eigenes Zustandsflag: in ihr läuft kein PI, die Instanz zählt nicht zum Entlade-Pool der Verteilung, Fall C, F und TM lösen nicht erneut aus, und Fall E, A, D, 0A, G und GT holen sie zurück wie aus Modus `'0'`. Der Betriebsmodus-Sensor zeigt `rest_discharge`. Gedacht für Geräte, die in Modus `'0'` trotz der [App-Einstellungen](#voraussetzungen) nicht laden. **Nicht empfohlen:** das Gerät verlässt die Fernsteuerung nur noch bei ausgeschalteter Regelung. Umschalten wirkt im nächsten Zyklus — eine ruhende Instanz wechselt dann einmal in den anderen Ruhemodus.
 
 ---
 
@@ -644,20 +685,23 @@ Alle Entitätsnamen kommen aus den Übersetzungen und erscheinen in der Sprache 
 
 | Entität | Typ | Beschreibung |
 |---------|-----|-------------|
-| `sensor.solakon_one_betriebszustand` | Sensor | **Was die Instanz gerade tut** — ein Zustand aus zehn (siehe unten). Übersetzter Enum-Sensor: der Zustandswert ist ein sprachneutraler Schlüssel, Automationen brechen damit nicht, wenn ein Anzeigetext sich ändert. Attribute: Zone, Gerätemodus, letzter Fall, letzte Aktion, anliegender Fehler, Zeitpunkt des letzten Wechsels |
+| `sensor.solakon_one_betriebszustand` | Sensor | **Was die Instanz gerade tut** — ein Zustand aus zwölf (siehe unten). Übersetzter Enum-Sensor: der Zustandswert ist ein sprachneutraler Schlüssel, Automationen brechen damit nicht, wenn ein Anzeigetext sich ändert. Attribute: Zone, Gerätemodus, letzter Fall, letzte Aktion, anliegender Fehler, Zeitpunkt des letzten Wechsels |
 | `sensor.solakon_one_aktuelle_zone` | Sensor | Aktive Zone (0–3) mit Zusatzattributen |
 | `sensor.solakon_one_betriebsmodus` | Sensor | Gerätemodus als übersetzter Enum-Sensor — `waiting`, `disabled`, `discharge`, `ac_charge`, `disabled_regulation_off`, `unknown` |
 | `sensor.solakon_one_letzte_aktion` | Sensor | Letzter Logeintrag der Steuerlogik, in der Sprache der Instanz. Sprachneutral auswertbar über das Attribut `action_key`; die Werte der Meldung stehen als weitere Attribute daneben |
 | `sensor.solakon_one_netz_standardabweichung` | Sensor | Netz-Stabw. in W über das konfigurierte Fenster (getrimmt, falls konfiguriert); Rohwert als Attribut `stddev_raw` |
-| `sensor.solakon_one_aktiver_fall` | Sensor | Zuletzt ausgeführter Fall als übersetzter Enum-Sensor — der Zustandswert ist der kleingeschriebene Fall-Schlüssel (`0a`, `a`, `b`, … `tm`), die Anzeige kommt aus den Übersetzungen |
+| `sensor.solakon_one_aktiver_fall` | Sensor | Zuletzt ausgeführter Fall als übersetzter Enum-Sensor — der Zustandswert ist der kleingeschriebene Fall-Schlüssel (`0a`, `a`, `b`, … `tm`, `ze`, `gn`, `hn`, `zb`), die Anzeige kommt aus den Übersetzungen |
 | `sensor.solakon_one_pi_integral` | Sensor | Aktueller I-Anteil des PI-Reglers |
 | `sensor.solakon_one_uberschussleistung` | Sensor | Verwertbarer PV-Überschuss in W — `min(aktuell geltendes Hard-Limit, PV-Leistung) − Ausgangsleistung`, geklemmt auf ≥0. Zeigt die Leistung, die über das aktuelle Hard-Limit oder die verfügbare Sonne hinaus **nicht** mehr sinnvoll ausgegeben werden kann, ohne den Akku zu belasten — z. B. für eine Automation, die bei Überschuss einen Zusatzverbraucher schaltet |
 | `switch.solakon_one_regelung_aktiv` | Switch | Hauptschalter — aktiviert/deaktiviert den Schreibteil |
 | `switch.solakon_one_tarif_steuerung_aktiv` | Switch | Tarif-Steuerung ein/aus — derselbe Schalter wie im **Tarif**-Tab des Panels, aus Dashboard, Skript und Automation heraus bedienbar. Beim Ausschalten endet eine laufende Tarif-Lade-Session im nächsten Regelzyklus (Fall HT) |
+| `switch.solakon_one_zielladen` | Switch | Zielladen ein/aus — derselbe Schalter wie im **Zielladen**-Tab. Gekoppelt mit „Regelung aktiv“, siehe [Zielladen](#-zielladen) |
+| `switch.solakon_one_netz_laden` | Switch | Netz-Laden des Zielladens ein/aus — lädt während des Aufladens sofort mit der Max. Ladeleistung; geht mit dem Ende des Zielladens aus |
 | `binary_sensor.solakon_one_entladezyklus_aktiv` | Binary Sensor | Internes Flag Zyklus |
 | `binary_sensor.solakon_one_uberschuss_modus` | Binary Sensor | Flag Überschuss-Modus aktiv |
 | `binary_sensor.solakon_one_ac_laden_aktiv` | Binary Sensor | Flag AC-Laden aktiv |
 | `binary_sensor.solakon_one_tarif_laden_aktiv` | Binary Sensor | Flag Tarif-Laden aktiv |
+| `binary_sensor.solakon_one_netz_laden_aktiv` | Binary Sensor | Flag Netz-Laden aktiv |
 | `binary_sensor.solakon_one_nachtabschaltung` | Binary Sensor | Flag Nachtabschaltung aktiv |
 | `binary_sensor.solakon_one_pv_vorhersage_tarif_gesperrt` | Binary Sensor | PV-Vorhersage sperrt Tarif-Laden |
 | `binary_sensor.solakon_one_pv_vorhersage_surplus_erzwungen` | Binary Sensor | PV-Vorhersage erzwingt Surplus-Eintritt |
@@ -672,16 +716,18 @@ Der Zustand wird aus den Zustandsflags abgeleitet, nicht aus dem zuletzt ausgef�
 
 | # | Schlüssel | Anzeige | Gilt wenn |
 |---|-----------|---------|-----------|
-| 1 | `disabled` | Regelung inaktiv | Hauptschalter aus |
-| 2 | `blocked` | Regelung blockiert | Zyklus bricht ab — Kernsensor (Netz, PV, Ist-Leistung, Leistungssollwert, SOC) fehlt, ist nicht verfügbar oder liefert keine Zahl, oder SOC-Grenzen unplausibel, Grund in `last_error` |
-| 3 | `exporting` | Surplus | Zone 0 aktiv |
-| 4 | `tariff_charging` | Tarif-Laden | Lade-Session bei günstigem Preis |
-| 5 | `ac_charging` | AC-Laden | Lade-Session Zone 1 |
-| 6 | `discharge_locked` | Entladung gesperrt (Tarif) | Preis unter Teuer-Schwelle, keine Lade-Session, kein Überschuss |
-| 7 | `night_off` | Nachtabschaltung | Nachtabschaltung greift |
-| 8 | `battery_supply` | Batteriebetrieb | Zyklus aktiv — gilt auch, wenn der PI-Ausgang gerade auf 0 steht |
-| 9 | `safety_stop` | Sicherheitsstopp (SOC-Minimum) | Zone 3 — SOC auf oder unter der Zone-3-Schwelle, Modus `0`, Ausgangsleistung 0 W |
-| 10 | `pv_direct` | PV-Direktnutzung | sonst — Zone 2 bei Tag, Wechselrichter auf PV-Vorrang, Ausgangsleistung 0 |
+| 1 | `disabled` | Regelung inaktiv | Hauptschalter aus, Zielladen aus |
+| 2 | `discharge_pause` | Entladepause | Hauptschalter aus, Zielladen an — nach Fall ZE oder von Hand |
+| 3 | `blocked` | Regelung blockiert | Zyklus bricht ab — Kernsensor (Netz, PV, Ist-Leistung, Leistungssollwert, SOC) fehlt, ist nicht verfügbar oder liefert keine Zahl, oder SOC-Grenzen unplausibel, Grund in `last_error` |
+| 4 | `target_charging` | Zielladen: Aufladen | Zielladen an, SOC unter dem Ziel-SOC — auch während Netz-, Tarif- oder AC-Laden |
+| 5 | `exporting` | Surplus | Zone 0 aktiv |
+| 6 | `tariff_charging` | Tarif-Laden | Lade-Session bei günstigem Preis |
+| 7 | `ac_charging` | AC-Laden | Lade-Session Zone 1 |
+| 8 | `discharge_locked` | Entladung gesperrt (Tarif) | Preis unter Teuer-Schwelle, keine Lade-Session, kein Überschuss |
+| 9 | `night_off` | Nachtabschaltung | Nachtabschaltung greift |
+| 10 | `battery_supply` | Batteriebetrieb | Zyklus aktiv — gilt auch, wenn der PI-Ausgang gerade auf 0 steht |
+| 11 | `safety_stop` | Sicherheitsstopp (SOC-Minimum) | Zone 3 — SOC auf oder unter der Zone-3-Schwelle, Modus `0`, Ausgangsleistung 0 W |
+| 12 | `pv_direct` | PV-Direktnutzung | sonst — Zone 2 bei Tag, Wechselrichter auf PV-Vorrang, Ausgangsleistung 0 |
 
 ### Sprache
 
@@ -739,6 +785,38 @@ Ja — **Surplus-Forecast-Erzwingung** im **Überschuss**-Tab: Liegt die PV-Vorh
 **Wie schalte ich bei Überschuss einen Verbraucher zu?**
 Über `sensor.solakon_one_uberschussleistung`. Er zeigt `max(0, min(Hard-Limit, PV) − Ausgangsleistung)`, also den Spielraum zwischen dem, was gerade ausgegeben werden könnte, und dem, was tatsächlich ausgegeben wird — gedacht als Auslöser für eine eigene Automation (Smart Plug, Boiler, Wallbox).
 
+**Wie lagere ich die Batterie über den Winter ein?**
+Mit dem [Zielladen](#-zielladen): Ziel-SOC einstellen (Standard 70 %), Ladequellen wählen und Zielladen einschalten. Am Ziel schaltet die Integration die Regelung ab, die Batterie bleibt in der Entladepause, auch über Neustarts. Liegt der SOC beim Einschalten schon über dem Ziel, beginnt die Entladepause im nächsten Regelzyklus. Im Frühjahr Zielladen ausschalten oder „Regelung aktiv“ einschalten — beides stellt den normalen Betrieb her.
+
+**Kann ich vor einem Unwetter die Batterie vollladen?**
+Ja, über eine eigene Automation mit den Schaltern `switch.solakon_one_zielladen` und `switch.solakon_one_netz_laden`. Ziel-SOC im Zielladen-Tab z. B. auf 100 % stellen. Beispiel mit einem Warn-Sensor (etwa aus der DWD-Integration):
+
+```yaml
+automation:
+  - alias: Unwetter-Vorsorge Start
+    triggers:
+      - trigger: numeric_state
+        entity_id: sensor.dwd_aktuelle_warnstufe
+        above: 2
+    actions:
+      - action: switch.turn_on
+        target:
+          entity_id:
+            - switch.solakon_one_zielladen
+            - switch.solakon_one_netz_laden
+  - alias: Unwetter-Vorsorge Ende
+    triggers:
+      - trigger: numeric_state
+        entity_id: sensor.dwd_aktuelle_warnstufe
+        below: 3
+    actions:
+      - action: switch.turn_off
+        target:
+          entity_id: switch.solakon_one_zielladen
+```
+
+Zielladen aus schaltet die Regelung wieder ein und Netz-Laden aus. Ohne Netz-Laden lädt die Instanz nur über PV und die zugeschalteten Ladequellen.
+
 **Ich habe mehrere Smartmeter für getrennte Stromkreise.**
 Instanzen werden automatisch nach ihrem Netz-Leistungssensor in [Netzgruppen](#netzgruppen-mehrere-smartmeter) sortiert. Jede Gruppe hat ihre eigene, unabhängige Leistungsverteilung; Instanzen an verschiedenen Zählern beeinflussen sich nicht.
 
@@ -751,7 +829,7 @@ Instanzen werden automatisch nach ihrem Netz-Leistungssensor in [Netzgruppen](#n
 Die Auswahl filtert auf `device_class: power`. Template- und Hilfssensoren, die erst eine Summe bilden (z. B. die drei Phasen eines Shelly 3EM), tragen diese Geräteklasse häufig nicht und erscheinen deshalb nicht in der Liste. Im Template-Sensor `device_class: power` und `unit_of_measurement: W` ergänzen, danach ist er auswählbar.
 
 **Zone 1 aktiv, aber die Instanz entlädt nicht („Batterieentladung gesperrt — Schwesterinstanz lädt“)**
-Eine andere Instanz am selben Netzsensor lädt gerade (AC Laden oder Tarif-Laden). Bis dahin speist diese Instanz nur PV − Reserve ein, damit keine Batterie die andere lädt. Endet das Laden, entlädt sie wieder normal.
+Eine andere Instanz am selben Netzsensor lädt gerade (AC Laden, Tarif-Laden oder Netz-Laden). Bis dahin speist diese Instanz nur PV − Reserve ein, damit keine Batterie die andere lädt. Endet das Laden, entlädt sie wieder normal.
 
 **Panel öffnet sich, zeigt aber keine Werte an**
 Integration neu laden (Einstellungen → Geräte & Dienste → Solakon → drei Punkte → Neu laden). Falls das Problem bleibt, HA-Protokoll auf Fehler der Domain `solakon_nulleinspeisung` prüfen.

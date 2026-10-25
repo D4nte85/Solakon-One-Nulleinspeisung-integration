@@ -23,6 +23,7 @@ class Member(Protocol):
     surplus_active: bool
     ac_charge_active: bool
     tariff_charge_active: bool
+    grid_charge_active: bool
     allocated_power: float | None
 
     @property
@@ -179,9 +180,10 @@ class NetGroup:
         return pool_sum(self.discharge_pool(), me, own_setpoint, lambda m: m.output_setpoint()) * share
 
     def sister_charging(self, me: Member) -> bool:
-        """Ein anderes regelndes Mitglied lädt (AC oder Tarif)."""
+        """Ein anderes regelndes Mitglied lädt (AC, Tarif oder Netz-Laden)."""
         return bool(self.pool(
-            lambda m: m is not me and m.regulating and (m.ac_charge_active or m.tariff_charge_active)
+            lambda m: m is not me and m.regulating
+            and (m.ac_charge_active or m.tariff_charge_active or m.grid_charge_active)
         ))
 
     def dist_cfg(self) -> dict:

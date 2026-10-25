@@ -16,6 +16,9 @@ from tests import harness as h
 from tests import scenarios
 
 C = h.const
+
+# Flags einer Lade-Session.
+LADE_FLAGS = ("ac_charge_active", "tariff_charge_active", "grid_charge_active")
 KINDS = ("cycle", "multi", "stall", "tariff", "domain", "rest")
 NICHT_ZAHL = ("unavailable", "unknown", "None", "abc", "nan", "on", "off")
 
@@ -119,16 +122,16 @@ class Ctx:
         return C.MODE_DISCHARGE if self.settings.get(C.S_REST_IN_DISCHARGE) else C.MODE_DISABLED
 
     def lade_session(self) -> bool:
-        return bool(self.flags["ac_charge_active"] or self.flags["tariff_charge_active"])
+        return any(self.flags[k] for k in LADE_FLAGS)
 
     def start_konsistent(self) -> bool:
         """Startzustand erfüllt selbst D1–D4 — sonst prüft die Regel das Heilen, nicht das Halten."""
         f = self.flags_vorher
         modus = (self.vorher.get(self.e(C.CONF_MODE_SELECT)) or {}).get("state")
-        session = f.get("ac_charge_active") or f.get("tariff_charge_active")
+        session = any(f.get(k) for k in LADE_FLAGS)
         return not (
             (f.get("surplus_active") and (not f.get("cycle_active") or session))
-            or (f.get("ac_charge_active") and f.get("tariff_charge_active"))
+            or sum(bool(f.get(k)) for k in LADE_FLAGS) > 1
             or (modus == C.MODE_AC_CHARGE and not session)
             or (session and modus != C.MODE_AC_CHARGE)
         )
@@ -282,15 +285,16 @@ def d1(c: Ctx):
 
 
 def d2(c: Ctx):
-    if c.flags["ac_charge_active"] and c.flags["tariff_charge_active"]:
-        return "AC- und Tarif-Laden gleichzeitig"
+    aktiv = [k for k in LADE_FLAGS if c.flags[k]]
+    if len(aktiv) > 1:
+        return "mehrere Lade-Sessions gleichzeitig: " + ", ".join(aktiv)
 
 
 def d3(c: Ctx):
     f = c.flags
     if not c.normal() or not f["surplus_active"]:
         return None
-    teile = [k for k in ("ac_charge_active", "tariff_charge_active", "discharge_locked", "is_night") if f[k]]
+    teile = [k for k in (*LADE_FLAGS, "discharge_locked", "is_night") if f[k]]
     if teile:
         return "surplus_active mit " + ", ".join(teile)
 
@@ -626,10 +630,13 @@ def k3(c: Ctx):
 
 def k4(c: Ctx):
     f = c.flags
+    ziel = c.settings[C.S_TARGET_CHARGE_ENABLED]
     if not c.settings[C.S_REGULATION_ENABLED]:
-        soll = "disabled"
+        soll = "discharge_pause" if ziel else "disabled"
     elif f["_cycle_blocked"]:
         soll = "blocked"
+    elif ziel and c.soc() is not None and c.soc() < c.settings[C.S_TARGET_SOC]:
+        soll = "target_charging"
     elif f["surplus_active"]:
         soll = "exporting"
     elif f["tariff_charge_active"]:
@@ -738,7 +745,7 @@ async def _lauf(kind: str, spec: dict) -> list[Ctx]:
                              dist=spec["dist"] if spec.get("has_dist_config") else None,
                              aus_seit=aus_seit[p], abgeschaltet_jetzt=p in abgeschaltet,
                              geregelt={q: bool(c.settings[C.S_REGULATION_ENABLED]) for q, c in coords.items()},
-                             laedt={q: bool(c.ac_charge_active or c.tariff_charge_active) for q, c in coords.items()}))
+                             laedt={q: any(getattr(c, k) for k in LADE_FLAGS) for q, c in coords.items()}))
             flags[p] = neu
         nach = schnappschuss(hass)
         alle = {p: (coords[p].entry.data, flags[p], nach) for p in coords}
