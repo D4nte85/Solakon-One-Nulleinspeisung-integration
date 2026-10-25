@@ -24,6 +24,7 @@ from .const import (
 )
 from . import group_store
 from .schema import InvalidSettings
+from .status_view import snapshot_view
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -141,7 +142,7 @@ async def _ws_get_status(
         return
 
     connection.send_result(msg["id"], {
-        **coord.snapshot_view(WS_STATUS_KEYS),
+        **snapshot_view(coord, WS_STATUS_KEYS),
         **coord.live_values(),
         # Mit Panelsprache: Aktion und Fehlerkette in dieser statt in der Instanzsprache.
         **(coord.status_texts(msg["language"]) if msg.get("language") else {}),

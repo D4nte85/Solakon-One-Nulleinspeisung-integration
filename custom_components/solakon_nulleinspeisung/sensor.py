@@ -13,6 +13,7 @@ from homeassistant.util import dt as dt_util
 from .const import DOMAIN, FALL_KEYS, MODE_KEYS, OPERATING_STATES
 from .coordinator import SolakonCoordinator
 from .entity_base import SolakonEntity
+from .status_view import snapshot_view
 
 # Attribute aus dem Coordinator-Schnappschuss: Name oder Paar (Attribut, Schnappschuss).
 OPERATING_STATE_ATTRS = (
@@ -86,7 +87,7 @@ class OperatingStateSensor(CoordinatorSensor):
     @property
     def extra_state_attributes(self) -> dict:
         """Zustandsattribute, `changed_at` als ISO-Zeitstempel."""
-        attrs = self._coordinator.snapshot_view(OPERATING_STATE_ATTRS)
+        attrs = snapshot_view(self._coordinator, OPERATING_STATE_ATTRS)
         attrs["changed_at"] = dt_util.utc_from_timestamp(attrs["changed_at"]).isoformat()
         return attrs
 
@@ -104,7 +105,7 @@ class ZoneSensor(CoordinatorSensor):
     @property
     def extra_state_attributes(self) -> dict:
         """Zonenattribute aus dem Snapshot."""
-        return self._coordinator.snapshot_view(ZONE_ATTRS)
+        return snapshot_view(self._coordinator, ZONE_ATTRS)
 
 
 class LastActionSensor(CoordinatorSensor):

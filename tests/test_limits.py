@@ -82,6 +82,20 @@ def test_zone1_bei_ladender_schwester_wie_zone2(solar, erwartet):
     assert lim.pi_max(const.MODE_DISCHARGE, cycle_active=True, solar=solar, pv_capped=True) == erwartet
 
 
+
+@pytest.mark.parametrize("sister, charging, priority, erwartet", [
+    (False, False, False, ""),
+    (False, False, True, ""),
+    (False, True, False, "house_priority"),
+    (False, True, True, ""),
+    (True, False, False, "sister_charging"),
+    (True, False, True, "sister_charging"),
+    (True, True, False, "sister_charging"),   # Schwester vor Hausvorrang
+    (True, True, True, "sister_charging"),
+])
+def test_pv_cap_reason(sister, charging, priority, erwartet):
+    assert limits.pv_cap_reason(sister, charging, priority) == erwartet
+
 def test_zone2_durch_zuteilung_gedeckelt():
     lim = _limits(allocated=300.0)
     assert lim.pi_max(const.MODE_DISCHARGE, cycle_active=False, solar=2000.0) == 300

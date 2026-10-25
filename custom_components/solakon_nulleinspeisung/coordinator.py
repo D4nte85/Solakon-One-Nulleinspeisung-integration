@@ -7,10 +7,8 @@ import time
 from operator import attrgetter
 from typing import Any, Callable
 
-from datetime import timedelta
-
 from homeassistant.core import HomeAssistant, Event, callback
-from homeassistant.helpers.event import async_track_state_change_event, async_track_time_interval
+from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.util import dt as dt_util
 
 from .display import Display
@@ -22,7 +20,7 @@ from .pi import PIController
 from .readings import UNIT_SCALE_KWH, UNIT_SCALE_W, read_number, read_scaled, valid_state
 from .grid_group import NetGroup, Shares
 from .group_store import group_for
-from .limits import PowerLimits, power_limits
+from .limits import PowerLimits, power_limits, pv_cap_reason
 from .messages import CycleMessages
 from .output import Actual, Output, Stall
 from .schema import (
@@ -31,6 +29,7 @@ from .schema import (
 )
 from .tariff import Tariff, forecast_suppressed
 from .timeout import Timeout
+from .trackers import Trackers
 from .zones import (
     FlagUpdate, Night, Surplus, ZoneInputs, at_rest, control_state, decide, forecast_flags,
     required_discharge, rest_mode,
@@ -41,10 +40,8 @@ from .const import (
     CONF_ACTIVE_POWER, CONF_DISCHARGE_CURRENT, CONF_TIMEOUT_SET, CONF_MODE_SELECT,
     CONF_EXPORT_LIMIT, MODE_DISABLED, MODE_DISCHARGE, MODE_AC_CHARGE, S_REGULATION_ENABLED,
     S_ZONE3_LIMIT, DEVICE_MAX_CURRENT, S_HARD_LIMIT_Z0, S_HARD_LIMIT_Z1, S_PV_RESERVE,
-    S_SURPLUS_FORECAST_ENABLED, S_SURPLUS_LOCK_ENABLED, S_AC_SOC_TARGET, S_AC_POWER_LIMIT,
-    S_PERIODIC_ENABLED, S_PERIODIC_INTERVAL, S_TARIFF_ENABLED, S_PV_FORECAST_ENABLED,
-    S_ZONE1_FORCE_ENABLED, S_REST_IN_DISCHARGE, S_DYN_Z1_ENABLED, S_DYN_Z2_ENABLED, S_DYN_AC_ENABLED,
-    S_PI_ENABLED, S_Z1_NIGHT_ENABLED, S_TARGET_CHARGE_ENABLED,
+    S_AC_SOC_TARGET, S_AC_POWER_LIMIT, S_REST_IN_DISCHARGE, S_PI_ENABLED, S_Z1_NIGHT_ENABLED,
+    S_TARGET_CHARGE_ENABLED,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -70,17 +67,6 @@ CORE_SENSORS = (
     (CONF_SOC_SENSOR, True, True),
     (CONF_MODE_SELECT, True, False),
 )
-
-# Zusätzliche Regel-Trigger in Registrierungsreihenfolge: (Name, Aktivierungsschlüssel,
-# ODER-verknüpft). "periodic" ist ein Zeitintervall, alle übrigen lauschen auf ihren Sensor.
-TRACKERS = (
-    ("tariff", (S_TARIFF_ENABLED,)),
-    ("periodic", (S_PERIODIC_ENABLED,)),
-    ("pv_forecast", (S_PV_FORECAST_ENABLED, S_SURPLUS_FORECAST_ENABLED)),
-    ("surplus_lock", (S_SURPLUS_LOCK_ENABLED,)),
-    ("zone1_force", (S_ZONE1_FORCE_ENABLED,)),
-)
-
 
 class SolakonCoordinator:
     """Zentrale Logik-Klasse — PI-Regler, SOC-Zonen, Modbus-Steuerung."""
@@ -153,8 +139,9 @@ class SolakonCoordinator:
         self._lock = asyncio.Lock()
         self._listeners: list[Callable[[], None]] = []
         self._unsub_trackers: list[Callable] = []
-        # Abmeldefunktionen der TRACKERS, nach Name
-        self._tracker_unsubs: dict[str, Callable] = {}
+        self.trackers = Trackers(
+            hass, lambda: self.settings, self._effective, self._on_state_change, self._on_periodic,
+        )
         self.forecast_tariff_suppressed: bool = False
         self.forecast_surplus_forced: bool = False
         self.forecast_exit_lock: bool = False
@@ -372,68 +359,10 @@ class SolakonCoordinator:
             self._setting(S_TARGET_CHARGE_ENABLED, bool), self.charging_to_target,
         )
 
-    def _offset_zone(self) -> str:
+    def offset_zone(self) -> str:
         """Offsetzone des Regelzustands; Nacht-Offset bei Dunkelheit, wenn eingeschaltet."""
         night = self.night.dark and bool(self.settings.get(S_Z1_NIGHT_ENABLED, False))
         return DynamicOffset.zone_of(self.ac_charge_active, self.cycle_active, night)
-
-    def snapshot(self) -> dict[str, Any]:
-        """Anzeigezustand unter internen Namen, ohne Live-Sensorwerte.
-
-        Offsetzone: AC-Laden, sonst Zone 1 bei aktivem Zyklus (bei Dunkelheit Nacht-Offset), sonst Zone 2.
-        Kapazität in kWh aus dem Verteilungs-Sensor der Instanz, None ohne gültigen Wert.
-        """
-        offset_zone = self._offset_zone()
-        offset_dynamic, offset_static, offset_value = self.dyn.offset(offset_zone, self.settings)
-        cap_sensor = str(self.group.dist_cfg().get(f"inst_{self.entry.entry_id}_capacity_sensor", ""))
-        return {
-            "offset_zone": offset_zone,
-            "offset_dynamic": offset_dynamic,
-            "offset_static": offset_static,
-            "offset_value": offset_value,
-            "capacity_kwh": self._flt_kwh_normalized(cap_sensor, None) if cap_sensor else None,
-            "current_zone": self.display.zone,
-            "zone_label": self.display.zone_label,
-            "mode_key": self.display.mode_key,
-            "mode_label": self.display.mode_label,
-            "last_action": self.last_action,
-            "last_action_ts": self.last_action_ts,
-            "last_output_ts": self.out.last_ts,
-            "mode_label_ts": self.display.mode_ts,
-            "last_error": self.last_error,
-            "integral": round(self.integral, 2),
-            "cycle_active": self.cycle_active,
-            "surplus_active": self.surplus_active,
-            "ac_charge_active": self.ac_charge_active,
-            "tariff_charge_active": self.tariff_charge_active,
-            "grid_charge_active": self.grid_charge_active,
-            "regulation_enabled": self.settings.get(S_REGULATION_ENABLED, False),
-            "grid_stddev": self.dyn.stddev,
-            "grid_stddev_raw": self.dyn.stddev_raw,
-            "dyn_z1_enabled": self.settings.get(S_DYN_Z1_ENABLED, False),
-            "dyn_z2_enabled": self.settings.get(S_DYN_Z2_ENABLED, False),
-            "dyn_ac_enabled": self.settings.get(S_DYN_AC_ENABLED, False),
-            "dyn_offset_z1": self.dyn.z1,
-            "dyn_offset_z1_night": self.dyn.z1_night,
-            "dyn_offset_z2": self.dyn.z2,
-            "dyn_offset_ac": self.dyn.ac,
-            "active_fall": self.active_fall,
-            "operating_state": self.display.operating_state,
-            "operating_state_ts": self.display.operating_state_ts,
-            "discharge_locked": self.discharge_locked,
-            "dist_mode_effective": self.dist_mode_effective,
-            "is_night": self.is_night,
-            "forecast_tariff_suppressed": self.forecast_tariff_suppressed,
-            "forecast_surplus_forced": self.forecast_surplus_forced,
-            "forecast_exit_lock": self.forecast_exit_lock,
-            "allocated_power": self.allocated_power,
-        }
-
-    def snapshot_view(self, names: tuple[str | tuple[str, str], ...]) -> dict[str, Any]:
-        """Auswahl aus `snapshot()`; ein Paar (außen, innen) benennt den Schlüssel um."""
-        snap = self.snapshot()
-        pairs = (n if isinstance(n, tuple) else (n, n) for n in names)
-        return {outer: snap[inner] for outer, inner in pairs}
 
     # ── Darstellen: Entity-Listener ──────────────────────────────────────────
 
@@ -648,16 +577,14 @@ class SolakonCoordinator:
             )
             self._unsub_trackers.append(unsub)
 
-        for name, _ in TRACKERS:
-            self._retrack(name)
+        self.trackers.start()
 
     async def async_shutdown(self) -> None:
         """Listener abräumen."""
         for unsub in self._unsub_trackers:
             unsub()
         self._unsub_trackers.clear()
-        for name, _ in TRACKERS:
-            self._untrack(name)
+        self.trackers.stop()
 
     async def async_update_settings(self, changes: dict[str, Any]) -> None:
         """Änderungen prüfen, mit der Kopplung von Zielladen und Regelung übernehmen und speichern.
@@ -676,7 +603,7 @@ class SolakonCoordinator:
             async with self._lock:
                 await self._switch_off_sequence()
 
-        before = {name: self._tracker_input(name) for name, _ in TRACKERS}
+        before = self.trackers.inputs()
 
         if S_REST_IN_DISCHARGE in changes:
             self.resting = False
@@ -686,9 +613,7 @@ class SolakonCoordinator:
         await self._store.async_save(self._store_data())
         _LOGGER.info("Solakon: Einstellungen gespeichert")
 
-        for name, _ in TRACKERS:
-            if self._tracker_input(name) != before[name]:
-                self._retrack(name)
+        self.trackers.refresh(before)
 
         self.notify_listeners()
 
@@ -710,47 +635,9 @@ class SolakonCoordinator:
 
     # ── Lebenszyklus: Trigger ────────────────────────────────────────────────
 
-    def _tracker_input(self, name: str) -> tuple:
-        """Eingaben eines Triggers: Aktivierungswerte und Sensor bzw. Intervall."""
-        keys = dict(TRACKERS)[name]
-        target = self.settings[S_PERIODIC_INTERVAL] if name == "periodic" else self._effective(name)
-        return tuple(self.settings[k] for k in keys), target
-
-    def _untrack(self, name: str) -> None:
-        """Trigger `name` abmelden, falls registriert."""
-        unsub = self._tracker_unsubs.pop(name, None)
-        if unsub:
-            unsub()
-
-    def _retrack(self, name: str) -> None:
-        """Trigger `name` abmelden und neu registrieren, wenn aktiviert und Sensor gesetzt.
-
-        Der periodische Trigger läuft im Intervall S_PERIODIC_INTERVAL, mindestens 5 s.
-        """
-        self._untrack(name)
-        if not any(self.settings[k] for k in dict(TRACKERS)[name]):
-            return
-        if name == "periodic":
-            interval = max(5, self._setting(S_PERIODIC_INTERVAL, int))
-            self._tracker_unsubs[name] = async_track_time_interval(
-                self.hass, self._on_periodic, timedelta(seconds=interval)
-            )
-            return
-        sensor = self._effective(name)
-        if sensor:
-            self._tracker_unsubs[name] = async_track_state_change_event(
-                self.hass, [sensor], self._on_state_change
-            )
-
-    def update_sensor_trackers(self) -> None:
-        """Sensorgebundene Trigger neu registrieren, etwa nach geänderten globalen Vorgaben."""
-        for name, _ in TRACKERS:
-            if name != "periodic":
-                self._retrack(name)
-
     def apply_group_change(self) -> None:
         """Nach geänderter Verteilung der Netzgruppe: Trigger neu anmelden, Regelzyklus anstoßen."""
-        self.update_sensor_trackers()
+        self.trackers.refresh_sensors()
         self.request_regulation()
 
     def request_regulation(self) -> None:
@@ -997,15 +884,10 @@ class SolakonCoordinator:
 
         # Eine Energierichtung je Netzgruppe: lädt eine Schwester, entlädt Zone 1 nur PV.
         # Ebenso beim Aufladen mit Hausvorrang.
-        if self.group.sister_charging(self):
-            cap_reason = "sister_charging"
-        elif self.charging_to_target and not cs.battery_priority:
-            cap_reason = "house_priority"
-        else:
-            cap_reason = ""
+        cap_reason = pv_cap_reason(self.group.sister_charging(self), self.charging_to_target, cs.battery_priority)
         capped = cap_reason if self.cycle_active and mode == MODE_DISCHARGE else ""
 
-        target_offset = self.dyn.value(self._offset_zone(), self.settings)
+        target_offset = self.dyn.value(self.offset_zone(), self.settings)
 
         # ── 11b. Timeout-Reset ───────────────────────────────────────────────
         # Entfällt wenn ein Fall in diesem Zyklus bereits getoggelt hat

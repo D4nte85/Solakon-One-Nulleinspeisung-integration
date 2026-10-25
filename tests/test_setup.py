@@ -21,7 +21,7 @@ def _hass(prefixes: str) -> tuple[h.FakeHass, list[h.FakeEntry]]:
 
 
 def _triggers(hass: h.FakeHass, prefix: str) -> list[str]:
-    return sorted(hass.data[DOMAIN][f"entry_{prefix}"]._tracker_unsubs)
+    return hass.data[DOMAIN][f"entry_{prefix}"].trackers.active()
 
 
 def test_globaler_sensor_trigger_nach_setup():

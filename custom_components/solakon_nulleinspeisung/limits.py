@@ -42,6 +42,17 @@ class PowerLimits:
         return min(self.zone12, max(0, solar - self.pv_reserve))
 
 
+def pv_cap_reason(sister_charging: bool, charging_to_target: bool, battery_priority: bool) -> str:
+    """Grund des PV-Deckels: `sister_charging`, wenn eine Schwesterinstanz lädt, sonst
+    `house_priority` beim Aufladen des Zielladens mit Hausvorrang, sonst leer.
+    """
+    if sister_charging:
+        return "sister_charging"
+    if charging_to_target and not battery_priority:
+        return "house_priority"
+    return ""
+
+
 def power_limits(
     *, hard_limit_z0: int, hard_limit_z1: int, ac_power_limit: int, pv_reserve: int,
     allocated: float | None,
