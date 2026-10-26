@@ -811,7 +811,7 @@ class SolakonCoordinator:
             zone1_forced=self.zone1_forced,
             target_enabled=cs.target_enabled, target_soc=cs.target_soc,
             battery_priority=cs.battery_priority, source_ac=cs.source_ac, source_tariff=cs.source_tariff,
-            grid_charge_enabled=cs.grid_charge_enabled, grid_charge_power=limits.ac,
+            grid_charge_enabled=cs.grid_charge_enabled, grid_charge_power=cs.grid_charge_power,
         )
         if fall_executed:
             self.active_fall = fall_executed
@@ -919,7 +919,7 @@ class SolakonCoordinator:
             grid=grid, current_power=current_power, tolerance=cs.tolerance,
             surplus_active=self.surplus_active, ac_charge_active=self.ac_charge_active,
             tariff_charge_active=self.tariff_charge_active, grid_charge_active=self.grid_charge_active,
-            capped=capped, zone0_power=limits.zone0, tariff_power=cs.tariff_power, grid_charge_power=limits.ac,
+            capped=capped, zone0_power=limits.zone0, tariff_power=cs.tariff_power, grid_charge_power=cs.grid_charge_power,
             ac_offset=ac_offset, ac_limit=limits.ac, ac_min_charge=cs.ac_min_power,
             ac_share=ac_error_share,
             ac_charge=-actual, ac_pool_charge=-self.group.ac_actual(self, actual),

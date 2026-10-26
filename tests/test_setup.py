@@ -58,3 +58,28 @@ def test_globaler_sensor_trigger_bei_parallelem_setup(monkeypatch):
 def test_config_schema_nur_ueber_config_entry():
     """async_setup verlangt ein CONFIG_SCHEMA (hassfest config_schema)."""
     assert hasattr(h.integration, "CONFIG_SCHEMA")
+
+
+def test_number_entitaeten_setzen_settings():
+    hass = h.FakeHass("de")
+    entry = h.FakeEntry("entry_a", h.entry_data("a"))
+    hass.config_entries.entries = [entry]
+
+    async def run():
+        await h.integration.async_setup(hass, {})
+        await h.integration.async_setup_entry(hass, entry)
+        coord = hass.data[DOMAIN]["entry_a"]
+        numbers = {e.translation_key: e for e in h.build_entities(hass, coord)
+                   if isinstance(e, h.number_mod.SettingNumber)}
+        assert set(numbers) == {"target_soc", "target_grid_power"}
+        assert (numbers["target_soc"].native_value, numbers["target_grid_power"].native_value) == (70, 800)
+        assert (numbers["target_grid_power"].native_min_value,
+                numbers["target_grid_power"].native_max_value,
+                numbers["target_grid_power"].native_step) == (100, 1200, 50)
+        await numbers["target_soc"].async_set_native_value(100.0)
+        await numbers["target_grid_power"].async_set_native_value(600.0)
+        return coord
+
+    coord = asyncio.run(run())
+    assert (coord.settings["target_soc"], coord.settings["target_grid_power"]) == (100, 600)
+    assert coord.settings["target_charge_enabled"] is False

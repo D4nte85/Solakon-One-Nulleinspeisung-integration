@@ -223,6 +223,9 @@ R, T, N = "regulation_enabled", "target_charge_enabled", "target_grid_charge"
     ({R: False, T: True}, {R: False, T: True}, {R: False, T: True}),
     # ohne Zielladen: Regelung schalten bleibt einfach
     ({R: False, T: False}, {R: True}, {R: True}),
+    # Ziel-SOC ändern koppelt nicht, auch nicht in der Entladepause
+    ({R: False, T: True}, {"target_soc": 100}, {"target_soc": 100}),
+    ({R: True, T: True}, {"target_soc": 50}, {"target_soc": 50}),
 ])
 def test_kopplung_einmal_aus_dem_alten_stand(before, changes, after):
     settings = {**const.SETTINGS_DEFAULTS, **before}

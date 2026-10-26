@@ -277,6 +277,7 @@ const TAB_LAYOUT = {
           { k: "target_source_ac",        t: "bool" },
           { k: "target_source_tariff",    t: "bool" },
           { k: "target_grid_charge",      t: "bool" },
+          { k: "target_grid_power",       t: "num" },
         ],
       },
     ],

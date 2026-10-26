@@ -48,7 +48,7 @@ REQUIRED_ENTITY_DEFAULTS_EN = {
     CONF_EXPORT_LIMIT:       "number.solakon_one_grid_export_power_limit",
 }
 
-PLATFORMS = ["sensor", "switch", "binary_sensor"]
+PLATFORMS = ["sensor", "switch", "binary_sensor", "number"]
 
 # -- Geraetegrenze ------------------------------------------------------------
 # Maximale Ein- und Ausgangsleistung des Solakon ONE laut Datenblatt. Deckelt jeden
@@ -202,8 +202,9 @@ S_TARGET_SOC              = "target_soc"
 S_TARGET_BATTERY_PRIORITY = "target_battery_priority"
 S_TARGET_SOURCE_AC        = "target_source_ac"
 S_TARGET_SOURCE_TARIFF    = "target_source_tariff"
-# Netz-Laden mit der Max. Ladeleistung, Fälle GN/HN.
+# Netz-Laden mit der Netz-Ladeleistung, Fälle GN/HN.
 S_TARGET_GRID_CHARGE      = "target_grid_charge"
+S_TARGET_GRID_POWER       = "target_grid_power"
 
 S_SELF_ADJUST     = "self_adjust_enabled"
 S_SELF_ADJUST_TOL = "self_adjust_tolerance"
@@ -366,6 +367,7 @@ SETTINGS_SCHEMA: dict[str, Field] = {
     S_TARGET_SOURCE_AC:        _bool(True),
     S_TARGET_SOURCE_TARIFF:    _bool(True),
     S_TARGET_GRID_CHARGE:      _bool(),
+    S_TARGET_GRID_POWER:       _int(800, POWER, 100, 1200, 50),
 
     S_SELF_ADJUST:     _bool(),
     S_SELF_ADJUST_TOL: _int(2, AMOUNT, 1, 50, 1),

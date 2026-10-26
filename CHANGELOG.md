@@ -5,6 +5,10 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+### Hinzugefügt
+
+- **Zielladen von außen steuern (Issue #53):** Ziel-SOC und die neue Netz-Ladeleistung sind als `number`-Entitäten „Ziel-SOC“ und „Netz-Ladeleistung“ setzbar, eine Automation kann damit das Ziel vor dem Einschalten des Zielladens setzen. Netz-Laden lädt mit der eigenen Netz-Ladeleistung (Standard 800 W) statt mit der Max. Ladeleistung des AC-Ladens. Wer die Max. Ladeleistung gesenkt hat, lädt im Netz-Laden nach dem Update mit 800 W, bis die Netz-Ladeleistung gesetzt ist. Ein geänderter Ziel-SOC wirkt im Aufladen sofort, in der Entladepause erst nach erneutem Einschalten von Zielladen; README-FAQ mit Beispiel (`const.py`, `schema.py`, `coordinator.py`, `number.py`, Panel).
+
 ## [3.5.0] – 2026-10-25
 
 ### Hinzugefügt

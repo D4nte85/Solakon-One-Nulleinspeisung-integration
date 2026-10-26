@@ -33,6 +33,7 @@ const = importlib.import_module(PKG + ".const")
 sensor_mod = importlib.import_module(PKG + ".sensor")
 binary_mod = importlib.import_module(PKG + ".binary_sensor")
 switch_mod = importlib.import_module(PKG + ".switch")
+number_mod = importlib.import_module(PKG + ".number")
 config_flow_mod = importlib.import_module(PKG + ".config_flow")
 group_store_mod = importlib.import_module(PKG + ".group_store")
 
@@ -376,7 +377,7 @@ def capture_logs() -> LogCapture:
 
 def build_entities(hass, coord) -> list:
     entities: list = []
-    for mod in (sensor_mod, binary_mod, switch_mod):
+    for mod in (sensor_mod, binary_mod, switch_mod, number_mod):
         _run_sync(mod.async_setup_entry(hass, coord.entry, entities.extend))
     return entities
 
@@ -394,6 +395,7 @@ STATIC_ENTITY_ATTRS = (
     "unique_id", "translation_key", "entity_category", "device_class", "state_class",
     "native_unit_of_measurement", "suggested_display_precision", "options",
     "has_entity_name", "should_poll", "device_info",
+    "native_min_value", "native_max_value", "native_step", "mode",
 )
 
 

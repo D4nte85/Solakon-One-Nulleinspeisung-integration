@@ -457,7 +457,7 @@ Regeln der Stellwertrechnung:
 |-----------|-------------|------------|
 | Aktivieren | Ein/Aus-Schalter | — |
 | Ladeziel SOC (%) | Laden stoppt bei diesem SOC | 80–95 |
-| Max. Ladeleistung (W) | Obergrenze der AC-Ladeleistung; gilt auch als feste Leistung des Netz-Ladens im [Zielladen](#-zielladen) | 400–800 |
+| Max. Ladeleistung (W) | Obergrenze der AC-Ladeleistung; das Netz-Laden im [Zielladen](#-zielladen) hat eine eigene Netz-Ladeleistung | 400–800 |
 | Mindestladeleistung (W) | Kleinster geschriebener Ladesollwert, darunter 0; 0 schaltet die Schwelle ab. 50 W gemessen, Änderung auf eigene Gefahr | 50 |
 | Hysterese (W) | Wirkt auf Eintritt und Austritt: Eintritt unter min(Offset, 0) − Hysterese, Austritt ab Offset + Hysterese | 30–80 |
 | Regel-Offset (W) | Zielwert während AC Laden (typisch negativ) | −80 bis −30 |
@@ -562,18 +562,21 @@ Lädt die Batterie bis zum **Ziel-SOC** und schaltet danach die Regelung ab. Zwe
 
 **PV beim Aufladen:** Mit **Hausvorrang** (Standard) laufen Zone 1 und Zone 2 weiter, die Ausgangsleistung ist aber auch mit Zyklus auf `min(Hard-Limit Z1, max(0, PV − Reserve))` gedeckelt; die Batterie lädt nur die PV über dem Hausverbrauch. Mit **Batterievorrang** setzt Fall ZB Ausgangsleistung 0 W im Ruhemodus, die ganze PV geht in die Batterie und das Haus bezieht vom Netz; Zone-1- und Zone-2-Start (A, E) sind gesperrt.
 
-**Netz-Laden** (Fälle GN/HN) lädt sofort mit der Max. Ladeleistung aus dem [AC-Laden-Tab](#-ac-laden) im Modus `'3'`, ohne Preisbedingung, und hat Vorrang vor dem Tarif-Laden. Es endet am Ziel-SOC oder wenn Netz-Laden oder Zielladen ausgeschaltet wird. Netz-Laden zählt als Lade-Session für die [Energierichtung der Netzgruppe](#eine-energierichtung-je-netzgruppe). Wann aus dem Netz geladen wird, entscheiden Nutzer oder Automation über den Schalter.
+**Netz-Laden** (Fälle GN/HN) lädt sofort mit der eigenen Netz-Ladeleistung (Standard 800 W, unabhängig von der Max. Ladeleistung des AC-Ladens) im Modus `'3'`, ohne Preisbedingung, und hat Vorrang vor dem Tarif-Laden. Es endet am Ziel-SOC oder wenn Netz-Laden oder Zielladen ausgeschaltet wird. Netz-Laden zählt als Lade-Session für die [Energierichtung der Netzgruppe](#eine-energierichtung-je-netzgruppe). Wann aus dem Netz geladen wird, entscheiden Nutzer oder Automation über den Schalter.
 
 Ziel-SOC und Ladequellen lassen sich auch bei ausgeschaltetem Zielladen einstellen. Der Max-SOC des Geräts bleibt Obergrenze: liegt das Ziel darüber, wird es nie erreicht und die Entladepause tritt nicht ein.
+
+**Ziel-SOC ändern:** Während des Aufladens gilt ein geänderter Ziel-SOC sofort — Fall ZE prüft ihn in jedem Regelzyklus. Ein gesenktes Ziel unter dem aktuellen SOC beginnt also im nächsten Zyklus die Entladepause. In der Entladepause bewirkt die Änderung nichts: Die Regelung ist aus, das Zielladen bleibt in der Pause. Der neue Wert gilt erst, wenn Zielladen aus- und wieder eingeschaltet wird.
 
 | Parameter | Beschreibung | Empfehlung |
 |-----------|-------------|------------|
 | Zielladen aktivieren | Ein/Aus — auch als Entität `switch.solakon_one_zielladen` | — |
-| Ziel-SOC (%) | Aufladen endet bei diesem SOC, danach Entladepause. 70 % lagert die Batterie im mittleren Ladebereich, der die Zellen über Wochen schont, mit Reserve gegen Selbstentladung | 70 (Winterpause), 100 (Unwetter-Vorsorge) |
+| Ziel-SOC (%) | Aufladen endet bei diesem SOC, danach Entladepause. 70 % lagert die Batterie im mittleren Ladebereich, der die Zellen über Wochen schont, mit Reserve gegen Selbstentladung — auch als Entität `number.solakon_one_ziel_soc` | 70 (Winterpause), 100 (Unwetter-Vorsorge) |
 | Batterievorrang | Aus = Hausvorrang, An = Batterievorrang | Aus |
 | AC Laden als Ladequelle | AC Laden darf während des Aufladens starten | An |
 | Tarif-Laden als Ladequelle | Tarif-Laden darf während des Aufladens starten | An |
-| Netz-Laden | Lädt sofort mit der Max. Ladeleistung aus dem Netz — auch als Entität `switch.solakon_one_netz_laden`; geht mit dem Ende des Zielladens aus | Aus |
+| Netz-Laden | Lädt sofort mit der Netz-Ladeleistung aus dem Netz — auch als Entität `switch.solakon_one_netz_laden`; geht mit dem Ende des Zielladens aus | Aus |
+| Netz-Ladeleistung (W) | Feste Ladeleistung des Netz-Ladens, unabhängig von der Max. Ladeleistung des AC-Ladens. 800 W wie Max. Ladeleistung und Tarif-Ladeleistung, mit Standardwerten lädt das Netz-Laden wie bisher — auch als Entität `number.solakon_one_netz_ladeleistung` | 800 |
 
 ---
 
@@ -605,7 +608,7 @@ Die Regellogik arbeitet mit einer geordneten Liste von Falls. Die Reihenfolge is
 | **B** — Zone 3 Stop | SOC ≤ Zone-3-Schwelle UND `cycle_active = True` UND keine Lade-Session | `cycle_active → False`. Integral = 0. Ausgangsleistung → 0 W. Timer-Toggle. Modus → `'0'`. |
 | **C** — Zone 3 Absicherung | SOC ≤ Zone-3-Schwelle UND `cycle_active = False` UND Modus ≠ `'0'` UND keine Lade-Session | Ausgangsleistung → 0 W. Timer-Toggle. Modus → `'0'`. Kein Integral-Reset. |
 | **D** — Recovery | `(cycle_active = True ODER Lade-Session mit geltendem Ladegrund)` UND Modus ∉ `{'1','3'}` UND (SOC > Zone-3-Schwelle **ODER** Lade-Session mit geltendem Ladegrund) UND keine **Tarifsperre** (Preis < Teuer-Schwelle; greift nicht bei einer Lade-Session oder `surplus_active`) UND ohne Lade-Session kein Aufladen mit Batterievorrang | Timer-Toggle. Modus → `'3'` (wenn eine Lade-Session mit geltendem Ladegrund läuft) sonst `'1'`. Kein Integral-Reset. Als *geltender Ladegrund* zählt `ac_charge_active` bei eingeschalteter AC-Option, `tariff_charge_active` bei ausgewiesenem Günstig-Preis und `grid_charge_active` bei eingeschaltetem Netz-Laden während des Aufladens — sonst räumt HT bzw. H die Session im selben Zyklus, und Recovery würde das Netzladen davor noch einmal anwerfen. |
-| **GN** — Netz-Laden Start | Aufladen des Zielladens UND Netz-Laden an UND keine Lade-Session UND kein Überschuss aktiv UND Modus ≠ `'3'` | `grid_charge_active → True`. Timer-Toggle. Ausgangsleistung → Max. Ladeleistung. Modus → `'3'`. |
+| **GN** — Netz-Laden Start | Aufladen des Zielladens UND Netz-Laden an UND keine Lade-Session UND kein Überschuss aktiv UND Modus ≠ `'3'` | `grid_charge_active → True`. Timer-Toggle. Ausgangsleistung → Netz-Ladeleistung. Modus → `'3'`. |
 | **HN** — Netz-Laden Ende | `grid_charge_active = True` UND (SOC ≥ Ziel-SOC ODER Netz-Laden aus ODER Zielladen aus) | `grid_charge_active → False`. Integral = 0. Ausgangsleistung 0 W. Timer-Toggle. Zone 1 → `'1'` / Zone 2 → `'0'`. |
 | **GT** — Tarif-Laden Start | Tarif aktiv UND Preis gültig UND Preis < Günstig-Schwelle UND SOC < Tarif-SOC-Ziel − SOC-Hysterese UND kein Tarif-Laden aktiv UND **kein AC-Laden aktiv** UND kein Netz-Laden aktiv UND kein Überschuss aktiv UND Modus ≠ `'3'` UND (kein Aufladen des Zielladens ODER Tarif-Laden als Ladequelle zugeschaltet) | `tariff_charge_active → True`. Timer-Toggle. Ausgangsleistung → Tarif-Ladeleistung. Modus → `'3'`. |
 | **HT** — Tarif-Laden Ende | `tariff_charge_active = True` UND (**kein Günstig-Preis ausgewiesen** ODER SOC ≥ Tarif-SOC-Ziel ODER Aufladen des Zielladens ohne Tarif-Laden als Ladequelle) — der Ausweis fehlt bei Preis ≥ Günstig-Schwelle, abgeschalteter Tarif-Option, PV-Prognose-Unterdrückung und unlesbarem Preissensor | `tariff_charge_active → False`. Integral = 0. Ausgangsleistung 0 W. Timer-Toggle. Zone 1 → `'1'` / Zone 2 → `'0'`. |
@@ -625,7 +628,7 @@ Die Regellogik arbeitet mit einer geordneten Liste von Falls. Die Reihenfolge is
 
 **Reihenfolge-Begründungen:**
 - Fall ZE steht vor allen anderen: Am Ziel-SOC endet das Aufladen in jedem Zustand, auch aus einer Lade-Session oder aus Surplus.
-- Falls GN/HN stehen vor GT/HT: Ist Netz-Laden eingeschaltet, lädt die Instanz mit der Max. Ladeleistung, auch wenn gleichzeitig ein günstiger Preis Tarif-Laden mit der Tarif-Ladeleistung starten würde. Endet Netz-Laden bei noch günstigem Preis, startet GT im nächsten Zyklus.
+- Falls GN/HN stehen vor GT/HT: Ist Netz-Laden eingeschaltet, lädt die Instanz mit der Netz-Ladeleistung, auch wenn gleichzeitig ein günstiger Preis Tarif-Laden mit der Tarif-Ladeleistung starten würde. Endet Netz-Laden bei noch günstigem Preis, startet GT im nächsten Zyklus.
 - Fall ZB steht direkt vor TM und hat dieselbe Mechanik. Fall A und E sind bei Batterievorrang gesperrt — sonst würde A einen Zyklus starten, den ZB im nächsten Zyklus wieder beendet.
 - Fall D liegt vor Falls G/H, damit Recovery nur Modus ∉ `{'1','3'}` prüft — der AC-Lade-Modus `'3'` wird durch Recovery nie überschrieben.
 - Fall I fängt jeden Widerspruch zwischen Modus und Lade-Flags auf — egal ob durch externe Modussetzung oder Fehlzustand entstanden. Bei einem Widerspruch gewinnt der **Modus**: er ist der beobachtete Zustand des Geräts, das Flag nur die Buchführung darüber. Eine so beendete Session wird nicht wieder aufgenommen, sie muss über Fall G oder GT neu eintreten.
@@ -696,7 +699,9 @@ Alle Entitätsnamen kommen aus den Übersetzungen und erscheinen in der Sprache 
 | `switch.solakon_one_regelung_aktiv` | Switch | Hauptschalter — aktiviert/deaktiviert den Schreibteil |
 | `switch.solakon_one_tarif_steuerung_aktiv` | Switch | Tarif-Steuerung ein/aus — derselbe Schalter wie im **Tarif**-Tab des Panels, aus Dashboard, Skript und Automation heraus bedienbar. Beim Ausschalten endet eine laufende Tarif-Lade-Session im nächsten Regelzyklus (Fall HT) |
 | `switch.solakon_one_zielladen` | Switch | Zielladen ein/aus — derselbe Schalter wie im **Zielladen**-Tab. Gekoppelt mit „Regelung aktiv“, siehe [Zielladen](#-zielladen) |
-| `switch.solakon_one_netz_laden` | Switch | Netz-Laden des Zielladens ein/aus — lädt während des Aufladens sofort mit der Max. Ladeleistung; geht mit dem Ende des Zielladens aus |
+| `switch.solakon_one_netz_laden` | Switch | Netz-Laden des Zielladens ein/aus — lädt während des Aufladens sofort mit der Netz-Ladeleistung; geht mit dem Ende des Zielladens aus |
+| `number.solakon_one_ziel_soc` | Number | Ziel-SOC des Zielladens (10–100 %) — derselbe Wert wie im **Zielladen**-Tab. Wirkt im Aufladen sofort, in der Entladepause erst nach erneutem Einschalten von Zielladen |
+| `number.solakon_one_netz_ladeleistung` | Number | Netz-Ladeleistung (100–1200 W) — derselbe Wert wie im **Zielladen**-Tab |
 | `binary_sensor.solakon_one_entladezyklus_aktiv` | Binary Sensor | Internes Flag Zyklus |
 | `binary_sensor.solakon_one_uberschuss_modus` | Binary Sensor | Flag Überschuss-Modus aktiv |
 | `binary_sensor.solakon_one_ac_laden_aktiv` | Binary Sensor | Flag AC-Laden aktiv |
@@ -789,7 +794,7 @@ Ja — **Surplus-Forecast-Erzwingung** im **Überschuss**-Tab: Liegt die PV-Vorh
 Mit dem [Zielladen](#-zielladen): Ziel-SOC einstellen (Standard 70 %), Ladequellen wählen und Zielladen einschalten. Am Ziel schaltet die Integration die Regelung ab, die Batterie bleibt in der Entladepause, auch über Neustarts. Liegt der SOC beim Einschalten schon über dem Ziel, beginnt die Entladepause im nächsten Regelzyklus. Im Frühjahr Zielladen ausschalten oder „Regelung aktiv“ einschalten — beides stellt den normalen Betrieb her.
 
 **Kann ich vor einem Unwetter die Batterie vollladen?**
-Ja, über eine eigene Automation mit den Schaltern `switch.solakon_one_zielladen` und `switch.solakon_one_netz_laden`. Ziel-SOC im Zielladen-Tab z. B. auf 100 % stellen. Beispiel mit einem Warn-Sensor (etwa aus der DWD-Integration):
+Ja, über eine eigene Automation mit `number.solakon_one_ziel_soc`, `number.solakon_one_netz_ladeleistung` und den Schaltern `switch.solakon_one_zielladen` und `switch.solakon_one_netz_laden`. Beispiel mit einem Warn-Sensor (etwa aus der DWD-Integration):
 
 ```yaml
 automation:
@@ -799,6 +804,16 @@ automation:
         entity_id: sensor.dwd_aktuelle_warnstufe
         above: 2
     actions:
+      - action: number.set_value
+        target:
+          entity_id: number.solakon_one_ziel_soc
+        data:
+          value: 100
+      - action: number.set_value
+        target:
+          entity_id: number.solakon_one_netz_ladeleistung
+        data:
+          value: 800
       - action: switch.turn_on
         target:
           entity_id:
@@ -816,6 +831,8 @@ automation:
 ```
 
 Zielladen aus schaltet die Regelung wieder ein und Netz-Laden aus. Ohne Netz-Laden lädt die Instanz nur über PV und die zugeschalteten Ladequellen.
+
+Läuft das Zielladen schon, etwa die Winterpause mit 70 %, gilt ein neuer Ziel-SOC im Aufladen sofort, in der Entladepause aber erst nach erneutem Einschalten. Die Start-Automation schaltet dann zuerst `switch.solakon_one_zielladen` aus, setzt den Ziel-SOC und schaltet Zielladen und Netz-Laden wieder ein — Zielladen aus schaltet auch Netz-Laden aus.
 
 **Ich habe mehrere Smartmeter für getrennte Stromkreise.**
 Instanzen werden automatisch nach ihrem Netz-Leistungssensor in [Netzgruppen](#netzgruppen-mehrere-smartmeter) sortiert. Jede Gruppe hat ihre eigene, unabhängige Leistungsverteilung; Instanzen an verschiedenen Zählern beeinflussen sich nicht.

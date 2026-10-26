@@ -185,6 +185,14 @@
       "target_grid_charge": {
         "name": "Grid charging"
       }
+    },
+    "number": {
+      "target_soc": {
+        "name": "Target SOC"
+      },
+      "target_grid_power": {
+        "name": "Grid charging power"
+      }
     }
   }
 }

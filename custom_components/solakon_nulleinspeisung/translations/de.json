@@ -185,6 +185,14 @@
       "target_grid_charge": {
         "name": "Netz-Laden"
       }
+    },
+    "number": {
+      "target_soc": {
+        "name": "Ziel-SOC"
+      },
+      "target_grid_power": {
+        "name": "Netz-Ladeleistung"
+      }
     }
   }
 }

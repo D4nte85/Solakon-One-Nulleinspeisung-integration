@@ -107,6 +107,7 @@ _ENTITY_ATTRS = (
     "unique_id", "translation_key", "icon", "entity_category", "device_class",
     "state_class", "native_unit_of_measurement", "suggested_display_precision",
     "options", "has_entity_name", "should_poll", "device_info",
+    "native_min_value", "native_max_value", "native_step", "mode",
 )
 
 
@@ -143,6 +144,16 @@ class BinarySensorEntity(Entity):
 
 class SwitchEntity(Entity):
     pass
+
+
+class NumberEntity(Entity):
+    pass
+
+
+class NumberMode(str, Enum):
+    AUTO = "auto"
+    BOX = "box"
+    SLIDER = "slider"
 
 
 class SensorDeviceClass(str, Enum):
@@ -301,7 +312,9 @@ def install() -> None:
     _module("homeassistant.components.binary_sensor", BinarySensorEntity=BinarySensorEntity,
             BinarySensorEntityDescription=BinarySensorEntityDescription)
     _module("homeassistant.components.switch", SwitchEntity=SwitchEntity)
-    _module("homeassistant.const", EntityCategory=EntityCategory, UnitOfPower=UnitOfPower)
+    _module("homeassistant.components.number", NumberEntity=NumberEntity, NumberMode=NumberMode)
+    _module("homeassistant.const", EntityCategory=EntityCategory, UnitOfPower=UnitOfPower,
+            PERCENTAGE="%")
     _module("homeassistant.config_entries", ConfigFlow=ConfigFlow, OptionsFlow=OptionsFlow,
             ConfigEntry=ConfigEntry)
     _module("homeassistant.data_entry_flow", FlowResult=dict)
