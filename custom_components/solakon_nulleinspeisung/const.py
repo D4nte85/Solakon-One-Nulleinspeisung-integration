@@ -61,9 +61,11 @@ DEVICE_MAX_CURRENT = 40
 # Greift nur im gesaettigten Standard-PI-Zweig (at_max_limit). Weicht die tatsaechliche
 # Wechselrichter-Ausgabe um mehr als OUTPUT_STALL_DEVIATION vom Limit ab und steht der
 # Messwert dabei laenger als OUTPUT_STALL_SECONDS unveraendert, wird der Sollwert neu
-# geschrieben und bei Fortbestand die Recovery aus Fall D gefahren.
+# geschrieben und bei Fortbestand die Recovery aus Fall D gefahren. Unter
+# OUTPUT_STALL_MIN_LIMIT findet keine Pruefung statt.
 OUTPUT_STALL_SECONDS = 300
 OUTPUT_STALL_DEVIATION = 0.05
+OUTPUT_STALL_MIN_LIMIT = 15
 
 # -- Tarif-Einheitenplausibilitaet --------------------------------------------
 # Die Preisschwellen sind ct/kWh. Liegt der Preis im Fenster

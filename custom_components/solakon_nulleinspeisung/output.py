@@ -8,7 +8,7 @@ import time
 from typing import Any, Awaitable, Callable, NamedTuple
 
 from .const import (
-    DEVICE_MAX_POWER, OUTPUT_STALL_SECONDS, OUTPUT_STALL_DEVIATION,
+    DEVICE_MAX_POWER, OUTPUT_STALL_SECONDS, OUTPUT_STALL_DEVIATION, OUTPUT_STALL_MIN_LIMIT,
     S_WAIT_TIME, S_SELF_ADJUST, S_SELF_ADJUST_TOL,
 )
 from .pi import clamp as _clamp
@@ -176,13 +176,13 @@ class Output:
     async def check_stall(self, limit: float) -> tuple[Stall, float] | None:
         """Erkennt einen Wechselrichter, der dem Limit nicht folgt; (Urteil, Ist-Leistung) oder None.
 
-        Kriterium: Abweichung über `OUTPUT_STALL_DEVIATION` bei einem Ist-Wert, dessen
-        `last_updated` seit `OUTPUT_STALL_SECONDS` nicht vorrückt. Erster Treffer schreibt
-        den Sollwert neu (`REWRITTEN`), jeder weitere liefert `RECOVERY`. Mindestabstand
-        zweier Urteile: `OUTPUT_STALL_SECONDS`.
+        Kriterium: Limit ab `OUTPUT_STALL_MIN_LIMIT`, Abweichung über `OUTPUT_STALL_DEVIATION`
+        bei einem Ist-Wert, dessen `last_updated` seit `OUTPUT_STALL_SECONDS` nicht vorrückt.
+        Erster Treffer schreibt den Sollwert neu (`REWRITTEN`), jeder weitere liefert
+        `RECOVERY`. Mindestabstand zweier Urteile: `OUTPUT_STALL_SECONDS`.
         """
         actual = self._read()
-        if limit <= 0 or not actual.ok:
+        if limit < OUTPUT_STALL_MIN_LIMIT or not actual.ok:
             self.reset_stall()
             return None
 

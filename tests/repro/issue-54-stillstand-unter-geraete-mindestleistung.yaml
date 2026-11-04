@@ -1,0 +1,21 @@
+titel: Stillstand schlägt bei einem Zone-2-Limit unter der Mindestleistung des Geräts an
+bezug: issue-54-stillstand-unter-geraete-mindestleistung
+# Zone 2 (Zyklus aus, Modus 1) in der Dämmerung: PV 53 W, PV-Ladereserve 50 W, Limit 3 W.
+# Die Ausgangsleistung steht am Limit, das Haus bezieht Strom. Unter etwa 12 W gibt das
+# Gerät nichts ab; die Ist-Leistung bleibt 0 W und meldet keinen neuen Wert.
+# Erwartet: keine Recovery (kein Modus '0').
+offen: false
+netz: 200
+instanzen:
+  - prefix: a
+    settings: {regulation_enabled: true}
+    sensoren: {soc: 40, solar: 53, modus: "1", leistung: 3, ist: 0}
+    folgt_ist: null
+schritte:
+  - nach: 0
+  - nach: 310
+  - nach: 310
+  - nach: 310
+erwartet:
+  - schritt: alle
+    kein_aufruf: {entity: select.a_mode, wert: "0"}
