@@ -5,6 +5,8 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+## [3.5.2] – 2026-11-04
+
 ### Behoben
 
 - **Stillstand meldete bei kleinem Limit eine Recovery (Issue #54):** In Zone 2 liegt das Limit `PV − PV-Ladereserve` in der Dämmerung im einstelligen Wattbereich. So kleine Leistungen gibt das Gerät nicht ab (gemessen: unter etwa 12 W 0 W), die Ist-Leistung blieb 0 W und galt nach 2 × 300 s als Stillstand — mit Fehlermeldung „Ausgang bleibt bei 0 W statt 3 W — Recovery ausgelöst“ und wirkungsloser Recovery. Die Prüfung setzt jetzt erst ab 15 W Limit ein (`const.py`, `output.py`).
