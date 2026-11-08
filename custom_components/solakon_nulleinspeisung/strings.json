@@ -192,7 +192,21 @@
       },
       "target_grid_power": {
         "name": "Grid charging power"
+      },
+      "hard_limit_z0": {
+        "name": "Zone 0 limit"
+      },
+      "hard_limit_z1": {
+        "name": "Zone 1/2 limit"
+      },
+      "global_max_power": {
+        "name": "Total max. output power"
       }
+    }
+  },
+  "device": {
+    "net_group": {
+      "name": "Solakon grid group {number}"
     }
   }
 }

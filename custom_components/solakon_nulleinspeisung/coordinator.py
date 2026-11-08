@@ -75,6 +75,7 @@ class SolakonCoordinator:
         self.hass = hass
         self.entry = entry
         self.settings: dict[str, Any] = SETTINGS_DEFAULTS.copy()
+        self.settings_rev = 0
         self._store = SolakonSettingsStore(hass, STORAGE_VERSION, f"{DOMAIN}_{entry.entry_id}")
 
         # Laufzeit-Zustände
@@ -610,6 +611,7 @@ class SolakonCoordinator:
         if S_PI_ENABLED in changes and changes[S_PI_ENABLED] != self._setting(S_PI_ENABLED, bool):
             self.pi.reset()
         self.settings.update(changes)
+        self.settings_rev += 1
         await self._store.async_save(self._store_data())
         _LOGGER.info("Solakon: Einstellungen gespeichert")
 

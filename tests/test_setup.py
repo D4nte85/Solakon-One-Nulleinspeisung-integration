@@ -71,15 +71,93 @@ def test_number_entitaeten_setzen_settings():
         coord = hass.data[DOMAIN]["entry_a"]
         numbers = {e.translation_key: e for e in h.build_entities(hass, coord)
                    if isinstance(e, h.number_mod.SettingNumber)}
-        assert set(numbers) == {"target_soc", "target_grid_power"}
+        assert set(numbers) == {"target_soc", "target_grid_power", "hard_limit_z0", "hard_limit_z1"}
         assert (numbers["target_soc"].native_value, numbers["target_grid_power"].native_value) == (70, 800)
         assert (numbers["target_grid_power"].native_min_value,
                 numbers["target_grid_power"].native_max_value,
                 numbers["target_grid_power"].native_step) == (100, 1200, 50)
         await numbers["target_soc"].async_set_native_value(100.0)
         await numbers["target_grid_power"].async_set_native_value(600.0)
+        await numbers["hard_limit_z1"].async_set_native_value(400.0)
+        await numbers["hard_limit_z0"].async_set_native_value(1000.0)
         return coord
 
     coord = asyncio.run(run())
     assert (coord.settings["target_soc"], coord.settings["target_grid_power"]) == (100, 600)
+    assert (coord.settings["hard_limit_z1"], coord.settings["hard_limit_z0"]) == (400, 1000)
+    assert coord.settings_rev == 4
     assert coord.settings["target_charge_enabled"] is False
+
+
+def _group_setup(entries: list[h.FakeEntry]) -> tuple[h.FakeHass, dict[str, list]]:
+    """Instanzen anlegen und ihre number-Plattform in Reihenfolge von `entries` laden; Entitäten je Eintrag."""
+    hass = h.FakeHass("de")
+    hass.config_entries.entries = list(entries)
+    added: dict[str, list] = {e.entry_id: [] for e in entries}
+
+    async def run():
+        await h.integration.async_setup(hass, {})
+        for entry in entries:
+            await h.integration.async_setup_entry(hass, entry)
+        for entry in entries:
+            await h.number_mod.async_setup_entry(hass, entry, added[entry.entry_id].extend)
+
+    asyncio.run(run())
+    return hass, added
+
+
+def _group_limits(added: dict[str, list]) -> dict[str, list]:
+    return {eid: [e for e in ents if isinstance(e, h.number_mod.GroupLimitNumber)] for eid, ents in added.items()}
+
+
+def test_gesamtlimit_traegt_kleinste_entry_id_und_wechselt_beim_laden():
+    hass, added = _group_setup([h.FakeEntry("entry_b", h.entry_data("b")),
+                                h.FakeEntry("entry_a", h.entry_data("a"))])
+    limits = _group_limits(added)
+    first, second = limits["entry_b"][0], limits["entry_a"][0]
+    assert first.__dict__.get("removed") is True
+    assert second.carrier == "entry_a" and "removed" not in second.__dict__
+    assert first.unique_id == second.unique_id == "group_1_global_max_power"
+    assert second.device_info["translation_placeholders"] == {"number": "1"}
+    assert (second.native_min_value, second.native_max_value, second.native_step) == (0, 9600, 10)
+
+
+def test_gesamtlimit_setzen_speichert_nur_das_feld_und_stoesst_regelung_an():
+    hass, added = _group_setup([h.FakeEntry("entry_a", h.entry_data("a")),
+                                h.FakeEntry("entry_b", h.entry_data("b"))])
+    entity = _group_limits(added)["entry_a"][0]
+    writes = []
+    entity.async_write_ha_state = lambda: writes.append(entity.native_value)
+    asyncio.run(entity.async_added_to_hass())
+    hass.events.clear()
+    asyncio.run(entity.async_set_native_value(400.0))
+    assert hass.storage[f"{DOMAIN}_distribution"]["sensor.grid"] == {"global_max_power": 400}
+    group = h.group_store_mod.group_for(hass, "sensor.grid")
+    assert group.dist_cfg()["global_max_power"] == 400 and group.dist_rev == 1
+    assert writes == [400]
+    assert [e for e in hass.events if e[0] == "task"] == [["task", "SolakonCoordinator._async_regulate"]] * 2
+    try:
+        asyncio.run(entity.async_set_native_value(-10.0))
+    except h.number_mod.InvalidSettings:
+        pass
+    else:
+        raise AssertionError("Wert unter der harten Grenze angenommen")
+
+
+def test_gesamtlimit_geht_beim_entladen_an_die_naechste_instanz():
+    hass, added = _group_setup([h.FakeEntry("entry_a", h.entry_data("a")),
+                                h.FakeEntry("entry_b", h.entry_data("b"))])
+    entry_a = hass.config_entries.entries[0]
+    asyncio.run(h.integration.async_unload_entry(hass, entry_a))
+    limits = _group_limits(added)
+    assert [e.carrier for e in limits["entry_b"]] == ["entry_b"]
+    assert limits["entry_b"][0].unique_id == "group_1_global_max_power"
+
+
+def test_gruppennummer_fest_je_netzsensor_und_gespeichert():
+    hass, added = _group_setup([h.FakeEntry("entry_a", h.entry_data("a")),
+                                h.FakeEntry("entry_c", h.entry_data("c", grid_sensor="sensor.grid_other"))])
+    limits = _group_limits(added)
+    assert limits["entry_a"][0].unique_id == "group_1_global_max_power"
+    assert limits["entry_c"][0].unique_id == "group_2_global_max_power"
+    assert hass.storage[f"{DOMAIN}_group_numbers"] == {"sensor.grid": 1, "sensor.grid_other": 2}

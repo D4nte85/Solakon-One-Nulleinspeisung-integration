@@ -22,14 +22,14 @@ from .const import (
     CONF_GRID_SENSOR,
     STORAGE_VERSION, DIST_DEFAULTS, DIST_SCHEMA, SETTINGS_SCHEMA, VERSION,
 )
-from . import group_store
+from . import group_store, number
 from .schema import InvalidSettings
 from .status_view import snapshot_view
 
 _LOGGER = logging.getLogger(__name__)
 
 # Integrationsweite `hass.data`-Schlüssel (ohne DOMAIN-Präfix), entfernt mit der letzten Instanz.
-DATA_KEYS = ("panel_registered", "ws_registered", *group_store.DATA_KEYS)
+DATA_KEYS = ("panel_registered", "ws_registered", *group_store.DATA_KEYS, number.DATA_KEY)
 PANEL_JS_URL = f"/{DOMAIN}/panel.js"
 
 # Keine YAML-Konfiguration; async_setup liefert nur Panel und Übersetzungen aus.
@@ -48,6 +48,7 @@ WS_STATUS_KEYS = (
     "active_fall", "operating_state", "discharge_locked", "dist_mode_effective", "is_night",
     "forecast_tariff_suppressed", "forecast_surplus_forced", "forecast_exit_lock", "allocated_power",
     "offset_zone", "offset_dynamic", "offset_static", "offset_value", "capacity_kwh",
+    "settings_rev", "dist_rev",
 )
 
 
@@ -80,14 +81,18 @@ def _coord_or_error(hass: HomeAssistant, connection: websocket_api.ActiveConnect
 async def _ws_get_all_instances(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
 ) -> None:
-    """WS: alle Instanzen mit Name und Netzsensor, nach Name sortiert."""
+    """WS: alle Instanzen mit Name, Netzsensor und Gruppennummer, nach Name sortiert."""
+    store = group_store.store_for(hass)
+    numbers = {} if store is None else store.numbers
     instances = []
     for entry_id, coord in hass.data.get(DOMAIN, {}).items():
         name = coord.entry.data.get(CONF_INSTANCE_NAME) or coord.entry.title or entry_id
+        grid_sensor = coord.entry.data.get(CONF_GRID_SENSOR, "")
         instances.append({
             "entry_id":      entry_id,
             "instance_name": name,
-            "grid_sensor":   coord.entry.data.get(CONF_GRID_SENSOR, ""),
+            "grid_sensor":   grid_sensor,
+            "group_number":  numbers.get(grid_sensor),
         })
     instances.sort(key=lambda x: x["instance_name"].lower())
     connection.send_result(msg["id"], {"instances": instances})
@@ -206,7 +211,7 @@ async def _ws_get_distribution_config(
 async def _ws_save_distribution_config(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
 ) -> None:
-    """WS: Verteilungs-Einstellungen speichern und die Mitglieder der Gruppe neu anbinden."""
+    """WS: geänderte Verteilungsfelder speichern; ungültige Werte als Befundliste zurück."""
     store = _get_or_error(
         connection, msg, group_store.store_for(hass),
         "not_ready", "Distribution-Store nicht initialisiert",
@@ -216,12 +221,6 @@ async def _ws_save_distribution_config(
     if findings := await store.save_dist(msg["grid_sensor"], msg["distribution"]):
         _send_invalid(connection, msg, findings)
         return
-
-    # Globale Sensor-Felder ändern den wirksamen Sensor einer Instanz ohne Änderung
-    # ihrer Settings; die Mitglieder melden ihre Trigger deshalb neu an.
-    for coord in group_store.group_for(hass, msg["grid_sensor"]).members().values():
-        coord.apply_group_change()
-
     connection.send_result(msg["id"], {"success": True})
 
 
@@ -330,6 +329,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     if unload_ok:
         hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
+        await number.release_carrier(hass, entry.entry_id)
 
         # Panel + Store nur entfernen wenn keine Instanz mehr läuft
         if not hass.data.get(DOMAIN):

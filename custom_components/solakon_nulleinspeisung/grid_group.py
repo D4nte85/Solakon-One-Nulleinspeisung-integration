@@ -130,6 +130,7 @@ class NetGroup:
         self.grid_sensor = grid_sensor
         self.sigma = Sigma()
         self.dist = dist
+        self.dist_rev = 0
         self._soc_switch = soc_switch
         self._on_soc_switch_change = on_soc_switch_change
 

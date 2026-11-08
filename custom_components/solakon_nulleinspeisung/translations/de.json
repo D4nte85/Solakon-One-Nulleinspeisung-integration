@@ -192,7 +192,21 @@
       },
       "target_grid_power": {
         "name": "Netz-Ladeleistung"
+      },
+      "hard_limit_z0": {
+        "name": "Zone-0-Limit"
+      },
+      "hard_limit_z1": {
+        "name": "Zone-1/2-Limit"
+      },
+      "global_max_power": {
+        "name": "Gesamte Max. Ausgangsleistung"
       }
+    }
+  },
+  "device": {
+    "net_group": {
+      "name": "Solakon Netzgruppe {number}"
     }
   }
 }

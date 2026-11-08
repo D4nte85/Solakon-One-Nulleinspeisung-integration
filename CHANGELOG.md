@@ -5,6 +5,11 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+### Hinzugefügt
+
+- **Leistungsgrenzen als Entitäten (Discussion #55):** Hard Limit Z0 und Hard Limit Z1 sind je Instanz als `number`-Entitäten „Zone-0-Limit“ und „Zone-1/2-Limit“ setzbar, die Gesamte Max. Ausgangsleistung der Netzgruppe als Entität am neuen Gerät „Solakon Netzgruppe N“. Die Gruppennummer wird beim ersten Auftreten einer Netzgruppe vergeben und gespeichert; die Entität führt die Instanz mit der kleinsten Eintrags-ID, bei deren Wegfall übernimmt die nächste mit derselben Entität. Automationen können damit die Entladeleistung begrenzen, etwa nachts; README-FAQ mit Beispiel (`number.py`, `group_store.py`, `__init__.py`).
+- **Panel gleicht Änderungen von außen ab:** Ändert eine Entität Settings oder Verteilung, lädt das Panel beim nächsten Statusabruf neu, sofern keine ungespeicherte Eingabe offen ist. Der Verteilungs-Tab speichert nur noch geänderte Felder und überschreibt ein per Automation gesetztes Gesamtlimit nicht mehr (`coordinator.py`, `status_view.py`, `solakon-panel.js`).
+
 ## [3.5.2] – 2026-11-04
 
 ### Behoben

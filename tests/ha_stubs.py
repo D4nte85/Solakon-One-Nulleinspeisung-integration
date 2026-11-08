@@ -133,6 +133,9 @@ class Entity:
     def async_write_ha_state(self):
         pass
 
+    async def async_remove(self):
+        self.__dict__["removed"] = True
+
 
 class SensorEntity(Entity):
     pass

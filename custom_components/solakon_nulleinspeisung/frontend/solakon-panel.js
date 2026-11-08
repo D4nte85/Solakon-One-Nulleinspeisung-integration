@@ -479,6 +479,7 @@ class SolakonPanel extends HTMLElement {
       label: this._areaNameFor(key)
              || this._hass?.states?.[key]?.attributes?.friendly_name
              || key,
+      number: instances[0].group_number ?? null,
       instances,
     }));
     this._groups.sort((a, b) => a.label.localeCompare(b.label));
@@ -782,6 +783,22 @@ class SolakonPanel extends HTMLElement {
     return true;
   }
 
+  // true, wenn sich der Änderungszähler der Settings von `entryId` seit dem letzten Abruf geändert hat.
+  _settingsRevChanged(entryId, rev) {
+    const seen = (this._settingsRevs ??= {});
+    const changed = entryId in seen && seen[entryId] !== rev;
+    seen[entryId] = rev;
+    return changed;
+  }
+
+  // true, wenn sich der Änderungszähler der Verteilung der Netzgruppe `gk` seit dem letzten Abruf geändert hat.
+  _distRevChanged(gk, rev) {
+    const seen = (this._distRevs ??= {});
+    const changed = gk in seen && seen[gk] !== rev;
+    seen[gk] = rev;
+    return changed;
+  }
+
   async _loadStatus() {
     if (this._activeInstance === "__overview__") {
       for (const inst of this._instances) {
@@ -799,11 +816,29 @@ class SolakonPanel extends HTMLElement {
       }
       return;
     }
+    if (this._activeInstance === "__dist__") {
+      const g = this._activeGroupObj() ?? this._groups[0];
+      const inst = g?.instances[0];
+      if (!inst) return;
+      try {
+        const status = await this._hass.callWS({ type: `${DOMAIN}/get_status`, entry_id: inst.entry_id });
+        if (this._distRevChanged(g.key, status.dist_rev) && !this._distBuf(g.key).isDirty) {
+          await this._loadDistConfig(g.key);
+          this._rerenderDist();
+        }
+      } catch (_) { /* ignore polling errors */ }
+      return;
+    }
     try {
       await this._forInstance(() => this._ws("get_status", { language: this._locale }), status => {
         this._status = status;
-        // Regelung serverseitig umgeschaltet (Fall ZE, Schalter-Entität): Settings neu laden.
-        if (status.regulation_enabled !== this._cfg.saved.regulation_enabled) this._loadConfig();
+        // Regelung serverseitig umgeschaltet (Fall ZE, Schalter-Entität) oder Settings von außen
+        // geändert (number-Entität) und keine ungespeicherte Eingabe: Settings neu laden.
+        const revChanged = this._settingsRevChanged(this._entryId, status.settings_rev);
+        if (status.regulation_enabled !== this._cfg.saved.regulation_enabled
+            || (revChanged && !this._cfg.isDirty)) this._loadConfig();
+        const g = this._groupOf(this._entryId);
+        if (g && this._distRevChanged(g.key, status.dist_rev) && !this._distBuf(g.key).isDirty) this._loadDistConfig(g.key);
         this._updateStatusView();
         this._updateRegBanner();
       });
@@ -1584,12 +1619,14 @@ ${this._textsMissing ? `
   }
 
   async _saveDistConfig() {
-    const gk     = this._distGroupKey();
-    const merged = this._distBuf(gk).merged();
-    const toast  = this._t.toast || {};
+    const gk      = this._distGroupKey();
+    const buf     = this._distBuf(gk);
+    const changes = { ...buf.dirty };
+    const merged  = buf.merged();
+    const toast   = this._t.toast || {};
     await this._wsAction(async () => {
-      await this._hass.callWS({ type: `${DOMAIN}/save_distribution_config`, grid_sensor: gk, distribution: merged });
-      this._distBuf(gk).reset(merged);
+      await this._hass.callWS({ type: `${DOMAIN}/save_distribution_config`, grid_sensor: gk, distribution: changes });
+      buf.reset(merged);
       this._showToast(toast.dist_saved || "");
       this._rerenderDist();
     });
@@ -1661,9 +1698,13 @@ ${this._textsMissing ? `
         `placeholder="${dt.cap_sensor_placeholder || ""}" data-dist-inst="${inst.entry_id}" data-dist-key="capacity_sensor"`),
     )).join("");
 
-    const groupsNote = this._groups.length > 1
-      ? `<p class="desc" style="padding:0 0 8px">${dt.groups_note || ""} — <strong>${dt.group_prefix || ""}: ${this._activeGroupObj()?.label ?? ""}</strong></p>`
+    const shownGroup = this._groups.length > 1 ? this._activeGroupObj() : this._groups[0];
+    const groupNumber = shownGroup?.number != null
+      ? (dt.group_number || "").replace("{n}", shownGroup.number)
       : "";
+    const groupsNote = this._groups.length > 1
+      ? `<p class="desc" style="padding:0 0 8px">${dt.groups_note || ""} — <strong>${dt.group_prefix || ""}: ${shownGroup?.label ?? ""}</strong>${groupNumber ? ` · ${groupNumber}` : ""}</p>`
+      : groupNumber ? `<p class="desc" style="padding:0 0 8px"><strong>${groupNumber}</strong></p>` : "";
 
     c.innerHTML = `
       ${groupsNote}

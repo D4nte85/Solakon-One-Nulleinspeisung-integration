@@ -40,6 +40,8 @@ def snapshot(coord: SolakonCoordinator) -> dict[str, Any]:
         "tariff_charge_active": coord.tariff_charge_active,
         "grid_charge_active": coord.grid_charge_active,
         "regulation_enabled": coord.settings.get(S_REGULATION_ENABLED, False),
+        "settings_rev": coord.settings_rev,
+        "dist_rev": coord.group.dist_rev,
         "grid_stddev": coord.dyn.stddev,
         "grid_stddev_raw": coord.dyn.stddev_raw,
         "dyn_z1_enabled": coord.settings.get(S_DYN_Z1_ENABLED, False),

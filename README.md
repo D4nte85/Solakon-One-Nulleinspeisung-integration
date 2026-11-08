@@ -188,10 +188,12 @@ Im Panel wird bei mehreren Instanzen ein zusätzlicher **Verteilungs-Tab** einge
 
 | Parameter | Beschreibung |
 |-----------|-------------|
-| Gesamte Max. Ausgangsleistung (W) | Absolute Obergrenze aller Instanzen zusammen |
+| Gesamte Max. Ausgangsleistung (W) | Absolute Obergrenze aller Instanzen zusammen — auch als Entität `number.solakon_netzgruppe_1_gesamte_max_ausgangsleistung` am Gerät „Solakon Netzgruppe N“ (siehe [Erzeugte Entitäten](#erzeugte-entitäten)) |
 | Verteilungs-Modus | Gleichverteilung / SOC-gewichtet / Kapazitätsgewichtet / SOC-Umschaltung — vier sich gegenseitig ausschließende Optionen, siehe Formeln oben |
 | Kapazitätssensor (pro Instanz) | Nur bei Modus „Kapazitätsgewichtet" wirksam (Feld sonst ausgegraut). `sensor.solakon_one_batteriekapazitat`. Der Validierungspunkt neben dem Feld zeigt live, ob die Entity existiert und eine Zahl liefert (grün/gelb/rot) |
 | Divergenz-Schwelle (Prozentpunkte) | Nur bei Modus „SOC-Umschaltung" wirksam. Die aktive Instanz entlädt exklusiv, bis ihr SOC um diesen Wert gefallen ist, dann Übergabe an die Instanz mit dem höchsten verbleibenden SOC. Standard 5 |
+
+**Gesamtlimit als Entität:** Jede Netzgruppe bekommt beim ersten Auftreten eine feste Gruppennummer, die der Verteilungs-Tab oben anzeigt. Die Gesamte Max. Ausgangsleistung erscheint als Entität am eigenen Gerät „Solakon Netzgruppe N“; geführt wird sie von der Instanz der Gruppe mit der kleinsten Eintrags-ID, bei deren Wegfall übernimmt die nächste mit derselben Entität. Wird der Netz-Leistungssensor umgestellt, entsteht eine neue Netzgruppe mit neuer Nummer und neuer Entität — wie ihre Verteilungs-Einstellungen beginnt sie bei den Standardwerten.
 
 **Globale Sensoren:** Zusätzliche Karte im Verteilungs-Tab für Sensoren, die typischerweise für den ganzen Haushalt gelten statt pro Solakon-Instanz zu unterscheiden — eine Wetter-/Solcast-Vorhersage, ein Stromtarif. Jede Instanz kann im jeweiligen Tab (Überschuss/Zonen/Tarif) optional lokal überschreiben; ist dort nichts gesetzt, gilt der globale Wert. Anders als der Kapazitätssensor (real pro Instanz unterschiedlich, keine sinnvolle globale Vorgabe) sind das reine Entity-Picker ohne eigene Enable-Flags oder Schwellen — die bleiben ausschließlich lokal pro Instanz.
 
@@ -328,8 +330,8 @@ SOC-Zonenlogik mit allen Leistungs- und Offset-Parametern.
 | Zone 1 SOC-Schwelle (%) | SOC über diesem Wert → Zone 1 (aggressiv) | 40–60 |
 | Zone 3 SOC-Schwelle (%) | SOC auf oder unter diesem Wert → Zone 3 (Stopp) | 15–25 |
 | Max. Entladestrom (A) | Entladestrom in Zone 1 und in der Ruhe in Modus `'0'` (Zone 2 = 0 A, Surplus = 2 A) | 25–40 |
-| Hard Limit Z0 — Surplus (W) | Ausgangsleistungs-Obergrenze in Zone 0 (Surplus). Typisch: gesetzliches Maximum (z. B. 800 W). Höhere Werte als die Gerätegrenze des Solakon ONE (1200 W, `DEVICE_MAX_POWER`) werden darauf gedeckelt. | 800 |
-| Hard Limit Z1 — Entladung (W) | Ausgangsleistungs-Obergrenze in Zone 1 und Zone 2. In Zone 2 gilt `min(Z1, max(0, PV − Reserve))`. Wird als `max(Z0, Z1)` in die optionale Export-Limit-Entität geschrieben. | 800 |
+| Hard Limit Z0 — Surplus (W) | Ausgangsleistungs-Obergrenze in Zone 0 (Surplus). Typisch: gesetzliches Maximum (z. B. 800 W). Höhere Werte als die Gerätegrenze des Solakon ONE (1200 W, `DEVICE_MAX_POWER`) werden darauf gedeckelt — auch als Entität `number.solakon_one_zone_0_limit` | 800 |
+| Hard Limit Z1 — Entladung (W) | Ausgangsleistungs-Obergrenze in Zone 1 und Zone 2. In Zone 2 gilt `min(Z1, max(0, PV − Reserve))`. Wird als `max(Z0, Z1)` in die optionale Export-Limit-Entität geschrieben — auch als Entität `number.solakon_one_zone_1_2_limit` | 800 |
 | Zone 1 Offset (W) | Statischer Zielwert in Zone 1. Bei aktivem Dyn. Offset überschrieben, bei Dunkelheit mit aktiviertem Nacht-Offset ersetzt | 20–50 |
 | Zone 2 Offset (W) | Statischer Zielwert in Zone 2 | 10–30 |
 | Nacht-Offset aktivieren | Ersetzt im Zone-1-Zyklus bei Dunkelheit den Zone-1-Offset durch den Nacht-Offset | Aus |
@@ -702,6 +704,9 @@ Alle Entitätsnamen kommen aus den Übersetzungen und erscheinen in der Sprache 
 | `switch.solakon_one_netz_laden` | Switch | Netz-Laden des Zielladens ein/aus — lädt während des Aufladens sofort mit der Netz-Ladeleistung; geht mit dem Ende des Zielladens aus |
 | `number.solakon_one_ziel_soc` | Number | Ziel-SOC des Zielladens (10–100 %) — derselbe Wert wie im **Zielladen**-Tab. Wirkt im Aufladen sofort, in der Entladepause erst nach erneutem Einschalten von Zielladen |
 | `number.solakon_one_netz_ladeleistung` | Number | Netz-Ladeleistung (100–1200 W) — derselbe Wert wie im **Zielladen**-Tab |
+| `number.solakon_one_zone_0_limit` | Number | Hard Limit Z0 (100–1200 W) — derselbe Wert wie im **Zonen**-Tab |
+| `number.solakon_one_zone_1_2_limit` | Number | Hard Limit Z1 für Zone 1 und 2 (100–1200 W) — derselbe Wert wie im **Zonen**-Tab |
+| `number.solakon_netzgruppe_1_gesamte_max_ausgangsleistung` | Number | Gesamte Max. Ausgangsleistung der Netzgruppe (0–9600 W) — derselbe Wert wie im **Verteilungs**-Tab; wirkt, sobald mindestens zwei Instanzen der Gruppe entladen |
 | `binary_sensor.solakon_one_entladezyklus_aktiv` | Binary Sensor | Internes Flag Zyklus |
 | `binary_sensor.solakon_one_uberschuss_modus` | Binary Sensor | Flag Überschuss-Modus aktiv |
 | `binary_sensor.solakon_one_ac_laden_aktiv` | Binary Sensor | Flag AC-Laden aktiv |
@@ -833,6 +838,33 @@ automation:
 Zielladen aus schaltet die Regelung wieder ein und Netz-Laden aus. Ohne Netz-Laden lädt die Instanz nur über PV und die zugeschalteten Ladequellen.
 
 Läuft das Zielladen schon, etwa die Winterpause mit 70 %, gilt ein neuer Ziel-SOC im Aufladen sofort, in der Entladepause aber erst nach erneutem Einschalten. Die Start-Automation schaltet dann zuerst `switch.solakon_one_zielladen` aus, setzt den Ziel-SOC und schaltet Zielladen und Netz-Laden wieder ein — Zielladen aus schaltet auch Netz-Laden aus.
+
+**Wie begrenze ich die Entladeleistung per Automation, etwa nachts?**
+Über `number.solakon_one_zone_1_2_limit` je Instanz oder, bei mehreren Instanzen an einem Netzanschluss, über das Gesamtlimit der Netzgruppe. Ein gesetzter Wert gilt wie eine Panel-Eingabe ab dem nächsten Regelzyklus und bleibt über Neustarts erhalten. Die Geräteentitäten `number.*_netz_ausgangsleistungsgrenze` und `number.*_maximaler_entladestrom` eignen sich dafür nicht, die Integration setzt sie bei jedem Regelzyklus zurück.
+
+```yaml
+automation:
+  - alias: Entladung nachts begrenzen
+    triggers:
+      - trigger: time
+        at: "22:00:00"
+    actions:
+      - action: number.set_value
+        target:
+          entity_id: number.solakon_netzgruppe_1_gesamte_max_ausgangsleistung
+        data:
+          value: 400
+  - alias: Entladung morgens freigeben
+    triggers:
+      - trigger: time
+        at: "07:00:00"
+    actions:
+      - action: number.set_value
+        target:
+          entity_id: number.solakon_netzgruppe_1_gesamte_max_ausgangsleistung
+        data:
+          value: 800
+```
 
 **Ich habe mehrere Smartmeter für getrennte Stromkreise.**
 Instanzen werden automatisch nach ihrem Netz-Leistungssensor in [Netzgruppen](#netzgruppen-mehrere-smartmeter) sortiert. Jede Gruppe hat ihre eigene, unabhängige Leistungsverteilung; Instanzen an verschiedenen Zählern beeinflussen sich nicht.

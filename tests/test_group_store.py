@@ -74,7 +74,7 @@ def test_paralleles_laden_einmal_und_alle_warten():
     first, second = asyncio.run(run())
     assert first is second
     assert second.dist == {"sensor.grid": SWITCH}
-    assert loads == [DIST_KEY, SWITCH_KEY]
+    assert loads == [DIST_KEY, SWITCH_KEY, gs.STORAGE_KEY_NUMBERS]
 
 
 def test_soc_switch_zustand_je_gruppe_und_gespeichert():
