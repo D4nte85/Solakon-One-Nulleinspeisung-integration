@@ -707,7 +707,7 @@ Alle Entitätsnamen kommen aus den Übersetzungen und erscheinen in der Sprache 
 | `number.solakon_one_zone_0_limit` | Number | Hard Limit Z0 (100–1200 W) — derselbe Wert wie im **Zonen**-Tab |
 | `number.solakon_one_zone_1_2_limit` | Number | Hard Limit Z1 für Zone 1 und 2 (100–1200 W) — derselbe Wert wie im **Zonen**-Tab |
 | `number.solakon_netzgruppe_1_gesamte_max_ausgangsleistung` | Number | Gesamte Max. Ausgangsleistung der Netzgruppe (0–9600 W) — derselbe Wert wie im **Verteilungs**-Tab; wirkt, sobald mindestens zwei Instanzen der Gruppe entladen |
-| `binary_sensor.solakon_one_entladezyklus_aktiv` | Binary Sensor | Internes Flag Zyklus |
+| `binary_sensor.solakon_one_zyklus_aktiv` | Binary Sensor | Internes Flag Zyklus |
 | `binary_sensor.solakon_one_uberschuss_modus` | Binary Sensor | Flag Überschuss-Modus aktiv |
 | `binary_sensor.solakon_one_ac_laden_aktiv` | Binary Sensor | Flag AC-Laden aktiv |
 | `binary_sensor.solakon_one_tarif_laden_aktiv` | Binary Sensor | Flag Tarif-Laden aktiv |
