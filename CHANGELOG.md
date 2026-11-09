@@ -5,6 +5,8 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+## [3.7.1] – 2026-11-09
+
 ### Geändert
 
 - **Gesamtlimit nur für Netzgruppen ab zwei Instanzen:** Die Entität „Gesamte Max. Ausgangsleistung“ und das Gerät „Solakon Netzgruppe N“ gibt es nur, solange mindestens zwei Config-Entries denselben Netz-Leistungssensor haben; eine einzelne Instanz bildet keine Netzgruppe. Fällt eine Gruppe auf eine Instanz, etwa weil ein Eintrag gelöscht wird, entfernt die Integration Entität und Gerät aus der Registrierung, auch bestehende von Einzelinstanzen beim ersten Start; Gruppennummer und Wert bleiben gespeichert und gelten wieder, sobald eine zweite Instanz hinzukommt. Der Verteilungs-Tab zeigt Feld und Gruppennummer nur bei einer Netzgruppe (`number.py`, `group_store.py`, `__init__.py`, `solakon-panel.js`).
