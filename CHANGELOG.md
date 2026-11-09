@@ -5,6 +5,14 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+## [3.6.0] – 2026-11-09
+
+Stabile Fassung von 3.6.0-beta.1. Enthält die Änderungen unten und alle Änderungen des Beta-Abschnitts.
+
+### Geändert
+
+- **README, Entitätstabelle:** Das Flag Zyklus steht mit der Entitäts-ID, die Home Assistant vergibt (`binary_sensor.solakon_one_zyklus_aktiv` statt `…_entladezyklus_aktiv`). Keine Verhaltensänderung.
+
 ## [3.6.0-beta.1] – 2026-11-08
 
 ### Hinzugefügt
