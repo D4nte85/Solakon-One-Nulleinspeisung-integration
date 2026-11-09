@@ -122,7 +122,9 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
       name: "Solakon A",
       grid_sensor: "sensor.shelly_3em_leistung",
       settings: { ...DEFAULT_SETTINGS, tariff_enabled: true, tariff_price_sensor: "sensor.tibber_price_current" },
-      status: mkStatus({ zone: 1, soc: 58, actual_power: 110, grid: -5, active_fall: "A", cycle_active: true }),
+      // Lädt per Tarif, damit der Lade-Chip im Status-Tab eingeschaltet zu sehen ist.
+      status: mkStatus({ zone: 1, soc: 58, actual_power: -800, grid: 795, active_fall: "GT", cycle_active: true,
+                         charge_session: "tariff_charge", mode_key: "ac_charge", mode_label: "INV Charge" }),
     },
     ...(SCENARIO !== "single" ? {
       demo_b: {
@@ -162,7 +164,7 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
 
   function mkStatus(o) {
     return {
-      zone: o.zone, zone_label: `Zone ${o.zone}`, mode_key: "discharge", mode_label: "INV Discharge PV Priority",
+      zone: o.zone, zone_label: `Zone ${o.zone}`, mode_key: o.mode_key ?? "discharge", mode_label: o.mode_label ?? "INV Discharge PV Priority",
       last_action: "Output → " + o.actual_power + " W", last_action_ts: now() - 12,
       last_output_ts: now() - 12, mode_label_ts: now() - 340,
       last_error: o.last_error ?? null, integral: 4.2, grid: o.grid, actual_power: o.actual_power,
