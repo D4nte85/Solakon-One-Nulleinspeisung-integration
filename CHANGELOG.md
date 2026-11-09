@@ -5,6 +5,8 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+## [3.7.0] – 2026-11-09
+
 ### Breaking Change
 
 - **Sensor „Lade-Session“ statt drei Binärsensoren:** `binary_sensor.…_ac_laden_aktiv`, `…_tarif_laden_aktiv` und `…_netz_laden_aktiv` entfallen. Die Art der laufenden Lade-Session steht im Enum-Sensor `sensor.…_lade_session` (`none`, `ac_charge`, `tariff_charge`, `grid_charge`). Automationen und Dashboards auf die alten Binärsensoren sind umzustellen. Beim ersten Start entfernt die Integration die alten Entitäten aus der Entitätsregistrierung (Config-Entry 1.2) und übernimmt eine laufende Lade-Session in den neuen Speicherschlüssel `charge_session` (Settings 2.3, `migrations.py`); eine laufende Lade-Session übersteht das Update. Im Status-Tab ersetzt ein Chip die drei Lade-Chips: er zeigt die Art oder grau „Laden“. WS-Status: `charge_session` statt `ac_charge`, `tariff_charge`, `grid_charge`.
