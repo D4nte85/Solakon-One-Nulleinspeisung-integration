@@ -458,6 +458,7 @@ def _setup_env(spec):
             # Lade-Flags der Szenarien wie aus Settings 2.2: über die Migration zur Art der Lade-Session.
             flags = _session_from_flags(flags)
             hass.storage[f"{C.DOMAIN}_{entry.entry_id}"] = {**inst["settings"], **flags}
+        hass.config_entries.entries.append(entry)
         coord = h.coordinator_mod.SolakonCoordinator(hass, entry)
         hass.data.setdefault(C.DOMAIN, {})[entry.entry_id] = coord
         coords[inst["prefix"]] = coord

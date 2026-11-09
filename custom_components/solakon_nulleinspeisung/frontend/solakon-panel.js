@@ -1699,7 +1699,8 @@ ${this._textsMissing ? `
     )).join("");
 
     const shownGroup = this._groups.length > 1 ? this._activeGroupObj() : this._groups[0];
-    const groupNumber = shownGroup?.number != null
+    const isGroup = this._currentGroupInstances().length > 1;
+    const groupNumber = isGroup && shownGroup?.number != null
       ? (dt.group_number || "").replace("{n}", shownGroup.number)
       : "";
     const groupsNote = this._groups.length > 1
@@ -1708,9 +1709,9 @@ ${this._textsMissing ? `
 
     c.innerHTML = `
       ${groupsNote}
-      ${this._cardHtml("#0891b2", dt.global_hdr || "", this._fieldHtml(dt.global_max_lbl || "", dt.global_max_desc || "",
+      ${isGroup ? this._cardHtml("#0891b2", dt.global_hdr || "", this._fieldHtml(dt.global_max_lbl || "", dt.global_max_desc || "",
         `<input type="number" ${this._numAttrs(this._schema.distribution.global_max_power)} value="${globalMax}" data-dist-key="global_max_power"/>`),
-        { extraClass: "top-item" })}
+        { extraClass: "top-item" }) : ""}
 
       ${this._cardHtml("#7c3aed", dt.mode_hdr || "", this._fieldHtml(dt.mode_lbl || "", (dt.mode_desc || "").replace(/\n/g, "<br>"),
         `<select data-dist-key="distribution_mode">${this._distModes().map(m =>

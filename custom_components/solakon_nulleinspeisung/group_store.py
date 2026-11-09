@@ -7,7 +7,7 @@ from typing import Any, Callable
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 
-from .const import DIST_DEFAULTS, DIST_INST_FIELDS, DIST_SCHEMA, DOMAIN
+from .const import CONF_GRID_SENSOR, DIST_DEFAULTS, DIST_INST_FIELDS, DIST_SCHEMA, DOMAIN
 from .grid_group import NetGroup
 from .i18n import translate
 from .migrations import SolakonDistStore, SolakonSocSwitchStore
@@ -33,6 +33,11 @@ def _soc_switch_group_state(stored: dict) -> dict:
         "start_soc": stored.get("start_soc"),
         "was_zone0": bool(stored.get("was_zone0", False)),
     }
+
+
+def configured_members(hass: Any, grid_sensor: str) -> int:
+    """Anzahl der Config-Entries am Netzsensor, geladen oder nicht."""
+    return sum(1 for e in hass.config_entries.async_entries(DOMAIN) if e.data.get(CONF_GRID_SENSOR, "") == grid_sensor)
 
 
 def store_for(hass: Any) -> GroupStore | None:

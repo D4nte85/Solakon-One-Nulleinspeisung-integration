@@ -342,7 +342,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Store der Instanz löschen; mit der letzten Instanz auch die Gruppen-Stores."""
+    """Store der Instanz löschen; mit der letzten Instanz auch die Gruppen-Stores, sonst die Netzgruppe neu zählen."""
     store = Store(hass, STORAGE_VERSION, f"{DOMAIN}_{entry.entry_id}")
     await store.async_remove()
 
@@ -351,3 +351,5 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     # entfernt; bei weiteren Instanzen bleiben sie bestehen.
     if not hass.config_entries.async_entries(DOMAIN):
         await group_store.async_remove(hass)
+    else:
+        await number.assign_carrier(hass, entry.data.get(CONF_GRID_SENSOR, ""))

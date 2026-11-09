@@ -155,9 +155,73 @@ def test_gesamtlimit_geht_beim_entladen_an_die_naechste_instanz():
 
 
 def test_gruppennummer_fest_je_netzsensor_und_gespeichert():
+    other = "sensor.grid_other"
     hass, added = _group_setup([h.FakeEntry("entry_a", h.entry_data("a")),
-                                h.FakeEntry("entry_c", h.entry_data("c", grid_sensor="sensor.grid_other"))])
+                                h.FakeEntry("entry_b", h.entry_data("b")),
+                                h.FakeEntry("entry_c", h.entry_data("c", grid_sensor=other)),
+                                h.FakeEntry("entry_d", h.entry_data("d", grid_sensor=other))])
     limits = _group_limits(added)
     assert limits["entry_a"][0].unique_id == "group_1_global_max_power"
     assert limits["entry_c"][0].unique_id == "group_2_global_max_power"
     assert hass.storage[f"{DOMAIN}_group_numbers"] == {"sensor.grid": 1, "sensor.grid_other": 2}
+
+
+def _register_group_limit(hass: h.FakeHass, number: int) -> tuple:
+    """Gesamtlimit-Entität und Gruppengerät wie aus einem früheren Lauf in den Registrierungen."""
+    ents, devs = h.ha_stubs.entity_registry_get(hass), h.ha_stubs.device_registry_get(hass)
+    ents.entities[f"number.netzgruppe_{number}"] = ("number", DOMAIN, f"group_{number}_global_max_power")
+    devs.devices[f"dev_{number}"] = h.ha_stubs.DeviceEntry(f"dev_{number}", {(DOMAIN, f"group_{number}")})
+    return ents, devs
+
+
+def test_einzelinstanz_bekommt_kein_gesamtlimit():
+    hass, added = _group_setup([h.FakeEntry("entry_a", h.entry_data("a")),
+                                h.FakeEntry("entry_c", h.entry_data("c", grid_sensor="sensor.grid_other"))])
+    assert _group_limits(added) == {"entry_a": [], "entry_c": []}
+    assert "sensor.grid" not in hass.storage.get(f"{DOMAIN}_group_numbers", {})
+
+
+def test_einzelinstanz_raeumt_gesamtlimit_frueherer_laeufe_ab():
+    hass = h.FakeHass("de")
+    hass.storage[f"{DOMAIN}_group_numbers"] = {"sensor.grid": 1, "sensor.grid_other": 2}
+    ents, devs = _register_group_limit(hass, 1)
+    _register_group_limit(hass, 2)
+    entries = [h.FakeEntry("entry_a", h.entry_data("a")),
+               h.FakeEntry("entry_c", h.entry_data("c", grid_sensor="sensor.grid_other")),
+               h.FakeEntry("entry_d", h.entry_data("d", grid_sensor="sensor.grid_other"))]
+    hass.config_entries.entries = entries
+
+    async def run():
+        await h.integration.async_setup(hass, {})
+        for entry in entries:
+            await h.integration.async_setup_entry(hass, entry)
+            await h.number_mod.async_setup_entry(hass, entry, lambda ents: None)
+
+    asyncio.run(run())
+    assert list(ents.entities) == ["number.netzgruppe_2"]
+    assert list(devs.devices) == ["dev_2"]
+
+
+def test_loeschen_der_zweiten_instanz_entfernt_gesamtlimit_und_geraet():
+    hass, added = _group_setup([h.FakeEntry("entry_a", h.entry_data("a")),
+                                h.FakeEntry("entry_b", h.entry_data("b"))])
+    ents, devs = _register_group_limit(hass, 1)
+    entry_b = hass.config_entries.entries[1]
+
+    async def run():
+        await h.integration.async_unload_entry(hass, entry_b)
+        hass.config_entries.entries.remove(entry_b)
+        await h.integration.async_remove_entry(hass, entry_b)
+
+    asyncio.run(run())
+    assert _group_limits(added)["entry_a"][0].__dict__.get("removed") is True
+    assert ents.entities == {} and devs.devices == {}
+    assert hass.storage[f"{DOMAIN}_group_numbers"] == {"sensor.grid": 1}
+
+
+def test_gesamtlimit_bei_zwei_eintraegen_auch_wenn_nur_einer_geladen():
+    entries = [h.FakeEntry("entry_a", h.entry_data("a")), h.FakeEntry("entry_b", h.entry_data("b"))]
+    hass, added = _group_setup(entries[:1])
+    hass.config_entries.entries = entries
+    asyncio.run(h.number_mod.assign_carrier(hass, "sensor.grid"))
+    assert [e.carrier for e in _group_limits(added)["entry_a"]] == ["entry_a"]

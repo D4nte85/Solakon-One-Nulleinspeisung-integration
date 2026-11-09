@@ -258,6 +258,33 @@ class EntityRegistry:
         self.entities.pop(entity_id, None)
 
 
+class DeviceEntry:
+    def __init__(self, device_id, identifiers):
+        self.id = device_id
+        self.identifiers = identifiers
+
+
+class DeviceRegistry:
+    """Geräteregistrierung: device_id → DeviceEntry."""
+
+    def __init__(self, hass):
+        self.hass = hass
+        self.devices = {}
+
+    def async_get_device(self, identifiers):
+        return next((d for d in self.devices.values() if d.identifiers & identifiers), None)
+
+    def async_remove_device(self, device_id):
+        self.hass.log("device_remove", device_id)
+        self.devices.pop(device_id, None)
+
+
+def device_registry_get(hass):
+    if getattr(hass, "device_registry", None) is None:
+        hass.device_registry = DeviceRegistry(hass)
+    return hass.device_registry
+
+
 def entity_registry_get(hass):
     if getattr(hass, "entity_registry", None) is None:
         hass.entity_registry = EntityRegistry(hass)
@@ -326,6 +353,7 @@ def install() -> None:
     _module("homeassistant.helpers.state", state_as_number=state_as_number)
     _module("homeassistant.helpers.storage", Store=Store)
     _module("homeassistant.helpers.entity_registry", async_get=entity_registry_get)
+    _module("homeassistant.helpers.device_registry", async_get=device_registry_get)
     _module("homeassistant.helpers.config_validation",
             config_entry_only_config_schema=lambda domain: {})
     _module("homeassistant.util.dt", now=dt_now, utc_from_timestamp=utc_from_timestamp)

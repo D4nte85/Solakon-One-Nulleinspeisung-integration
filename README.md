@@ -188,12 +188,12 @@ Im Panel wird bei mehreren Instanzen ein zusätzlicher **Verteilungs-Tab** einge
 
 | Parameter | Beschreibung |
 |-----------|-------------|
-| Gesamte Max. Ausgangsleistung (W) | Absolute Obergrenze aller Instanzen zusammen — auch als Entität `number.solakon_netzgruppe_1_gesamte_max_ausgangsleistung` am Gerät „Solakon Netzgruppe N“ (siehe [Erzeugte Entitäten](#erzeugte-entitäten)) |
+| Gesamte Max. Ausgangsleistung (W) | Absolute Obergrenze aller Instanzen zusammen — nur bei mindestens zwei Instanzen am selben Netz-Leistungssensor; auch als Entität `number.solakon_netzgruppe_1_gesamte_max_ausgangsleistung` am Gerät „Solakon Netzgruppe N“ (siehe [Erzeugte Entitäten](#erzeugte-entitäten)) |
 | Verteilungs-Modus | Gleichverteilung / SOC-gewichtet / Kapazitätsgewichtet / SOC-Umschaltung — vier sich gegenseitig ausschließende Optionen, siehe Formeln oben |
 | Kapazitätssensor (pro Instanz) | Nur bei Modus „Kapazitätsgewichtet" wirksam (Feld sonst ausgegraut). `sensor.solakon_one_batteriekapazitat`. Der Validierungspunkt neben dem Feld zeigt live, ob die Entity existiert und eine Zahl liefert (grün/gelb/rot) |
 | Divergenz-Schwelle (Prozentpunkte) | Nur bei Modus „SOC-Umschaltung" wirksam. Die aktive Instanz entlädt exklusiv, bis ihr SOC um diesen Wert gefallen ist, dann Übergabe an die Instanz mit dem höchsten verbleibenden SOC. Standard 5 |
 
-**Gesamtlimit als Entität:** Jede Netzgruppe bekommt beim ersten Auftreten eine feste Gruppennummer, die der Verteilungs-Tab oben anzeigt. Die Gesamte Max. Ausgangsleistung erscheint als Entität am eigenen Gerät „Solakon Netzgruppe N“; geführt wird sie von der Instanz der Gruppe mit der kleinsten Eintrags-ID, bei deren Wegfall übernimmt die nächste mit derselben Entität. Wird der Netz-Leistungssensor umgestellt, entsteht eine neue Netzgruppe mit neuer Nummer und neuer Entität — wie ihre Verteilungs-Einstellungen beginnt sie bei den Standardwerten.
+**Gesamtlimit als Entität:** Eine Netzgruppe besteht nur aus mindestens zwei Instanzen am selben Netz-Leistungssensor; eine einzelne Instanz hat weder Gesamtlimit-Entität noch Gruppengerät. Bleibt nach dem Löschen eines Eintrags nur eine Instanz übrig, entfernt die Integration beide; Gruppennummer und Wert bleiben gespeichert und gelten wieder, sobald eine zweite Instanz hinzukommt. Jede Netzgruppe bekommt beim ersten Auftreten eine feste Gruppennummer, die der Verteilungs-Tab oben anzeigt. Die Gesamte Max. Ausgangsleistung erscheint als Entität am eigenen Gerät „Solakon Netzgruppe N“; geführt wird sie von der Instanz der Gruppe mit der kleinsten Eintrags-ID, bei deren Wegfall übernimmt die nächste mit derselben Entität. Wird der Netz-Leistungssensor umgestellt, entsteht eine neue Netzgruppe mit neuer Nummer und neuer Entität — wie ihre Verteilungs-Einstellungen beginnt sie bei den Standardwerten.
 
 **Globale Sensoren:** Zusätzliche Karte im Verteilungs-Tab für Sensoren, die typischerweise für den ganzen Haushalt gelten statt pro Solakon-Instanz zu unterscheiden — eine Wetter-/Solcast-Vorhersage, ein Stromtarif. Jede Instanz kann im jeweiligen Tab (Überschuss/Zonen/Tarif) optional lokal überschreiben; ist dort nichts gesetzt, gilt der globale Wert. Anders als der Kapazitätssensor (real pro Instanz unterschiedlich, keine sinnvolle globale Vorgabe) sind das reine Entity-Picker ohne eigene Enable-Flags oder Schwellen — die bleiben ausschließlich lokal pro Instanz.
 
@@ -707,7 +707,7 @@ Alle Entitätsnamen kommen aus den Übersetzungen und erscheinen in der Sprache 
 | `number.solakon_one_netz_ladeleistung` | Number | Netz-Ladeleistung (100–1200 W) — derselbe Wert wie im **Zielladen**-Tab |
 | `number.solakon_one_zone_0_limit` | Number | Hard Limit Z0 (100–1200 W) — derselbe Wert wie im **Zonen**-Tab |
 | `number.solakon_one_zone_1_2_limit` | Number | Hard Limit Z1 für Zone 1 und 2 (100–1200 W) — derselbe Wert wie im **Zonen**-Tab |
-| `number.solakon_netzgruppe_1_gesamte_max_ausgangsleistung` | Number | Gesamte Max. Ausgangsleistung der Netzgruppe (0–9600 W) — derselbe Wert wie im **Verteilungs**-Tab; wirkt, sobald mindestens zwei Instanzen der Gruppe entladen |
+| `number.solakon_netzgruppe_1_gesamte_max_ausgangsleistung` | Number | Gesamte Max. Ausgangsleistung der Netzgruppe (0–9600 W) — derselbe Wert wie im **Verteilungs**-Tab; nur bei mindestens zwei Instanzen am selben Netz-Leistungssensor, wirkt, sobald mindestens zwei davon entladen |
 | `binary_sensor.solakon_one_zyklus_aktiv` | Binary Sensor | Internes Flag Zyklus |
 | `binary_sensor.solakon_one_uberschuss_modus` | Binary Sensor | Flag Überschuss-Modus aktiv |
 | `binary_sensor.solakon_one_nachtabschaltung` | Binary Sensor | Flag Nachtabschaltung aktiv |

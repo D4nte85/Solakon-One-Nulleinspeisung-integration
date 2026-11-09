@@ -7,6 +7,7 @@ from homeassistant.components.number import NumberEntity, NumberMode
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfPower
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import group_store
@@ -99,15 +100,36 @@ def _carriers(hass: Any) -> dict[str, Any]:
     return hass.data.setdefault(f"{DOMAIN}_{DATA_KEY}", {"adders": {}, "entities": {}})
 
 
+def _drop_group_limit(hass: Any, grid_sensor: str) -> None:
+    """Gesamtlimit-Entität und Gerät der Netzgruppe aus Entitäts- und Geräteregistrierung entfernen."""
+    store = group_store.store_for(hass)
+    if store is None or (number := store.numbers.get(grid_sensor)) is None:
+        return
+    entities = er.async_get(hass)
+    if entity_id := entities.async_get_entity_id("number", DOMAIN, f"group_{number}_{GROUP_LIMIT_KEY}"):
+        entities.async_remove(entity_id)
+    devices = dr.async_get(hass)
+    if device := devices.async_get_device(identifiers={(DOMAIN, f"group_{number}")}):
+        devices.async_remove_device(device.id)
+
+
 async def assign_carrier(hass: Any, grid_sensor: str) -> None:
     """Gesamtlimit-Entität der Gruppe an die geladene Mitgliedsinstanz mit der kleinsten entry_id geben.
 
-    Trägt schon diese Instanz, bleibt alles, wie es ist. Sonst entfernt sie die Entität des bisherigen
-    noch geladenen Trägers und legt sie mit derselben unique_id beim neuen Träger an.
+    Haben weniger als zwei Config-Entries diesen Netzsensor, gibt es keine Netzgruppe: Entität und
+    Gerät werden entfernt. Trägt schon die richtige Instanz, bleibt alles, wie es ist. Sonst entfernt
+    sie die Entität des bisherigen noch geladenen Trägers und legt sie mit derselben unique_id beim
+    neuen Träger an.
     """
     reg = _carriers(hass)
     members = sorted(eid for eid, (_, coord) in reg["adders"].items() if coord.grid_sensor == grid_sensor)
     current = reg["entities"].get(grid_sensor)
+    if group_store.configured_members(hass, grid_sensor) < 2:
+        if current is not None and current.carrier in reg["adders"]:
+            await current.async_remove()
+        reg["entities"].pop(grid_sensor, None)
+        _drop_group_limit(hass, grid_sensor)
+        return
     if not members:
         reg["entities"].pop(grid_sensor, None)
         return
