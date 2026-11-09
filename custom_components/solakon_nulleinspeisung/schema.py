@@ -1,4 +1,4 @@
-"""Settings-Schicht: Prüfung gegen das Schema, Zyklus-Schnappschuss, SOC-Grenzen, Speicher mit Migration."""
+"""Settings-Schicht: Prüfung gegen das Schema, Zyklus-Schnappschuss, SOC-Grenzen, Prüfung gespeicherter Werte."""
 from __future__ import annotations
 
 import logging
@@ -8,13 +8,12 @@ from typing import Any
 
 from homeassistant.components import persistent_notification
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.storage import Store
 
 from .const import (
     Field, S_REGULATION_ENABLED,
     S_AC_ENABLED, S_AC_HYSTERESIS, S_AC_MIN_POWER, S_AC_POWER_LIMIT, S_AC_SOC_TARGET,
     S_DISCHARGE_MAX, S_HARD_LIMIT_Z0, S_HARD_LIMIT_Z1, S_I_FACTOR, S_NIGHT_ENABLED,
-    S_NIGHT_HYSTERESIS, S_PI_ENABLED, S_PV_FORECAST_ENABLED, S_PV_FORECAST_SENSOR, S_PV_FORECAST_THRESHOLD,
+    S_NIGHT_HYSTERESIS, S_PI_ENABLED, S_PV_FORECAST_ENABLED, S_PV_FORECAST_THRESHOLD,
     S_PV_RESERVE, S_P_FACTOR, S_SURPLUS_ENABLED, S_SURPLUS_FORECAST_ENABLED,
     S_SURPLUS_FORECAST_THRESHOLD, S_SURPLUS_LOCK_ENABLED, S_SURPLUS_LOCK_FACTOR, S_SURPLUS_PV_HYST,
     S_SURPLUS_SOC_HYST, S_SURPLUS_SOC_THRESHOLD, S_TARGET_BATTERY_PRIORITY, S_TARGET_CHARGE_ENABLED,
@@ -208,21 +207,3 @@ def notify_reset(
         title=translate(language, "settings_reset_title", scope=scope),
         notification_id=notification_id,
     )
-
-
-class SolakonSettingsStore(Store):
-    """Settings-Store mit Schemamigration."""
-
-    async def _async_migrate_func(
-        self, old_major_version: int, old_minor_version: int, old_data: dict
-    ) -> dict:
-        """Hebt Version 1 auf 2: Hard-Limit aufgespalten, Forecast-Sensor umbenannt."""
-        if old_major_version < 2:
-            old_limit = old_data.pop("hard_limit", 800)
-            old_data.setdefault(S_HARD_LIMIT_Z0, old_limit)
-            old_data.setdefault(S_HARD_LIMIT_Z1, old_limit)
-
-            old_forecast = old_data.pop("surplus_forecast_sensor", "")
-            if old_forecast and not old_data.get(S_PV_FORECAST_SENSOR):
-                old_data[S_PV_FORECAST_SENSOR] = old_forecast
-        return old_data

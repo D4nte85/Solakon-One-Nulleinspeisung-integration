@@ -5,6 +5,14 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+### Behoben
+
+- **Kapazitätssensor aus Versionen bis 2.1.6:** Der früher je Instanz eingestellte Kapazitätssensor (`battery_capacity_sensor`) wird beim Start wieder in die Verteilung der Netzgruppe übernommen, sofern dort noch keiner eingetragen ist. Die Übernahme war mit 2.1.7 entfallen; wer von einer älteren Version aktualisierte, fiel bei der Verteilung nach Kapazität auf Gleichverteilung zurück. Settings-Speicher Version 2.2 (`migrations.py`).
+
+### Geändert
+
+- **Migrationen in einem Modul:** Die Speichermigrationen von Settings, Verteilung und `soc_switch`-Zustand liegen in `migrations.py` statt in `schema.py` und `group_store.py`. Keine Verhaltensänderung.
+
 ## [3.6.0] – 2026-11-09
 
 Stabile Fassung von 3.6.0-beta.1. Enthält die Änderungen unten und alle Änderungen des Beta-Abschnitts.

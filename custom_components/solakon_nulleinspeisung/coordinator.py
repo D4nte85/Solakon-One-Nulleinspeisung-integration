@@ -22,9 +22,10 @@ from .grid_group import NetGroup, Shares
 from .group_store import group_for
 from .limits import PowerLimits, power_limits, pv_cap_reason
 from .messages import CycleMessages
+from .migrations import SolakonSettingsStore
 from .output import Actual, Output, Stall
 from .schema import (
-    CycleSettings, InvalidSettings, SolakonSettingsStore, check, couple_target, cycle_settings, notify_reset,
+    CycleSettings, InvalidSettings, check, couple_target, cycle_settings, notify_reset,
     sanitize, soc_conflict,
 )
 from .tariff import Tariff, forecast_suppressed
@@ -35,7 +36,7 @@ from .zones import (
     required_discharge, rest_mode,
 )
 from .const import (
-    DOMAIN, STORAGE_VERSION, SETTINGS_DEFAULTS, SETTINGS_SCHEMA, CONF_GRID_SENSOR,
+    DOMAIN, STORAGE_MINOR_VERSION, STORAGE_VERSION, SETTINGS_DEFAULTS, SETTINGS_SCHEMA, CONF_GRID_SENSOR,
     CONF_ACTUAL_SENSOR, CONF_SOLAR_SENSOR, CONF_SOC_SENSOR, CONF_TIMEOUT_COUNTDOWN,
     CONF_ACTIVE_POWER, CONF_DISCHARGE_CURRENT, CONF_TIMEOUT_SET, CONF_MODE_SELECT,
     CONF_EXPORT_LIMIT, MODE_DISABLED, MODE_DISCHARGE, MODE_AC_CHARGE, S_REGULATION_ENABLED,
@@ -76,7 +77,9 @@ class SolakonCoordinator:
         self.entry = entry
         self.settings: dict[str, Any] = SETTINGS_DEFAULTS.copy()
         self.settings_rev = 0
-        self._store = SolakonSettingsStore(hass, STORAGE_VERSION, f"{DOMAIN}_{entry.entry_id}")
+        self._store = SolakonSettingsStore(
+            hass, STORAGE_VERSION, f"{DOMAIN}_{entry.entry_id}", minor_version=STORAGE_MINOR_VERSION,
+        )
 
         # Laufzeit-Zustände
         self.display = Display(hass.config.language)

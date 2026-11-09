@@ -8,6 +8,7 @@ from typing import Any, NamedTuple
 
 DOMAIN = "solakon_nulleinspeisung"
 STORAGE_VERSION = 2
+STORAGE_MINOR_VERSION = 2
 VERSION = json.loads((Path(__file__).parent / "manifest.json").read_text())["version"]
 
 # -- Config-Entry Keys --------------------------------------------------------

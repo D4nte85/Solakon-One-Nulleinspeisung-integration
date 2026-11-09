@@ -7,9 +7,10 @@ from typing import Any, Callable
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 
-from .const import CONF_GRID_SENSOR, DIST_DEFAULTS, DIST_INST_FIELDS, DIST_SCHEMA, DOMAIN
+from .const import DIST_DEFAULTS, DIST_INST_FIELDS, DIST_SCHEMA, DOMAIN
 from .grid_group import NetGroup
 from .i18n import translate
+from .migrations import SolakonDistStore, SolakonSocSwitchStore
 from .schema import check, notify_reset, sanitize
 
 STORAGE_VERSION_DIST = 2
@@ -25,11 +26,6 @@ STORAGE_KEY_NUMBERS     = f"{DOMAIN}_group_numbers"
 DATA_KEYS = ("group_store", "group_store_loaded", "groups")
 
 
-def _grid_groups(hass: HomeAssistant) -> set[str]:
-    """Netzsensoren aller Einträge, einer je Netzgruppe."""
-    return {e.data.get(CONF_GRID_SENSOR, "") for e in hass.config_entries.async_entries(DOMAIN)}
-
-
 def _soc_switch_group_state(stored: dict) -> dict:
     """Laufzeitzustand einer Netzgruppe im Modus `soc_switch` aus dem gespeicherten Stand."""
     return {
@@ -37,18 +33,6 @@ def _soc_switch_group_state(stored: dict) -> dict:
         "start_soc": stored.get("start_soc"),
         "was_zone0": bool(stored.get("was_zone0", False)),
     }
-
-
-def _migrate_dist_mode(cfg: dict) -> dict:
-    """Bildet das alte `capacity_weighting`-Bool auf den Drei-Wert-`distribution_mode` ab."""
-    if "capacity_weighting" not in cfg:
-        return cfg
-    migrated = dict(cfg)
-    if migrated.pop("capacity_weighting", False):
-        migrated["distribution_mode"] = "capacity"
-    elif migrated.get("distribution_mode") == "weighted":
-        migrated["distribution_mode"] = "soc"
-    return migrated
 
 
 def store_for(hass: Any) -> GroupStore | None:
@@ -69,34 +53,6 @@ def group_for(hass: Any, grid_sensor: str) -> NetGroup:
             on_soc_switch_change=lambda state: store.soc_switch_changed(grid_sensor, state),
         )
     return group
-
-
-class SolakonDistStore(Store):
-    """Verteilungs-Store mit Schemamigration."""
-
-    async def _async_migrate_func(
-        self, old_major_version: int, old_minor_version: int, old_data: dict
-    ) -> dict:
-        """Hebt Version 1 auf 2: flache Form verschachteln, Zwei-Feld-Modus auflösen."""
-        if old_major_version >= 2 or not old_data:
-            return old_data
-
-        if "distribution_mode" in old_data or "global_max_power" in old_data:
-            flat = _migrate_dist_mode(old_data)
-            return {gk: dict(flat) for gk in _grid_groups(self.hass)}
-        return {gk: _migrate_dist_mode(cfg) for gk, cfg in old_data.items()}
-
-
-class SolakonSocSwitchStore(Store):
-    """SOC-Switch-Store mit Schemamigration."""
-
-    async def _async_migrate_func(
-        self, old_major_version: int, old_minor_version: int, old_data: dict
-    ) -> dict:
-        """Hebt Version 1 auf 2: der flache Zustand gilt für jede vorhandene Netzgruppe."""
-        if old_major_version >= 2 or not old_data:
-            return old_data
-        return {gk: dict(old_data) for gk in _grid_groups(self.hass)}
 
 
 class GroupStore:

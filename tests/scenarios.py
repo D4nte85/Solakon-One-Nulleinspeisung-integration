@@ -12,7 +12,8 @@ from datetime import datetime, timezone
 
 from tests import geraet, harness as h
 from tests.ha_stubs import ActiveConnection, _DtState
-from custom_components.solakon_nulleinspeisung.schema import InvalidSettings, SolakonSettingsStore
+from custom_components.solakon_nulleinspeisung.migrations import SolakonSettingsStore
+from custom_components.solakon_nulleinspeisung.schema import InvalidSettings
 
 C = h.const
 # Literal statt Konstante, damit die Referenz auch vom Stand ohne das Setting erzeugbar ist.
