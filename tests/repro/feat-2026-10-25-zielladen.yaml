@@ -30,14 +30,14 @@ erwartet:
     aufruf: {entity: a.leistung, wert: 800}
   - schritt: 1
     instanz: a
-    zustand: {operating_state: target_charging, active_fall: GN, grid_charge_active: true}
+    zustand: {operating_state: target_charging, active_fall: GN, charge_session: grid_charge}
   - schritt: 2
     aufruf: {entity: select.a_mode, wert: "0"}
   - schritt: 2
     aufruf: {entity: a.leistung, wert: 0}
   - schritt: 2
     instanz: a
-    zustand: {operating_state: discharge_pause, active_fall: ZE, grid_charge_active: false}
+    zustand: {operating_state: discharge_pause, active_fall: ZE, charge_session: none}
   - schritt: 3
     kein_aufruf: {entity: a.leistung}
   - schritt: 3

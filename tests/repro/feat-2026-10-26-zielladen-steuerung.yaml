@@ -16,4 +16,4 @@ erwartet:
     aufruf: {entity: a.leistung, wert: 800}
   - schritt: 1
     instanz: a
-    zustand: {active_fall: GN, grid_charge_active: true}
+    zustand: {active_fall: GN, charge_session: grid_charge}

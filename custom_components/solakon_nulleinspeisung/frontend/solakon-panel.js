@@ -1395,13 +1395,13 @@ ${this._textsMissing ? `
     this.shadowRoot.getElementById("st-stddev")?.parentElement.classList.toggle("dimmed", !(this._cfg.saved.stddev_trim_count > 0));
 
     const fl = this.shadowRoot.getElementById("st-flags");
+    // Ein Chip für die Lade-Session: Name der Art, ohne Session der Ruhetext.
+    const sessionText = { ac_charge: s.flag_ac, tariff_charge: s.flag_tariff, grid_charge: s.flag_grid_charge };
     if (fl) fl.innerHTML = [
       [s.flag_pi          || "",         piOn],
       [s.flag_cycle       || "",         st.cycle_active],
       [s.flag_surplus     || "",        st.surplus_active],
-      [s.flag_ac          || "",             st.ac_charge],
-      [s.flag_tariff      || "",         st.tariff_charge],
-      [s.flag_grid_charge || "",         st.grid_charge],
+      [sessionText[st.charge_session] ?? s.flag_charge ?? "", (st.charge_session ?? "none") !== "none"],
       [s.flag_night       || "",          st.is_night],
       [s.flag_pv_tariff   || "",      st.forecast_tariff_suppressed],
       [s.flag_pv_surplus  || "",     st.forecast_surplus_forced],

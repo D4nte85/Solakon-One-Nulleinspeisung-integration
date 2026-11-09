@@ -431,6 +431,7 @@
     "flag_pi":           "PI Controller",
     "flag_cycle":        "Cycle",
     "flag_surplus":      "Surplus",
+    "flag_charge":       "Charging",
     "flag_ac":           "AC Charge",
     "flag_tariff":       "Tariff Charge",
     "flag_grid_charge":  "Grid charging",

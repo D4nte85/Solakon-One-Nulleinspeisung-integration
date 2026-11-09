@@ -29,4 +29,4 @@ erwartet:
   - schritt: alle
     kein_aufruf: {entity: a.leistung, wert_min: 1201}
   - schritt: 1
-    zustand: {tariff_charge_active: true}
+    zustand: {charge_session: tariff_charge}

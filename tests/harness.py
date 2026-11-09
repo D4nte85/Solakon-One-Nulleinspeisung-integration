@@ -175,6 +175,8 @@ class FakeConfigEntries:
         self.hass.log("entry_update", entry.entry_id, data)
         if data is not None:
             entry.data = data
+        for key, value in kwargs.items():
+            setattr(entry, key, value)
 
     async def async_forward_entry_setups(self, entry, platforms):
         self.hass.log("forward_setups", entry.entry_id, list(platforms))
@@ -276,7 +278,7 @@ COORD_ATTRS = (
     "current_zone", "zone_label", "mode_key", "mode_label",
     "last_action", "last_action_key", "last_action_params", "last_action_ts",
     "last_error", "last_error_msgs", "integral", "active_fall",
-    "cycle_active", "surplus_active", "ac_charge_active", "tariff_charge_active", "grid_charge_active", "resting",
+    "cycle_active", "surplus_active", "charge_session", "resting",
     "is_night", "discharge_locked", "operating_state", "operating_state_ts",
     "_cycle_blocked", "last_output_ts", "mode_label_ts",
     "grid_stddev", "grid_stddev_raw", "dyn_offset_z1", "dyn_offset_z2", "dyn_offset_ac",

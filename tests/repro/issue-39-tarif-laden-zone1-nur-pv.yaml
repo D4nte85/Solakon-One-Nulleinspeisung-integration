@@ -8,7 +8,7 @@ sensoren:
 instanzen:
   - prefix: a
     settings: {regulation_enabled: true, tariff_enabled: true, tariff_price_sensor: sensor.preis}
-    flags: {tariff_charge_active: true}
+    flags: {charge_session: tariff_charge}
     sensoren: {soc: 50, modus: "3", leistung: 800, ist: -800}
   - prefix: b
     settings: {regulation_enabled: true, pv_reserve: 50}

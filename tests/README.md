@@ -68,7 +68,7 @@ instanzen:
   - prefix: a         # erste Instanz immer a; weitere b, c …
     netzsensor: sensor.grid   # optional; sensor.grid_other bildet eine zweite Netzgruppe (Wert wie netz)
     settings: {regulation_enabled: true, tariff_power: 1000}   # über SETTINGS_DEFAULTS
-    flags: {cycle_active: false}                              # gespeicherte Zustandsflags
+    flags: {cycle_active: false, charge_session: tariff_charge}   # gespeicherte Zustandsflags; charge_session none|ac_charge|tariff_charge|grid_charge
     gespeichert: false   # optional: Settings am Laden vorbei, ohne Rücksetzen auf den Standard; ohne flags
     sensoren: {soc: 40, modus: "1"}   # soc solar ist countdown leistung entladestrom timeout modus export kapazitaet
     integral: 0.0
@@ -85,7 +85,7 @@ erwartet:
     kein_aufruf: {entity: a.leistung, wert_min: 1201}
   - schritt: 1
     instanz: a
-    zustand: {tariff_charge_active: true}
+    zustand: {charge_session: tariff_charge}
   - aufruf: {entity: select.a_mode, wert: "3"}
   - log: Teiltext einer WARNING
 ```
@@ -119,6 +119,10 @@ Regellauf einer Instanz: Eingänge davor, Schreibbefehle, Zustand danach.
 
 - Gezählt werden nur Läufe mit konsistentem Startzustand; Treffer aus widersprüchlichen
   Startflags prüfen das Heilen und laufen getrennt mit.
+- Der Szenariogenerator schreibt die Lade-Session noch als drei Flags (`ac_charge_active`,
+  `tariff_charge_active`, `grid_charge_active`); `scenarios.py` führt sie vor dem Speichern
+  durch die Settings-Migration 2.3 zu `charge_session`, mehrere gesetzte Flags ergeben `none`.
+  Die Regeln lesen die Art über abgeleitete Flags gleichen Namens (`invarianten._zustand`).
 - Regeln in `VERZOEGERT` gelten nur in Läufen ohne Übergang (kein Fallwechsel, kein
   geschriebener Modus), weil der erste zutreffende Fall gewinnt.
 - `test_invarianten.py` prüft jede Regel einzeln. Eine Regel mit offener Bugfix-Seite steht

@@ -20,7 +20,7 @@ schritte:
 erwartet:
   - schritt: 1
     instanz: a
-    zustand: {tariff_charge_active: true}
+    zustand: {charge_session: tariff_charge}
   - schritt: 3
     instanz: a
-    zustand: {tariff_charge_active: false}
+    zustand: {charge_session: none}

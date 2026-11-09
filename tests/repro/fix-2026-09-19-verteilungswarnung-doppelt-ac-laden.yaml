@@ -16,7 +16,7 @@ instanzen:
   # b lädt schon AC, bildet mit a den AC-Pool.
   - prefix: b
     settings: {regulation_enabled: true}
-    flags: {ac_charge_active: true}
+    flags: {charge_session: ac_charge}
     sensoren: {soc: 50, modus: "3"}
   # c entlädt, bildet vor den Falls mit a den Entlade-Pool.
   - prefix: c

@@ -42,7 +42,7 @@ from .const import (
     CONF_EXPORT_LIMIT, MODE_DISABLED, MODE_DISCHARGE, MODE_AC_CHARGE, S_REGULATION_ENABLED,
     S_ZONE3_LIMIT, DEVICE_MAX_CURRENT, S_HARD_LIMIT_Z0, S_HARD_LIMIT_Z1, S_PV_RESERVE,
     S_AC_SOC_TARGET, S_AC_POWER_LIMIT, S_REST_IN_DISCHARGE, S_PI_ENABLED, S_Z1_NIGHT_ENABLED,
-    S_TARGET_CHARGE_ENABLED, SESSION_AC, SESSION_GRID, SESSION_NONE, SESSION_TARIFF,
+    S_TARGET_CHARGE_ENABLED, CHARGE_SESSION_KEY, CHARGE_SESSIONS, SESSION_AC, SESSION_NONE,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -55,13 +55,6 @@ PERSISTED_FLAGS = (
     ("solar_zero_entry_armed", "surplus.armed", True),
 )
 
-# Speicherschlüssel der Lade-Session je Art.
-SESSION_FLAGS = {
-    SESSION_AC: "ac_charge_active",
-    SESSION_TARIFF: "tariff_charge_active",
-    SESSION_GRID: "grid_charge_active",
-}
-
 # Kernsensoren der Instanz: (Konfigschlüssel, löst Regelzyklus aus, Pflicht für den Zyklus).
 # Ist-Leistung und Leistungssollwert werden gepollt und lösen keinen Zyklus aus.
 CORE_SENSORS = (
@@ -72,15 +65,6 @@ CORE_SENSORS = (
     (CONF_SOC_SENSOR, True, True),
     (CONF_MODE_SELECT, True, False),
 )
-
-
-def _session_from_flags(stored: dict) -> str:
-    """Art der Lade-Session aus den gespeicherten Flags; mehrere gesetzte Flags ergeben keine Session."""
-    kinds = [kind for kind, key in SESSION_FLAGS.items() if stored.get(key)]
-    if len(kinds) > 1:
-        _LOGGER.warning("Solakon: mehrere Lade-Sessions gespeichert (%s), keine übernommen", ", ".join(kinds))
-        return SESSION_NONE
-    return kinds[0] if kinds else SESSION_NONE
 
 
 class SolakonCoordinator:
@@ -306,21 +290,6 @@ class SolakonCoordinator:
         """Regelzustand der Instanz laut `zones.control_state`."""
         return control_state(self.surplus_active, self.charge_session, self.cycle_active)
 
-    @property
-    def ac_charge_active(self) -> bool:
-        """Lade-Session ist AC-Laden."""
-        return self.charge_session == SESSION_AC
-
-    @property
-    def tariff_charge_active(self) -> bool:
-        """Lade-Session ist Tarif-Laden."""
-        return self.charge_session == SESSION_TARIFF
-
-    @property
-    def grid_charge_active(self) -> bool:
-        """Lade-Session ist Netz-Laden."""
-        return self.charge_session == SESSION_GRID
-
     def _at_rest(self, mode: str) -> bool:
         """Ruht die Instanz in `mode`, laut `zones.at_rest`."""
         return at_rest(mode, self._setting(S_REST_IN_DISCHARGE, bool), self.resting)
@@ -328,7 +297,7 @@ class SolakonCoordinator:
     def _persisted_flags(self) -> dict[str, bool]:
         """Gespeicherte Zustandsflags unter ihrem Speicherschlüssel."""
         flags = {key: attrgetter(attr)(self) for key, attr, _ in PERSISTED_FLAGS}
-        return {**flags, **{key: self.charge_session == kind for kind, key in SESSION_FLAGS.items()}}
+        return {**flags, CHARGE_SESSION_KEY: self.charge_session}
 
     def _store_data(self) -> dict:
         """Speicherinhalt: Settings plus gespeicherte Zustandsflags."""
@@ -587,7 +556,8 @@ class SolakonCoordinator:
             for key, attr, default in PERSISTED_FLAGS:
                 owner, _, name = attr.rpartition(".")
                 setattr(attrgetter(owner)(self) if owner else self, name, bool(stored.get(key, default)))
-            self.charge_session = _session_from_flags(stored)
+            session = stored.get(CHARGE_SESSION_KEY, SESSION_NONE)
+            self.charge_session = session if session in CHARGE_SESSIONS else SESSION_NONE
             if reset:
                 notify_reset(self.hass, f"{DOMAIN}_settings_reset_{self.entry.entry_id}", self.entry.title, reset)
                 await self._store.async_save(self._store_data())

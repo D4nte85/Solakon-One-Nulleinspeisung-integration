@@ -7,11 +7,11 @@ verteilung:
 instanzen:
   - prefix: a
     settings: {regulation_enabled: true, ac_enabled: true}
-    flags: {ac_charge_active: true}
+    flags: {charge_session: ac_charge}
     sensoren: {soc: 80, modus: "3", leistung: 400, ist: 400}
   - prefix: b
     settings: {regulation_enabled: true, ac_enabled: true}
-    flags: {ac_charge_active: true}
+    flags: {charge_session: ac_charge}
     sensoren: {soc: 30, modus: "3", leistung: 400, ist: 400}
 schritte:
   - nach: 0

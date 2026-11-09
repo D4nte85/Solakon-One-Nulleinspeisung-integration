@@ -89,6 +89,15 @@
           "pv_direct": "PV-Direktnutzung"
         }
       },
+      "charge_session": {
+        "name": "Lade-Session",
+        "state": {
+          "none": "Keine",
+          "ac_charge": "AC-Laden",
+          "tariff_charge": "Tarif-Laden",
+          "grid_charge": "Netz-Laden"
+        }
+      },
       "zone": {
         "name": "Aktuelle Zone"
       },
@@ -146,15 +155,6 @@
       },
       "surplus_active": {
         "name": "Überschuss-Modus"
-      },
-      "ac_charge_active": {
-        "name": "AC Laden aktiv"
-      },
-      "tariff_charge_active": {
-        "name": "Tarif-Laden aktiv"
-      },
-      "grid_charge_active": {
-        "name": "Netz-Laden aktiv"
       },
       "is_night": {
         "name": "Nachtabschaltung"

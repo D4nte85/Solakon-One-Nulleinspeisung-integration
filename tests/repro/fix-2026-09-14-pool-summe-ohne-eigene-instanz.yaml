@@ -15,5 +15,5 @@ schritte:
   - nach: 0
     wer: a
 erwartet:
-  - zustand: {ac_charge_active: false}
+  - zustand: {charge_session: none}
   - kein_aufruf: {entity: a.modus, wert: "3"}

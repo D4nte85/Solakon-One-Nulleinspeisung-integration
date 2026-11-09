@@ -5,6 +5,10 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+### Breaking Change
+
+- **Sensor „Lade-Session“ statt drei Binärsensoren:** `binary_sensor.…_ac_laden_aktiv`, `…_tarif_laden_aktiv` und `…_netz_laden_aktiv` entfallen. Die Art der laufenden Lade-Session steht im Enum-Sensor `sensor.…_lade_session` (`none`, `ac_charge`, `tariff_charge`, `grid_charge`). Automationen und Dashboards auf die alten Binärsensoren sind umzustellen. Beim ersten Start entfernt die Integration die alten Entitäten aus der Entitätsregistrierung (Config-Entry 1.2) und übernimmt eine laufende Lade-Session in den neuen Speicherschlüssel `charge_session` (Settings 2.3, `migrations.py`); eine laufende Lade-Session übersteht das Update. Im Status-Tab ersetzt ein Chip die drei Lade-Chips: er zeigt die Art oder grau „Laden“. WS-Status: `charge_session` statt `ac_charge`, `tariff_charge`, `grid_charge`.
+
 ### Behoben
 
 - **Kapazitätssensor aus Versionen bis 2.1.6:** Der früher je Instanz eingestellte Kapazitätssensor (`battery_capacity_sensor`) wird beim Start wieder in die Verteilung der Netzgruppe übernommen, sofern dort noch keiner eingetragen ist. Die Übernahme war mit 2.1.7 entfallen; wer von einer älteren Version aktualisierte, fiel bei der Verteilung nach Kapazität auf Gleichverteilung zurück. Settings-Speicher Version 2.2 (`migrations.py`).

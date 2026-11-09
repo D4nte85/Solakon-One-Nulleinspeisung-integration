@@ -10,7 +10,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util import dt as dt_util
 
-from .const import DOMAIN, FALL_KEYS, MODE_KEYS, OPERATING_STATES
+from .const import CHARGE_SESSIONS, DOMAIN, FALL_KEYS, MODE_KEYS, OPERATING_STATES
 from .coordinator import SolakonCoordinator
 from .entity_base import SolakonEntity
 from .status_view import snapshot_view
@@ -157,6 +157,8 @@ async def async_setup_entry(
     add([
         OperatingStateSensor(coord),
         ZoneSensor(coord),
+        CoordinatorSensor(coord, "charge_session", lambda c: c.charge_session,
+                          icon="mdi:battery-charging", **_enum(CHARGE_SESSIONS), **DIAG),
         CoordinatorSensor(coord, "mode_label", lambda c: c.display.mode_key,
                           icon="mdi:information-outline", **_enum(MODE_KEYS), **DIAG),
         LastActionSensor(coord),

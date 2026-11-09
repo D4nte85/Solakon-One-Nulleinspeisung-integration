@@ -1,13 +1,29 @@
 """Speichermigrationen: je Speicher eine Store-Klasse, je Version ein Schritt."""
 from __future__ import annotations
 
+import logging
+
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.helpers import entity_registry as er
 
-from .const import CONF_GRID_SENSOR, DOMAIN, S_HARD_LIMIT_Z0, S_HARD_LIMIT_Z1, S_PV_FORECAST_SENSOR
+from .const import (
+    CHARGE_SESSION_KEY, CONF_GRID_SENSOR, DOMAIN, S_HARD_LIMIT_Z0, S_HARD_LIMIT_Z1, S_PV_FORECAST_SENSOR,
+    SESSION_AC, SESSION_GRID, SESSION_NONE, SESSION_TARIFF,
+)
+
+_LOGGER = logging.getLogger(__name__)
 
 # Settings-Schlüssel des Kapazitätssensors bis v2.1.6; seither je Instanz in der Verteilung.
 OLD_CAPACITY_SENSOR = "battery_capacity_sensor"
+
+# Lade-Flags bis Settings 2.2 je Art der Lade-Session; zugleich Unique-ID-Suffix ihrer Binärsensoren.
+OLD_SESSION_FLAGS = {
+    SESSION_AC: "ac_charge_active",
+    SESSION_TARIFF: "tariff_charge_active",
+    SESSION_GRID: "grid_charge_active",
+}
 
 
 def _grid_groups(hass: HomeAssistant) -> set[str]:
@@ -62,17 +78,29 @@ async def _capacity_to_dist(hass: HomeAssistant, entry_id: str, data: dict) -> d
     return migrated
 
 
+def _session_from_flags(data: dict) -> dict:
+    """Settings 2.2 → 2.3: Lade-Flags zur Art der Lade-Session; mehrere gesetzte Flags ergeben keine."""
+    migrated = dict(data)
+    kinds = [kind for kind, key in OLD_SESSION_FLAGS.items() if migrated.pop(key, False)]
+    if len(kinds) > 1:
+        _LOGGER.warning("Solakon: mehrere Lade-Sessions gespeichert (%s), keine übernommen", ", ".join(kinds))
+    migrated.setdefault(CHARGE_SESSION_KEY, kinds[0] if len(kinds) == 1 else SESSION_NONE)
+    return migrated
+
+
 class SolakonSettingsStore(Store):
     """Settings-Speicher einer Instanz unter `<DOMAIN>_<entry_id>`."""
 
     async def _async_migrate_func(
         self, old_major_version: int, old_minor_version: int, old_data: dict
     ) -> dict:
-        """Schritte von der gespeicherten Version bis 2.2; neuere Stände bleiben unverändert."""
+        """Schritte von der gespeicherten Version bis 2.3; neuere Stände bleiben unverändert."""
         if old_major_version < 2:
             old_data = _settings_v2(old_data)
         if (old_major_version, old_minor_version) < (2, 2):
             old_data = await _capacity_to_dist(self.hass, self.key.removeprefix(f"{DOMAIN}_"), old_data)
+        if (old_major_version, old_minor_version) < (2, 3):
+            old_data = _session_from_flags(old_data)
         return old_data
 
 
@@ -102,3 +130,14 @@ class SolakonSocSwitchStore(Store):
         if old_major_version >= 2 or not old_data:
             return old_data
         return {gk: dict(old_data) for gk in _grid_groups(self.hass)}
+
+
+async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Config-Entry 1.1 → 1.2: Binärsensoren der Lade-Flags aus der Entitätsregistrierung entfernen."""
+    if entry.version == 1 and entry.minor_version < 2:
+        registry = er.async_get(hass)
+        for key in OLD_SESSION_FLAGS.values():
+            if entity_id := registry.async_get_entity_id("binary_sensor", DOMAIN, f"{entry.entry_id}_{key}"):
+                registry.async_remove(entity_id)
+        hass.config_entries.async_update_entry(entry, minor_version=2)
+    return True

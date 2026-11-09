@@ -32,9 +32,6 @@ async def async_setup_entry(
     add([
         DiagBoolSensor(coord, "cycle_active",               "mdi:battery-arrow-up"),
         DiagBoolSensor(coord, "surplus_active",             "mdi:solar-power"),
-        DiagBoolSensor(coord, "ac_charge_active",           "mdi:lightning-bolt"),
-        DiagBoolSensor(coord, "tariff_charge_active",       "mdi:currency-eur"),
-        DiagBoolSensor(coord, "grid_charge_active",         "mdi:transmission-tower-import"),
         DiagBoolSensor(coord, "is_night",                   "mdi:weather-night"),
         DiagBoolSensor(coord, "forecast_tariff_suppressed", "mdi:weather-sunny"),
         DiagBoolSensor(coord, "forecast_surplus_forced",    "mdi:weather-sunny-alert"),

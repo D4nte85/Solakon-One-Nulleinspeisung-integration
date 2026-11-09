@@ -89,6 +89,15 @@
           "pv_direct": "PV direct use"
         }
       },
+      "charge_session": {
+        "name": "Charging session",
+        "state": {
+          "none": "None",
+          "ac_charge": "AC charging",
+          "tariff_charge": "Tariff charging",
+          "grid_charge": "Grid charging"
+        }
+      },
       "zone": {
         "name": "Current zone"
       },
@@ -146,15 +155,6 @@
       },
       "surplus_active": {
         "name": "Surplus mode"
-      },
-      "ac_charge_active": {
-        "name": "AC charging active"
-      },
-      "tariff_charge_active": {
-        "name": "Tariff charging active"
-      },
-      "grid_charge_active": {
-        "name": "Grid charging active"
       },
       "is_night": {
         "name": "Night shutdown"

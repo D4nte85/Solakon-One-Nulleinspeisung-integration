@@ -19,6 +19,15 @@ C = h.const
 
 # Flags einer Lade-Session.
 LADE_FLAGS = ("ac_charge_active", "tariff_charge_active", "grid_charge_active")
+SESSION_FLAG = {"ac_charge": "ac_charge_active", "tariff_charge": "tariff_charge_active",
+                "grid_charge": "grid_charge_active"}
+
+
+def _zustand(coord) -> dict:
+    """Zustand des Coordinators, dazu je Art der Lade-Session ein Flag für die Regeln."""
+    z = h.coord_state(coord)
+    z.update({flag: z["charge_session"] == art for art, flag in SESSION_FLAG.items()})
+    return z
 KINDS = ("cycle", "multi", "stall", "tariff", "domain", "rest")
 NICHT_ZAHL = ("unavailable", "unknown", "None", "abc", "nan", "on", "off")
 
@@ -710,7 +719,7 @@ async def _lauf(kind: str, spec: dict) -> list[Ctx]:
             coord.settings.update(inst["settings"])
         coord.integral = inst["integral"]
         coord.surplus.prev_actual = inst["prev_actual"]
-    flags = {p: h.coord_state(c) for p, c in coords.items()}
+    flags = {p: _zustand(c) for p, c in coords.items()}
     aus_seit = {p: None for p in coords}
     out = []
     for idx, step in enumerate(spec["steps"]):
@@ -739,13 +748,13 @@ async def _lauf(kind: str, spec: dict) -> list[Ctx]:
             aufrufe = [e for e in hass.events if e[0] == "call"]
             if p in abgeschaltet:
                 aufrufe = ereignisse_aenderung + aufrufe
-            neu = h.coord_state(coord)
+            neu = _zustand(coord)
             runde.append(Ctx(kind, spec["id"], idx, p, coord.entry.data, dict(coord.settings), vorher,
                              schnappschuss(hass), flags[p], neu, aufrufe,
                              dist=spec["dist"] if spec.get("has_dist_config") else None,
                              aus_seit=aus_seit[p], abgeschaltet_jetzt=p in abgeschaltet,
                              geregelt={q: bool(c.settings[C.S_REGULATION_ENABLED]) for q, c in coords.items()},
-                             laedt={q: any(getattr(c, k) for k in LADE_FLAGS) for q, c in coords.items()}))
+                             laedt={q: c.charge_session != "none" for q, c in coords.items()}))
             flags[p] = neu
         nach = schnappschuss(hass)
         alle = {p: (coords[p].entry.data, flags[p], nach) for p in coords}

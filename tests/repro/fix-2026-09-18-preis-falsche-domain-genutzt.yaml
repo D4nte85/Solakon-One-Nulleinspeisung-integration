@@ -13,5 +13,5 @@ schritte:
   - nach: 0
   - nach: 5
 erwartet:
-  - zustand: {tariff_charge_active: false}
+  - zustand: {charge_session: none}
   - zustand_nicht: {last_error: ""}

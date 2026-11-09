@@ -1,4 +1,4 @@
-"""Speichermigrationen: Kapazitätssensor aus den Settings in die Verteilung (Settings 2.1 → 2.2)."""
+"""Speichermigrationen: Kapazitätssensor in die Verteilung (2.2), Lade-Flags zur Lade-Session (2.3), Binärsensoren (Entry 1.2)."""
 from __future__ import annotations
 
 import asyncio
@@ -19,7 +19,7 @@ def _setup(dist=None):
     if dist is not None:
         hass.storage[DIST_KEY] = dist
     asyncio.run(h.group_store_mod.async_load(hass))
-    return hass, mig.SolakonSettingsStore(hass, 2, f"{DOMAIN}_entry_a", minor_version=2)
+    return hass, mig.SolakonSettingsStore(hass, 2, f"{DOMAIN}_entry_a", minor_version=3)
 
 
 def _migrate(store, major, minor, data):
@@ -29,7 +29,7 @@ def _migrate(store, major, minor, data):
 def test_kapazitaetssensor_wandert_in_die_verteilung():
     hass, store = _setup()
     out = _migrate(store, 2, 1, {"zone1_limit": 50, mig.OLD_CAPACITY_SENSOR: "sensor.cap_a"})
-    assert out == {"zone1_limit": 50}
+    assert out == {"zone1_limit": 50, "charge_session": "none"}
     assert hass.storage[DIST_KEY]["sensor.grid"][CAP_KEY] == "sensor.cap_a"
 
 
@@ -43,25 +43,53 @@ def test_vorhandener_sensor_in_der_verteilung_bleibt():
 def test_leerer_altschluessel_wird_nur_entfernt():
     hass, store = _setup()
     out = _migrate(store, 2, 1, {mig.OLD_CAPACITY_SENSOR: ""})
-    assert out == {}
+    assert out == {"charge_session": "none"}
     assert DIST_KEY not in hass.storage
 
 
 def test_version_1_durchlaeuft_beide_schritte():
     hass, store = _setup()
     out = _migrate(store, 1, 1, {"hard_limit": 650, mig.OLD_CAPACITY_SENSOR: "sensor.cap_a"})
-    assert out == {"hard_limit_z0": 650, "hard_limit_z1": 650}
+    assert out == {"hard_limit_z0": 650, "hard_limit_z1": 650, "charge_session": "none"}
     assert hass.storage[DIST_KEY]["sensor.grid"][CAP_KEY] == "sensor.cap_a"
 
 
 def test_neuere_nebenversion_bleibt_unveraendert():
     _, store = _setup()
-    data = {"zone1_limit": 50, mig.OLD_CAPACITY_SENSOR: "sensor.cap_a", "charge_session": "none"}
-    assert _migrate(store, 2, 3, data) == data
+    data = {"zone1_limit": 50, mig.OLD_CAPACITY_SENSOR: "sensor.cap_a", "ac_charge_active": True}
+    assert _migrate(store, 2, 4, data) == data
 
 
 def test_ohne_verteilungsspeicher_bleiben_die_settings():
     hass = h.FakeHass("de")
-    store = mig.SolakonSettingsStore(hass, 2, f"{DOMAIN}_entry_a", minor_version=2)
+    store = mig.SolakonSettingsStore(hass, 2, f"{DOMAIN}_entry_a", minor_version=3)
     data = {mig.OLD_CAPACITY_SENSOR: "sensor.cap_a"}
-    assert _migrate(store, 2, 1, data) == data
+    assert _migrate(store, 2, 1, data) == {**data, "charge_session": "none"}
+
+
+def test_ein_lade_flag_wird_zur_art():
+    _, store = _setup()
+    out = _migrate(store, 2, 2, {"cycle_active": True, "ac_charge_active": False,
+                                 "tariff_charge_active": True, "grid_charge_active": False})
+    assert out == {"cycle_active": True, "charge_session": "tariff_charge"}
+
+
+def test_mehrere_lade_flags_ergeben_keine_session():
+    _, store = _setup()
+    out = _migrate(store, 2, 2, {"ac_charge_active": True, "tariff_charge_active": True})
+    assert out == {"charge_session": "none"}
+
+
+def test_entry_migration_entfernt_die_binaersensoren_der_lade_flags():
+    hass = h.FakeHass("de")
+    entry = h.FakeEntry("entry_a", h.entry_data("a"))
+    entry.version, entry.minor_version = 1, 1
+    hass.config_entries.entries = [entry]
+    reg = h.ha_stubs.entity_registry_get(hass)
+    for key in ("ac_charge_active", "tariff_charge_active", "grid_charge_active", "cycle_active"):
+        reg.entities[f"binary_sensor.a_{key}"] = ("binary_sensor", DOMAIN, f"entry_a_{key}")
+    assert asyncio.run(mig.async_migrate_entry(hass, entry)) is True
+    assert list(reg.entities) == ["binary_sensor.a_cycle_active"]
+    assert entry.minor_version == 2
+    assert asyncio.run(mig.async_migrate_entry(hass, entry)) is True
+    assert list(reg.entities) == ["binary_sensor.a_cycle_active"]

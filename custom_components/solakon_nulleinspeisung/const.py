@@ -8,7 +8,7 @@ from typing import Any, NamedTuple
 
 DOMAIN = "solakon_nulleinspeisung"
 STORAGE_VERSION = 2
-STORAGE_MINOR_VERSION = 2
+STORAGE_MINOR_VERSION = 3
 VERSION = json.loads((Path(__file__).parent / "manifest.json").read_text())["version"]
 
 # -- Config-Entry Keys --------------------------------------------------------
@@ -125,6 +125,8 @@ SESSION_AC     = "ac_charge"
 SESSION_TARIFF = "tariff_charge"
 SESSION_GRID   = "grid_charge"
 CHARGE_SESSIONS = [SESSION_NONE, SESSION_AC, SESSION_TARIFF, SESSION_GRID]
+# Speicherschlüssel der Art der Lade-Session in den Settings einer Instanz.
+CHARGE_SESSION_KEY = "charge_session"
 
 # -- Inverter Mode Values -----------------------------------------------------
 MODE_DISABLED  = "0"

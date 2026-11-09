@@ -17,6 +17,6 @@ schritte:
 erwartet:
   - schritt: 1
     instanz: a
-    zustand: {ac_charge_active: false}
+    zustand: {charge_session: none}
   - schritt: 3
     kein_aufruf: {entity: select.a_mode, wert: "3"}

@@ -9,7 +9,7 @@ sensoren:
 instanzen:
   - prefix: a
     settings: {regulation_enabled: true, tariff_enabled: true, tariff_price_sensor: sensor.preis, tariff_soc_target: 80}
-    flags: {cycle_active: false, tariff_charge_active: true}
+    flags: {cycle_active: false, charge_session: tariff_charge}
     sensoren: {soc: 80, modus: "3"}
 schritte:
   - nach: 0
@@ -18,9 +18,9 @@ schritte:
 erwartet:
   - schritt: 1
     instanz: a
-    zustand: {tariff_charge_active: false}
+    zustand: {charge_session: none}
   - schritt: 2
     instanz: a
-    zustand: {tariff_charge_active: false}
+    zustand: {charge_session: none}
   - schritt: 2
     kein_aufruf: {entity: select.a_mode, wert: "3"}

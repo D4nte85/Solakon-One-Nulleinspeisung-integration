@@ -151,8 +151,8 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
     if (o.regulation_enabled === false) return o.target_charge_enabled ? "discharge_pause" : "disabled";
     if (o.target_charge_enabled && o.soc < (o.target_soc ?? 70)) return "target_charging";
     if (o.surplus_active)               return "exporting";
-    if (o.tariff_charge)                return "tariff_charging";
-    if (o.ac_charge)                    return "ac_charging";
+    if (o.charge_session === "tariff_charge") return "tariff_charging";
+    if (o.charge_session === "ac_charge")     return "ac_charging";
     if (o.discharge_locked)             return "discharge_locked";
     if (o.is_night)                     return "night_off";
     if (o.cycle_active)                 return "battery_supply";
@@ -167,7 +167,7 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
       last_output_ts: now() - 12, mode_label_ts: now() - 340,
       last_error: o.last_error ?? null, integral: 4.2, grid: o.grid, actual_power: o.actual_power,
       solar: 850, soc: o.soc, cycle_active: o.cycle_active, surplus_active: false,
-      ac_charge: false, tariff_charge: false, grid_charge: o.grid_charge ?? false, regulation_enabled: o.regulation_enabled ?? true, stddev: 8.4, stddev_raw: 8.4,
+      charge_session: o.charge_session ?? "none", regulation_enabled: o.regulation_enabled ?? true, stddev: 8.4, stddev_raw: 8.4,
       dyn_z1_enabled: false, dyn_z2_enabled: false, dyn_ac_enabled: false,
       dyn_z1: 0, dyn_z1_night: 0, dyn_z2: 0, dyn_ac: 0, active_fall: o.active_fall, is_night: false,
       operating_state: mkOperatingState(o), discharge_locked: o.discharge_locked ?? false,
@@ -217,7 +217,7 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
     const inst = INSTANCES[entryId];
     const st = inst.status, s = inst.settings;
     const night = !!(st.dark && s.z1_night_enabled);
-    const zone = st.ac_charge ? "ac" : st.cycle_active ? (night ? "z1_night" : "z1") : "z2";
+    const zone = st.charge_session === "ac_charge" ? "ac" : st.cycle_active ? (night ? "z1_night" : "z1") : "z2";
     const [enabledKey, staticKey, dynKey] = OFFSET_SOURCES[zone];
     const dynamic = !!s[enabledKey];
     const capSensor = (distConfig[inst.grid_sensor] || {})[`inst_${entryId}_capacity_sensor`];

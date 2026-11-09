@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 
 from tests import geraet, harness as h
 from tests.ha_stubs import ActiveConnection, _DtState
-from custom_components.solakon_nulleinspeisung.migrations import SolakonSettingsStore
+from custom_components.solakon_nulleinspeisung.migrations import SolakonSettingsStore, _session_from_flags
 from custom_components.solakon_nulleinspeisung.schema import InvalidSettings
 
 C = h.const
@@ -455,6 +455,8 @@ def _setup_env(spec):
                 (entry.data[C.CONF_ACTUAL_SENSOR], inst["follow_actual"])]
         if inst["stored"]:
             flags = {k: v for k, v in inst["flags"].items() if k not in inst.get("drop_flags", ())}
+            # Lade-Flags der Szenarien wie aus Settings 2.2: über die Migration zur Art der Lade-Session.
+            flags = _session_from_flags(flags)
             hass.storage[f"{C.DOMAIN}_{entry.entry_id}"] = {**inst["settings"], **flags}
         coord = h.coordinator_mod.SolakonCoordinator(hass, entry)
         hass.data.setdefault(C.DOMAIN, {})[entry.entry_id] = coord

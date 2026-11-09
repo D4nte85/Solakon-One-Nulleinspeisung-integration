@@ -42,8 +42,7 @@ INSTANZ_SENSOREN = {
     "export":       ("number.{p}_export", _G["export"], 800),
     "kapazitaet":   ("sensor.{p}_capacity", "kWh", 2.0),
 }
-FLAGS = ("cycle_active", "surplus_active", "ac_charge_active", "tariff_charge_active", "grid_charge_active",
-         "solar_zero_entry_armed")
+FLAGS = ("cycle_active", "surplus_active", "solar_zero_entry_armed")
 
 
 class SzenarioFehler(Exception):
@@ -115,6 +114,7 @@ def spec_aus(szenario: dict) -> dict:
         if not gespeichert and inst.get("flags"):
             raise SzenarioFehler(f"Instanz {p}: flags wirken nur mit gespeichert: true")
         flags = {f: False for f in FLAGS}
+        flags["charge_session"] = "none"
         flags.update(inst.get("flags") or {})
         spec["instances"].append({
             "prefix": p,

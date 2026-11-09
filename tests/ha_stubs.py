@@ -243,6 +243,27 @@ class EntitySelectorConfig(dict):
         return "EntitySelectorConfig(" + ", ".join(f"{k}={v!r}" for k, v in sorted(self.items())) + ")"
 
 
+class EntityRegistry:
+    """Entitätsregistrierung: entity_id → (Plattform-Domain, Integration, unique_id)."""
+
+    def __init__(self, hass):
+        self.hass = hass
+        self.entities = {}
+
+    def async_get_entity_id(self, domain, platform, unique_id):
+        return next((eid for eid, key in self.entities.items() if key == (domain, platform, unique_id)), None)
+
+    def async_remove(self, entity_id):
+        self.hass.log("registry_remove", entity_id)
+        self.entities.pop(entity_id, None)
+
+
+def entity_registry_get(hass):
+    if getattr(hass, "entity_registry", None) is None:
+        hass.entity_registry = EntityRegistry(hass)
+    return hass.entity_registry
+
+
 class ConfigEntryNotReady(Exception):
     pass
 
@@ -304,6 +325,7 @@ def install() -> None:
             async_track_time_interval=async_track_time_interval)
     _module("homeassistant.helpers.state", state_as_number=state_as_number)
     _module("homeassistant.helpers.storage", Store=Store)
+    _module("homeassistant.helpers.entity_registry", async_get=entity_registry_get)
     _module("homeassistant.helpers.config_validation",
             config_entry_only_config_schema=lambda domain: {})
     _module("homeassistant.util.dt", now=dt_now, utc_from_timestamp=utc_from_timestamp)
