@@ -16,7 +16,7 @@ class M:
     """Minimales Mitglied für Pools und `soc_switch`."""
 
     surplus_active = False
-    ac_charge_active = False
+    charge_session = "none"
 
     def __init__(self, member_id, grid_sensor="sensor.grid", soc=50.0):
         self.member_id, self.grid_sensor, self.soc = member_id, grid_sensor, soc

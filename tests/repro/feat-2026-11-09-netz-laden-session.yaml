@@ -1,0 +1,39 @@
+titel: Netz-Laden startet und endet als Lade-Session, die Schwester speist währenddessen nur PV ein
+bezug: 2026-11-09-lade-session-zustand-design
+# a lädt im Zielladen über Netz-Laden (GN), b entlädt in Zone 1 mit 600 W bei 300 W PV
+# am selben Netzsensor und ist auf PV minus Reserve gedeckelt. Danach schaltet a das
+# Netz-Laden ab, Fall HN beendet die Lade-Session.
+netz: 900
+instanzen:
+  - prefix: a
+    settings: {regulation_enabled: true, target_charge_enabled: true, target_soc: 70,
+               target_grid_charge: true}
+    sensoren: {soc: 40, solar: 0, modus: "0"}
+  - prefix: b
+    settings: {regulation_enabled: true, pv_reserve: 50}
+    flags: {cycle_active: true}
+    sensoren: {soc: 80, modus: "1", leistung: 600, ist: 600, solar: 300}
+schritte:
+  - nach: 0
+    wer: all
+  - nach: 30
+    settings: {target_grid_charge: false}
+    wer: a
+erwartet:
+  - schritt: 1
+    aufruf: {entity: select.a_mode, wert: "3"}
+  - schritt: 1
+    aufruf: {entity: a.leistung, wert: 800}
+  - schritt: 1
+    instanz: a
+    zustand: {active_fall: GN, grid_charge_active: true}
+  - schritt: 1
+    aufruf: {entity: b.leistung, wert: 250}
+  - schritt: 1
+    instanz: b
+    zustand: {last_action_key: act_pi_sister_charging}
+  - schritt: 2
+    aufruf: {entity: a.leistung, wert: 0}
+  - schritt: 2
+    instanz: a
+    zustand: {active_fall: HN, grid_charge_active: false}

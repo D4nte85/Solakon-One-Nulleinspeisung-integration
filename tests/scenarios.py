@@ -667,7 +667,11 @@ async def _run_derive() -> dict:
             for soc in (19, 20, 21, 60):
                 for mode in ("0", "1", "3", "x"):
                     for name, val in zip(flags, combo):
-                        setattr(coord, name, val)
+                        if name not in ("tariff_charge_active", "ac_charge_active"):
+                            setattr(coord, name, val)
+                    # Rangfolge des Regelzustands: Tarif-Laden vor AC-Laden
+                    tariff_on, ac_on = combo[1], combo[2]
+                    coord.charge_session = "tariff_charge" if tariff_on else "ac_charge" if ac_on else "none"
                     coord.settings[C.S_REGULATION_ENABLED] = regulation
                     coord.display.operating_state = ""
                     coord.display.mode_key = "waiting"

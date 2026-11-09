@@ -119,6 +119,13 @@ MODE_KEYS = [
     "unknown",
 ]
 
+# Art der Lade-Session einer Instanz; höchstens eine zugleich. Zustände des Sensors charge_session.
+SESSION_NONE   = "none"
+SESSION_AC     = "ac_charge"
+SESSION_TARIFF = "tariff_charge"
+SESSION_GRID   = "grid_charge"
+CHARGE_SESSIONS = [SESSION_NONE, SESSION_AC, SESSION_TARIFF, SESSION_GRID]
+
 # -- Inverter Mode Values -----------------------------------------------------
 MODE_DISABLED  = "0"
 MODE_DISCHARGE = "1"

@@ -22,7 +22,7 @@ class M:
     regulating: bool = True
     discharge: bool = True
     surplus_active: bool = False
-    ac_charge_active: bool = False
+    charge_session: str = "none"
     allocated_power: float | None = None
     soc: float | None = 50.0
     limit: float = 800.0
@@ -92,8 +92,8 @@ def test_leader_kleinste_id_unter_regelnden_sonst_unter_allen():
 
 def test_pools():
     a = M("a")
-    b = M("b", discharge=False, ac_charge_active=True)
-    c = M("c", regulating=False, ac_charge_active=True)
+    b = M("b", discharge=False, charge_session="ac_charge")
+    c = M("c", regulating=False, charge_session="ac_charge")
     _, g = _group(a, b, c)
     assert list(g.discharge_pool()) == ["a"]
     assert list(g.ac_pool()) == ["b"]
@@ -128,14 +128,14 @@ def test_discharge_output_im_surplus_nur_ist_leistung():
 
 def test_ac_actual_summiert_ac_pool():
     a, b = M("a", actual=999), M("b", actual=100)
-    c = M("c", actual=-50, discharge=False, ac_charge_active=True)
+    c = M("c", actual=-50, discharge=False, charge_session="ac_charge")
     _, g = _group(a, b, c)
     assert g.ac_actual(a, -10) == -60
 
 
 def test_pi_base_pool_mal_anteil():
     a, b = M("a", setpoint=999), M("b", setpoint=100)
-    c = M("c", setpoint=50, discharge=False, ac_charge_active=True)
+    c = M("c", setpoint=50, discharge=False, charge_session="ac_charge")
     _, g = _group(a, b, c)
     assert g.pi_base(a, 10, 0.5) == (10 + 100) * 0.5
 
@@ -337,8 +337,18 @@ def test_zuteilung_steigt_nur_bis_zur_freien_leistung():
 
 
 def test_ac_anteil():
-    a, b = M("a", ac_charge_active=True), M("b", ac_charge_active=True)
+    a, b = M("a", charge_session="ac_charge"), M("b", charge_session="ac_charge")
     _, g = _group(a, b, dist={"distribution_mode": "equal"})
     assert g.ac_share(a, 50) == (0.5, group.Shares({"a": 0.5, "b": 0.5}, "equal"))
-    a.ac_charge_active = False
+    a.charge_session = "none"
     assert g.ac_share(a, 50) == (0.0, None)
+
+
+def test_schwester_laedt_bei_jeder_art_der_lade_session():
+    for kind in ("ac_charge", "tariff_charge", "grid_charge"):
+        a, b = M("a"), M("b", charge_session=kind)
+        _, g = _group(a, b)
+        assert g.sister_charging(a) is True
+        assert g.sister_charging(b) is False
+    b.regulating = False
+    assert g.sister_charging(a) is False

@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from . import setpoint
+from .const import SESSION_AC, SESSION_GRID, SESSION_TARIFF
 from .pi import SATURATED, STEP, gate_discharge
 
 # Arten der Pfadentscheidung.
@@ -23,9 +24,7 @@ class PathInputs:
     current_power: float
     tolerance: float
     surplus_active: bool
-    ac_charge_active: bool
-    tariff_charge_active: bool
-    grid_charge_active: bool
+    session: str
     capped: str
     zone0_power: float
     tariff_power: float
@@ -84,7 +83,7 @@ def decide(inp: PathInputs) -> PathDecision:
     if inp.surplus_active:
         return PathDecision(FIXED, inp.zone0_power, "act_zone0_output")
 
-    if inp.ac_charge_active:
+    if inp.session == SESSION_AC:
         value = setpoint.ac(inp.grid, inp.ac_charge, inp.ac_pool_charge, inp.current_power,
                             inp.ac_offset, inp.ac_limit, inp.ac_min_charge, inp.ac_share,
                             inp.tolerance)
@@ -92,10 +91,10 @@ def decide(inp: PathInputs) -> PathDecision:
             return PathDecision(IDLE)
         return PathDecision(SETPOINT, value, "act_ac_setpoint", ac_charge_mode=True)
 
-    if inp.tariff_charge_active:
+    if inp.session == SESSION_TARIFF:
         return PathDecision(FIXED, inp.tariff_power, "act_tariff_power", ac_charge_mode=True)
 
-    if inp.grid_charge_active:
+    if inp.session == SESSION_GRID:
         return PathDecision(FIXED, inp.grid_charge_power, "act_grid_charge_power", ac_charge_mode=True)
 
     gate = gate_discharge(inp.grid, inp.current_power, inp.target_offset, inp.dynamic_max, inp.tolerance)

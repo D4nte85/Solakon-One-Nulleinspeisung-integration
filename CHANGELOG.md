@@ -11,6 +11,8 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ### Geändert
 
+- **Lade-Session als ein Zustand:** AC-Laden, Tarif-Laden und Netz-Laden sind intern eine Lade-Session mit einer Art statt drei unabhängiger Flags; zwei Lade-Sessions zugleich sind nicht mehr darstellbar. Fall I fängt nur noch Modus und Lade-Session, die sich widersprechen; die Meldung „AC- und Tarif-Laden waren gleichzeitig aktiv“ entfällt. Ein gespeicherter Stand mit mehreren Lade-Flags startet ohne Lade-Session, mit Log-Warnung (`zones.py`, `paths.py`, `grid_group.py`, `coordinator.py`).
+- **Fall ZE** erhöht beim Abschalten der Regelung den Änderungszähler der Settings, wie jede andere Settings-Änderung.
 - **Migrationen in einem Modul:** Die Speichermigrationen von Settings, Verteilung und `soc_switch`-Zustand liegen in `migrations.py` statt in `schema.py` und `group_store.py`. Keine Verhaltensänderung.
 
 ## [3.6.0] – 2026-11-09

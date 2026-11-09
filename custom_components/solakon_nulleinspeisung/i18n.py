@@ -332,10 +332,6 @@ _TEXTS: dict[str, dict[str, str]] = {
         "de": "AC-Verteilung: SOC-Sensor einer anderen Instanz nicht verfügbar — auf Gleichverteilung zurückgefallen",
         "en": "AC distribution: SOC sensor of another instance unavailable — fell back to equal distribution",
     },
-    "warn_double_session": {
-        "de": "AC- und Tarif-Laden waren gleichzeitig aktiv — beide Sessions beendet",
-        "en": "AC and tariff charging were active at the same time — both sessions ended",
-    },
     "warn_tariff_unit": {
         "de": "Tarif: Preis {price:g} passt nicht zur Günstig-Schwelle {cheap:g} ct/kWh — Sensor liefert vermutlich €/kWh",
         "en": "Tariff: price {price:g} does not match the cheap threshold {cheap:g} ct/kWh — sensor probably reports €/kWh",

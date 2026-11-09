@@ -21,7 +21,7 @@ BASE = zones.ZoneInputs(
                               below_cheap=False, at_least_cheap=True),
     tariff_soc=80, tariff_soc_hyst=3, tariff_power=800,
     is_night=True, zone1_forced=False,
-    surplus_active=False, ac_charge_active=False, tariff_charge_active=False,
+    surplus_active=False, session="none",
     cycle_active=False, at_rest=True,
 )
 
@@ -47,19 +47,17 @@ def test_base_trifft_keinen_fall():
     (dict(soc=15, mode="1", at_rest=False), "C"),
     (dict(cycle_active=True), "D"),
     (dict(below_cheap=True, below_exp=True), "GT"),
-    (dict(tariff_charge_active=True, mode="3", at_rest=False), "HT"),
+    (dict(session="tariff_charge", mode="3", at_rest=False), "HT"),
     (dict(below_exp=True, at_least_cheap=False, mode="1", at_rest=False), "TM"),
     (dict(ac_enabled=True, grid=-200, mode="1", at_rest=True, below_exp=True), "G"),
-    (dict(ac_enabled=True, ac_charge_active=True, mode="3", at_rest=False, soc=95), "H"),
-    (dict(ac_enabled=True, ac_charge_active=True, mode="3", at_rest=False, grid=10, actual=0), "H"),
+    (dict(ac_enabled=True, session="ac_charge", mode="3", at_rest=False, soc=95), "H"),
+    (dict(ac_enabled=True, session="ac_charge", mode="3", at_rest=False, grid=10, actual=0), "H"),
     # Options-Austritt: abgeschaltete Option beendet die Session unabhängig vom Wert
-    (dict(ac_charge_active=True, mode="3", at_rest=False), "H"),
-    (dict(tariff_charge_active=True, mode="3", at_rest=False, at_least_cheap=False), "HT"),
+    (dict(session="ac_charge", mode="3", at_rest=False), "H"),
+    (dict(session="tariff_charge", mode="3", at_rest=False, at_least_cheap=False), "HT"),
     (dict(mode="3", at_rest=False), "I"),
-    # Fall I beidseitig: Session ohne Modus '3' und beide Lade-Flags zugleich
-    (dict(ac_charge_active=True, ac_enabled=True, mode="1", at_rest=False), "I"),
-    (dict(ac_charge_active=True, tariff_charge_active=True, mode="3", at_rest=False,
-          below_cheap=True, at_least_cheap=False), "I"),
+    # Fall I: Session ohne Modus '3'
+    (dict(session="ac_charge", ac_enabled=True, mode="1", at_rest=False), "I"),
     (dict(is_night=False), "E"),
     (dict(mode="1", at_rest=False), "F"),
 ])
@@ -99,7 +97,7 @@ def test_a_erzwungen_unter_zone1():
 
 
 def test_d_session_kehrt_unter_zone3_in_modus_3_zurueck():
-    d = _decide(ac_enabled=True, ac_charge_active=True, soc=15)
+    d = _decide(ac_enabled=True, session="ac_charge", soc=15)
     assert (d.name, d.transition) == ("D", {"mode": "3"})
 
 
@@ -117,16 +115,16 @@ def test_d_durch_tarif_lock_gesperrt():
 
 @pytest.mark.parametrize("cycle_active, rest", [(False, True), (True, False)])
 def test_end_charge_ruhe_nur_ohne_zyklus(cycle_active, rest):
-    d = _decide(ac_enabled=True, ac_charge_active=True, mode="3", at_rest=False, soc=95,
+    d = _decide(ac_enabled=True, session="ac_charge", mode="3", at_rest=False, soc=95,
                 cycle_active=cycle_active)
-    assert d.transition == {"reset_integral": True, "flags": zones.FlagUpdate(ac_charge_active=False),
+    assert d.transition == {"reset_integral": True, "flags": zones.FlagUpdate(session="none"),
                             "output": 0, "mode": "1", "rest": rest}
     assert d.action == "act_fall_h"
 
 
 @pytest.mark.parametrize("actual", [-1, 1, -300])
 def test_h_bleibt_bei_ladeleistung_ungleich_null(actual):
-    assert _decide(ac_enabled=True, ac_charge_active=True, mode="3", at_rest=False,
+    assert _decide(ac_enabled=True, session="ac_charge", mode="3", at_rest=False,
                    grid=10, actual=actual) is None
 
 
@@ -141,27 +139,19 @@ def test_g_eintritt_symmetrisch_zum_austritt_um_den_offset(offset, grid, fall):
 
 
 def test_d_folgt_session_mit_abgeschalteter_option_nicht():
-    d = _decide(tariff_charge_active=True, cycle_active=True, soc=70)
+    d = _decide(session="tariff_charge", cycle_active=True, soc=70)
     assert (d.name, d.transition) == ("D", {"mode": "1"})
 
 
 def test_gt_startet_nicht_neben_laufender_ac_session():
-    assert _decide(ac_enabled=True, ac_charge_active=True, mode="1", at_rest=False,
+    assert _decide(ac_enabled=True, session="ac_charge", mode="1", at_rest=False,
                    below_cheap=True, below_exp=True).name == "I"
 
 
 def test_i_loescht_flags_und_laesst_modus_stehen():
-    d = _decide(ac_enabled=True, ac_charge_active=True, mode="1", at_rest=False)
-    assert d.transition == {"reset_integral": True,
-                            "flags": zones.FlagUpdate(ac_charge_active=False, tariff_charge_active=False,
-                                                      grid_charge_active=False)}
-    assert (d.action, d.warn) == ("act_fall_i_session", None)
-
-
-def test_i_meldet_nur_die_doppelsession():
-    d = _decide(ac_charge_active=True, tariff_charge_active=True, mode="3", at_rest=False,
-                below_cheap=True, at_least_cheap=False)
-    assert d.warn == ("warn_double_session", {})
+    d = _decide(ac_enabled=True, session="ac_charge", mode="1", at_rest=False)
+    assert d.transition == {"reset_integral": True, "flags": zones.FlagUpdate(session="none")}
+    assert d.action == "act_fall_i_session"
 
 
 # ── Vorstufe: Prognoseflags ──────────────────────────────────────────────────
@@ -334,11 +324,12 @@ def test_night_objekt_haelt_dunkelheit():
 # ── Regelzustand und Ruhezustand ─────────────────────────────────────────────
 
 @pytest.mark.parametrize("flags, expected", [
-    ((True, True, True, True), "surplus"),
-    ((False, True, True, True), "tariff_charge"),
-    ((False, False, True, True), "ac_charge"),
-    ((False, False, False, True), "cycle"),
-    ((False, False, False, False), "pv"),
+    ((True, "tariff_charge", True), "surplus"),
+    ((False, "tariff_charge", True), "tariff_charge"),
+    ((False, "ac_charge", True), "ac_charge"),
+    ((False, "grid_charge", True), "grid_charge"),
+    ((False, "none", True), "cycle"),
+    ((False, "none", False), "pv"),
 ])
 def test_control_state_rangfolge(flags, expected):
     assert zones.control_state(*flags) == expected
@@ -383,8 +374,8 @@ TARGET = dict(target_enabled=True, target_soc=70)
 @pytest.mark.parametrize("kw, name", [
     (dict(soc=70), "ZE"),
     (dict(grid_charge_enabled=True), "GN"),
-    (dict(grid_charge_active=True, grid_charge_enabled=False, mode="3", at_rest=False), "HN"),
-    (dict(target_enabled=False, grid_charge_active=True, grid_charge_enabled=True, mode="3", at_rest=False), "HN"),
+    (dict(session="grid_charge", grid_charge_enabled=False, mode="3", at_rest=False), "HN"),
+    (dict(target_enabled=False, session="grid_charge", grid_charge_enabled=True, mode="3", at_rest=False), "HN"),
     (dict(battery_priority=True, mode="1", at_rest=False, is_night=False), "ZB"),
 ])
 def test_zielladen_je_fall_ein_treffer(kw, name):
@@ -393,18 +384,17 @@ def test_zielladen_je_fall_ein_treffer(kw, name):
 
 def test_ze_vor_allem_setzt_flags_zurueck_und_schaltet_regelung_ab():
     d = _decide(**TARGET, soc=80, surplus_enabled=True, new_surplus=True, surplus_active=True,
-                cycle_active=True, tariff_charge_active=True, mode="3", at_rest=False)
+                cycle_active=True, session="tariff_charge", mode="3", at_rest=False)
     assert (d.name, d.regulation_off, d.action, d.params) == ("ZE", True, "act_fall_ze", {"soc": 80})
     assert d.transition == {"reset_integral": True, "timer": False, "flags": zones.FlagUpdate(
-        cycle_active=False, surplus_active=False, ac_charge_active=False,
-        tariff_charge_active=False, grid_charge_active=False)}
+        cycle_active=False, surplus_active=False, session="none")}
 
 
 def test_gn_vor_gt_mit_max_ladeleistung():
     d = _decide(**TARGET, grid_charge_enabled=True, grid_charge_power=1000,
                 below_cheap=True, below_exp=True, mode="1", at_rest=True)
     assert d.name == "GN"
-    assert d.transition == {"flags": zones.FlagUpdate(grid_charge_active=True), "output": 1000,
+    assert d.transition == {"flags": zones.FlagUpdate(session="grid_charge"), "output": 1000,
                             "ac_charge_mode": True, "timer_first": True, "mode": "3"}
 
 
@@ -442,28 +432,18 @@ def test_hausvorrang_startet_a():
 
 @pytest.mark.parametrize("kw, name", [
     (dict(surplus_active=True, new_surplus=True, cycle_active=True, mode="1", at_rest=False), "0B"),
-    (dict(tariff_charge_active=True, below_cheap=True, source_tariff=False, mode="3", at_rest=False), "HT"),
-    (dict(ac_charge_active=True, ac_enabled=True, source_ac=False, mode="3", at_rest=False), "H"),
+    (dict(session="tariff_charge", below_cheap=True, source_tariff=False, mode="3", at_rest=False), "HT"),
+    (dict(session="ac_charge", ac_enabled=True, source_ac=False, mode="3", at_rest=False), "H"),
 ])
 def test_aufladen_beendet_laufende_zustaende(kw, name):
     assert _decide(**{**TARGET, **kw}).name == name
 
 
-def test_i_faengt_netz_laden_neben_tarif_laden():
-    d = _decide(**TARGET, grid_charge_active=True, grid_charge_enabled=True, tariff_charge_active=True,
-                below_cheap=True, mode="3", at_rest=False)
-    assert (d.name, d.warn) == ("I", ("warn_double_session", {}))
-
-
 def test_i_faengt_netz_laden_ohne_modus_3():
-    d = _decide(**TARGET, grid_charge_active=True, grid_charge_enabled=True, mode="1", at_rest=False)
+    d = _decide(**TARGET, session="grid_charge", grid_charge_enabled=True, mode="1", at_rest=False)
     assert d.name == "I"
 
 
 def test_d_folgt_netz_laden_auch_unter_zone3():
-    d = _decide(**TARGET, grid_charge_active=True, grid_charge_enabled=True, soc=15)
+    d = _decide(**TARGET, session="grid_charge", grid_charge_enabled=True, soc=15)
     assert (d.name, d.transition) == ("D", {"mode": "3"})
-
-
-def test_control_state_netz_laden():
-    assert zones.control_state(False, False, False, True, grid_charge=True) == "grid_charge"

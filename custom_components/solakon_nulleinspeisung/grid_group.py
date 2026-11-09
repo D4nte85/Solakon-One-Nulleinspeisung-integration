@@ -5,7 +5,7 @@ import math
 from dataclasses import dataclass
 from typing import Any, Callable, Protocol
 
-from .const import DIST_DEFAULTS, DOMAIN
+from .const import DIST_DEFAULTS, DOMAIN, SESSION_AC, SESSION_NONE
 from .dynamic_offset import Sigma
 
 # Warnschlüssel bei Rückfall des Verteilungsmodus, je Grund: (Entlade-Pool, AC-Pool).
@@ -21,9 +21,7 @@ class Member(Protocol):
     """Lesefläche einer Instanz für ihre Netzgruppe; Sensoren werden erst beim Aufruf gelesen."""
 
     surplus_active: bool
-    ac_charge_active: bool
-    tariff_charge_active: bool
-    grid_charge_active: bool
+    charge_session: str
     allocated_power: float | None
 
     @property
@@ -158,7 +156,7 @@ class NetGroup:
 
     def ac_pool(self) -> dict[str, Member]:
         """Regelnde Mitglieder mit aktivem AC-Laden."""
-        return self.pool(lambda m: m.regulating and m.ac_charge_active)
+        return self.pool(lambda m: m.regulating and m.charge_session == SESSION_AC)
 
     def discharge_actual(self, me: Member, own_actual: float) -> float:
         """Summe der Ist-Leistung im Entlade-Pool; der eigene Wert zählt immer."""
@@ -183,8 +181,7 @@ class NetGroup:
     def sister_charging(self, me: Member) -> bool:
         """Ein anderes regelndes Mitglied lädt (AC, Tarif oder Netz-Laden)."""
         return bool(self.pool(
-            lambda m: m is not me and m.regulating
-            and (m.ac_charge_active or m.tariff_charge_active or m.grid_charge_active)
+            lambda m: m is not me and m.regulating and m.charge_session != SESSION_NONE
         ))
 
     def dist_cfg(self) -> dict:

@@ -11,7 +11,7 @@ paths = importlib.import_module(h.PKG + ".paths")
 
 BASE = dict(
     grid=30.0, current_power=400.0, tolerance=25.0,
-    surplus_active=False, ac_charge_active=False, tariff_charge_active=False, grid_charge_active=False,
+    surplus_active=False, session="none",
     capped="", zone0_power=1200.0, tariff_power=800.0, grid_charge_power=800.0,
     ac_offset=-50.0, ac_limit=800.0, ac_min_charge=50.0, ac_share=1.0, ac_charge=300.0, ac_pool_charge=300.0,
     target_offset=30.0, dynamic_max=800.0, pi_enabled=True, discharge=390.0, discharge_pool=390.0,
@@ -25,27 +25,27 @@ def _decide(**over):
 
 
 def test_surplus_schreibt_zone0_festwert():
-    d = _decide(surplus_active=True, ac_charge_active=True)
+    d = _decide(surplus_active=True, session="ac_charge")
     assert (d.kind, d.value, d.action, d.ac_charge_mode) == (paths.FIXED, 1200.0, "act_zone0_output", False)
 
 
 def test_tarif_schreibt_festwert_im_lademodus():
-    d = _decide(tariff_charge_active=True)
+    d = _decide(session="tariff_charge")
     assert (d.kind, d.value, d.action, d.ac_charge_mode) == (paths.FIXED, 800.0, "act_tariff_power", True)
 
 
 def test_netz_laden_schreibt_festwert_im_lademodus():
-    d = _decide(grid_charge_active=True, grid_charge_power=1000.0)
+    d = _decide(session="grid_charge", grid_charge_power=1000.0)
     assert (d.kind, d.value, d.action, d.ac_charge_mode) == (paths.FIXED, 1000.0, "act_grid_charge_power", True)
 
 
 def test_ac_in_toleranz_nichts():
-    d = _decide(ac_charge_active=True, grid=-50.0, current_power=300.0)
+    d = _decide(session="ac_charge", grid=-50.0, current_power=300.0)
     assert (d.kind, d.decay) == (paths.IDLE, False)
 
 
 def test_ac_stellwert_aus_ist_leistung():
-    d = _decide(ac_charge_active=True, grid=-200.0, current_power=300.0)
+    d = _decide(session="ac_charge", grid=-200.0, current_power=300.0)
     assert (d.kind, d.value, d.action, d.ac_charge_mode, d.decay) == (
         paths.SETPOINT, 450.0, "act_ac_setpoint", True, False)
 

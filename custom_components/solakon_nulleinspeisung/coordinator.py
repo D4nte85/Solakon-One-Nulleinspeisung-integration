@@ -32,8 +32,8 @@ from .tariff import Tariff, forecast_suppressed
 from .timeout import Timeout
 from .trackers import Trackers
 from .zones import (
-    FlagUpdate, Night, Surplus, ZoneInputs, at_rest, control_state, decide, forecast_flags,
-    required_discharge, rest_mode,
+    FlagUpdate, Night, Surplus, ZoneInputs, at_rest, charging_to_target, control_state, decide,
+    forecast_flags, required_discharge, rest_mode,
 )
 from .const import (
     DOMAIN, STORAGE_MINOR_VERSION, STORAGE_VERSION, SETTINGS_DEFAULTS, SETTINGS_SCHEMA, CONF_GRID_SENSOR,
@@ -42,7 +42,7 @@ from .const import (
     CONF_EXPORT_LIMIT, MODE_DISABLED, MODE_DISCHARGE, MODE_AC_CHARGE, S_REGULATION_ENABLED,
     S_ZONE3_LIMIT, DEVICE_MAX_CURRENT, S_HARD_LIMIT_Z0, S_HARD_LIMIT_Z1, S_PV_RESERVE,
     S_AC_SOC_TARGET, S_AC_POWER_LIMIT, S_REST_IN_DISCHARGE, S_PI_ENABLED, S_Z1_NIGHT_ENABLED,
-    S_TARGET_CHARGE_ENABLED,
+    S_TARGET_CHARGE_ENABLED, SESSION_AC, SESSION_GRID, SESSION_NONE, SESSION_TARIFF,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -52,11 +52,15 @@ _LOGGER = logging.getLogger(__name__)
 PERSISTED_FLAGS = (
     ("cycle_active", "cycle_active", False),
     ("surplus_active", "surplus_active", False),
-    ("ac_charge_active", "ac_charge_active", False),
-    ("tariff_charge_active", "tariff_charge_active", False),
-    ("grid_charge_active", "grid_charge_active", False),
     ("solar_zero_entry_armed", "surplus.armed", True),
 )
+
+# Speicherschlüssel der Lade-Session je Art.
+SESSION_FLAGS = {
+    SESSION_AC: "ac_charge_active",
+    SESSION_TARIFF: "tariff_charge_active",
+    SESSION_GRID: "grid_charge_active",
+}
 
 # Kernsensoren der Instanz: (Konfigschlüssel, löst Regelzyklus aus, Pflicht für den Zyklus).
 # Ist-Leistung und Leistungssollwert werden gepollt und lösen keinen Zyklus aus.
@@ -68,6 +72,16 @@ CORE_SENSORS = (
     (CONF_SOC_SENSOR, True, True),
     (CONF_MODE_SELECT, True, False),
 )
+
+
+def _session_from_flags(stored: dict) -> str:
+    """Art der Lade-Session aus den gespeicherten Flags; mehrere gesetzte Flags ergeben keine Session."""
+    kinds = [kind for kind, key in SESSION_FLAGS.items() if stored.get(key)]
+    if len(kinds) > 1:
+        _LOGGER.warning("Solakon: mehrere Lade-Sessions gespeichert (%s), keine übernommen", ", ".join(kinds))
+        return SESSION_NONE
+    return kinds[0] if kinds else SESSION_NONE
+
 
 class SolakonCoordinator:
     """Zentrale Logik-Klasse — PI-Regler, SOC-Zonen, Modbus-Steuerung."""
@@ -93,9 +107,8 @@ class SolakonCoordinator:
         # Boolsche Status-Flags
         self.cycle_active: bool = False
         self.surplus_active: bool = False
-        self.ac_charge_active: bool = False
-        self.tariff_charge_active: bool = False
-        self.grid_charge_active: bool = False
+        # Art der Lade-Session, SESSION_NONE ohne Lade-Session.
+        self.charge_session: str = SESSION_NONE
         # Aufladen des Zielladens: Zielladen an, SOC unter dem Ziel-SOC.
         self.charging_to_target: bool = False
         # Ruhezustand: Output 0 im Ruhemodus, keine PI-Regelung.
@@ -291,8 +304,22 @@ class SolakonCoordinator:
     @property
     def _control_state(self) -> str:
         """Regelzustand der Instanz laut `zones.control_state`."""
-        return control_state(self.surplus_active, self.tariff_charge_active, self.ac_charge_active,
-                             self.cycle_active, self.grid_charge_active)
+        return control_state(self.surplus_active, self.charge_session, self.cycle_active)
+
+    @property
+    def ac_charge_active(self) -> bool:
+        """Lade-Session ist AC-Laden."""
+        return self.charge_session == SESSION_AC
+
+    @property
+    def tariff_charge_active(self) -> bool:
+        """Lade-Session ist Tarif-Laden."""
+        return self.charge_session == SESSION_TARIFF
+
+    @property
+    def grid_charge_active(self) -> bool:
+        """Lade-Session ist Netz-Laden."""
+        return self.charge_session == SESSION_GRID
 
     def _at_rest(self, mode: str) -> bool:
         """Ruht die Instanz in `mode`, laut `zones.at_rest`."""
@@ -300,7 +327,8 @@ class SolakonCoordinator:
 
     def _persisted_flags(self) -> dict[str, bool]:
         """Gespeicherte Zustandsflags unter ihrem Speicherschlüssel."""
-        return {key: attrgetter(attr)(self) for key, attr, _ in PERSISTED_FLAGS}
+        flags = {key: attrgetter(attr)(self) for key, attr, _ in PERSISTED_FLAGS}
+        return {**flags, **{key: self.charge_session == kind for kind, key in SESSION_FLAGS.items()}}
 
     def _store_data(self) -> dict:
         """Speicherinhalt: Settings plus gespeicherte Zustandsflags."""
@@ -366,7 +394,7 @@ class SolakonCoordinator:
     def offset_zone(self) -> str:
         """Offsetzone des Regelzustands; Nacht-Offset bei Dunkelheit, wenn eingeschaltet."""
         night = self.night.dark and bool(self.settings.get(S_Z1_NIGHT_ENABLED, False))
-        return DynamicOffset.zone_of(self.ac_charge_active, self.cycle_active, night)
+        return DynamicOffset.zone_of(self.charge_session == SESSION_AC, self.cycle_active, night)
 
     # ── Darstellen: Entity-Listener ──────────────────────────────────────────
 
@@ -501,12 +529,8 @@ class SolakonCoordinator:
                 self.cycle_active = flags.cycle_active
             if flags.surplus_active is not None:
                 self.surplus_active = flags.surplus_active
-            if flags.ac_charge_active is not None:
-                self.ac_charge_active = flags.ac_charge_active
-            if flags.tariff_charge_active is not None:
-                self.tariff_charge_active = flags.tariff_charge_active
-            if flags.grid_charge_active is not None:
-                self.grid_charge_active = flags.grid_charge_active
+            if flags.session is not None:
+                self.charge_session = flags.session
         if timer and timer_first:
             await self.timeout.toggle()
         if output is not None:
@@ -563,6 +587,7 @@ class SolakonCoordinator:
             for key, attr, default in PERSISTED_FLAGS:
                 owner, _, name = attr.rpartition(".")
                 setattr(attrgetter(owner)(self) if owner else self, name, bool(stored.get(key, default)))
+            self.charge_session = _session_from_flags(stored)
             if reset:
                 notify_reset(self.hass, f"{DOMAIN}_settings_reset_{self.entry.entry_id}", self.entry.title, reset)
                 await self._store.async_save(self._store_data())
@@ -786,12 +811,13 @@ class SolakonCoordinator:
 
         # ── 8. Überschuss und Nacht ──────────────────────────────────────────
         total_actual = self.group.discharge_actual(self, actual)
+        total_output = self.group.discharge_output(self, actual, self.output_setpoint())
 
         new_surplus = self.surplus.step(
             surplus_enabled=cs.surplus_enabled, surplus_active=self.surplus_active,
             forced=self.forecast_surplus_forced, exit_lock=self.forecast_exit_lock,
             solar=solar, soc=soc, actual=actual, total_actual=total_actual,
-            total_output=self.group.discharge_output(self, actual, self.output_setpoint()),
+            total_output=total_output,
             grid=grid, error_share=error_share, surplus_threshold=cs.surplus_threshold,
             surplus_soc_hyst=cs.surplus_soc_hyst, surplus_pv_hyst=cs.surplus_pv_hyst,
         )
@@ -800,7 +826,7 @@ class SolakonCoordinator:
             night_hysteresis=cs.night_hysteresis, night_enabled=cs.night_enabled,
         )
         self.is_night = is_night
-        self.charging_to_target = cs.target_enabled and soc < cs.target_soc
+        self.charging_to_target = charging_to_target(cs.target_enabled, soc, cs.target_soc)
 
         # ── 9. Falls / Zonenwechsel ──────────────────────────────────────────
         fall_executed = await self._execute_falls(
@@ -812,7 +838,7 @@ class SolakonCoordinator:
             tariff=tariff, tariff_soc=cs.tariff_soc, tariff_soc_hyst=cs.tariff_soc_hyst,
             tariff_power=cs.tariff_power,
             is_night=is_night,
-            total_output=self.group.discharge_output(self, actual, self.output_setpoint()),
+            total_output=total_output,
             zone1_forced=self.zone1_forced,
             target_enabled=cs.target_enabled, target_soc=cs.target_soc,
             battery_priority=cs.battery_priority, source_ac=cs.source_ac, source_tariff=cs.source_tariff,
@@ -827,8 +853,7 @@ class SolakonCoordinator:
 
         # Zustand hinter Fall TM: die Sperre selbst mit den Flags nach den Falls,
         # nicht ihr Auslöser.
-        self.discharge_locked = tariff.discharge_locked(
-            self.tariff_charge_active or self.ac_charge_active or self.grid_charge_active, self.surplus_active)
+        self.discharge_locked = tariff.discharge_locked(self.charge_session != SESSION_NONE, self.surplus_active)
 
         # ── 10. Entladestrom mit Regelzustand abgleichen ─────────────────────
         mode = self._str(cfg[CONF_MODE_SELECT])
@@ -851,21 +876,18 @@ class SolakonCoordinator:
         d = decide(ZoneInputs(
             **v,
             surplus_active=self.surplus_active,
-            ac_charge_active=self.ac_charge_active,
-            tariff_charge_active=self.tariff_charge_active,
-            grid_charge_active=self.grid_charge_active,
+            session=self.charge_session,
             cycle_active=self.cycle_active,
             at_rest=self._at_rest(v["mode"]),
         ))
         if d is None:
             return None
         await self._transition(**d.transition)
-        if d.warn:
-            self._messages.warn(d.warn)
         self._set_last_action(d.action, **d.params)
         if d.regulation_off:
             await self._switch_off_sequence()
             self.settings[S_REGULATION_ENABLED] = False
+            self.settings_rev += 1
             await self._store.async_save(self._store_data())
         return d.name
 
@@ -922,8 +944,7 @@ class SolakonCoordinator:
         # ── 11c. PI-Pfade ────────────────────────────────────────────────────
         d = decide_path(PathInputs(
             grid=grid, current_power=current_power, tolerance=cs.tolerance,
-            surplus_active=self.surplus_active, ac_charge_active=self.ac_charge_active,
-            tariff_charge_active=self.tariff_charge_active, grid_charge_active=self.grid_charge_active,
+            surplus_active=self.surplus_active, session=self.charge_session,
             capped=capped, zone0_power=limits.zone0, tariff_power=cs.tariff_power, grid_charge_power=cs.grid_charge_power,
             ac_offset=ac_offset, ac_limit=limits.ac, ac_min_charge=cs.ac_min_power,
             ac_share=ac_error_share,
