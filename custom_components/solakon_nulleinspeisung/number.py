@@ -124,20 +124,17 @@ async def assign_carrier(hass: Any, grid_sensor: str) -> None:
     reg = _carriers(hass)
     members = sorted(eid for eid, (_, coord) in reg["adders"].items() if coord.grid_sensor == grid_sensor)
     current = reg["entities"].get(grid_sensor)
-    if group_store.configured_members(hass, grid_sensor) < 2:
-        if current is not None and current.carrier in reg["adders"]:
-            await current.async_remove()
-        reg["entities"].pop(grid_sensor, None)
-        _drop_group_limit(hass, grid_sensor)
-        return
-    if not members:
-        reg["entities"].pop(grid_sensor, None)
-        return
-    carrier = members[0]
+    lone = group_store.configured_members(hass, grid_sensor) < 2
+    carrier = None if lone or not members else members[0]
     if current is not None and current.carrier == carrier:
         return
     if current is not None and current.carrier in reg["adders"]:
         await current.async_remove()
+    reg["entities"].pop(grid_sensor, None)
+    if lone:
+        _drop_group_limit(hass, grid_sensor)
+    if carrier is None:
+        return
     store = group_store.store_for(hass)
     entity = GroupLimitNumber(store, grid_sensor, await store.group_number(grid_sensor), carrier)
     reg["entities"][grid_sensor] = entity

@@ -5,6 +5,10 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+### Geändert
+
+- **Trägerwechsel des Gesamtlimits an einer Stelle:** `assign_carrier` behandelt Einzelinstanz, fehlende Mitglieder und Trägerwechsel über denselben Pfad. Keine Verhaltensänderung (`number.py`).
+
 ## [3.7.1] – 2026-11-09
 
 ### Geändert
