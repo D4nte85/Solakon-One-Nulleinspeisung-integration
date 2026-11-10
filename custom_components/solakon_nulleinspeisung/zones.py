@@ -120,7 +120,7 @@ class FallDecision:
 
 
 def _end_charge(name: str, action_key: str, cycle_active: bool) -> FallDecision:
-    """Lade-Session beenden: Integral, Session, Output 0, Rückkehrmodus, Aktionstext."""
+    """Lade-Session beenden: Integral, Session, Output 0, Rückkehrmodus, ohne Zyklus Ruhezustand, Aktionstext."""
     return FallDecision(name, {
         "reset_integral": True, "flags": FlagUpdate(session=SESSION_NONE), "output": 0,
         "mode": MODE_DISCHARGE, "rest": not cycle_active,
