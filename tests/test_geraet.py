@@ -3,8 +3,6 @@ from __future__ import annotations
 
 import asyncio
 
-import pytest
-
 from tests import geraet, harness as h
 
 C = h.const
