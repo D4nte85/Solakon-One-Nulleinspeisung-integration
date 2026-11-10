@@ -36,6 +36,11 @@ git clone https://github.com/solakon-de/solakon-one-homeassistant tests/geraet-i
 git -C tests/geraet-integration pull --tags && git -C tests/geraet-integration describe --tags
 ```
 
+Der Config-Flow hat eigene Tests in `test_config_flow.py`. Geräte- und Entitätsregistrierung
+aus `ha_stubs.py` bilden dort Solakon-Geräte nach (`DeviceEntry`, `RegistryEntry` mit
+`unique_id`, Gerät und `disabled_by`); Schlüssel und Domain je Feld kommen aus
+`geraet.ENTITIES`.
+
 ## CI
 
 Bei Push und Pull Request laufen `tests.yml` (`ruff check --select F` und `pytest` unter

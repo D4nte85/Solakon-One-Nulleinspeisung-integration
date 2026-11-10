@@ -625,30 +625,40 @@ async def _run_wiring() -> dict:
 
     # Config-Flow
     cf = h.config_flow_mod
+    stubs = h.ha_stubs
     flows = {}
-    for lang in ("de", "en", None):
-        fh = h.FakeHass(lang or "")
-        fh.config.language = lang
-        fh.config_entries.entries = [h.FakeEntry("entry_a", h.entry_data("a")),
-                                     h.FakeEntry("entry_b", h.entry_data("b"))]
-        flow = cf.SolakonConfigFlow()
-        flow.hass = fh
-        form = await flow.async_step_user(None)
-        flows[f"user_form_{lang}"] = _schema_repr(form)
-        flows[f"user_dup_{lang}"] = h.jsonable(await flow.async_step_user({"mode_select": "select.a_mode"}))
-        flows[f"user_new_{lang}"] = h.jsonable(await flow.async_step_user(
-            {"mode_select": "select.z_mode", "instance_name": "Neu"}))
-        flows[f"user_new_noname_{lang}"] = h.jsonable(await flow.async_step_user({"mode_select": "select.z"}))
-        opt = cf.SolakonConfigFlow.async_get_options_flow(fh.config_entries.entries[0])
-        opt.hass = fh
-        opt.config_entry = fh.config_entries.entries[0]
-        flows[f"init_form_{lang}"] = _schema_repr(await opt.async_step_init(None))
-        flows[f"init_same_{lang}"] = h.jsonable(await opt.async_step_init({"mode_select": "select.a_mode"}))
-        flows[f"init_dup_{lang}"] = h.jsonable(await opt.async_step_init({"mode_select": "select.b_mode"}))
-        flows[f"init_events_{lang}"] = fh.events
+    fh = h.FakeHass("de")
+    fh.config_entries.entries = [h.FakeEntry("entry_a", h.entry_data("a")),
+                                 h.FakeEntry("entry_b", h.entry_data("b"))]
+    flow = cf.SolakonConfigFlow()
+    flow.hass = fh
+    flows["user_no_device"] = _schema_repr(await flow.async_step_user(None))
+    flows["no_device_form"] = _schema_repr(await flow.async_step_no_device({}))
+    stubs.device_registry_get(fh).devices["dev_z"] = stubs.DeviceEntry(
+        "dev_z", {(C.DEVICE_DOMAIN, "ce_z")}, "Solakon ONE", "Balkon")
+    domains = {key: domain for key, domain, *_ in cf.ENTITY_FIELDS}
+    for field, key in C.DEVICE_KEYS.items():
+        domain = domains[field]
+        stubs.entity_registry_get(fh).add(stubs.RegistryEntry(
+            f"{domain}.balkon_{key}", C.DEVICE_DOMAIN, f"ce_z_{key}", "ce_z", "dev_z",
+            "integration" if key == "battery_max_discharge_current" else None))
+    flows["user_form"] = _schema_repr(await flow.async_step_user(None))
+    flows["entities_form"] = _schema_repr(await flow.async_step_user({"device": "dev_z"}))
+    flows["entities_dup"] = h.jsonable(await flow.async_step_entities({"mode_select": "select.a_mode"}))
+    flows["entities_new"] = h.jsonable(await flow.async_step_entities(
+        {"mode_select": "select.balkon_remote_control_mode", "instance_name": "Neu", "enable_disabled": True}))
+    flows["entities_new_noname"] = h.jsonable(await flow.async_step_entities({"mode_select": "select.z"}))
+    opt = cf.SolakonConfigFlow.async_get_options_flow(fh.config_entries.entries[0])
+    opt.hass = fh
+    opt.config_entry = fh.config_entries.entries[0]
+    flows["init_form"] = _schema_repr(await opt.async_step_init(None))
+    flows["init_entities"] = _schema_repr(await opt.async_step_init({"device": "dev_z"}))
+    flows["init_same"] = h.jsonable(await opt.async_step_entities({"mode_select": "select.a_mode"}))
+    flows["init_dup"] = h.jsonable(await opt.async_step_entities({"mode_select": "select.b_mode"}))
+    flows["init_events"] = fh.events
     partial = h.entry_data("q")
     del partial[C.CONF_EXPORT_LIMIT]
-    flows["schema_partial"] = _schema_repr({"data_schema": cf._schema(partial, C.REQUIRED_ENTITY_DEFAULTS_DE)})
+    flows["schema_partial"] = _schema_repr({"data_schema": cf._schema(partial, [])})
     rec["config_flow"] = flows
     rec["logs"] = logs.records
     return h.mask_version(rec)

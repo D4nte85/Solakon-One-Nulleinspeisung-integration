@@ -5,6 +5,10 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+### Hinzugefügt
+
+- **Geräteauswahl beim Einrichten und Anpassen:** Der erste Schritt wählt das Solakon-Gerät der Solakon-ONE-Integration; Geräte, die schon eine Instanz steuern, fehlen in der Liste. Die Solakon-Entitäten werden über den Schlüssel ihrer unique_id gefunden und vorbelegt, unabhängig von Sprache, Bereichspräfix und Umbenennungen. Ohne Gerät führt ein Hinweis zur Zuweisung von Hand. *Entitäten anpassen* ersetzt nur Zuweisungen, deren Entität es nicht gibt. Deaktivierte Zuweisungen, ab Werk der Max. Entladestrom, nennt das Formular und aktiviert sie über ein vorab angekreuztes Feld. Der Instanzname wird mit dem Gerätenamen vorbelegt. Die sprachabhängigen Standard-IDs entfallen (`config_flow.py`, `const.py`).
+
 ### Geändert
 
 - **Trägerwechsel des Gesamtlimits an einer Stelle:** `assign_carrier` behandelt Einzelinstanz, fehlende Mitglieder und Trägerwechsel über denselben Pfad. Keine Verhaltensänderung (`number.py`).

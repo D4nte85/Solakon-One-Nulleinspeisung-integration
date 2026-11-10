@@ -2,6 +2,17 @@
   "config": {
     "step": {
       "user": {
+        "title": "Solakon ONE — Gerät wählen",
+        "description": "Wähle dein Solakon-Gerät aus der Solakon-ONE-Integration. Seine Entitäten werden im nächsten Schritt vorbelegt; jede lässt sich dort ändern.\n\nGeräte, die schon eine Instanz steuern, stehen nicht in der Liste.\n\n[Dokumentation]({hint})",
+        "data": {
+          "device": "🔆 Solakon-Gerät"
+        }
+      },
+      "no_device": {
+        "title": "Solakon ONE — kein Gerät gefunden",
+        "description": "Es wurde kein freies Solakon-Gerät gefunden. Die benötigten Entitäten liefert die offizielle Solakon-ONE-Integration; ist sie eingerichtet?\n\n**Absenden** führt zur Zuweisung von Hand.\n\n[Dokumentation]({hint})"
+      },
+      "entities": {
         "title": "Solakon ONE — Entitäten zuordnen",
         "description": "Ordne die Solakon ONE Entitäten zu.\n\nAlle weiteren Parameter (PI, Zonen, AC Laden, Tarif, Überschuss …) werden **im Sidebar-Panel** konfiguriert.\n\n[Dokumentation]({hint})",
         "data": {
@@ -15,7 +26,8 @@
           "max_discharge_current_number": "🔋 Max. Entladestrom",
           "remote_timeout_set_number": "⏲️ Modus-Reset-Timer",
           "mode_select": "🔄 Betriebsmodus-Auswahl",
-          "export_power_limit_number": "📤 Netz-Ausgangsleistungsgrenze (optional)"
+          "export_power_limit_number": "📤 Netz-Ausgangsleistungsgrenze (optional)",
+          "enable_disabled": "✅ Deaktivierte Entitäten aktivieren"
         },
         "data_description": {
           "grid_power_sensor": "Sensor der die aktuelle Netzleistung misst. Positiv = Bezug, negativ = Einspeisung.",
@@ -27,7 +39,8 @@
           "max_discharge_current_number": "Maximaler Entladestrom in Ampere — zonenabhängig gesetzt.",
           "remote_timeout_set_number": "Timer-Wert für den Modus-Reset (3598/3599 Toggle-Mechanismus).",
           "mode_select": "Betriebsmodus des Wechselrichters: Disabled / Discharge / AC Charge.",
-          "export_power_limit_number": "Solakon-Entität für das Hardware-Limit der Netzeinspeisung. Wird bei jedem Regelzyklus automatisch auf den Hard-Limit-Wert gesetzt — stellt sicher dass die Grenze auch nach externen Änderungen korrekt bleibt."
+          "export_power_limit_number": "Solakon-Entität für das Hardware-Limit der Netzeinspeisung. Wird bei jedem Regelzyklus automatisch auf den Hard-Limit-Wert gesetzt — stellt sicher dass die Grenze auch nach externen Änderungen korrekt bleibt.",
+          "enable_disabled": "In der Solakon-ONE-Integration deaktiviert: {disabled}. Ohne Aktivierung liefern sie keinen Wert. Die Solakon-ONE-Integration wird danach neu geladen."
         }
       }
     },
@@ -38,6 +51,17 @@
   "options": {
     "step": {
       "init": {
+        "title": "Solakon ONE — Gerät wählen",
+        "description": "Wähle das Solakon-Gerät dieser Instanz. Ersetzt werden nur Zuweisungen, deren Entität es nicht gibt; bestehende bleiben. Für einen Gerätewechsel die Felder im nächsten Schritt von Hand ändern oder eine neue Instanz anlegen.",
+        "data": {
+          "device": "🔆 Solakon-Gerät"
+        }
+      },
+      "no_device": {
+        "title": "Solakon ONE — kein Gerät gefunden",
+        "description": "Es wurde kein freies Solakon-Gerät gefunden. Die benötigten Entitäten liefert die offizielle Solakon-ONE-Integration; ist sie eingerichtet?\n\n**Absenden** führt zur Zuweisung von Hand.\n\n[Dokumentation]({hint})"
+      },
+      "entities": {
         "title": "Solakon ONE — Entitäten anpassen",
         "data": {
           "instance_name": "📛 Instanzname",
@@ -50,7 +74,8 @@
           "max_discharge_current_number": "🔋 Max. Entladestrom",
           "remote_timeout_set_number": "⏲️ Modus-Reset-Timer",
           "mode_select": "🔄 Betriebsmodus-Auswahl",
-          "export_power_limit_number": "📤 Netz-Ausgangsleistungsgrenze (optional)"
+          "export_power_limit_number": "📤 Netz-Ausgangsleistungsgrenze (optional)",
+          "enable_disabled": "✅ Deaktivierte Entitäten aktivieren"
         },
         "data_description": {
           "grid_power_sensor": "Sensor der die aktuelle Netzleistung misst. Positiv = Bezug, negativ = Einspeisung.",
@@ -62,7 +87,8 @@
           "max_discharge_current_number": "Maximaler Entladestrom in Ampere — zonenabhängig gesetzt.",
           "remote_timeout_set_number": "Timer-Wert für den Modus-Reset (3598/3599 Toggle-Mechanismus).",
           "mode_select": "Betriebsmodus des Wechselrichters: Disabled / Discharge / AC Charge.",
-          "export_power_limit_number": "Solakon-Entität für das Hardware-Limit der Netzeinspeisung. Wird bei jedem Regelzyklus automatisch auf den Hard-Limit-Wert gesetzt — stellt sicher dass die Grenze auch nach externen Änderungen korrekt bleibt."
+          "export_power_limit_number": "Solakon-Entität für das Hardware-Limit der Netzeinspeisung. Wird bei jedem Regelzyklus automatisch auf den Hard-Limit-Wert gesetzt — stellt sicher dass die Grenze auch nach externen Änderungen korrekt bleibt.",
+          "enable_disabled": "In der Solakon-ONE-Integration deaktiviert: {disabled}. Ohne Aktivierung liefern sie keinen Wert. Die Solakon-ONE-Integration wird danach neu geladen."
         }
       }
     },

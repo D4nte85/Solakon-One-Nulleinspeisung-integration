@@ -24,29 +24,19 @@ CONF_TIMEOUT_SET      = "remote_timeout_set_number"
 CONF_MODE_SELECT      = "mode_select"
 CONF_EXPORT_LIMIT     = "export_power_limit_number"
 
-# -- Config-Entry Entity Defaults (sprachabhängig) ----------------------------
-REQUIRED_ENTITY_DEFAULTS_DE = {
-    CONF_ACTUAL_SENSOR:      "sensor.solakon_one_leistung",
-    CONF_SOLAR_SENSOR:       "sensor.solakon_one_pv_leistung",
-    CONF_SOC_SENSOR:         "sensor.solakon_one_batterie_ladestand",
-    CONF_TIMEOUT_COUNTDOWN:  "sensor.solakon_one_fernsteuerung_zeituberschreitung",
-    CONF_ACTIVE_POWER:       "number.solakon_one_fernsteuerung_leistung",
-    CONF_DISCHARGE_CURRENT:  "number.solakon_one_maximaler_entladestrom",
-    CONF_TIMEOUT_SET:        "number.solakon_one_fernsteuerung_zeituberschreitung",
-    CONF_MODE_SELECT:        "select.solakon_one_modus_fernsteuern",
-    CONF_EXPORT_LIMIT:       "number.solakon_one_netz_ausgangsleistungsgrenze",
-}
-
-REQUIRED_ENTITY_DEFAULTS_EN = {
-    CONF_ACTUAL_SENSOR:      "sensor.solakon_one_active_power",
-    CONF_SOLAR_SENSOR:       "sensor.solakon_one_pv_power",
-    CONF_SOC_SENSOR:         "sensor.solakon_one_battery_state_of_charge",
-    CONF_TIMEOUT_COUNTDOWN:  "sensor.solakon_one_remote_timeout_countdown",
-    CONF_ACTIVE_POWER:       "number.solakon_one_remote_control_power",
-    CONF_DISCHARGE_CURRENT:  "number.solakon_one_maximum_discharge_current",
-    CONF_TIMEOUT_SET:        "number.solakon_one_remote_control_timeout",
-    CONF_MODE_SELECT:        "select.solakon_one_remote_control_mode",
-    CONF_EXPORT_LIMIT:       "number.solakon_one_grid_export_power_limit",
+# -- Geräteintegration ---------------------------------------------------------
+# Domain und Schlüssel ihrer Entitäten (unique_id `<config_entry_id>_<key>`) je Feld.
+DEVICE_DOMAIN = "solakon_one"
+DEVICE_KEYS = {
+    CONF_ACTUAL_SENSOR:      "active_power",
+    CONF_SOLAR_SENSOR:       "total_pv_power",
+    CONF_SOC_SENSOR:         "battery_soc",
+    CONF_TIMEOUT_COUNTDOWN:  "remote_timeout_countdown",
+    CONF_ACTIVE_POWER:       "remote_active_power",
+    CONF_DISCHARGE_CURRENT:  "battery_max_discharge_current",
+    CONF_TIMEOUT_SET:        "remote_timeout_set",
+    CONF_MODE_SELECT:        "remote_control_mode",
+    CONF_EXPORT_LIMIT:       "grid_export_power_limit",
 }
 
 PLATFORMS = ["sensor", "switch", "binary_sensor", "number"]

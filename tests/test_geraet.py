@@ -26,10 +26,8 @@ def _set(hass, eid, value):
     return hass.states.get(eid)
 
 
-@pytest.mark.parametrize("sprache, defaults", [("de", C.REQUIRED_ENTITY_DEFAULTS_DE), ("en", C.REQUIRED_ENTITY_DEFAULTS_EN)])
-def test_default_ids(sprache, defaults):
-    ids = {k: getattr(e, f"id_{sprache}") for k, e in geraet.ENTITIES.items()}
-    assert ids == defaults
+def test_geraete_schluessel():
+    assert {k: e.key for k, e in geraet.ENTITIES.items()} == C.DEVICE_KEYS
 
 
 def test_attribute_an_zustaenden():

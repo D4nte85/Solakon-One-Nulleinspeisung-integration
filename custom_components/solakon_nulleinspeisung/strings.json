@@ -2,6 +2,17 @@
   "config": {
     "step": {
       "user": {
+        "title": "Solakon ONE — Select device",
+        "description": "Select your Solakon device from the Solakon ONE integration. Its entities are pre-filled in the next step; each can be changed there.\n\nDevices already controlled by an instance are not listed.\n\n[Documentation]({hint})",
+        "data": {
+          "device": "🔆 Solakon device"
+        }
+      },
+      "no_device": {
+        "title": "Solakon ONE — no device found",
+        "description": "No free Solakon device was found. The required entities come from the official Solakon ONE integration; is it set up?\n\n**Submit** continues to the manual assignment.\n\n[Documentation]({hint})"
+      },
+      "entities": {
         "title": "Solakon ONE — Entity Assignment",
         "description": "Assign your Solakon ONE entities.\n\nAll further parameters (PI, zones, AC charging, tariff, surplus …) are configured in the **sidebar panel**.\n\n[Documentation]({hint})",
         "data": {
@@ -15,7 +26,8 @@
           "max_discharge_current_number": "🔋 Max. discharge current",
           "remote_timeout_set_number": "⏲️ Mode reset timer",
           "mode_select": "🔄 Operating mode selector",
-          "export_power_limit_number": "📤 Grid export power limit (optional)"
+          "export_power_limit_number": "📤 Grid export power limit (optional)",
+          "enable_disabled": "✅ Enable disabled entities"
         },
         "data_description": {
           "grid_power_sensor": "Sensor measuring current grid power. Positive = consumption, negative = feed-in.",
@@ -27,7 +39,8 @@
           "max_discharge_current_number": "Maximum discharge current in amperes — set zone-dependently.",
           "remote_timeout_set_number": "Timer value for mode reset (3598/3599 toggle mechanism).",
           "mode_select": "Inverter operating mode: Disabled / Discharge / AC Charge.",
-          "export_power_limit_number": "Solakon entity for the hardware grid export limit. Automatically set to the Hard Limit value on each regulation cycle — ensures the cap stays correct even after external changes."
+          "export_power_limit_number": "Solakon entity for the hardware grid export limit. Automatically set to the Hard Limit value on each regulation cycle — ensures the cap stays correct even after external changes.",
+          "enable_disabled": "Disabled in the Solakon ONE integration: {disabled}. Without enabling they provide no value. The Solakon ONE integration is reloaded afterwards."
         }
       }
     },
@@ -38,6 +51,17 @@
   "options": {
     "step": {
       "init": {
+        "title": "Solakon ONE — Select device",
+        "description": "Select the Solakon device of this instance. Only assignments whose entity does not exist are replaced; existing ones stay. To switch devices, change the fields in the next step by hand or create a new instance.",
+        "data": {
+          "device": "🔆 Solakon device"
+        }
+      },
+      "no_device": {
+        "title": "Solakon ONE — no device found",
+        "description": "No free Solakon device was found. The required entities come from the official Solakon ONE integration; is it set up?\n\n**Submit** continues to the manual assignment.\n\n[Documentation]({hint})"
+      },
+      "entities": {
         "title": "Solakon ONE — Update Entities",
         "data": {
           "instance_name": "📛 Instance name",
@@ -50,7 +74,8 @@
           "max_discharge_current_number": "🔋 Max. discharge current",
           "remote_timeout_set_number": "⏲️ Mode reset timer",
           "mode_select": "🔄 Operating mode",
-          "export_power_limit_number": "📤 Grid export power limit (optional)"
+          "export_power_limit_number": "📤 Grid export power limit (optional)",
+          "enable_disabled": "✅ Enable disabled entities"
         },
         "data_description": {
           "grid_power_sensor": "Sensor measuring current grid power. Positive = consumption, negative = feed-in.",
@@ -62,7 +87,8 @@
           "max_discharge_current_number": "Maximum discharge current in amperes — set zone-dependently.",
           "remote_timeout_set_number": "Timer value for mode reset (3598/3599 toggle mechanism).",
           "mode_select": "Inverter operating mode: Disabled / Discharge / AC Charge.",
-          "export_power_limit_number": "Solakon entity for the hardware grid export limit. Automatically set to the Hard Limit value on each regulation cycle — ensures the cap stays correct even after external changes."
+          "export_power_limit_number": "Solakon entity for the hardware grid export limit. Automatically set to the Hard Limit value on each regulation cycle — ensures the cap stays correct even after external changes.",
+          "enable_disabled": "Disabled in the Solakon ONE integration: {disabled}. Without enabling they provide no value. The Solakon ONE integration is reloaded afterwards."
         }
       }
     },

@@ -234,6 +234,30 @@ class EntitySelector(_Selector):
     pass
 
 
+class SelectSelector(_Selector):
+    pass
+
+
+class BooleanSelector(_Selector):
+    pass
+
+
+class SelectSelectorMode:
+    DROPDOWN = "dropdown"
+
+
+def SelectOptionDict(value, label):
+    return {"value": value, "label": label}
+
+
+class SelectSelectorConfig(dict):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def __repr__(self):
+        return "SelectSelectorConfig(" + ", ".join(f"{k}={v!r}" for k, v in sorted(self.items())) + ")"
+
+
 class TextSelector(_Selector):
     pass
 
@@ -243,12 +267,36 @@ class EntitySelectorConfig(dict):
         return "EntitySelectorConfig(" + ", ".join(f"{k}={v!r}" for k, v in sorted(self.items())) + ")"
 
 
+class RegistryEntry:
+    """Eintrag der Entitätsregistrierung mit Gerät, Config-Entry und Deaktivierung."""
+
+    def __init__(self, entity_id, platform, unique_id, config_entry_id=None, device_id=None, disabled_by=None):
+        self.entity_id = entity_id
+        self.platform = platform
+        self.unique_id = unique_id
+        self.config_entry_id = config_entry_id
+        self.device_id = device_id
+        self.disabled_by = disabled_by
+
+
 class EntityRegistry:
-    """Entitätsregistrierung: entity_id → (Plattform-Domain, Integration, unique_id)."""
+    """Entitätsregistrierung: entity_id → (Plattform-Domain, Integration, unique_id); `records` mit Geräte-Bezug."""
 
     def __init__(self, hass):
         self.hass = hass
         self.entities = {}
+        self.records = {}
+
+    def add(self, entry):
+        self.records[entry.entity_id] = entry
+
+    def async_get(self, entity_id):
+        return self.records.get(entity_id)
+
+    def async_update_entity(self, entity_id, **changes):
+        self.hass.log("registry_update", entity_id, changes)
+        for key, value in changes.items():
+            setattr(self.records[entity_id], key, value)
 
     def async_get_entity_id(self, domain, platform, unique_id):
         return next((eid for eid, key in self.entities.items() if key == (domain, platform, unique_id)), None)
@@ -259,9 +307,11 @@ class EntityRegistry:
 
 
 class DeviceEntry:
-    def __init__(self, device_id, identifiers):
+    def __init__(self, device_id, identifiers, name=None, name_by_user=None):
         self.id = device_id
         self.identifiers = identifiers
+        self.name = name
+        self.name_by_user = name_by_user
 
 
 class DeviceRegistry:
@@ -283,6 +333,11 @@ def device_registry_get(hass):
     if getattr(hass, "device_registry", None) is None:
         hass.device_registry = DeviceRegistry(hass)
     return hass.device_registry
+
+
+def entities_for_device(registry, device_id, include_disabled_entities=False):
+    return [e for e in registry.records.values()
+            if e.device_id == device_id and (include_disabled_entities or e.disabled_by is None)]
 
 
 def entity_registry_get(hass):
@@ -352,7 +407,8 @@ def install() -> None:
             async_track_time_interval=async_track_time_interval)
     _module("homeassistant.helpers.state", state_as_number=state_as_number)
     _module("homeassistant.helpers.storage", Store=Store)
-    _module("homeassistant.helpers.entity_registry", async_get=entity_registry_get)
+    _module("homeassistant.helpers.entity_registry", async_get=entity_registry_get,
+            async_entries_for_device=entities_for_device)
     _module("homeassistant.helpers.device_registry", async_get=device_registry_get)
     _module("homeassistant.helpers.config_validation",
             config_entry_only_config_schema=lambda domain: {})
@@ -372,7 +428,10 @@ def install() -> None:
             ConfigEntry=ConfigEntry)
     _module("homeassistant.data_entry_flow", FlowResult=dict)
     _module("homeassistant.helpers.selector", EntitySelector=EntitySelector,
-            EntitySelectorConfig=EntitySelectorConfig, TextSelector=TextSelector)
+            EntitySelectorConfig=EntitySelectorConfig, TextSelector=TextSelector,
+            SelectSelector=SelectSelector, SelectSelectorConfig=SelectSelectorConfig,
+            SelectSelectorMode=SelectSelectorMode, SelectOptionDict=SelectOptionDict,
+            BooleanSelector=BooleanSelector)
     _module("homeassistant.exceptions", ConfigEntryNotReady=ConfigEntryNotReady)
     _module("homeassistant.components.http", StaticPathConfig=StaticPathConfig)
     _module("homeassistant.components.websocket_api", websocket_command=websocket_command,

@@ -17,7 +17,7 @@ Die Integration regelt die Ausgangsleistung des Wechselrichters über einen **PI
 >
 > Sie ist **nicht im HACS-Standardstore** enthalten und muss als benutzerdefiniertes Repository hinzugefügt werden: HACS → Integrationen → ⋮ → *Benutzerdefiniertes Repository hinzufügen* → obige URL, Kategorie **Integration**.
 >
-> **Danach zwingend:** Die Entität `number.solakon_one_maximaler_entladestrom` ist dort **standardmäßig deaktiviert** und muss von Hand aktiviert werden (Gerät → Entität → Zahnrad → *Aktivieren*). Ohne sie kann der Entladestrom nicht gesteuert werden; im Einrichtungsformular erscheint sie sonst als „unbekannte Entität“.
+> **Max. Entladestrom:** Die Entität `number.solakon_one_maximaler_entladestrom` ist dort **standardmäßig deaktiviert**. Ohne sie kann der Entladestrom nicht gesteuert werden. Das Einrichtungsformular erkennt das und aktiviert sie beim Absenden (Ankreuzfeld *Deaktivierte Entitäten aktivieren*, siehe [Einrichtung](#einrichtung)).
 
 ## Inhalt
 
@@ -273,7 +273,14 @@ Repository klonen oder als ZIP herunterladen und den Ordner `custom_components/s
 
 Nach dem Neustart unter **Einstellungen → Geräte & Dienste → Integration hinzufügen** nach *Solakon* suchen.
 
-Im Einrichtungsformular werden zunächst ein **Instanzname** (z. B. „Speicher 1" — wird zum Gerätenamen in HA, relevant bei mehreren Instanzen, siehe [Multi-Instancing](#multi-instancing)) sowie die neun Pflichtentitäten zugewiesen. Alle weiteren Parameter (PI-Regler, SOC-Zonen, optionale Module) werden **nicht** im Config-Flow konfiguriert, sondern ausschließlich über das **Sidebar-Panel**.
+Die Einrichtung hat zwei Schritte:
+
+1. **Gerät wählen:** Die Liste zeigt die Solakon-Geräte der Solakon-ONE-Integration, die noch keine Instanz steuern. Aus dem gewählten Gerät werden die Solakon-Entitäten vorbelegt. Sie werden über ihren Schlüssel in der Solakon-ONE-Integration gefunden, nicht über die Entitäts-ID, also unabhängig von Sprache, Bereich und Umbenennungen. Wird kein Gerät gefunden, erscheint ein Hinweis, und es geht mit der Zuweisung von Hand weiter.
+2. **Entitäten zuordnen:** **Instanzname** (vorbelegt mit dem Gerätenamen; wird zum Gerätenamen in HA, relevant bei mehreren Instanzen, siehe [Multi-Instancing](#multi-instancing)), Netz-Leistungssensor und die vorbelegten Solakon-Entitäten; jedes Feld lässt sich ändern. Ist eine zugewiesene Entität in der Solakon-ONE-Integration deaktiviert (ab Werk der Max. Entladestrom), nennt das Formular sie; das vorab angekreuzte Feld **Deaktivierte Entitäten aktivieren** aktiviert sie beim Absenden. Die Solakon-ONE-Integration wird danach neu geladen.
+
+**Entitäten anpassen** (Einstellungen → Geräte & Dienste → Solakon ONE Nulleinspeisung → *Konfigurieren*) läuft genauso. Das Gerät der Instanz ist vorgewählt, ersetzt werden aber nur Zuweisungen, deren Entität es nicht gibt; bestehende bleiben. Für einen Gerätewechsel die Felder von Hand ändern oder eine neue Instanz anlegen.
+
+Alle weiteren Parameter (PI-Regler, SOC-Zonen, optionale Module) werden **nicht** im Config-Flow konfiguriert, sondern ausschließlich über das **Sidebar-Panel**.
 
 > Die Regelung startet nach der Einrichtung mit deaktiviertem Schreibteil (`Regelung aktiv = Aus`). Erst nach Prüfung der Konfiguration im Panel sollte die Regelung aktiviert werden.
 
@@ -874,6 +881,9 @@ Instanzen werden automatisch nach ihrem Netz-Leistungssensor in [Netzgruppen](#n
 
 **Mein Netz-Leistungssensor lässt sich bei der Einrichtung nicht auswählen**
 Die Auswahl filtert auf `device_class: power`. Template- und Hilfssensoren, die erst eine Summe bilden (z. B. die drei Phasen eines Shelly 3EM), tragen diese Geräteklasse häufig nicht und erscheinen deshalb nicht in der Liste. Im Template-Sensor `device_class: power` und `unit_of_measurement: W` ergänzen, danach ist er auswählbar.
+
+**Im Formular steht „Unbekannte Entität ausgewählt“**
+Die zugewiesene Entität gibt es in HA nicht, etwa nach einer Umbenennung oder weil die Instanz vor dieser Version mit fest vorgegebenen IDs angelegt wurde. Unter *Entitäten anpassen* das Solakon-Gerät wählen; fehlende Zuweisungen werden aus dem Gerät ersetzt. Bietet die Liste kein Gerät an, ist die Solakon-ONE-Integration nicht eingerichtet (siehe Hinweis ganz oben).
 
 **Zone 1 aktiv, aber die Instanz entlädt nicht („Batterieentladung gesperrt — Schwesterinstanz lädt“)**
 Eine andere Instanz am selben Netzsensor lädt gerade (AC Laden, Tarif-Laden oder Netz-Laden). Bis dahin speist diese Instanz nur PV − Reserve ein, damit keine Batterie die andere lädt. Endet das Laden, entlädt sie wieder normal.
