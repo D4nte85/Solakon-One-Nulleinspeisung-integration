@@ -286,7 +286,7 @@
     },
     "zone1_force_sensor": {
       "l": "PV-Vorhersage morgen (optional lokal)",
-      "d": "input_number- oder sensor-Entität mit dem erwarteten kWh-Ertrag für morgen (Wh/MWh werden automatisch auf kWh normalisiert). Speist die Zone-1-Nacht-Forcierung (Zonen-Tab), gelesen vor Mitternacht — danach automatisch „PV-Vorhersage heute“ oben (derselbe Zieltag, nur der Sensor wechselt)."
+      "d": "input_number- oder sensor-Entität mit dem erwarteten kWh-Ertrag für morgen (Wh/MWh werden automatisch auf kWh normalisiert). Speist die Zone-1-Nacht-Forcierung (Zonen-Tab), gelesen von 12 Uhr bis Mitternacht — von 0 bis 12 Uhr automatisch „PV-Vorhersage heute“ oben (derselbe Zieltag, nur der Sensor wechselt)."
     },
     "zone1_force_sensor_note": {
       "d": "🔌 Ohne Entität „PV-Vorhersage morgen“ (Entitäten-Tab) bleibt diese Funktion inaktiv."
@@ -521,7 +521,7 @@
     "global_pv_today_desc":   "Speist Surplus-Forecast-Erzwingung (Zone-0-Tab), Prognose-Unterdrückung (Tarif-Tab) und, zwischen 0–12 Uhr, die Zone-1-Nacht-Forcierung (Zonen-Tab), sofern keine Instanz lokal überschreibt.",
     "global_pv_today_ph":      "sensor.pv_forecast_today",
     "global_pv_tomorrow_lbl":  "PV-Vorhersage morgen (kWh)",
-    "global_pv_tomorrow_desc": "Speist die Zone-1-Nacht-Forcierung (Zonen-Tab). Vor Mitternacht gelesen; nach Mitternacht greift automatisch stattdessen \"PV-Vorhersage heute\" oben (derselbe Zieltag).",
+    "global_pv_tomorrow_desc": "Speist die Zone-1-Nacht-Forcierung (Zonen-Tab). Gelesen von 12 Uhr bis Mitternacht; von 0 bis 12 Uhr greift automatisch stattdessen \"PV-Vorhersage heute\" oben (derselbe Zieltag).",
     "global_pv_tomorrow_ph":   "sensor.pv_forecast_tomorrow",
     "global_surplus_lock_lbl":  "Leistungs-Vorhersage jetzt (W)",
     "global_surplus_lock_desc":"Speist die Austritts-Sperre aus Zone 0 (Zone-0-Tab), sofern keine Instanz lokal überschreibt.",

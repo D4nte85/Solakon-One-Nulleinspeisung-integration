@@ -286,7 +286,7 @@
     },
     "zone1_force_sensor": {
       "l": "PV Forecast Tomorrow (optional local)",
-      "d": "input_number or sensor entity with the expected kWh yield for tomorrow (Wh/MWh normalized to kWh automatically). Feeds Zone-1 Night Forcing (Zones tab), read before midnight — after midnight \"PV Forecast Today\" above is used automatically instead (same target day, only the sensor changes)."
+      "d": "input_number or sensor entity with the expected kWh yield for tomorrow (Wh/MWh normalized to kWh automatically). Feeds Zone-1 Night Forcing (Zones tab), read from noon to midnight — from 0 to 12h \"PV Forecast Today\" above is used automatically instead (same target day, only the sensor changes)."
     },
     "zone1_force_sensor_note": {
       "d": "🔌 Without the \"PV Forecast Tomorrow\" entity (Entities tab) this function stays inactive."
@@ -521,7 +521,7 @@
     "global_pv_today_desc":   "Feeds the Surplus Forecast Override (Zone-0 tab), the Tariff Lock suppression (Tariff tab) and, between 0–12h, Zone-1 Night Forcing (Zones tab), unless an instance overrides it locally.",
     "global_pv_today_ph":      "sensor.pv_forecast_today",
     "global_pv_tomorrow_lbl":  "PV Forecast Tomorrow (kWh)",
-    "global_pv_tomorrow_desc": "Feeds the Zone-1 Night Forcing (Zones tab). Read before midnight; after midnight \"PV Forecast Today\" above is used automatically instead (same target day).",
+    "global_pv_tomorrow_desc": "Feeds the Zone-1 Night Forcing (Zones tab). Read from noon to midnight; from 0 to 12h \"PV Forecast Today\" above is used automatically instead (same target day).",
     "global_pv_tomorrow_ph":   "sensor.pv_forecast_tomorrow",
     "global_surplus_lock_lbl":  "Power Forecast Now (W)",
     "global_surplus_lock_desc":"Feeds the Zone-0 exit lock (Zone-0 tab), unless an instance overrides it locally.",

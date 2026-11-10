@@ -200,7 +200,7 @@ Im Panel wird bei mehreren Instanzen ein zusätzlicher **Verteilungs-Tab** einge
 | Globaler Sensor | Speist |
 |---|---|
 | PV-Vorhersage heute (kWh, Wh/MWh automatisch normalisiert) | Surplus-Forecast-Erzwingung (Überschuss-Tab), Prognose-Unterdrückung (Tarif-Tab), 0–12 Uhr zusätzlich Zone-1-Nacht-Forcierung (Zonen-Tab) |
-| PV-Vorhersage morgen (kWh, Wh/MWh automatisch normalisiert) | Zone-1-Nacht-Forcierung (Zonen-Tab) |
+| PV-Vorhersage morgen (kWh, Wh/MWh automatisch normalisiert) | Zone-1-Nacht-Forcierung (Zonen-Tab), gelesen ab 12 Uhr — von 0 bis 12 Uhr automatisch PV-Vorhersage heute |
 | Leistungs-Vorhersage jetzt (W) | Austritts-Sperre (Überschuss-Tab) |
 | Strompreis-Sensor | Tarif-Arbitrage (Tarif-Tab) |
 | Günstig-/Teuer-Schwelle dynamisch | Tarif-Arbitrage (Tarif-Tab) |
@@ -353,7 +353,7 @@ Ein positiver Offset von z. B. 30 W lässt den Regler auf 30 W Netzbezug regeln 
 
 **Nacht-Forcierung (optional):** Erlaubt den Zone-1-Zyklus auch unter der normalen Zone-1-Schwelle, wenn die PV-Vorhersage für den Zieltag zeigt, dass die Nacht ohnehin wieder aufgefüllt wird — verhindert ungenutzt liegen gebliebene Kapazität nach einem wolkigen Tag. Bedingung: Vorhersage ≥ Mindest-Ertrag UND PV < PV-Ladereserve (gerade dunkel) UND SOC > eigenes Mindest-SOC. Das Mindest-SOC ist ein eigener, unabhängig einstellbarer Sicherheits-Floor (nicht die Zone-3-Schwelle, die nur den regulären Austritt steuert) — muss strikt zwischen Zone-3- und Zone-1-Schwelle liegen, damit die Forcierung nicht bei SOC-Werten greift, in denen die SOC-Schätzung unzuverlässig wird. Reiner Eintritts-Trigger — der Austritt läuft unverändert ausschließlich über die Zone-3-Schwelle, ein späteres Zurückfallen der Vorhersage beeinflusst einen bereits laufenden Zyklus nicht.
 
-> **Sensor wechselt an der Mitternachtsgrenze:** Vor Mitternacht wird die "PV-Vorhersage morgen" gelesen — das ist der korrekte Zieltag, dessen Ertrag die Nacht auffüllt. Nach Mitternacht (neuer Kalendertag) würde derselbe "morgen"-Sensor auf den *übernächsten* Tag zeigen, deshalb wird automatisch stattdessen die "PV-Vorhersage heute" verwendet — der Zieltag bleibt über die ganze Nacht hinweg derselbe, nur die Quelle wechselt. Kein Sonnenauf-/untergangs-Helper nötig, Mittag (12 Uhr) ist der Umschaltpunkt.
+> **Sensor wechselt zweimal am Tag:** Von 12 Uhr bis Mitternacht wird die "PV-Vorhersage morgen" gelesen — das ist der korrekte Zieltag, dessen Ertrag die Nacht auffüllt. Nach Mitternacht (neuer Kalendertag) würde derselbe "morgen"-Sensor auf den *übernächsten* Tag zeigen, deshalb wird von 0 bis 12 Uhr automatisch die "PV-Vorhersage heute" verwendet — der Zieltag bleibt über die ganze Nacht hinweg derselbe, nur die Quelle wechselt. Um 12 Uhr wechselt die Quelle zurück auf "morgen". Kein Sonnenauf-/untergangs-Helper nötig.
 
 | Parameter | Beschreibung | Empfehlung |
 |-----------|-------------|------------|
