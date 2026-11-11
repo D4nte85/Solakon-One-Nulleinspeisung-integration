@@ -20,6 +20,7 @@ from homeassistant.helpers.selector import (
 from .const import (
     DOMAIN,
     CONF_INSTANCE_NAME,
+    FALLBACK_INSTANCE_NAME,
     CONF_GRID_SENSOR, CONF_ACTUAL_SENSOR, CONF_SOLAR_SENSOR,
     CONF_SOC_SENSOR, CONF_TIMEOUT_COUNTDOWN, CONF_ACTIVE_POWER,
     CONF_DISCHARGE_CURRENT, CONF_TIMEOUT_SET, CONF_MODE_SELECT,
@@ -207,7 +208,7 @@ class SolakonConfigFlow(_EntityFlow, config_entries.ConfigFlow, domain=DOMAIN):
 
     def _finish(self, data: dict) -> FlowResult:
         """Neue Instanz anlegen."""
-        return self.async_create_entry(title=data.get(CONF_INSTANCE_NAME, "Solakon ONE"), data=data)
+        return self.async_create_entry(title=data.get(CONF_INSTANCE_NAME, FALLBACK_INSTANCE_NAME), data=data)
 
     @staticmethod
     @callback

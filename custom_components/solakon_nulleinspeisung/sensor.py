@@ -12,6 +12,7 @@ from homeassistant.util import dt as dt_util
 
 from .const import CHARGE_SESSIONS, DOMAIN, FALL_KEYS, MODE_KEYS, OPERATING_STATES
 from .coordinator import SolakonCoordinator
+from .dynamic_offset import any_dynamic
 from .entity_base import SolakonEntity
 from .status_view import snapshot_view
 
@@ -133,7 +134,7 @@ class GridStdDevSensor(CoordinatorSensor):
     def extra_state_attributes(self) -> dict:
         """Fensterparameter und Rohwert; bei dynamischem Offset zusätzlich die Offsets je Zone."""
         s = self._coordinator.settings
-        dyn = any(s.get(k, False) for k in ("dyn_z1_enabled", "dyn_z1_night_enabled", "dyn_z2_enabled", "dyn_ac_enabled"))
+        dyn = any_dynamic(s)
         attrs = {
             "window_seconds": s.get("stddev_window", 60),
             "sample_count": len(self._coordinator.group.sigma.samples),

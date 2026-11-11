@@ -4,7 +4,7 @@ from __future__ import annotations
 import time
 
 from .i18n import translate
-from .const import MODE_AC_CHARGE, MODE_DISABLED, MODE_DISCHARGE
+from .const import CHARGE_SESSIONS, MODE_AC_CHARGE, MODE_DISABLED, MODE_DISCHARGE
 
 # Regelzustand → Betriebszustand. Laden liegt als Zustand über dem Zyklus.
 OPERATING_BY_STATE = {
@@ -89,7 +89,7 @@ class Display:
             state = "blocked"
         elif charging_to_target:
             state = "target_charging"
-        elif control in ("surplus", "tariff_charge", "grid_charge", "ac_charge"):
+        elif control == "surplus" or control in CHARGE_SESSIONS:
             state = OPERATING_BY_STATE[control]
         elif discharge_locked:
             state = "discharge_locked"

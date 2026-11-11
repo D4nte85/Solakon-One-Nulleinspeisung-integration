@@ -33,6 +33,11 @@ OFFSET_SOURCES = {
 }
 
 
+def any_dynamic(settings: dict) -> bool:
+    """True, wenn der Offset mindestens einer Zone aus OFFSET_SOURCES dynamisch ist."""
+    return any(settings[enabled_key] for enabled_key, _ in OFFSET_SOURCES.values())
+
+
 def _stddev_of(values: list[float]) -> float:
     """Populations-Standardabweichung einer Werteliste."""
     n = len(values)
@@ -109,7 +114,7 @@ class DynamicOffset:
         """σ aus der Netzgruppe übernehmen; Offsets aller Zonen neu berechnen, wenn eine Zone dynamisch ist."""
         self.stddev = sigma.stddev
         self.stddev_raw = sigma.stddev_raw
-        if not any(settings[enabled_key] for enabled_key, _ in OFFSET_SOURCES.values()):
+        if not any_dynamic(settings):
             return
         for zone, keys in DYN_OFFSETS.items():
             args = (cast(settings[key]) for key, cast in zip(keys, DYN_CASTS))

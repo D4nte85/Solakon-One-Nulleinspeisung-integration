@@ -14,16 +14,15 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 import homeassistant.helpers.config_validation as cv
-from homeassistant.helpers.storage import Store
 
 from .const import (
     DOMAIN, PLATFORMS,
     CONF_INSTANCE_NAME,
     CONF_GRID_SENSOR,
-    STORAGE_VERSION, DIST_DEFAULTS, DIST_SCHEMA, SETTINGS_SCHEMA, VERSION,
+    DIST_DEFAULTS, DIST_SCHEMA, SETTINGS_SCHEMA, VERSION,
 )
 from . import group_store, number
-from .migrations import async_migrate_entry as async_migrate_entry
+from .migrations import SolakonSettingsStore, async_migrate_entry as async_migrate_entry
 from .schema import InvalidSettings
 from .status_view import snapshot_view
 
@@ -348,8 +347,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Store der Instanz löschen; mit der letzten Instanz auch die Gruppen-Stores, sonst die Netzgruppe neu zählen."""
-    store = Store(hass, STORAGE_VERSION, f"{DOMAIN}_{entry.entry_id}")
-    await store.async_remove()
+    await SolakonSettingsStore(hass, entry.entry_id).async_remove()
 
     # Home Assistant traegt den Entry vor diesem Aufruf aus der Registrierung aus.
     # Ist danach keiner mehr uebrig, werden auch die instanzuebergreifenden Stores

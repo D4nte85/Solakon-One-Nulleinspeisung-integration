@@ -27,33 +27,32 @@ def test_schwellen_aus_entitaet_sonst_setting():
     assert (s.cheap, s.exp) == (10.0, 30.0)
 
 
-@pytest.mark.parametrize("price, below_exp, below_cheap, at_least_cheap", [
-    (5.0, True, True, False),
-    (10.0, True, False, True),     # genau an der Günstig-Schwelle
-    (24.9, True, False, True),
-    (25.0, False, False, True),    # genau an der Teuer-Schwelle
-    (40.0, False, False, True),
+@pytest.mark.parametrize("price, below_exp, below_cheap", [
+    (5.0, True, True),
+    (10.0, True, False),     # genau an der Günstig-Schwelle
+    (24.9, True, False),
+    (25.0, False, False),    # genau an der Teuer-Schwelle
+    (40.0, False, False),
 ])
-def test_vergleiche_an_den_schwellen(price, below_exp, below_cheap, at_least_cheap):
+def test_vergleiche_an_den_schwellen(price, below_exp, below_cheap):
     s = _assess(price=price)
-    assert (s.below_exp, s.below_cheap, s.at_least_cheap) == (below_exp, below_cheap, at_least_cheap)
+    assert (s.below_exp, s.below_cheap) == (below_exp, below_cheap)
     assert s.allows_discharge is not below_exp
 
 
 def test_ungueltiger_preis_sperrt_nichts():
     s = _assess(price=None)
-    assert (s.price, s.below_exp, s.below_cheap, s.at_least_cheap) == (0.0, False, False, False)
+    assert (s.price, s.below_exp, s.below_cheap) == (0.0, False, False)
     assert s.allows_discharge and s.unit_warning is None
-    # Günstig-Schwelle ≤ 0 (Börsenpreise): der Ersatzwert 0.0 zählt nicht als Preis
-    assert not _assess(price=None, cheap_setting=-2.0).at_least_cheap
+    # Teuer-Schwelle über 0: der Ersatzwert 0.0 zählt nicht als Preis
+    assert not _assess(price=None, exp_setting=50.0).below_exp
 
 
 @pytest.mark.parametrize("kw", [dict(enabled=False), dict(suppressed=True)])
-def test_abgeschaltet_nur_at_least_cheap(kw):
-    s = _assess(price=12.0, **kw)
-    assert (s.below_exp, s.below_cheap, s.at_least_cheap) == (False, False, True)
-    s = _assess(price=5.0, **kw)
-    assert (s.below_exp, s.below_cheap, s.at_least_cheap) == (False, False, False)
+def test_abgeschaltet_ohne_vergleiche(kw):
+    for price in (12.0, 5.0):
+        s = _assess(price=price, **kw)
+        assert (s.below_exp, s.below_cheap) == (False, False)
 
 
 @pytest.mark.parametrize("value, threshold, expected", [

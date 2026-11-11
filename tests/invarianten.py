@@ -140,7 +140,6 @@ class Ctx:
         session = any(f.get(k) for k in LADE_FLAGS)
         return not (
             (f.get("surplus_active") and (not f.get("cycle_active") or session))
-            or sum(bool(f.get(k)) for k in LADE_FLAGS) > 1
             or (modus == C.MODE_AC_CHARGE and not session)
             or (session and modus != C.MODE_AC_CHARGE)
         )
@@ -291,12 +290,6 @@ def c3(c: Ctx):
 def d1(c: Ctx):
     if c.normal() and c.flags["surplus_active"] and not c.flags["cycle_active"]:
         return "surplus_active ohne cycle_active"
-
-
-def d2(c: Ctx):
-    aktiv = [k for k in LADE_FLAGS if c.flags[k]]
-    if len(aktiv) > 1:
-        return "mehrere Lade-Sessions gleichzeitig: " + ", ".join(aktiv)
 
 
 def d3(c: Ctx):

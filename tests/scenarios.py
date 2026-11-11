@@ -616,7 +616,7 @@ async def _run_wiring() -> dict:
     soc_switch_store = h.group_store_mod.SolakonSocSwitchStore(hass, 2, "z")
     for name, data in {"v1": {"active_id": "entry_b", "start_soc": 55}, "empty": {}}.items():
         mig["soc_switch_" + name] = h.jsonable(await soc_switch_store._async_migrate_func(1, 0, dict(data)))
-    settings_store = SolakonSettingsStore(hass, 2, "y")
+    settings_store = SolakonSettingsStore(hass, "y")
     mig["settings_v1"] = h.jsonable(await settings_store._async_migrate_func(
         1, 0, {"hard_limit": 650, "surplus_forecast_sensor": "sensor.f"}))
     mig["settings_v1_keep"] = h.jsonable(await settings_store._async_migrate_func(
@@ -682,7 +682,7 @@ async def _run_derive() -> dict:
                     for name, val in zip(flags, combo):
                         if name not in ("tariff_charge_active", "ac_charge_active"):
                             setattr(coord, name, val)
-                    # Rangfolge des Regelzustands: Tarif-Laden vor AC-Laden
+                    # Zwei Bits der Aufzählung ergeben eine Art der Lade-Session; sind beide gesetzt, Tarif-Laden.
                     tariff_on, ac_on = combo[1], combo[2]
                     coord.charge_session = "tariff_charge" if tariff_on else "ac_charge" if ac_on else "none"
                     coord.settings[C.S_REGULATION_ENABLED] = regulation

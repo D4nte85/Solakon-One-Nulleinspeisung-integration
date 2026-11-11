@@ -25,14 +25,14 @@ BASE = zones.ZoneInputs(
     soc=40, grid=0, actual=0, total_output=0, mode="0",
     new_surplus=False, ac_offset=-50,
     tariff=tariff.TariffState(price=0.30, cheap=0.20, exp=0.40, below_exp=False,
-                              below_cheap=False, at_least_cheap=True),
+                              below_cheap=False),
     is_night=True, zone1_forced=False,
     surplus_active=False, session="none",
     cycle_active=False, at_rest=True,
 )
 
 
-_TARIFF_KEYS = ("below_exp", "below_cheap", "at_least_cheap")
+_TARIFF_KEYS = ("below_exp", "below_cheap")
 
 
 def _decide(**kw):
@@ -57,13 +57,13 @@ def test_base_trifft_keinen_fall():
     (dict(cycle_active=True), "D"),
     (dict(below_cheap=True, below_exp=True), "GT"),
     (dict(session="tariff_charge", mode="3", at_rest=False), "HT"),
-    (dict(below_exp=True, at_least_cheap=False, mode="1", at_rest=False), "TM"),
+    (dict(below_exp=True, mode="1", at_rest=False), "TM"),
     (dict(ac_enabled=True, grid=-200, mode="1", at_rest=True, below_exp=True), "G"),
     (dict(ac_enabled=True, session="ac_charge", mode="3", at_rest=False, soc=95), "H"),
     (dict(ac_enabled=True, session="ac_charge", mode="3", at_rest=False, grid=10, actual=0), "H"),
     # Options-Austritt: abgeschaltete Option beendet die Session unabhängig vom Wert
     (dict(session="ac_charge", mode="3", at_rest=False), "H"),
-    (dict(session="tariff_charge", mode="3", at_rest=False, at_least_cheap=False), "HT"),
+    (dict(session="tariff_charge", mode="3", at_rest=False), "HT"),
     (dict(mode="3", at_rest=False), "I"),
     # Fall I: Session ohne Modus '3'
     (dict(session="ac_charge", ac_enabled=True, mode="1", at_rest=False), "I"),
@@ -409,7 +409,7 @@ def test_gn_vor_gt_mit_max_ladeleistung():
 
 def test_zb_vor_tarifsperre():
     assert _decide(**TARGET, battery_priority=True, mode="1", at_rest=False,
-                   below_exp=True, at_least_cheap=False).name == "ZB"
+                   below_exp=True).name == "ZB"
 
 
 def test_zb_ruht_wie_tm():

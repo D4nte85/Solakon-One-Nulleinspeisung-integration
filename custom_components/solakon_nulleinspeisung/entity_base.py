@@ -5,7 +5,7 @@ from typing import Any
 
 from homeassistant.helpers.entity import Entity
 
-from .const import DOMAIN, CONF_INSTANCE_NAME, VERSION
+from .const import DOMAIN, CONF_INSTANCE_NAME, FALLBACK_INSTANCE_NAME, VERSION
 from .coordinator import SolakonCoordinator
 
 
@@ -21,7 +21,7 @@ class SolakonEntity(Entity):
         self._attr_unique_id = f"{coordinator.entry.entry_id}_{suffix}"
         self._attr_device_info = {
             "identifiers": {(DOMAIN, coordinator.entry.entry_id)},
-            "name": coordinator.entry.data.get(CONF_INSTANCE_NAME, "Solakon ONE"),
+            "name": coordinator.entry.data.get(CONF_INSTANCE_NAME, FALLBACK_INSTANCE_NAME),
             "manufacturer": "D4nte",
             "model": "Nulleinspeisung",
             "sw_version": VERSION,

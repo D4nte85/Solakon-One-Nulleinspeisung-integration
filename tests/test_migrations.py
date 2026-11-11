@@ -19,7 +19,7 @@ def _setup(dist=None):
     if dist is not None:
         hass.storage[DIST_KEY] = dist
     asyncio.run(h.group_store_mod.async_load(hass))
-    return hass, mig.SolakonSettingsStore(hass, 2, f"{DOMAIN}_entry_a", minor_version=3)
+    return hass, mig.SolakonSettingsStore(hass, "entry_a")
 
 
 def _migrate(store, major, minor, data):
@@ -63,7 +63,7 @@ def test_neuere_nebenversion_bleibt_unveraendert():
 def test_ohne_gruppenspeicher_bricht_die_migration_ab():
     """Der Schritt 2.1 → 2.2 wird nicht still übersprungen: HA höbe die Version sonst trotzdem an."""
     hass = h.FakeHass("de")
-    store = mig.SolakonSettingsStore(hass, 2, f"{DOMAIN}_entry_a", minor_version=3)
+    store = mig.SolakonSettingsStore(hass, "entry_a")
     try:
         _migrate(store, 2, 1, {mig.OLD_CAPACITY_SENSOR: "sensor.cap_a"})
     except RuntimeError as err:
@@ -74,7 +74,7 @@ def test_ohne_gruppenspeicher_bricht_die_migration_ab():
 
 def test_ohne_alten_kapazitaetssensor_braucht_die_migration_keinen_gruppenspeicher():
     hass = h.FakeHass("de")
-    store = mig.SolakonSettingsStore(hass, 2, f"{DOMAIN}_entry_a", minor_version=3)
+    store = mig.SolakonSettingsStore(hass, "entry_a")
     assert _migrate(store, 2, 1, {"zone1_limit": 50}) == {"zone1_limit": 50, "charge_session": "none"}
 
 

@@ -36,7 +36,7 @@ from .zones import (
     forecast_flags, required_discharge, rest_mode,
 )
 from .const import (
-    DOMAIN, STORAGE_MINOR_VERSION, STORAGE_VERSION, SETTINGS_DEFAULTS, SETTINGS_SCHEMA, CONF_GRID_SENSOR,
+    DOMAIN, SETTINGS_DEFAULTS, SETTINGS_SCHEMA, CONF_GRID_SENSOR,
     CONF_ACTUAL_SENSOR, CONF_SOLAR_SENSOR, CONF_SOC_SENSOR, CONF_TIMEOUT_COUNTDOWN,
     CONF_ACTIVE_POWER, CONF_DISCHARGE_CURRENT, CONF_TIMEOUT_SET, CONF_MODE_SELECT,
     CONF_EXPORT_LIMIT, MODE_DISABLED, MODE_DISCHARGE, MODE_AC_CHARGE, S_REGULATION_ENABLED,
@@ -48,11 +48,13 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 
-# Über Neustarts gespeicherte Zustandsflags: (Speicherschlüssel, Attributpfad, Default).
+# Über Neustarts gespeicherte Zustandsflags: (Speicherschlüssel, Attributpfad, Default, erlaubte Werte).
+# Ohne erlaubte Werte ist das Flag ein Bool; sonst gilt für jeden anderen gespeicherten Wert der Default.
 PERSISTED_FLAGS = (
-    ("cycle_active", "cycle_active", False),
-    ("surplus_active", "surplus_active", False),
-    ("solar_zero_entry_armed", "surplus.armed", True),
+    ("cycle_active", "cycle_active", False, None),
+    ("surplus_active", "surplus_active", False, None),
+    ("solar_zero_entry_armed", "surplus.armed", True, None),
+    (CHARGE_SESSION_KEY, "charge_session", SESSION_NONE, CHARGE_SESSIONS),
 )
 
 # Kernsensoren der Instanz: (Konfigschlüssel, löst Regelzyklus aus, Pflicht für den Zyklus).
@@ -75,9 +77,7 @@ class SolakonCoordinator:
         self.entry = entry
         self.settings: dict[str, Any] = SETTINGS_DEFAULTS.copy()
         self.settings_rev = 0
-        self._store = SolakonSettingsStore(
-            hass, STORAGE_VERSION, f"{DOMAIN}_{entry.entry_id}", minor_version=STORAGE_MINOR_VERSION,
-        )
+        self._store = SolakonSettingsStore(hass, entry.entry_id)
 
         # Laufzeit-Zustände
         self.display = Display(hass.config.language)
@@ -294,10 +294,9 @@ class SolakonCoordinator:
         """Ruht die Instanz in `mode`, laut `zones.at_rest`."""
         return at_rest(mode, self._setting(S_REST_IN_DISCHARGE, bool), self.resting)
 
-    def _persisted_flags(self) -> dict[str, bool]:
+    def _persisted_flags(self) -> dict[str, Any]:
         """Gespeicherte Zustandsflags unter ihrem Speicherschlüssel."""
-        flags = {key: attrgetter(attr)(self) for key, attr, _ in PERSISTED_FLAGS}
-        return {**flags, CHARGE_SESSION_KEY: self.charge_session}
+        return {key: attrgetter(attr)(self) for key, attr, _, _ in PERSISTED_FLAGS}
 
     def _store_data(self) -> dict:
         """Speicherinhalt: Settings plus gespeicherte Zustandsflags."""
@@ -553,11 +552,11 @@ class SolakonCoordinator:
         if stored:
             stored, reset = sanitize(stored, SETTINGS_SCHEMA)
             self.settings = {**SETTINGS_DEFAULTS, **stored}
-            for key, attr, default in PERSISTED_FLAGS:
+            for key, attr, default, allowed in PERSISTED_FLAGS:
+                value = stored.get(key, default)
+                value = bool(value) if allowed is None else value if value in allowed else default
                 owner, _, name = attr.rpartition(".")
-                setattr(attrgetter(owner)(self) if owner else self, name, bool(stored.get(key, default)))
-            session = stored.get(CHARGE_SESSION_KEY, SESSION_NONE)
-            self.charge_session = session if session in CHARGE_SESSIONS else SESSION_NONE
+                setattr(attrgetter(owner)(self) if owner else self, name, value)
             if reset:
                 notify_reset(self.hass, f"{DOMAIN}_settings_reset_{self.entry.entry_id}", self.entry.title, reset)
                 await self._store.async_save(self._store_data())
@@ -602,18 +601,15 @@ class SolakonCoordinator:
             async with self._lock:
                 await self._switch_off_sequence()
 
-        before = self.trackers.inputs()
-
-        if S_REST_IN_DISCHARGE in changes:
-            self.resting = False
-        if S_PI_ENABLED in changes and changes[S_PI_ENABLED] != self._setting(S_PI_ENABLED, bool):
-            self.pi.reset()
-        self.settings.update(changes)
-        self.settings_rev += 1
-        await self._store.async_save(self._store_data())
-        _LOGGER.info("Solakon: Einstellungen gespeichert")
-
-        self.trackers.refresh(before)
+        with self.trackers.refreshing():
+            if S_REST_IN_DISCHARGE in changes:
+                self.resting = False
+            if S_PI_ENABLED in changes and changes[S_PI_ENABLED] != self._setting(S_PI_ENABLED, bool):
+                self.pi.reset()
+            self.settings.update(changes)
+            self.settings_rev += 1
+            await self._store.async_save(self._store_data())
+            _LOGGER.info("Solakon: Einstellungen gespeichert")
 
         self.notify_listeners()
 

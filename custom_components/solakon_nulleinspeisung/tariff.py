@@ -19,8 +19,7 @@ class TariffState:
     """Preislage eines Zyklus: Preis, wirksame Schwellen und Vergleiche.
 
     `price` ist 0.0 ohne gültigen Preis. `below_exp` und `below_cheap` gelten nur bei
-    wirksamem Tarif, `at_least_cheap` bei jedem gültigen Preis — HT beendet das
-    Tarif-Laden auch bei abgeschaltetem Tarif.
+    wirksamem Tarif mit gültigem Preis; ohne sie beendet HT ein laufendes Tarif-Laden.
     """
 
     price: float
@@ -28,7 +27,6 @@ class TariffState:
     exp: float
     below_exp: bool
     below_cheap: bool
-    at_least_cheap: bool
     unit_warning: Msg | None = None
 
     @property
@@ -66,7 +64,6 @@ class Tariff:
             price=value, cheap=cheap, exp=exp,
             below_exp=usable and value < exp,
             below_cheap=usable and value < cheap,
-            at_least_cheap=valid and value >= cheap,
             unit_warning=self._unit_warning(unit, value, cheap, now) if valid else None,
         )
 

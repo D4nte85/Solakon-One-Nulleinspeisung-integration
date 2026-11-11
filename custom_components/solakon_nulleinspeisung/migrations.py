@@ -10,7 +10,7 @@ from homeassistant.helpers import entity_registry as er
 
 from .const import (
     CHARGE_SESSION_KEY, CONF_GRID_SENSOR, DOMAIN, S_HARD_LIMIT_Z0, S_HARD_LIMIT_Z1, S_PV_FORECAST_SENSOR,
-    SESSION_AC, SESSION_GRID, SESSION_NONE, SESSION_TARIFF,
+    SESSION_AC, SESSION_GRID, SESSION_NONE, SESSION_TARIFF, STORAGE_MINOR_VERSION, STORAGE_VERSION,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -90,7 +90,11 @@ def _session_from_flags(data: dict) -> dict:
 
 
 class SolakonSettingsStore(Store):
-    """Settings-Speicher einer Instanz unter `<DOMAIN>_<entry_id>`."""
+    """Settings-Speicher der Instanz `entry_id` unter `<DOMAIN>_<entry_id>`, in der aktuellen Speicherversion."""
+
+    def __init__(self, hass: HomeAssistant, entry_id: str) -> None:
+        super().__init__(hass, STORAGE_VERSION, f"{DOMAIN}_{entry_id}", minor_version=STORAGE_MINOR_VERSION)
+        self.entry_id = entry_id
 
     async def _async_migrate_func(
         self, old_major_version: int, old_minor_version: int, old_data: dict
@@ -99,7 +103,7 @@ class SolakonSettingsStore(Store):
         if old_major_version < 2:
             old_data = _settings_v2(old_data)
         if (old_major_version, old_minor_version) < (2, 2):
-            old_data = await _capacity_to_dist(self.hass, self.key.removeprefix(f"{DOMAIN}_"), old_data)
+            old_data = await _capacity_to_dist(self.hass, self.entry_id, old_data)
         if (old_major_version, old_minor_version) < (2, 3):
             old_data = _session_from_flags(old_data)
         return old_data

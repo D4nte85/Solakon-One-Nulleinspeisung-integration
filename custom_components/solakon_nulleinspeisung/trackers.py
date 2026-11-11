@@ -1,8 +1,9 @@
 """Zusätzliche Regel-Trigger einer Instanz: an- und abmelden nach Settings und wirksamem Sensor."""
 from __future__ import annotations
 
+from contextlib import contextmanager
 from datetime import timedelta
-from typing import Any, Callable
+from typing import Any, Callable, Iterator
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.event import async_track_state_change_event, async_track_time_interval
@@ -86,12 +87,11 @@ class Trackers:
         for name, _ in TRACKERS:
             self._untrack(name)
 
-    def inputs(self) -> dict[str, tuple]:
-        """Eingaben aller Trigger nach Name, als Vergleichsstand für `refresh`."""
-        return {name: self._input(name) for name, _ in TRACKERS}
-
-    def refresh(self, before: dict[str, tuple]) -> None:
-        """Trigger neu anmelden, deren Eingaben sich gegenüber `before` geändert haben."""
+    @contextmanager
+    def refreshing(self) -> Iterator[None]:
+        """Rahmen um eine Settings-Änderung: danach die Trigger neu anmelden, deren Eingaben sich darin geändert haben."""
+        before = {name: self._input(name) for name, _ in TRACKERS}
+        yield
         for name, _ in TRACKERS:
             if self._input(name) != before[name]:
                 self._retrack(name)
