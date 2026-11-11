@@ -28,7 +28,7 @@ def _zustand(coord) -> dict:
     z = h.coord_state(coord)
     z.update({flag: z["charge_session"] == art for art, flag in SESSION_FLAG.items()})
     return z
-KINDS = ("cycle", "multi", "stall", "tariff", "domain", "rest")
+KINDS = ("cycle", "multi", "stall", "tariff", "domain", "rest", "gridcharge")
 NICHT_ZAHL = ("unavailable", "unknown", "None", "abc", "nan", "on", "off")
 
 
@@ -248,6 +248,9 @@ def b3(c: Ctx):
 
 def c1(c: Ctx):
     if c.aus_seit is None:
+        # Fall ZE schaltet die Regelung in diesem Regelzyklus selbst ab und schreibt dabei den Abschaltpfad.
+        if c.flags["active_fall"] == "ZE" and c.flags_vorher.get("active_fall") != "ZE":
+            return None
         if c.settings[C.S_REGULATION_ENABLED] is False and c.schreibt():
             return f"Regelung von Anfang an aus, trotzdem {len(c.schreibt())} Schreibbefehle"
         return None
@@ -346,8 +349,9 @@ def e1(c: Ctx):
         ziel -= c.settings[C.S_TARIFF_SOC_HYST]
     if preis >= guenstig or c.soc() >= ziel:
         return None
-    # Laufendes AC-Laden wird nicht abgelöst; eine Ablösung käme nur als Tarif-Schalter.
-    if f["surplus_active"] or f["forecast_tariff_suppressed"] or c.flags_vorher.get("ac_charge_active"):
+    # Laufendes AC- oder Netz-Laden wird nicht abgelöst; eine Ablösung käme nur als Tarif-Schalter.
+    if (f["surplus_active"] or f["forecast_tariff_suppressed"] or c.flags_vorher.get("ac_charge_active")
+            or c.flags_vorher.get("grid_charge_active")):
         return None
     if not f["tariff_charge_active"] or c.modus() != C.MODE_AC_CHARGE:
         return f"Preis {preis} < {guenstig}, SOC {c.soc()}: tariff_charge={f['tariff_charge_active']}, Modus {c.modus()!r}"
