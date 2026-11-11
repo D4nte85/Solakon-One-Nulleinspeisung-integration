@@ -117,18 +117,22 @@ def waterfill(active: dict[str, Member], shares: dict[str, float], global_max: f
 
 class NetGroup:
     """Alle Instanzen an einem Netzsensor. Mitglieder werden bei jedem Aufruf neu bestimmt,
-    Anteile je Aufruf neu gerechnet; gehalten werden σ-Puffer, gespeicherte Verteilung
-    und `soc_switch`-Zustand. Änderungen am `soc_switch`-Zustand gehen an `on_soc_switch_change`."""
+    Anteile je Aufruf neu gerechnet; gehalten werden σ-Puffer und `soc_switch`-Zustand.
+    Die Verteilung liest sie über `dist` (Verteilung mit Defaults) und `dist_rev` (ihre Revision);
+    ohne diese Leser gelten die Defaults und Revision 0.
+    Änderungen am `soc_switch`-Zustand gehen an `on_soc_switch_change`."""
 
     def __init__(
-        self, hass: Any, grid_sensor: str, dist: dict | None = None, soc_switch: dict | None = None,
+        self, hass: Any, grid_sensor: str, dist: Callable[[], dict] | None = None,
+        soc_switch: dict | None = None,
         on_soc_switch_change: Callable[[dict], None] | None = None,
+        dist_rev: Callable[[], int] | None = None,
     ) -> None:
         self.hass = hass
         self.grid_sensor = grid_sensor
         self.sigma = Sigma()
-        self.dist = dist
-        self.dist_rev = 0
+        self._dist = dist
+        self._dist_rev = dist_rev
         self._soc_switch = soc_switch
         self._on_soc_switch_change = on_soc_switch_change
 
@@ -186,7 +190,12 @@ class NetGroup:
 
     def dist_cfg(self) -> dict:
         """Verteilungs-Config dieser Gruppe, mit Defaults aufgefüllt."""
-        return {**DIST_DEFAULTS, **(self.dist or {})}
+        return dict(DIST_DEFAULTS) if self._dist is None else self._dist()
+
+    @property
+    def dist_rev(self) -> int:
+        """Revision der Verteilung, erhöht mit jedem Speichern."""
+        return 0 if self._dist_rev is None else self._dist_rev()
 
     # ── Ableiten: Verteilung ─────────────────────────────────────────────────
 

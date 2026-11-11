@@ -106,7 +106,8 @@ def test_speichern_mit_befund_aendert_nichts():
     store = _load(hass)
     g = gs.group_for(hass, "sensor.grid")
     assert asyncio.run(store.save_dist("sensor.grid", {"distribution_mode": "weighted"}))
-    assert g.dist is None and DIST_KEY not in hass.storage
+    assert g.dist_cfg() == store.dist_view("sensor.frei") and g.dist_rev == 0
+    assert store.dist == {} and DIST_KEY not in hass.storage
 
 
 def test_entfernen_loescht_beide_stores():

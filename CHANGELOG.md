@@ -5,6 +5,10 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+### Geändert
+
+- **Gruppenspeicher führt die Verteilung:** Die Netzgruppe hält keine eigene Kopie der Verteilung mehr, sie liest Einstellungen und Revision beim Gruppenspeicher. Keine Verhaltensänderung (`group_store.py`, `grid_group.py`).
+
 ## [3.8.0] – 2026-11-10
 
 ### Hinzugefügt

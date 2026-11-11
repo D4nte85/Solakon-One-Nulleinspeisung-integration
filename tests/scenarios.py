@@ -430,7 +430,7 @@ def _apply_states(hass, states: dict) -> None:
         hass.states.set(eid, st.get("state"), st.get("attrs"), last_updated=h.CLOCK.now - age)
 
 
-def _setup_env(spec):
+def _setup_env(spec, dist_store: bool = False):
     h.CLOCK.now = h.Clock.START
     _DtState.now = datetime(2026, 9, 13, spec["hour"], 0, tzinfo=timezone.utc)
     hass = h.FakeHass(spec["language"])
@@ -441,6 +441,7 @@ def _setup_env(spec):
         dist={"sensor.grid": spec["dist"], **spec.get("dist_other", {})} if spec["has_dist_config"] else None,
         soc_switch=None if switch is None else {"sensor.grid": dict(switch)},
         soc_switch_store=None if switch is None else h.ha_stubs.Store(hass, 1, "soc_switch"),
+        dist_store=h.ha_stubs.Store(hass, 2, "dist") if dist_store else None,
     )
     _apply_states(hass, {"sensor.grid": spec["grid"], "sensor.grid_other": spec["grid"]})
     _apply_states(hass, spec["shared"])
@@ -507,7 +508,7 @@ async def _run_cycle_spec(spec) -> dict:
 
 
 async def _run_settings_spec(spec) -> dict:
-    hass, logs, coords = _setup_env(spec)
+    hass, logs, coords = _setup_env(spec, dist_store=True)
     coord = coords["a"]
     await coord.async_setup()
     if not spec["instances"][0]["stored"]:
@@ -522,7 +523,6 @@ async def _run_settings_spec(spec) -> dict:
            "settings": h.jsonable(coord.settings), "rejected": rejected}
     if spec["dist_save"]:
         hass.events = []
-        h.group_store_mod.store_for(hass)._dist_store = h.ha_stubs.Store(hass, 2, "dist")
         conn = ActiveConnection()
         await h.integration._ws_save_distribution_config(
             hass, conn, {"id": 7, "grid_sensor": "sensor.grid", "distribution": spec["dist"]})

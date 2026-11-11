@@ -53,9 +53,10 @@ def group_for(hass: Any, grid_sensor: str) -> NetGroup:
         store = store_for(hass)
         group = groups[grid_sensor] = NetGroup(hass, grid_sensor) if store is None else NetGroup(
             hass, grid_sensor,
-            dist=store.dist.get(grid_sensor),
+            dist=lambda: store.dist_view(grid_sensor),
             soc_switch=store.soc_switch.get(grid_sensor),
             on_soc_switch_change=lambda state: store.soc_switch_changed(grid_sensor, state),
+            dist_rev=lambda: store.dist_rev(grid_sensor),
         )
     return group
 
@@ -63,6 +64,7 @@ def group_for(hass: Any, grid_sensor: str) -> NetGroup:
 class GroupStore:
     """Verteilung, `soc_switch`-Zustand und Gruppennummer je Netzsensor, auch für Gruppen ohne laufende Instanz.
 
+    Führende Stelle der Verteilung: Netzgruppen lesen sie hier über `dist_view` und `dist_rev`.
     Ohne HA-Store (`None`) wird nur gehalten, nicht gespeichert.
     """
 
@@ -78,27 +80,30 @@ class GroupStore:
         self.dist: dict[str, dict] = {} if dist is None else dist
         self.soc_switch: dict[str, dict] = {} if soc_switch is None else soc_switch
         self.numbers: dict[str, int] = {} if numbers is None else numbers
+        self._dist_revs: dict[str, int] = {}
         self._dist_listeners: dict[str, list[Callable[[], None]]] = {}
 
     def dist_view(self, grid_sensor: str) -> dict:
         """Verteilung einer Gruppe, mit Defaults aufgefüllt."""
         return {**DIST_DEFAULTS, **self.dist.get(grid_sensor, {})}
 
+    def dist_rev(self, grid_sensor: str) -> int:
+        """Revision der Verteilung einer Gruppe: Zahl der Speicherungen seit dem Laden."""
+        return self._dist_revs.get(grid_sensor, 0)
+
     async def save_dist(self, grid_sensor: str, changes: dict) -> list[dict]:
         """Geänderte Verteilungsfelder einer Gruppe prüfen und in ihre Verteilung übernehmen; Befunde statt Speichern.
 
-        Danach erhält die Netzgruppe die Verteilung, ihre Mitglieder melden ihre Trigger neu an
+        Danach steigt die Revision, die Mitglieder der Netzgruppe melden ihre Trigger neu an
         und stoßen einen Regelzyklus an, angemeldete Beobachter werden benachrichtigt.
         """
         if findings := check(changes, DIST_SCHEMA, DIST_INST_FIELDS):
             return findings
-        cfg = {**self.dist.get(grid_sensor, {}), **changes}
-        self.dist[grid_sensor] = cfg
-        await self._dist_store.async_save(self.dist)
-        group = group_for(self.hass, grid_sensor)
-        group.dist = cfg
-        group.dist_rev += 1
-        for coord in group.members().values():
+        self.dist[grid_sensor] = {**self.dist.get(grid_sensor, {}), **changes}
+        if self._dist_store is not None:
+            await self._dist_store.async_save(self.dist)
+        self._dist_revs[grid_sensor] = self.dist_rev(grid_sensor) + 1
+        for coord in group_for(self.hass, grid_sensor).members().values():
             coord.apply_group_change()
         for listener in list(self._dist_listeners.get(grid_sensor, ())):
             listener()

@@ -66,7 +66,8 @@ class Hass:
 
 def _group(*members, dist=None, soc_switch=None, on_change=None):
     hass = Hass(*members)
-    return hass, group.NetGroup(hass, "sensor.grid", dist=dist, soc_switch=soc_switch,
+    read = None if dist is None else (lambda: {**group.DIST_DEFAULTS, **dist})
+    return hass, group.NetGroup(hass, "sensor.grid", dist=read, soc_switch=soc_switch,
                                 on_soc_switch_change=on_change)
 
 
