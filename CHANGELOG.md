@@ -5,6 +5,8 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+## [3.8.1] – 2026-11-11
+
 ### Behoben
 
 - **Löschen einer Instanz bei deaktivierter Schwester:** Wird die einzige laufende Instanz einer Netzgruppe gelöscht, während die zweite deaktiviert ist, entfernt die Integration jetzt die Entität „Gesamte Max. Ausgangsleistung“ und das Gerät „Solakon Netzgruppe N“. Bisher kehrte das Aufräumen ohne geladenen Gruppenspeicher stumm zurück (`__init__.py`, `number.py`).
