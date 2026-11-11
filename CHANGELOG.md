@@ -5,9 +5,14 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+### Behoben
+
+- **Löschen einer Instanz bei deaktivierter Schwester:** Wird die einzige laufende Instanz einer Netzgruppe gelöscht, während die zweite deaktiviert ist, entfernt die Integration jetzt die Entität „Gesamte Max. Ausgangsleistung“ und das Gerät „Solakon Netzgruppe N“. Bisher kehrte das Aufräumen ohne geladenen Gruppenspeicher stumm zurück (`__init__.py`, `number.py`).
+
 ### Geändert
 
 - **Gruppenspeicher führt die Verteilung:** Die Netzgruppe hält keine eigene Kopie der Verteilung mehr, sie liest Einstellungen und Revision beim Gruppenspeicher. Keine Verhaltensänderung (`group_store.py`, `grid_group.py`).
+- **Fehlender Gruppenspeicher ist ein Fehler:** Netzgruppe, Träger-Verwaltung und die Übernahme des Kapazitätssensors (Speicherstand 2.1 → 2.2) verlangen den geladenen Gruppenspeicher und brechen mit Meldung ab, statt still auf Standardwerte zu fallen oder den Migrationsschritt zu überspringen. Im Betrieb ist er geladen, solange eine Instanz läuft; nur die Panel-Befehle melden weiterhin „nicht bereit“ (`group_store.py`, `migrations.py`, `number.py`).
 
 ## [3.8.0] – 2026-11-10
 

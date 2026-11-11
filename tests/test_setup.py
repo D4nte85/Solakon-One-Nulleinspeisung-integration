@@ -225,3 +225,22 @@ def test_gesamtlimit_bei_zwei_eintraegen_auch_wenn_nur_einer_geladen():
     hass.config_entries.entries = entries
     asyncio.run(h.number_mod.assign_carrier(hass, "sensor.grid"))
     assert [e.carrier for e in _group_limits(added)["entry_a"]] == ["entry_a"]
+
+
+def test_loeschen_bei_deaktivierter_schwester_entfernt_gesamtlimit_und_geraet():
+    """Die gelöschte Instanz war die einzige geladene; die Schwester ist eingerichtet, aber nicht geladen."""
+    entries = [h.FakeEntry("entry_a", h.entry_data("a")), h.FakeEntry("entry_b", h.entry_data("b"))]
+    hass, added = _group_setup(entries[:1])
+    hass.config_entries.entries = entries
+    asyncio.run(h.number_mod.assign_carrier(hass, "sensor.grid"))
+    ents, devs = _register_group_limit(hass, 1)
+
+    async def run():
+        await h.integration.async_unload_entry(hass, entries[0])
+        hass.config_entries.entries.remove(entries[0])
+        await h.integration.async_remove_entry(hass, entries[0])
+
+    asyncio.run(run())
+    assert ents.entities == {} and devs.devices == {}
+    assert [key for key in hass.data if key.startswith(DOMAIN)] == []
+    assert hass.storage[f"{DOMAIN}_group_numbers"] == {"sensor.grid": 1}

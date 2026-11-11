@@ -60,11 +60,22 @@ def test_neuere_nebenversion_bleibt_unveraendert():
     assert _migrate(store, 2, 4, data) == data
 
 
-def test_ohne_verteilungsspeicher_bleiben_die_settings():
+def test_ohne_gruppenspeicher_bricht_die_migration_ab():
+    """Der Schritt 2.1 → 2.2 wird nicht still übersprungen: HA höbe die Version sonst trotzdem an."""
     hass = h.FakeHass("de")
     store = mig.SolakonSettingsStore(hass, 2, f"{DOMAIN}_entry_a", minor_version=3)
-    data = {mig.OLD_CAPACITY_SENSOR: "sensor.cap_a"}
-    assert _migrate(store, 2, 1, data) == {**data, "charge_session": "none"}
+    try:
+        _migrate(store, 2, 1, {mig.OLD_CAPACITY_SENSOR: "sensor.cap_a"})
+    except RuntimeError as err:
+        assert "Gruppenspeicher" in str(err)
+    else:
+        raise AssertionError("Migration ohne Gruppenspeicher lief durch")
+
+
+def test_ohne_alten_kapazitaetssensor_braucht_die_migration_keinen_gruppenspeicher():
+    hass = h.FakeHass("de")
+    store = mig.SolakonSettingsStore(hass, 2, f"{DOMAIN}_entry_a", minor_version=3)
+    assert _migrate(store, 2, 1, {"zone1_limit": 50}) == {"zone1_limit": 50, "charge_session": "none"}
 
 
 def test_ein_lade_flag_wird_zur_art():

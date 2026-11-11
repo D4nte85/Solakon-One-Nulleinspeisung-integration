@@ -13,6 +13,7 @@ i18n = importlib.import_module(h.PKG + ".i18n")
 
 def _coord(language: str):
     hass = h.FakeHass(language)
+    h.install_groups(hass)
     entry = h.FakeEntry("entry_a", h.entry_data("a"))
     coord = h.coordinator_mod.SolakonCoordinator(hass, entry)
     hass.data.setdefault(h.const.DOMAIN, {})[entry.entry_id] = coord

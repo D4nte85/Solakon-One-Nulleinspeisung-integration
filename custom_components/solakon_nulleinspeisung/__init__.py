@@ -317,6 +317,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
+def _drop_shared_data(hass: HomeAssistant) -> None:
+    """Integrationsweite `hass.data`-Schlüssel entfernen; nur ohne geladene Instanz aufrufen."""
+    hass.data.pop(DOMAIN, None)
+    for key in DATA_KEYS:
+        hass.data.pop(f"{DOMAIN}_{key}", None)
+
+
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Instanz beenden; mit der letzten Instanz auch Panel und globale Daten entfernen."""
     from homeassistant.components.frontend import async_remove_panel
@@ -334,9 +341,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # Panel + Store nur entfernen wenn keine Instanz mehr läuft
         if not hass.data.get(DOMAIN):
             async_remove_panel(hass, DOMAIN)
-            hass.data.pop(DOMAIN, None)
-            for key in DATA_KEYS:
-                hass.data.pop(f"{DOMAIN}_{key}", None)
+            _drop_shared_data(hass)
 
     return unload_ok
 
@@ -351,5 +356,10 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     # entfernt; bei weiteren Instanzen bleiben sie bestehen.
     if not hass.config_entries.async_entries(DOMAIN):
         await group_store.async_remove(hass)
-    else:
-        await number.assign_carrier(hass, entry.data.get(CONF_GRID_SENSOR, ""))
+        return
+    # Läuft keine Instanz mehr (die übrigen sind deaktiviert), ist der Gruppenspeicher
+    # schon abgeräumt: für die Träger-Verwaltung laden und danach wieder entfernen.
+    await group_store.async_load(hass)
+    await number.assign_carrier(hass, entry.data.get(CONF_GRID_SENSOR, ""))
+    if not hass.data.get(DOMAIN):
+        _drop_shared_data(hass)

@@ -102,8 +102,7 @@ def _carriers(hass: Any) -> dict[str, Any]:
 
 def _drop_group_limit(hass: Any, grid_sensor: str) -> None:
     """Gesamtlimit-Entität und Gerät der Netzgruppe aus Entitäts- und Geräteregistrierung entfernen."""
-    store = group_store.store_for(hass)
-    if store is None or (number := store.numbers.get(grid_sensor)) is None:
+    if (number := group_store.require_store(hass).numbers.get(grid_sensor)) is None:
         return
     entities = er.async_get(hass)
     if entity_id := entities.async_get_entity_id("number", DOMAIN, f"group_{number}_{GROUP_LIMIT_KEY}"):
@@ -135,7 +134,7 @@ async def assign_carrier(hass: Any, grid_sensor: str) -> None:
         _drop_group_limit(hass, grid_sensor)
     if carrier is None:
         return
-    store = group_store.store_for(hass)
+    store = group_store.require_store(hass)
     entity = GroupLimitNumber(store, grid_sensor, await store.group_number(grid_sensor), carrier)
     reg["entities"][grid_sensor] = entity
     reg["adders"][carrier][0]([entity])

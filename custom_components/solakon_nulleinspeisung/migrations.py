@@ -58,16 +58,17 @@ def _settings_v2(data: dict) -> dict:
 async def _capacity_to_dist(hass: HomeAssistant, entry_id: str, data: dict) -> dict:
     """Settings 2.1 → 2.2: Kapazitätssensor der Instanz in die Verteilung ihrer Netzgruppe übernehmen.
 
-    Ein dort schon eingetragener Sensor bleibt. Ohne geladenen Verteilungsspeicher oder
-    ohne Eintrag bleiben die Settings unverändert.
+    Ein dort schon eingetragener Sensor bleibt. Ohne Eintrag bleiben die Settings unverändert;
+    ohne geladenen Gruppenspeicher bricht die Migration ab (`require_store`), statt den
+    Schritt zu überspringen.
     """
     if OLD_CAPACITY_SENSOR not in data:
         return data
-    from .group_store import store_for
+    from .group_store import require_store
 
-    store = store_for(hass)
+    store = require_store(hass)
     entry = next((e for e in hass.config_entries.async_entries(DOMAIN) if e.entry_id == entry_id), None)
-    if store is None or entry is None:
+    if entry is None:
         return data
     migrated = dict(data)
     sensor = migrated.pop(OLD_CAPACITY_SENSOR)

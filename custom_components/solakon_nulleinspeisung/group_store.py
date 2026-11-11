@@ -41,8 +41,20 @@ def configured_members(hass: Any, grid_sensor: str) -> int:
 
 
 def store_for(hass: Any) -> GroupStore | None:
-    """Geladener Speicher aus `hass.data`, sonst None."""
+    """Geladener Speicher aus `hass.data`, sonst None; nur für Aufrufer, die „nicht bereit“ selbst behandeln."""
     return hass.data.get(f"{DOMAIN}_group_store")
+
+
+def require_store(hass: Any) -> GroupStore:
+    """Geladener Speicher aus `hass.data`; RuntimeError, wenn er fehlt.
+
+    Der Speicher lebt, solange mindestens eine Instanz geladen ist (`async_load` im Setup,
+    Abräumen mit der letzten entladenen Instanz). Aufrufer außerhalb dieser Spanne laden ihn selbst.
+    """
+    store = store_for(hass)
+    if store is None:
+        raise RuntimeError("Solakon: Gruppenspeicher nicht geladen")
+    return store
 
 
 def group_for(hass: Any, grid_sensor: str) -> NetGroup:
@@ -50,8 +62,8 @@ def group_for(hass: Any, grid_sensor: str) -> NetGroup:
     groups = hass.data.setdefault(f"{DOMAIN}_groups", {})
     group = groups.get(grid_sensor)
     if group is None:
-        store = store_for(hass)
-        group = groups[grid_sensor] = NetGroup(hass, grid_sensor) if store is None else NetGroup(
+        store = require_store(hass)
+        group = groups[grid_sensor] = NetGroup(
             hass, grid_sensor,
             dist=lambda: store.dist_view(grid_sensor),
             soc_switch=store.soc_switch.get(grid_sensor),

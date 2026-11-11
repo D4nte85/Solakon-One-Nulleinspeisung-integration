@@ -38,6 +38,7 @@ def _load(hass):
 
 def test_register_eine_gruppe_je_netzsensor():
     hass = _hass()
+    _load(hass)
     assert gs.group_for(hass, "sensor.grid") is gs.group_for(hass, "sensor.grid")
     assert gs.group_for(hass, "sensor.grid") is not gs.group_for(hass, "sensor.other")
 
@@ -116,3 +117,12 @@ def test_entfernen_loescht_beide_stores():
     hass.storage[SWITCH_KEY] = {"sensor.grid": {"active_id": "a"}}
     asyncio.run(gs.async_remove(hass))
     assert DIST_KEY not in hass.storage and SWITCH_KEY not in hass.storage
+
+
+def test_netzgruppe_ohne_gruppenspeicher_ist_ein_fehler():
+    try:
+        gs.group_for(_hass(), "sensor.grid")
+    except RuntimeError as err:
+        assert "Gruppenspeicher" in str(err)
+    else:
+        raise AssertionError("Netzgruppe ohne Gruppenspeicher angelegt")
