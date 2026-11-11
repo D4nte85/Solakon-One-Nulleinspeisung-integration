@@ -181,7 +181,7 @@ async function run(scenario, lang) {
 
 (async () => {
   const all = [];
-  for (const sc of ["single", "single-group", "multi-group"]) for (const lang of ["de", "en"]) all.push(...await run(sc, lang));
+  for (const sc of ["single", "single-group", "multi-group", "single-sister"]) for (const lang of ["de", "en"]) all.push(...await run(sc, lang));
   fs.writeFileSync(process.argv[3], JSON.stringify(all, null, 1));
   console.log(`${all.length} Schnappschüsse`);
   process.exit(0);

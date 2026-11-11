@@ -480,9 +480,17 @@ class SolakonPanel extends HTMLElement {
              || this._hass?.states?.[key]?.attributes?.friendly_name
              || key,
       number: instances[0].group_number ?? null,
+      // Eingerichtete Instanzen am Netzsensor, auch nicht geladene (deaktivierte).
+      configured: Math.max(instances.length, ...instances.map(i => i.configured_members ?? 0)),
       instances,
     }));
     this._groups.sort((a, b) => a.label.localeCompare(b.label));
+  }
+
+  // Eine Instanz der Gruppe läuft, eine weitere ist eingerichtet, aber nicht geladen:
+  // Das Gesamtlimit existiert als Entität, wirkt aber noch nicht.
+  _sisterDown(g) {
+    return !!g && g.instances.length === 1 && g.configured > 1;
   }
 
   // Netzgruppe, die die Instanz `entryId` enthält.
@@ -558,7 +566,8 @@ class SolakonPanel extends HTMLElement {
     if (!bar) return;
     bar.innerHTML = "";
     if (subBar) subBar.innerHTML = "";
-    if (this._instances.length <= 1) return;
+    const single = this._instances.length <= 1;
+    if (single && !this._sisterDown(this._groups[0])) return;
 
     const dt = this._t.dist || {};
     const mkTab = (container, id, label, active) => {
@@ -576,7 +585,8 @@ class SolakonPanel extends HTMLElement {
       }
     };
 
-    mkTab(bar, "__overview__", this._t.ov?.btn || "", this._activeInstance === "__overview__");
+    // Eine einzelne laufende Instanz mit eingerichteter Schwester: nur Verteilung und Instanz.
+    if (!single) mkTab(bar, "__overview__", this._t.ov?.btn || "", this._activeInstance === "__overview__");
 
     if (this._groups.length <= 1) {
       // Ein-Gruppen-Fall (Normalfall): flache Leiste, Verteilung als eigener Tab
@@ -1656,8 +1666,12 @@ ${this._textsMissing ? `
 
   _renderVerteilung(c) {
     const dt = this._t.dist || {};
+    const shownGroup = this._groups.length > 1 ? this._activeGroupObj() : this._groups[0];
+    const sisterDown = this._sisterDown(shownGroup);
+    // Modus, Kapazitäts- und globale Sensoren nur, wenn mehrere Instanzen laufen.
+    const fullDist = this._instances.length > 1;
 
-    if (this._instances.length <= 1) {
+    if (!fullDist && !sisterDown) {
       c.innerHTML = `<p style="font-size:.88em;color:var(--secondary-text-color,#888);padding:12px 0">
         ${dt.single_instance_note || ""}</p>`;
       return;
@@ -1698,8 +1712,10 @@ ${this._textsMissing ? `
         `placeholder="${dt.cap_sensor_placeholder || ""}" data-dist-inst="${inst.entry_id}" data-dist-key="capacity_sensor"`),
     )).join("");
 
-    const shownGroup = this._groups.length > 1 ? this._activeGroupObj() : this._groups[0];
-    const isGroup = this._currentGroupInstances().length > 1;
+    const isGroup = this._currentGroupInstances().length > 1 || sisterDown;
+    const inactiveNote = sisterDown
+      ? `<div class="desc" style="margin-top:8px;color:var(--warning-color,#f59e0b)">⚠️ ${dt.global_max_inactive || ""}</div>`
+      : "";
     const groupNumber = isGroup && shownGroup?.number != null
       ? (dt.group_number || "").replace("{n}", shownGroup.number)
       : "";
@@ -1710,10 +1726,10 @@ ${this._textsMissing ? `
     c.innerHTML = `
       ${groupsNote}
       ${isGroup ? this._cardHtml("#0891b2", dt.global_hdr || "", this._fieldHtml(dt.global_max_lbl || "", dt.global_max_desc || "",
-        `<input type="number" ${this._numAttrs(this._schema.distribution.global_max_power)} value="${globalMax}" data-dist-key="global_max_power"/>`),
+        `<input type="number" ${this._numAttrs(this._schema.distribution.global_max_power)} value="${globalMax}" data-dist-key="global_max_power"/>`) + inactiveNote,
         { extraClass: "top-item" }) : ""}
 
-      ${this._cardHtml("#7c3aed", dt.mode_hdr || "", this._fieldHtml(dt.mode_lbl || "", (dt.mode_desc || "").replace(/\n/g, "<br>"),
+      ${!fullDist ? "" : `${this._cardHtml("#7c3aed", dt.mode_hdr || "", this._fieldHtml(dt.mode_lbl || "", (dt.mode_desc || "").replace(/\n/g, "<br>"),
         `<select data-dist-key="distribution_mode">${this._distModes().map(m =>
           `<option value="${m}"${mode === m ? " selected" : ""}>${dt[`mode_${m}`] || ""}</option>`).join("")}</select>`),
         { extraClass: "top-item" })}
@@ -1726,7 +1742,7 @@ ${this._textsMissing ? `
         { extraClass: "top-item", style: mode !== "soc_switch" ? "opacity:.4;pointer-events:none" : "" })}
 
       ${this._cardHtml("#0284c7", dt.global_sensors_hdr || "", `<div class="desc" style="margin-bottom:8px">${dt.global_sensors_desc || ""}</div>${globalSensorCards}`,
-        { extraClass: "top-item" })}
+        { extraClass: "top-item" })}`}
 
       ${this._saveBarHtml("dist-save-bar", dt, "_saveDistConfig", buf.isDirty)}
     `;

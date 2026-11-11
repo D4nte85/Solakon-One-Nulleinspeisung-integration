@@ -80,7 +80,7 @@ def _coord_or_error(hass: HomeAssistant, connection: websocket_api.ActiveConnect
 async def _ws_get_all_instances(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
 ) -> None:
-    """WS: alle Instanzen mit Name, Netzsensor und Gruppennummer, nach Name sortiert."""
+    """WS: alle Instanzen mit Name, Netzsensor, Gruppennummer und Zahl der eingerichteten Instanzen am Netzsensor, nach Name sortiert."""
     store = group_store.store_for(hass)
     numbers = {} if store is None else store.numbers
     instances = []
@@ -92,6 +92,7 @@ async def _ws_get_all_instances(
             "instance_name": name,
             "grid_sensor":   grid_sensor,
             "group_number":  numbers.get(grid_sensor),
+            "configured_members": group_store.configured_members(hass, grid_sensor),
         })
     instances.sort(key=lambda x: x["instance_name"].lower())
     connection.send_result(msg["id"], {"instances": instances})

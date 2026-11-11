@@ -184,7 +184,7 @@ AC Laden startet nur bei Überschuss ohne die Entladung der Schwester-Instanzen 
 
 ### Leistungsverteilung konfigurieren
 
-Im Panel wird bei mehreren Instanzen ein zusätzlicher **Verteilungs-Tab** eingeblendet — bei mehreren Netzgruppen (siehe oben) je Gruppe ein eigener, unabhängig konfigurierbarer Verteilungs-Tab.
+Im Panel wird bei mehreren Instanzen ein zusätzlicher **Verteilungs-Tab** eingeblendet — bei mehreren Netzgruppen (siehe oben) je Gruppe ein eigener, unabhängig konfigurierbarer Verteilungs-Tab. Läuft nur eine Instanz, während eine zweite am selben Netz-Leistungssensor eingerichtet, aber deaktiviert ist, zeigt der Verteilungs-Tab die Gruppennummer und die Gesamte Max. Ausgangsleistung mit dem Hinweis, dass sie erst mit einer zweiten laufenden Instanz wirkt; der Wert wird gespeichert.
 
 | Parameter | Beschreibung |
 |-----------|-------------|

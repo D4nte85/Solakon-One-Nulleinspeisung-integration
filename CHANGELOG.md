@@ -12,6 +12,7 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ### Geändert
 
+- **Gesamtlimit im Panel bei deaktivierter Schwester:** Läuft nur eine Instanz, während eine zweite am selben Netz-Leistungssensor eingerichtet, aber deaktiviert ist, zeigt das Panel jetzt den Verteilungs-Tab mit Gruppennummer und Gesamter Max. Ausgangsleistung samt Hinweis, dass der Wert erst mit einer zweiten laufenden Instanz wirkt. Bisher gab es in dieser Lage die Entität, im Panel aber kein Feld (`solakon-panel.js`, `__init__.py`).
 - **Meldung bei unbekannter gespeicherter Lade-Session:** Steht im Speicher eine Art der Lade-Session, die es nicht gibt, meldet die Integration das beim Start wie bei ungültigen Settings per Log-Warnung und HA-Benachrichtigung und speichert „keine Lade-Session“ zurück. Bisher geschah das still (`coordinator.py`).
 - **Zone manuell setzen läuft über den Übergangsweg:** „Zone 1 aktivieren“ und „Zone 2 aktivieren“ im Debug-Tab setzen den Zyklus über denselben Weg wie jeder Fallwechsel und toggeln dabei zusätzlich den Timer; der Befehl antwortet etwa eine Sekunde später (`coordinator.py`).
 - **Gruppenspeicher führt die Verteilung:** Die Netzgruppe hält keine eigene Kopie der Verteilung mehr, sie liest Einstellungen und Revision beim Gruppenspeicher. Keine Verhaltensänderung (`group_store.py`, `grid_group.py`).

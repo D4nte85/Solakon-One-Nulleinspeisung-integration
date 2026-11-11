@@ -109,7 +109,9 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
   // die Mehr-Gruppen-Navigation ohne zweiten physischen Smartmeter zu sehen).
   // ?multigroup=1 bleibt als Alias für ältere Links auf multi-group erhalten.
   const params = new URLSearchParams(location.search);
-  const SCENARIOS = ["single", "single-group", "multi-group"];
+  // "single-sister": eine laufende Instanz, eine zweite am selben Netzsensor ist eingerichtet,
+  // aber deaktiviert — Verteilungs-Tab zeigt nur das Gesamtlimit mit Hinweis.
+  const SCENARIOS = ["single", "single-sister", "single-group", "multi-group"];
   let SCENARIO = params.get("scenario");
   if (!SCENARIOS.includes(SCENARIO)) {
     SCENARIO = params.get("multigroup") === "1" ? "multi-group" : "single-group";
@@ -126,7 +128,7 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
       status: mkStatus({ zone: 1, soc: 58, actual_power: -800, grid: 795, active_fall: "GT", cycle_active: true,
                          charge_session: "tariff_charge", mode_key: "ac_charge", mode_label: "INV Charge" }),
     },
-    ...(SCENARIO !== "single" ? {
+    ...(!["single", "single-sister"].includes(SCENARIO) ? {
       demo_b: {
         name: "Solakon B",
         grid_sensor: "sensor.shelly_3em_leistung",
@@ -251,7 +253,9 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
   // Gruppe "sensor.shelly_3em_leistung": Kapazitätsausgleich aktiv, ein Sensor
   // korrekt (Instanz A), einer vertippt (Instanz B). Bei "single" keine
   // Verteilungs-Config nötig — der Verteilungs-Tab existiert dann gar nicht.
-  let distConfig = SCENARIO === "single" ? {} : {
+  // Bei "single-sister" nur das gespeicherte Gesamtlimit der Netzgruppe.
+  let distConfig = SCENARIO === "single" ? {}
+    : SCENARIO === "single-sister" ? { "sensor.shelly_3em_leistung": { global_max_power: 800, distribution_mode: "equal" } } : {
     "sensor.shelly_3em_leistung": {
       global_max_power: 800,
       distribution_mode: "capacity",
@@ -292,7 +296,8 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
       const inst = msg.entry_id ? INSTANCES[msg.entry_id] : null;
       switch (type) {
         case "get_all_instances":
-          return Promise.resolve({ instances: Object.entries(INSTANCES).map(([entry_id, v]) => ({ entry_id, instance_name: v.name, grid_sensor: v.grid_sensor, group_number: GROUP_NUMBERS[v.grid_sensor] ?? null })) });
+          return Promise.resolve({ instances: Object.entries(INSTANCES).map(([entry_id, v]) => ({ entry_id, instance_name: v.name, grid_sensor: v.grid_sensor, group_number: GROUP_NUMBERS[v.grid_sensor] ?? null,
+            configured_members: Object.values(INSTANCES).filter(o => o.grid_sensor === v.grid_sensor).length + (SCENARIO === "single-sister" ? 1 : 0) })) });
         case "get_schema":
           return Promise.resolve(JSON.parse(JSON.stringify(SCHEMA)));
         case "get_config":
@@ -327,7 +332,7 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
   // Szenario-Schalter unten rechts — navigiert per URL-Parameter (statt Live-
   // Hotswap), damit das Panel jedes Mal sauber mit neuem Startzustand lädt.
   const SCENARIO_LABELS = {
-    single: "1 Instanz", "single-group": "2 Instanzen, 1 Gruppe", "multi-group": "3 Instanzen, 2 Gruppen",
+    single: "1 Instanz", "single-sister": "1 Instanz, Schwester deaktiviert", "single-group": "2 Instanzen, 1 Gruppe", "multi-group": "3 Instanzen, 2 Gruppen",
   };
   const switcher = document.getElementById("scenario-switcher");
   for (const s of SCENARIOS) {
