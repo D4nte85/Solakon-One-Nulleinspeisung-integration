@@ -53,7 +53,7 @@
     },
     "debug": {
       "summary": "Debug — manual intervention in the control state",
-      "text": "Reset integral: sets the I-part of the PI controller to 0.\n\nSet zone manually: toggles the internal cycle_active flag and resets the integral.\n• Activate Zone 1: cycle_active = true → aggressive discharge, full discharge current.\n• Activate Zone 2: cycle_active = false → battery-friendly operation, 0 A discharge current, dynamic output limit.\n\nIdle state in mode 1 (default off): every transition that would otherwise write mode '0' — case B, C, F, TM, ZB, charge end and case I without cycle, stall recovery — writes mode '1' at 0 W instead. Control off always writes mode '0'. While idle no PI runs, the instance is left out of the discharge pool, and cases E, A, D, 0A, G and GT bring it back just as from mode '0'. Not recommended: the device only leaves remote control when control is switched off. Intended for devices that do not charge in mode '0'.\n\nAll actions are logged under 'Last action' in the Status tab."
+      "text": "Reset integral: sets the I-part of the PI controller to 0.\n\nSet zone manually: toggles the internal cycle_active flag, resets the integral and toggles the timer like every case transition.\n• Activate Zone 1: cycle_active = true → aggressive discharge, full discharge current.\n• Activate Zone 2: cycle_active = false → battery-friendly operation, 0 A discharge current, dynamic output limit.\n\nIdle state in mode 1 (default off): every transition that would otherwise write mode '0' — case B, C, F, TM, ZB, charge end and case I without cycle, stall recovery — writes mode '1' at 0 W instead. Control off always writes mode '0'. While idle no PI runs, the instance is left out of the discharge pool, and cases E, A, D, 0A, G and GT bring it back just as from mode '0'. Not recommended: the device only leaves remote control when control is switched off. Intended for devices that do not charge in mode '0'.\n\nAll actions are logged under 'Last action' in the Status tab."
     },
     "entities": {
       "summary": "Entities — every optional sensor assignment for this instance in one place",
@@ -464,7 +464,7 @@
     "pi_desc":    "Manually resets the I-part of the PI controller to 0. Useful after a manual intervention.",
     "reset_btn":  "🔄 Reset Integral",
     "zone_hdr":   "🔁 Set Zone Manually",
-    "zone_desc":  "Manually switches the discharge cycle and resets the integral.",
+    "zone_desc":  "Manually switches the discharge cycle, resets the integral and toggles the timer.",
     "zone_current":"Current: ",
     "zone1_btn":  "⚡ Activate Zone 1",
     "zone2_btn":  "🔋 Activate Zone 2",

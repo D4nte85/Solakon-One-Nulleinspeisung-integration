@@ -87,3 +87,7 @@ def test_update_state_ohne_wechsel():
     h.CLOCK.now += 5
     assert d.update_state(**args) is False
     assert d.operating_state_ts == ts
+
+
+def test_jeder_betriebszustand_hat_ein_icon():
+    assert set(h.sensor_mod._STATE_ICONS) == set(h.const.OPERATING_STATES)

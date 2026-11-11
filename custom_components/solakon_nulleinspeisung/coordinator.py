@@ -532,10 +532,9 @@ class SolakonCoordinator:
             self.notify_listeners()
 
     async def async_set_cycle(self, active: bool) -> None:
-        """Unter dem Lock: Zyklus setzen, Integral nullen, speichern, benachrichtigen; danach Regelzyklus anstoßen."""
+        """Unter dem Lock: Zyklus über `_transition` setzen (Integral nullen, Timer-Toggle), speichern, benachrichtigen; danach Regelzyklus anstoßen."""
         async with self._lock:
-            self.cycle_active = active
-            self.pi.reset()
+            await self._transition(reset_integral=True, flags=FlagUpdate(cycle_active=active))
             self.schedule_save()
             self.notify_listeners()
         self.request_regulation()
@@ -545,8 +544,8 @@ class SolakonCoordinator:
     async def async_setup(self) -> None:
         """Settings und Zustandsflags laden, Trigger registrieren.
 
-        Gespeicherte Werte, die das Schema verletzen, werden durch den Standard ersetzt,
-        zurückgespeichert und per Benachrichtigung gemeldet.
+        Gespeicherte Werte, die das Schema verletzen, und eine unbekannte Art der Lade-Session
+        werden durch den Standard ersetzt, zurückgespeichert und per Benachrichtigung gemeldet.
         """
         stored = await self._store.async_load()
         if stored:
@@ -554,7 +553,11 @@ class SolakonCoordinator:
             self.settings = {**SETTINGS_DEFAULTS, **stored}
             for key, attr, default, allowed in PERSISTED_FLAGS:
                 value = stored.get(key, default)
-                value = bool(value) if allowed is None else value if value in allowed else default
+                if allowed is None:
+                    value = bool(value)
+                elif value not in allowed:
+                    reset.append((key, value, default))
+                    value = default
                 owner, _, name = attr.rpartition(".")
                 setattr(attrgetter(owner)(self) if owner else self, name, value)
             if reset:

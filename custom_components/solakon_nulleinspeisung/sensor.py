@@ -32,7 +32,9 @@ _ZONE_ICONS = {
 
 _STATE_ICONS = {
     "disabled":         "mdi:power-off",
+    "discharge_pause":  "mdi:pause-circle-outline",
     "blocked":          "mdi:alert-circle-outline",
+    "target_charging":  "mdi:battery-charging-high",
     "exporting":        "mdi:transmission-tower-export",
     "tariff_charging":  "mdi:currency-eur",
     "ac_charging":      "mdi:lightning-bolt",

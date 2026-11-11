@@ -596,8 +596,8 @@ Manuelle Eingriffe in den laufenden Regelzustand. Jede Aktion wird im Status-Tab
 | Aktion | Wirkung |
 |--------|---------|
 | Integral zurücksetzen | Setzt den I-Anteil des PI-Reglers auf 0. Sinnvoll nach einem manuellen Eingriff am Wechselrichter. |
-| Zone 1 aktivieren | Setzt `cycle_active = true` → aggressiver Entladebetrieb mit vollem Entladestrom. Integral wird zurückgesetzt. |
-| Zone 2 aktivieren | Setzt `cycle_active = false` → batterieschonender Betrieb, 0 A Entladestrom, dynamisches Ausgangsleistungs-Limit. Integral wird zurückgesetzt. |
+| Zone 1 aktivieren | Setzt `cycle_active = true` → aggressiver Entladebetrieb mit vollem Entladestrom. Integral wird zurückgesetzt. Timer-Toggle. |
+| Zone 2 aktivieren | Setzt `cycle_active = false` → batterieschonender Betrieb, 0 A Entladestrom, dynamisches Ausgangsleistungs-Limit. Integral wird zurückgesetzt. Timer-Toggle. |
 | Ruhezustand in Modus 1 (Schalter, Standard aus) | Die Regelung ruht in Modus `'1'` mit 0 W statt in Modus `'0'`, siehe Hinweis 15. **Nicht empfohlener Hack** — das Gerät verlässt die Fernsteuerung nur noch bei ausgeschalteter Regelung. |
 
 Der Zonenwechsel ist ein Eingriff in den internen Zustand, kein dauerhafter Modus — der nächste Regelzyklus bewertet die Zonenbedingungen normal weiter und kann ihn sofort wieder überschreiben.

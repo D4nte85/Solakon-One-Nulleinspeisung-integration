@@ -113,6 +113,26 @@ def test_laden_setzt_zurueck_meldet_und_speichert():
     assert "ac_power_limit (1500 → 800)" in notify[3]
 
 
+def test_laden_meldet_unbekannte_art_der_lade_session():
+    hass = h.FakeHass("de")
+    coord = _coord(hass, {C.S_ZONE1_LIMIT: 60, "cycle_active": True, "charge_session": "solar_charge"})
+    asyncio.run(coord.async_setup())
+    assert coord.charge_session == "none" and coord.cycle_active is True
+    notify = [e for e in hass.events if e[0] == "notify"]
+    assert [n[1] for n in notify] == [f"{C.DOMAIN}_settings_reset_entry_a"]
+    assert "charge_session ('solar_charge' → 'none')" in notify[0][3]
+    saved = next(e for e in hass.events if e[0] == "store_save")
+    assert hass.storage[f"{C.DOMAIN}_entry_a"]["charge_session"] == "none", saved
+
+
+def test_laden_uebernimmt_gueltige_art_der_lade_session_ohne_meldung():
+    hass = h.FakeHass("de")
+    coord = _coord(hass, {"charge_session": "tariff_charge"})
+    asyncio.run(coord.async_setup())
+    assert coord.charge_session == "tariff_charge"
+    assert [e for e in hass.events if e[0] in ("notify", "store_save")] == []
+
+
 def test_laden_ohne_befund_ohne_meldung():
     hass = h.FakeHass("de")
     coord = _coord(hass, {C.S_ZONE1_LIMIT: 60})

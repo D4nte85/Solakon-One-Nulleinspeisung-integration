@@ -8,9 +8,12 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 ### Behoben
 
 - **Löschen einer Instanz bei deaktivierter Schwester:** Wird die einzige laufende Instanz einer Netzgruppe gelöscht, während die zweite deaktiviert ist, entfernt die Integration jetzt die Entität „Gesamte Max. Ausgangsleistung“ und das Gerät „Solakon Netzgruppe N“. Bisher kehrte das Aufräumen ohne geladenen Gruppenspeicher stumm zurück (`__init__.py`, `number.py`).
+- **Icons für Entladepause und Zielladen:** Der Sensor „Betriebszustand“ zeigte in beiden Zuständen das Rückfall-Icon; jetzt haben alle zwölf Zustände ein eigenes (`sensor.py`).
 
 ### Geändert
 
+- **Meldung bei unbekannter gespeicherter Lade-Session:** Steht im Speicher eine Art der Lade-Session, die es nicht gibt, meldet die Integration das beim Start wie bei ungültigen Settings per Log-Warnung und HA-Benachrichtigung und speichert „keine Lade-Session“ zurück. Bisher geschah das still (`coordinator.py`).
+- **Zone manuell setzen läuft über den Übergangsweg:** „Zone 1 aktivieren“ und „Zone 2 aktivieren“ im Debug-Tab setzen den Zyklus über denselben Weg wie jeder Fallwechsel und toggeln dabei zusätzlich den Timer; der Befehl antwortet etwa eine Sekunde später (`coordinator.py`).
 - **Gruppenspeicher führt die Verteilung:** Die Netzgruppe hält keine eigene Kopie der Verteilung mehr, sie liest Einstellungen und Revision beim Gruppenspeicher. Keine Verhaltensänderung (`group_store.py`, `grid_group.py`).
 - **Fehlender Gruppenspeicher ist ein Fehler:** Netzgruppe, Träger-Verwaltung und die Übernahme des Kapazitätssensors (Speicherstand 2.1 → 2.2) verlangen den geladenen Gruppenspeicher und brechen mit Meldung ab, statt still auf Standardwerte zu fallen oder den Migrationsschritt zu überspringen. Im Betrieb ist er geladen, solange eine Instanz läuft; nur die Panel-Befehle melden weiterhin „nicht bereit“ (`group_store.py`, `migrations.py`, `number.py`).
 - **Fallentscheidung liest den Settings-Schnappschuss:** `decide` bekommt die Settings des Regelzyklus als Ganzes statt 16 einzeln durchgereichter Werte; die stillen Standardwerte der Zielladen-Schalter in `ZoneInputs` entfallen. Keine Verhaltensänderung (`zones.py`, `coordinator.py`).

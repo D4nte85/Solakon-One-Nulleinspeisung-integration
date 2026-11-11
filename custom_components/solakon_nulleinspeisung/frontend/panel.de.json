@@ -53,7 +53,7 @@
     },
     "debug": {
       "summary": "Debug — manuelle Eingriffe in den Regelzustand",
-      "text": "Integral zurücksetzen: Setzt den I-Anteil des PI-Reglers auf 0.\n\nZone manuell setzen: Schaltet den internen cycle_active-Flag und setzt das Integral zurück.\n• Zone 1 aktivieren: cycle_active = true → aggressiver Entladebetrieb, voller Entladestrom.\n• Zone 2 aktivieren: cycle_active = false → batterieschonender Betrieb, 0 A Entladestrom, dynamisches Ausgangsleistungs-Limit.\n\nRuhezustand in Modus 1 (Standard aus): Alle Übergänge, die sonst Modus '0' schreiben — Fall B, C, F, TM, ZB, Lade-Ende und Fall I ohne Zyklus, Stillstands-Recovery —, schreiben stattdessen Modus '1' mit 0 W. Regelung aus schreibt immer Modus '0'. In dieser Ruhe läuft kein PI, die Instanz zählt nicht zum Entlade-Pool, und die Fälle E, A, D, 0A, G und GT holen sie zurück wie aus Modus '0'. Nicht empfohlen: das Gerät verlässt die Fernsteuerung nur noch bei ausgeschalteter Regelung. Gedacht für Geräte, die in Modus '0' nicht laden.\n\nAlle Aktionen werden unter 'Letzte Aktion' im Status-Tab protokolliert."
+      "text": "Integral zurücksetzen: Setzt den I-Anteil des PI-Reglers auf 0.\n\nZone manuell setzen: Schaltet den internen cycle_active-Flag, setzt das Integral zurück und toggelt den Timer wie jeder Fallwechsel.\n• Zone 1 aktivieren: cycle_active = true → aggressiver Entladebetrieb, voller Entladestrom.\n• Zone 2 aktivieren: cycle_active = false → batterieschonender Betrieb, 0 A Entladestrom, dynamisches Ausgangsleistungs-Limit.\n\nRuhezustand in Modus 1 (Standard aus): Alle Übergänge, die sonst Modus '0' schreiben — Fall B, C, F, TM, ZB, Lade-Ende und Fall I ohne Zyklus, Stillstands-Recovery —, schreiben stattdessen Modus '1' mit 0 W. Regelung aus schreibt immer Modus '0'. In dieser Ruhe läuft kein PI, die Instanz zählt nicht zum Entlade-Pool, und die Fälle E, A, D, 0A, G und GT holen sie zurück wie aus Modus '0'. Nicht empfohlen: das Gerät verlässt die Fernsteuerung nur noch bei ausgeschalteter Regelung. Gedacht für Geräte, die in Modus '0' nicht laden.\n\nAlle Aktionen werden unter 'Letzte Aktion' im Status-Tab protokolliert."
     },
     "entities": {
       "summary": "Entitäten — alle optionalen Sensor-Zuweisungen dieser Instanz an einer Stelle",
@@ -464,7 +464,7 @@
     "pi_desc":    "Setzt den I-Anteil des PI-Reglers manuell auf 0 zurück. Nützlich nach einem manuellen Eingriff.",
     "reset_btn":  "🔄 Integral zurücksetzen",
     "zone_hdr":   "🔁 Zone manuell setzen",
-    "zone_desc":  "Schaltet den Entlade-Zyklus manuell um und setzt das Integral zurück.",
+    "zone_desc":  "Schaltet den Entlade-Zyklus manuell um, setzt das Integral zurück und toggelt den Timer.",
     "zone_current":"Aktuell: ",
     "zone1_btn":  "⚡ Zone 1 aktivieren",
     "zone2_btn":  "🔋 Zone 2 aktivieren",
