@@ -28,7 +28,7 @@ from .schema import (
     CycleSettings, InvalidSettings, check, couple_target, cycle_settings, notify_reset,
     sanitize, soc_conflict,
 )
-from .tariff import Tariff, forecast_suppressed
+from .tariff import Tariff, TariffState, forecast_suppressed
 from .timeout import Timeout
 from .trackers import Trackers
 from .zones import (
@@ -800,19 +800,8 @@ class SolakonCoordinator:
 
         # ── 9. Falls / Zonenwechsel ──────────────────────────────────────────
         fall_executed = await self._execute_falls(
-            soc=soc, grid=grid, actual=actual, mode=mode,
-            zone1_limit=cs.zone1_limit, zone3_limit=cs.zone3_limit,
-            surplus_enabled=cs.surplus_enabled, new_surplus=new_surplus,
-            ac_enabled=cs.ac_enabled, ac_soc_target=cs.ac_soc_target,
-            ac_hysteresis=cs.ac_hysteresis, ac_offset=ac_offset,
-            tariff=tariff, tariff_soc=cs.tariff_soc, tariff_soc_hyst=cs.tariff_soc_hyst,
-            tariff_power=cs.tariff_power,
-            is_night=is_night,
-            total_output=total_output,
-            zone1_forced=self.zone1_forced,
-            target_enabled=cs.target_enabled, target_soc=cs.target_soc,
-            battery_priority=cs.battery_priority, source_ac=cs.source_ac, source_tariff=cs.source_tariff,
-            grid_charge_enabled=cs.grid_charge_enabled, grid_charge_power=cs.grid_charge_power,
+            cs, soc=soc, grid=grid, actual=actual, mode=mode, new_surplus=new_surplus,
+            ac_offset=ac_offset, tariff=tariff, is_night=is_night, total_output=total_output,
         )
         if fall_executed:
             self.active_fall = fall_executed
@@ -838,17 +827,22 @@ class SolakonCoordinator:
         self._end_cycle(blocked=blocked, display=(soc, cs.zone3_limit, mode),
                         prev_flags=prev_flags)
 
-    async def _execute_falls(self, **v) -> str | None:
+    async def _execute_falls(
+        self, cs: CycleSettings, *, soc: float, grid: float, actual: float, mode: str,
+        new_surplus: bool, ac_offset: float, tariff: TariffState, is_night: bool, total_output: float,
+    ) -> str | None:
         """Fall per `zones.decide` bestimmen, Übergang und Aktionstext ausführen, Kennung zurückgeben.
 
         Ein Fall mit `regulation_off` fährt danach den Abschaltpfad und speichert die Regelung als aus.
         """
         d = decide(ZoneInputs(
-            **v,
+            cs=cs, soc=soc, grid=grid, actual=actual, total_output=total_output, mode=mode,
+            new_surplus=new_surplus, ac_offset=ac_offset, tariff=tariff, is_night=is_night,
+            zone1_forced=self.zone1_forced,
             surplus_active=self.surplus_active,
             session=self.charge_session,
             cycle_active=self.cycle_active,
-            at_rest=self._at_rest(v["mode"]),
+            at_rest=self._at_rest(mode),
         ))
         if d is None:
             return None

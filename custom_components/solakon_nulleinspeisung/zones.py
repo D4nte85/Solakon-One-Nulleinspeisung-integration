@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from .const import (
     MODE_AC_CHARGE, MODE_DISABLED, MODE_DISCHARGE, SESSION_AC, SESSION_GRID, SESSION_NONE, SESSION_TARIFF,
 )
+from .schema import CycleSettings
 from .tariff import TariffState
 
 # Entladestrom in A je Regelzustand; der Zyklus nutzt den eingestellten Maximalstrom.
@@ -57,43 +58,28 @@ def required_discharge(state: str, mode: str, discharge_max: int) -> float:
 
 @dataclass(frozen=True)
 class ZoneInputs:
-    """Messwerte, Einstellungen, Preislage und Zustandsflags eines Zyklus."""
+    """Messwerte, Settings-Schnappschuss, Preislage und Zustandsflags eines Regelzyklus."""
 
+    cs: CycleSettings
     soc: float
     grid: float
     actual: float
     total_output: float
     mode: str
-    zone1_limit: int
-    zone3_limit: int
-    surplus_enabled: bool
     new_surplus: bool
-    ac_enabled: bool
-    ac_soc_target: float
-    ac_hysteresis: float
     ac_offset: float
     tariff: TariffState
-    tariff_soc: float
-    tariff_soc_hyst: float
-    tariff_power: float
     is_night: bool
     zone1_forced: bool
     surplus_active: bool
     session: str
     cycle_active: bool
     at_rest: bool
-    target_enabled: bool = False
-    target_soc: float = 100
-    battery_priority: bool = False
-    source_ac: bool = True
-    source_tariff: bool = True
-    grid_charge_enabled: bool = False
-    grid_charge_power: float = 0
 
     @property
     def charging_to_target(self) -> bool:
         """Aufladen laut `charging_to_target`."""
-        return charging_to_target(self.target_enabled, self.soc, self.target_soc)
+        return charging_to_target(self.cs.target_enabled, self.soc, self.cs.target_soc)
 
 
 @dataclass(frozen=True)
@@ -262,14 +248,14 @@ def decide(inp: ZoneInputs) -> FallDecision | None:
     """
     soc = inp.soc
     mode = inp.mode
-    zone1 = inp.zone1_limit
-    zone3 = inp.zone3_limit
+    zone1 = inp.cs.zone1_limit
+    zone3 = inp.cs.zone3_limit
     charging = inp.charging_to_target
-    battery_lock = charging and inp.battery_priority
+    battery_lock = charging and inp.cs.battery_priority
     session = inp.session != SESSION_NONE
 
     # ── Fall ZE: Ziel erreicht ───────────────────────────────────────────────
-    if inp.target_enabled and soc >= inp.target_soc:
+    if inp.cs.target_enabled and soc >= inp.cs.target_soc:
         return FallDecision("ZE", {
             "reset_integral": True,
             "flags": FlagUpdate(cycle_active=False, surplus_active=False, session=SESSION_NONE),
@@ -278,7 +264,7 @@ def decide(inp: ZoneInputs) -> FallDecision | None:
 
     # ── Fall 0A: Surplus Entry ───────────────────────────────────────────────
     if (
-        inp.surplus_enabled
+        inp.cs.surplus_enabled
         and inp.new_surplus
         and not inp.surplus_active
         and not session
@@ -293,7 +279,7 @@ def decide(inp: ZoneInputs) -> FallDecision | None:
 
     # ── Fall 0B: Surplus Exit ────────────────────────────────────────────────
     # Austritt bei erfüllter Austritts-Bedingung, deaktivierter Überschuss-Option oder Aufladen.
-    if inp.surplus_active and (not inp.surplus_enabled or not inp.new_surplus or charging):
+    if inp.surplus_active and (not inp.cs.surplus_enabled or not inp.new_surplus or charging):
         # Zone nach Overlay-Ende aus dem SOC ableiten
         return FallDecision("0B", {
             "reset_integral": True,
@@ -351,9 +337,9 @@ def decide(inp: ZoneInputs) -> FallDecision | None:
     tariff_lock_active = inp.tariff.discharge_locked(session, inp.surplus_active)
     # Recovery folgt einer Lade-Session nur, solange deren Ladegrund noch gilt
     recovery_session = (
-        (inp.session == SESSION_AC and inp.ac_enabled)
+        (inp.session == SESSION_AC and inp.cs.ac_enabled)
         or (inp.session == SESSION_TARIFF and inp.tariff.below_cheap)
-        or (inp.session == SESSION_GRID and inp.grid_charge_enabled and charging)
+        or (inp.session == SESSION_GRID and inp.cs.grid_charge_enabled and charging)
     )
     if (
         (inp.cycle_active or recovery_session)
@@ -369,33 +355,33 @@ def decide(inp: ZoneInputs) -> FallDecision | None:
     # ── Fall GN: Netz-Laden Start ────────────────────────────────────────────
     if (
         charging
-        and inp.grid_charge_enabled
+        and inp.cs.grid_charge_enabled
         and not session
         and not inp.surplus_active
         and mode != MODE_AC_CHARGE
     ):
         return FallDecision("GN", {
-            "flags": FlagUpdate(session=SESSION_GRID), "output": inp.grid_charge_power,
+            "flags": FlagUpdate(session=SESSION_GRID), "output": inp.cs.grid_charge_power,
             "ac_charge_mode": True, "timer_first": True, "mode": MODE_AC_CHARGE,
         }, "act_fall_gn", {"soc": soc})
 
     # ── Fall HN: Netz-Laden Ende ─────────────────────────────────────────────
     # Ziel-SOC erreicht, Netz-Laden oder Zielladen ausgeschaltet.
-    if inp.session == SESSION_GRID and (not charging or not inp.grid_charge_enabled):
+    if inp.session == SESSION_GRID and (not charging or not inp.cs.grid_charge_enabled):
         return _end_charge("HN", "act_fall_hn", inp.cycle_active)
 
     # ── Fall GT: Tarif-Laden Start ───────────────────────────────────────────
     # Surplus hat Vorrang — kein Tarif-Laden während Zone 0 aktiv
     if (
         inp.tariff.below_cheap
-        and soc < inp.tariff_soc - inp.tariff_soc_hyst
+        and soc < inp.cs.tariff_soc - inp.cs.tariff_soc_hyst
         and not session
         and not inp.surplus_active
         and mode != MODE_AC_CHARGE
-        and (inp.source_tariff or not charging)
+        and (inp.cs.source_tariff or not charging)
     ):
         return FallDecision("GT", {
-            "flags": FlagUpdate(session=SESSION_TARIFF), "output": inp.tariff_power,
+            "flags": FlagUpdate(session=SESSION_TARIFF), "output": inp.cs.tariff_power,
             "ac_charge_mode": True, "timer_first": True, "mode": MODE_AC_CHARGE,
         }, "act_fall_gt", {"price": inp.tariff.price})
 
@@ -406,8 +392,8 @@ def decide(inp: ZoneInputs) -> FallDecision | None:
         inp.session == SESSION_TARIFF
         and (
             not inp.tariff.below_cheap
-            or soc >= inp.tariff_soc
-            or (charging and not inp.source_tariff)
+            or soc >= inp.cs.tariff_soc
+            or (charging and not inp.cs.source_tariff)
         )
     ):
         return _end_charge("HT", "act_fall_ht", inp.cycle_active)
@@ -440,13 +426,13 @@ def decide(inp: ZoneInputs) -> FallDecision | None:
     # total_output summiert max(Ist-Leistung, Sollwert) über alle entladenden Instanzen (Einzelbetrieb: eigener Wert)
     # Schwelle symmetrisch zu Fall H um den Offset, bei positivem Offset Bezug 0
     if (
-        inp.ac_enabled
+        inp.cs.ac_enabled
         and not session
         and not inp.surplus_active
-        and (inp.source_ac or not charging)
-        and soc < inp.ac_soc_target
+        and (inp.cs.source_ac or not charging)
+        and soc < inp.cs.ac_soc_target
         and mode != MODE_AC_CHARGE
-        and (inp.grid + inp.total_output) < min(inp.ac_offset, 0) - inp.ac_hysteresis
+        and (inp.grid + inp.total_output) < min(inp.ac_offset, 0) - inp.cs.ac_hysteresis
     ):
         return FallDecision("G", {
             "flags": FlagUpdate(session=SESSION_AC), "output": 0,
@@ -458,11 +444,11 @@ def decide(inp: ZoneInputs) -> FallDecision | None:
         mode == MODE_AC_CHARGE
         and inp.session == SESSION_AC
         and (
-            not inp.ac_enabled
-            or soc >= inp.ac_soc_target
-            or (charging and not inp.source_ac)
+            not inp.cs.ac_enabled
+            or soc >= inp.cs.ac_soc_target
+            or (charging and not inp.cs.source_ac)
             or (
-                inp.grid >= (inp.ac_offset + inp.ac_hysteresis)
+                inp.grid >= (inp.ac_offset + inp.cs.ac_hysteresis)
                 and inp.actual == 0
             )
         )

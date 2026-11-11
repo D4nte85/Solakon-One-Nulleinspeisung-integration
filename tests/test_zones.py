@@ -10,16 +10,22 @@ from tests import harness as h
 
 zones = importlib.import_module(h.PKG + ".zones")
 tariff = importlib.import_module(h.PKG + ".tariff")
+schema = importlib.import_module(h.PKG + ".schema")
 
 # Ruhe in Modus '0' bei SOC in Zone 2, Nacht, keine Session: kein Fall greift.
+# Die Schalter des Zielladens stehen hier ausdrücklich, damit kein Test an einem Default hängt.
 BASE = zones.ZoneInputs(
+    cs=schema.cycle_settings(h.const.SETTINGS_DEFAULTS)._replace(
+        zone1_limit=60, zone3_limit=20, surplus_enabled=False,
+        ac_enabled=False, ac_soc_target=90, ac_hysteresis=50,
+        tariff_soc=80, tariff_soc_hyst=3, tariff_power=800,
+        target_enabled=False, target_soc=100, battery_priority=False,
+        source_ac=True, source_tariff=True, grid_charge_enabled=False, grid_charge_power=0,
+    ),
     soc=40, grid=0, actual=0, total_output=0, mode="0",
-    zone1_limit=60, zone3_limit=20,
-    surplus_enabled=False, new_surplus=False,
-    ac_enabled=False, ac_soc_target=90, ac_hysteresis=50, ac_offset=-50,
+    new_surplus=False, ac_offset=-50,
     tariff=tariff.TariffState(price=0.30, cheap=0.20, exp=0.40, below_exp=False,
                               below_cheap=False, at_least_cheap=True),
-    tariff_soc=80, tariff_soc_hyst=3, tariff_power=800,
     is_night=True, zone1_forced=False,
     surplus_active=False, session="none",
     cycle_active=False, at_rest=True,
@@ -30,8 +36,11 @@ _TARIFF_KEYS = ("below_exp", "below_cheap", "at_least_cheap")
 
 
 def _decide(**kw):
+    """`decide` auf BASE mit überschriebenen Feldern: Preislage, Settings-Schnappschuss, Rest."""
     t = {k: kw.pop(k) for k in _TARIFF_KEYS if k in kw}
-    return zones.decide(dataclasses.replace(BASE, tariff=dataclasses.replace(BASE.tariff, **t), **kw))
+    cs = {k: kw.pop(k) for k in BASE.cs._fields if k in kw}
+    return zones.decide(dataclasses.replace(
+        BASE, tariff=dataclasses.replace(BASE.tariff, **t), cs=BASE.cs._replace(**cs), **kw))
 
 
 def test_base_trifft_keinen_fall():
