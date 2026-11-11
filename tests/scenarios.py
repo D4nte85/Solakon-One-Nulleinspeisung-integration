@@ -19,7 +19,8 @@ C = h.const
 # Literal statt Konstante, damit die Referenz auch vom Stand ohne das Setting erzeugbar ist.
 REST_KEY = "rest_in_discharge"
 
-COUNTS = {"cycle": 1500, "multi": 400, "stall": 120, "tariff": 160, "settings": 200, "wiring": 1, "derive": 1, "domain": 60, "rest": 300}
+COUNTS = {"cycle": 1500, "multi": 400, "stall": 120, "tariff": 160, "settings": 200, "wiring": 1, "derive": 1, "domain": 60, "rest": 300,
+          "gridcharge": 160}
 
 
 # ── Bausteine ────────────────────────────────────────────────────────────────
@@ -327,6 +328,33 @@ def gen_tariff(rng) -> dict:
     return spec
 
 
+def gen_grid_charge(rng) -> dict:
+    """Netz-Laden gezielt: Aufladen des Zielladens mit SOC um den Ziel-SOC, mit und ohne laufende Lade-Session.
+
+    Die Art der Lade-Session steht direkt im Speicherstand (auch `grid_charge`), nicht als Lade-Flag.
+    """
+    spec = gen_cycle(rng, 1)
+    inst = spec["instances"][0]
+    target = _pick(rng, [60, 80, 100])
+    inst["settings"].update({
+        C.S_REGULATION_ENABLED: True, C.S_TARGET_CHARGE_ENABLED: _chance(rng, 0.9), C.S_TARGET_SOC: target,
+        C.S_TARGET_GRID_CHARGE: _chance(rng, 0.8), C.S_TARGET_GRID_POWER: _pick(rng, [400, 800, 1200]),
+        C.S_TARGET_BATTERY_PRIORITY: _chance(rng, 0.3), C.S_TARGET_SOURCE_AC: _chance(rng, 0.5),
+        C.S_TARGET_SOURCE_TARIFF: _chance(rng, 0.5),
+    })
+    session = _pick(rng, ["grid_charge", "grid_charge", "none", "none", "ac_charge"])
+    inst["flags"].update({"ac_charge_active": False, "tariff_charge_active": False, "charge_session": session})
+    inst["stored"] = True
+    inst["drop_flags"] = []
+    spec["has_dist_config"] = False
+    soc = [target - 15, target - 1, target, min(100, target + 2)]
+    inst["states"]["sensor.a_soc"] = {"state": _pick(rng, soc), "attrs": {"unit_of_measurement": "%"}}
+    inst["states"]["select.a_mode"] = {"state": _pick(rng, ["3", "3", "0", "1"] if session != "none" else ["0", "1", "3"])}
+    for step in spec["steps"][1:]:
+        step["set"]["sensor.a_soc"] = {"state": _pick(rng, soc), "attrs": {"unit_of_measurement": "%"}}
+    return spec
+
+
 def gen_domain(rng) -> dict:
     """Tarifschwellen und PV-Vorhersage auf Entitäten mit und ohne Zahlen-Domain."""
     spec = gen_tariff(rng)
@@ -415,6 +443,8 @@ def generate(kind: str) -> list[dict]:
             spec = gen_domain(rng)
         elif kind == "rest":
             spec = gen_rest(rng)
+        elif kind == "gridcharge":
+            spec = gen_grid_charge(rng)
         else:
             spec = {}
         spec["id"] = f"{kind}-{idx:04d}"
@@ -725,7 +755,7 @@ def _schema_repr(form) -> list:
 
 
 def run(kind: str, spec: dict) -> dict:
-    if kind in ("cycle", "multi", "stall", "tariff", "domain", "rest"):
+    if kind in ("cycle", "multi", "stall", "tariff", "domain", "rest", "gridcharge"):
         coro = _run_cycle_spec(spec)
     elif kind == "settings":
         coro = _run_settings_spec(spec)
