@@ -313,9 +313,9 @@ SETTINGS_SCHEMA: dict[str, Field] = {
 
     S_ZONE1_LIMIT:   _int(50, PERCENT, 0, 100, 1),
     S_ZONE3_LIMIT:   _int(20, PERCENT, 0, 100, 1),
-    S_DISCHARGE_MAX: _int(40, CURRENT, 1, 100, 1),
-    S_HARD_LIMIT_Z0: _int(800, POWER, 100, 1200, 50),
-    S_HARD_LIMIT_Z1: _int(800, POWER, 100, 1200, 50),
+    S_DISCHARGE_MAX: _int(40, CURRENT, 1, DEVICE_MAX_CURRENT, 1),
+    S_HARD_LIMIT_Z0: _int(800, POWER, 100, DEVICE_MAX_POWER, 50),
+    S_HARD_LIMIT_Z1: _int(800, POWER, 100, DEVICE_MAX_POWER, 50),
     S_OFFSET_1:      _int(30, SIGNED, -200, 300, 1),
     S_OFFSET_2:      _int(10, SIGNED, -200, 300, 1),
     S_Z1_NIGHT_ENABLED: _bool(),
@@ -334,7 +334,7 @@ SETTINGS_SCHEMA: dict[str, Field] = {
 
     S_AC_ENABLED:     _bool(),
     S_AC_SOC_TARGET:  _int(90, PERCENT, 0, 100, 1),
-    S_AC_POWER_LIMIT: _int(800, POWER, 100, 1200, 50),
+    S_AC_POWER_LIMIT: _int(800, POWER, 100, DEVICE_MAX_POWER, 50),
     S_AC_HYSTERESIS:  _int(50, AMOUNT, 10, 500, 10),
     S_AC_MIN_POWER:   _int(50, POWER, 0, 300, 10),
     S_AC_OFFSET:      _int(-50, SIGNED, -500, 200, 5),
@@ -345,7 +345,7 @@ SETTINGS_SCHEMA: dict[str, Field] = {
     S_TARIFF_EXP_THRESHOLD:   _float(25.0, SIGNED, 0, 100, 0.5),
     S_TARIFF_SOC_TARGET:      _int(90, PERCENT, 0, 100, 1),
     S_TARIFF_SOC_HYST:        _int(3, PERCENT, 0, 20, 1),
-    S_TARIFF_POWER:           _int(800, POWER, 100, 1200, 50),
+    S_TARIFF_POWER:           _int(800, POWER, 100, DEVICE_MAX_POWER, 50),
     S_TARIFF_CHEAP_ENTITY:    _str(),
     S_TARIFF_EXP_ENTITY:      _str(),
 
@@ -371,7 +371,7 @@ SETTINGS_SCHEMA: dict[str, Field] = {
     S_TARGET_SOURCE_AC:        _bool(True),
     S_TARGET_SOURCE_TARIFF:    _bool(True),
     S_TARGET_GRID_CHARGE:      _bool(),
-    S_TARGET_GRID_POWER:       _int(800, POWER, 100, 1200, 50),
+    S_TARGET_GRID_POWER:       _int(800, POWER, 100, DEVICE_MAX_POWER, 50),
 
     S_SELF_ADJUST:     _bool(),
     S_SELF_ADJUST_TOL: _int(2, AMOUNT, 1, 50, 1),

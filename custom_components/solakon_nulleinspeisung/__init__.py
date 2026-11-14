@@ -23,6 +23,7 @@ from .const import (
 )
 from . import group_store, number
 from .migrations import SolakonSettingsStore, async_migrate_entry as async_migrate_entry
+from .readings import NUMERIC_DOMAINS
 from .schema import InvalidSettings
 from .status_view import snapshot_view
 
@@ -231,10 +232,11 @@ async def _ws_save_distribution_config(
 async def _ws_get_schema(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
 ) -> None:
-    """WS: Typ, Bereich und Schrittweite aller Settings und der Verteilung."""
+    """WS: Typ, Bereich und Schrittweite aller Settings und der Verteilung, Domains der Entitätsfelder."""
     connection.send_result(msg["id"], {
-        "settings":     {key: field._asdict() for key, field in SETTINGS_SCHEMA.items()},
-        "distribution": {key: field._asdict() for key, field in DIST_SCHEMA.items()},
+        "settings":        {key: field._asdict() for key, field in SETTINGS_SCHEMA.items()},
+        "distribution":    {key: field._asdict() for key, field in DIST_SCHEMA.items()},
+        "numeric_domains": list(NUMERIC_DOMAINS),
     })
 
 

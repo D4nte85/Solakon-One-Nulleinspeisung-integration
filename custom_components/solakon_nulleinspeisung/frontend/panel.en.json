@@ -488,6 +488,8 @@
   },
   "errors": {
     "range":    "{label}: only {min} to {max} allowed",
+    "range_min": "{label}: at least {min}",
+    "range_max": "{label}: at most {max}",
     "type":     "{label}: invalid value",
     "integer":  "{label}: whole numbers only",
     "unknown":  "{label}: unknown setting"
@@ -498,6 +500,7 @@
     "group_prefix":       "Area",
     "groups_note":        "Instances are grouped automatically by their configured grid power sensor — each grid group (e.g. multiple smart meters for separate circuits) gets its own, independent power distribution. With only one group this grouping is invisible, there's just a single shared pool. The displayed name is the Home Assistant area of the grid sensor, otherwise its display name.",
     "loading":            "Loading…",
+    "load_error":         "Could not load the distribution — reopen the page.",
     "global_hdr":         "🌐 Global Settings",
     "global_max_lbl":     "Total Max. Output Power (W)",
     "global_max_desc":    "Absolute ceiling for all instances combined — split according to weights. If an instance is capped by its own hard limit (Zones tab), the unused remainder is automatically passed on to instances with headroom (water-filling) — otherwise the pool would never reach this value with unevenly sized instances. Default: 800 W (legal feed-in maximum). Can also be set via the entity “Total max. output power” on the device “Solakon grid group N”; N is shown at the top of this page.",

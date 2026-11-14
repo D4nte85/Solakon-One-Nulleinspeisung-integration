@@ -52,3 +52,9 @@ def test_unbekannte_option_ohne_wirkung():
     hass, data = _hass()
     assert _set(hass, data[C.CONF_MODE_SELECT], "2").state == "1"
     assert _set(hass, data[C.CONF_MODE_SELECT], "3").state == "3"
+
+
+def test_geraetegrenzen_der_integration_wie_geraeteseite():
+    """DEVICE_MAX_CURRENT und DEVICE_MAX_POWER folgen den Grenzen der Geräte-Entitäten."""
+    assert C.DEVICE_MAX_CURRENT == geraet.ENTITIES[C.CONF_DISCHARGE_CURRENT].max
+    assert C.DEVICE_MAX_POWER == geraet.ENTITIES[C.CONF_EXPORT_LIMIT].max

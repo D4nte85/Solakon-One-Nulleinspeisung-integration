@@ -8,6 +8,10 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 ### Behoben
 
 - **Zuteilung nach dem Abschalten einer Instanz:** Schaltet eine Instanz der Netzgruppe die Regelung ab, ruht sie oder lädt sie, zählte ihr letztes zugeteiltes Limit weiter gegen die Gesamte Max. Ausgangsleistung. Die übrigen Instanzen blieben dadurch unter ihrem Anteil, bei drei Instanzen dauerhaft (etwa 267 statt 400 W je Instanz bei 800 W). Jetzt zählen nur die Limits der Instanzen im Entlade-Pool (`grid_group.py`).
+- **Anzeigebereich des Max. Entladestroms:** Das Panel bot 1–100 A an, gespeichert werden aber nur Werte bis 40 A; jetzt endet das Feld bei 40 A. Die Obergrenzen aller Leistungs- und Strom-Settings im Panel folgen den Gerätegrenzen (`const.py`).
+- **Auswahl der Sensoren im Panel:** Die Vorschlagsliste der Entitätsfelder zeigt jetzt genau die Domains, die die Integration als Zahl liest (`sensor`, `input_number`, `number`). Bisher blendete sie für den Tarifpreis `input_number` und `number` aus und bot für Prognose und Austrittssperre auch Schalter und Binärsensoren an (`solakon-panel.js`, `__init__.py`).
+- **Verteilungsseite bei Ladefehler:** Scheiterte das Laden der Verteilung, versuchte die Seite es ohne Pause erneut, solange sie offen war. Jetzt erscheint eine Meldung, der nächste Seitenaufruf lädt neu (`solakon-panel.js`).
+- **Fehlertext bei einseitiger Grenze:** Statt „nur 0 bis null erlaubt“ meldet das Panel bei Feldern ohne Obergrenze „mindestens …“ bzw. ohne Untergrenze „höchstens …“ (`solakon-panel.js`).
 
 ## [3.8.1] – 2026-11-11
 

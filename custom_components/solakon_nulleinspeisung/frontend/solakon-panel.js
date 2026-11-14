@@ -151,9 +151,9 @@ const TAB_LAYOUT = {
           { k: "pv_forecast_sensor",  t: "entity" },
           { k: "zone1_force_sensor",  t: "entity" },
           { k: "surplus_lock_sensor", t: "entity" },
-          { k: "tariff_price_sensor", t: "entity", domain: "sensor" },
-          { k: "tariff_cheap_entity", t: "entity", domain: "input_number" },
-          { k: "tariff_exp_entity",   t: "entity", domain: "input_number" },
+          { k: "tariff_price_sensor", t: "entity" },
+          { k: "tariff_cheap_entity", t: "entity" },
+          { k: "tariff_exp_entity",   t: "entity" },
         ],
       },
     ],
@@ -299,8 +299,8 @@ class ConfigBuffer {
   // True, solange ungespeicherte Änderungen anliegen.
   get isDirty() { return Object.keys(this.dirty).length > 0; }
 
-  // Gespeicherten Stand setzen und Puffer leeren.
-  reset(saved = {}) { this.saved = saved; this.dirty = {}; }
+  // Gespeicherten Stand setzen und Puffer leeren; `loaded` erst nach einem erfolgreichen Laden.
+  reset(saved = {}, loaded = false) { this.saved = saved; this.dirty = {}; this.loaded = loaded; this.loadError = false; }
 
   // Gespeicherter Stand mit den Änderungen darüber.
   merged() { return { ...this.saved, ...this.dirty }; }
@@ -1216,8 +1216,8 @@ ${this._textsMissing ? `
       const dot = div.querySelector(".entity-dot");
       const dl  = div.querySelector("datalist");
       if (this._hass?.states) {
-        const domain = f.domain || "";
-        Object.keys(this._hass.states).filter(e => !domain || e.startsWith(domain + ".")).sort().forEach(e => {
+        const domains = this._schema.numeric_domains || [];
+        Object.keys(this._hass.states).filter(e => domains.includes(e.split(".")[0])).sort().forEach(e => {
           const opt = document.createElement("option");
           opt.value = e;
           const name = this._hass.states[e]?.attributes?.friendly_name || "";
@@ -1522,7 +1522,9 @@ ${this._textsMissing ? `
     const dt = this._t.dist || {};
     return JSON.parse(e.message).map(({ key, reason, min, max }) => {
       const label = this._t.fields?.[key]?.l || dt[DIST_LABELS[key]] || key;
-      return (errors[reason] || reason).replace("{label}", label).replace("{min}", min).replace("{max}", max);
+      // Offene Grenze: nur die gesetzte Seite nennen.
+      const kind = reason === "range" && max == null ? "range_min" : reason === "range" && min == null ? "range_max" : reason;
+      return (errors[kind] || reason).replace("{label}", label).replace("{min}", min).replace("{max}", max);
     }).join(" • ");
   }
 
@@ -1620,12 +1622,14 @@ ${this._textsMissing ? `
   }
 
   async _loadDistConfig(gk = this._distGroupKey()) {
-    let saved = {};
+    const buf = this._distBuf(gk);
     try {
       const res = await this._hass.callWS({ type: `${DOMAIN}/get_distribution_config`, grid_sensor: gk });
-      saved = res.distribution || {};
-    } catch (_) { /* leer laden */ }
-    this._distBuf(gk).reset(saved);
+      buf.reset(res.distribution || {}, true);
+    } catch (_) {
+      // Kein erneuter Versuch beim Rendern; der nächste Seitenaufruf lädt neu.
+      buf.loadError = true;
+    }
   }
 
   async _saveDistConfig() {
@@ -1636,7 +1640,7 @@ ${this._textsMissing ? `
     const toast   = this._t.toast || {};
     await this._wsAction(async () => {
       await this._hass.callWS({ type: `${DOMAIN}/save_distribution_config`, grid_sensor: gk, distribution: changes });
-      buf.reset(merged);
+      buf.reset(merged, true);
       this._showToast(toast.dist_saved || "");
       this._rerenderDist();
     });
@@ -1679,8 +1683,12 @@ ${this._textsMissing ? `
 
     const gk = this._distGroupKey();
     const buf = this._distBuf(gk);
-    const distLoaded = Object.keys(buf.saved).length > 0 || buf.isDirty;
-    if (!distLoaded) {
+    if (buf.loadError) {
+      buf.loadError = false;
+      c.innerHTML = `<p style="font-size:.88em;color:var(--error-color,#db4437);padding:12px 0">${dt.load_error || ""}</p>`;
+      return;
+    }
+    if (!buf.loaded && !buf.isDirty) {
       this._loadDistConfig().then(() => this._rerenderDist());
       c.innerHTML = `<p style="font-size:.88em;color:var(--secondary-text-color,#888);padding:12px 0">${dt.loading || ""}</p>`;
       return;
@@ -1693,12 +1701,12 @@ ${this._textsMissing ? `
     // Instanzübergreifende Entity-Picker: jede Instanz
     // kann lokal überschreiben (Zonen-/Tarif-Tab), sonst greift dieser Wert.
     const GLOBAL_SENSOR_FIELDS = [
-      { key: "global_pv_forecast_today_sensor",    lk: "global_pv_today",    domain: "" },
-      { key: "global_pv_forecast_tomorrow_sensor", lk: "global_pv_tomorrow", domain: "" },
-      { key: "global_surplus_lock_sensor",         lk: "global_surplus_lock",domain: "" },
-      { key: "global_tariff_price_sensor",         lk: "global_tariff_price",domain: "sensor" },
-      { key: "global_tariff_cheap_entity",         lk: "global_tariff_cheap",domain: "input_number" },
-      { key: "global_tariff_exp_entity",           lk: "global_tariff_exp",  domain: "input_number" },
+      { key: "global_pv_forecast_today_sensor",    lk: "global_pv_today" },
+      { key: "global_pv_forecast_tomorrow_sensor", lk: "global_pv_tomorrow" },
+      { key: "global_surplus_lock_sensor",         lk: "global_surplus_lock" },
+      { key: "global_tariff_price_sensor",         lk: "global_tariff_price" },
+      { key: "global_tariff_cheap_entity",         lk: "global_tariff_cheap" },
+      { key: "global_tariff_exp_entity",           lk: "global_tariff_exp" },
     ];
     const globalSensorCards = GLOBAL_SENSOR_FIELDS.map(f => this._fieldHtml(
       dt[`${f.lk}_lbl`] || f.key, dt[`${f.lk}_desc`] || "",

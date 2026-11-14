@@ -199,6 +199,21 @@ def test_get_schema_liefert_jeden_schluessel():
     assert set(result["distribution"]) == set(C.DIST_DEFAULTS)
     assert result["settings"][C.S_HARD_LIMIT_Z0]["max"] == 1200
     assert list(result["settings"][C.S_HARD_LIMIT_Z0]["ui"]) == [100, 1200, 50]
+    readings = importlib.import_module(h.PKG + ".readings")
+    assert list(result["numeric_domains"]) == list(readings.NUMERIC_DOMAINS)
+
+
+@pytest.mark.parametrize("schema_name", ["SETTINGS_SCHEMA", "DIST_SCHEMA"])
+def test_anzeigebereich_innerhalb_der_harten_grenzen(schema_name):
+    """Das Panel bietet keinen Wert an, den das Speichern abweist."""
+    raus = []
+    for key, f in getattr(C, schema_name).items():
+        if not f.ui:
+            continue
+        lo, hi, _ = f.ui
+        if (f.min is not None and lo < f.min) or (f.max is not None and hi > f.max):
+            raus.append((key, f.ui, (f.min, f.max)))
+    assert raus == []
 
 
 _SOC = dict(zone1_limit=50, zone3_limit=20, surplus_enabled=False, surplus_threshold=90,
