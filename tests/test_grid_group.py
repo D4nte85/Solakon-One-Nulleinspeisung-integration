@@ -337,6 +337,14 @@ def test_zuteilung_steigt_nur_bis_zur_freien_leistung():
     assert g.distribution(a, 50)[1] == 400
 
 
+def test_zuteilung_ohne_limit_von_mitgliedern_ausserhalb_des_pools():
+    """Das letzte Limit einer abgeschalteten Instanz kappt die übrigen nicht."""
+    a, b = M("a"), M("b", allocated_power=400)
+    c = M("c", regulating=False, allocated_power=266)
+    _, g = _group(a, b, c, dist={"distribution_mode": "equal", "global_max_power": 800})
+    assert g.distribution(a, 50)[1] == 400
+
+
 def test_ac_anteil():
     a, b = M("a", charge_session="ac_charge"), M("b", charge_session="ac_charge")
     _, g = _group(a, b, dist={"distribution_mode": "equal"})

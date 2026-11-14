@@ -5,6 +5,10 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+### Behoben
+
+- **Zuteilung nach dem Abschalten einer Instanz:** Schaltet eine Instanz der Netzgruppe die Regelung ab, ruht sie oder lädt sie, zählte ihr letztes zugeteiltes Limit weiter gegen die Gesamte Max. Ausgangsleistung. Die übrigen Instanzen blieben dadurch unter ihrem Anteil, bei drei Instanzen dauerhaft (etwa 267 statt 400 W je Instanz bei 800 W). Jetzt zählen nur die Limits der Instanzen im Entlade-Pool (`grid_group.py`).
+
 ## [3.8.1] – 2026-11-11
 
 ### Behoben

@@ -340,8 +340,9 @@ class NetGroup:
         """Fehler-Anteil, zugeteilte Leistung und Anteile von `me` im Entlade-Pool (Modus '1').
 
         Einzelbetrieb oder `me` nicht im Pool: (1.0 bzw. 0.0, None, None). Angehoben wird
-        höchstens bis zu dem, was die veröffentlichten Limits der übrigen Mitglieder von
-        `global_max_power` freilassen; Senken wirkt sofort.
+        höchstens bis zu dem, was die veröffentlichten Limits der übrigen Mitglieder im
+        Entlade-Pool von `global_max_power` freilassen; Senken wirkt sofort. Mitglieder
+        außerhalb des Pools zählen nicht, auch wenn ihr letztes Limit noch steht.
         """
         active = self.discharge_pool()
         if me.member_id not in active or len(active) <= 1:
@@ -350,7 +351,7 @@ class NetGroup:
         shares = self.all_shares(active, me, own_soc)
         global_max = float(self.dist_cfg()["global_max_power"])
         allocations = waterfill(active, shares.values, global_max)
-        others = sum(m.allocated_power or 0 for m in self.members().values() if m is not me)
+        others = sum(m.allocated_power or 0 for m in active.values() if m is not me)
         own = allocations.get(me.member_id)
         if own is not None:
             own = min(own, max(0, math.floor(global_max - others)))

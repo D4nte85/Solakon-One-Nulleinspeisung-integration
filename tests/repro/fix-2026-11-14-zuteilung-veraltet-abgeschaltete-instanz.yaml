@@ -1,0 +1,35 @@
+titel: Die letzte Zuteilung einer abgeschalteten Instanz kappt die übrigen Mitglieder der Netzgruppe
+bezug: fix-2026-11-14-zuteilung-veraltet-abgeschaltete-instanz
+offen: false
+netz: 300
+verteilung: {distribution_mode: equal, global_max_power: 800}
+instanzen:
+  - prefix: a
+    settings: {regulation_enabled: true}
+    sensoren: {soc: 60, modus: "1"}
+  - prefix: b
+    settings: {regulation_enabled: true}
+    sensoren: {soc: 60, modus: "1"}
+  - prefix: c
+    settings: {regulation_enabled: true}
+    sensoren: {soc: 60, modus: "1"}
+schritte:
+  # Drei Instanzen teilen sich 800 W.
+  - nach: 0
+    wer: all
+  # a schaltet die Regelung ab; b und c teilen sich danach 800 W.
+  - nach: 5
+    settings: {regulation_enabled: false}
+    wer: all
+  - nach: 5
+    wer: all
+  - nach: 5
+    wer: all
+erwartet:
+  - schritt: 1
+    instanz: a
+    zustand_nicht: {allocated_power: null}
+  - instanz: b
+    zustand: {allocated_power: 400}
+  - instanz: c
+    zustand: {allocated_power: 400}
