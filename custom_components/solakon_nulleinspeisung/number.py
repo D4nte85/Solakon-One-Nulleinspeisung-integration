@@ -13,10 +13,10 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from . import group_store, runtime
 from .const import (
     DIST_GLOBAL_MAX, DIST_SCHEMA, DOMAIN, S_HARD_LIMIT_Z0, S_HARD_LIMIT_Z1, S_TARGET_GRID_POWER, S_TARGET_SOC,
-    SETTINGS_SCHEMA, VERSION,
+    SETTINGS_SCHEMA,
 )
 from .coordinator import SolakonCoordinator
-from .entity_base import SolakonEntity
+from .entity_base import SolakonEntity, device_info
 
 
 
@@ -42,6 +42,16 @@ class SettingNumber(SolakonEntity, NumberEntity):
         await self._coordinator.async_update_settings({self._key: int(value)})
 
 
+def _group_device(number: int) -> str:
+    """Kennung des Geräts der Netzgruppe `number`."""
+    return f"group_{number}"
+
+
+def _group_limit_uid(number: int) -> str:
+    """unique_id der Gesamtlimit-Entität der Netzgruppe `number`."""
+    return f"{_group_device(number)}_{DIST_GLOBAL_MAX}"
+
+
 class GroupLimitNumber(NumberEntity):
     """Gesamtlimit einer Netzgruppe an ihrem eigenen Gerät (Gruppennummer im Namen); `carrier` ist der Config-Entry, der sie führt."""
 
@@ -60,15 +70,11 @@ class GroupLimitNumber(NumberEntity):
         self._unsub: Callable[[], None] | None = None
         lo, hi, step = DIST_SCHEMA[DIST_GLOBAL_MAX].ui
         self._attr_native_min_value, self._attr_native_max_value, self._attr_native_step = lo, hi, step
-        self._attr_unique_id = f"group_{number}_{DIST_GLOBAL_MAX}"
-        self._attr_device_info = {
-            "identifiers": {(DOMAIN, f"group_{number}")},
-            "translation_key": "net_group",
-            "translation_placeholders": {"number": str(number)},
-            "manufacturer": "D4nte",
-            "model": "Netzgruppe",
-            "sw_version": VERSION,
-        }
+        self._attr_unique_id = _group_limit_uid(number)
+        self._attr_device_info = device_info(
+            _group_device(number), "Netzgruppe",
+            translation_key="net_group", translation_placeholders={"number": str(number)},
+        )
 
     @property
     def native_value(self) -> int:
@@ -95,10 +101,10 @@ def _drop_group_limit(hass: Any, grid_sensor: str) -> None:
     if (number := group_store.require_store(hass).numbers.get(grid_sensor)) is None:
         return
     entities = er.async_get(hass)
-    if entity_id := entities.async_get_entity_id("number", DOMAIN, f"group_{number}_{DIST_GLOBAL_MAX}"):
+    if entity_id := entities.async_get_entity_id("number", DOMAIN, _group_limit_uid(number)):
         entities.async_remove(entity_id)
     devices = dr.async_get(hass)
-    if device := devices.async_get_device(identifiers={(DOMAIN, f"group_{number}")}):
+    if device := devices.async_get_device(identifiers={(DOMAIN, _group_device(number))}):
         devices.async_remove_device(device.id)
 
 

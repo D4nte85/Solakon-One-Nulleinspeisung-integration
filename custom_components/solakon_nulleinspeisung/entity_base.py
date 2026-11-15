@@ -9,6 +9,17 @@ from .const import DOMAIN, CONF_INSTANCE_NAME, FALLBACK_INSTANCE_NAME, VERSION
 from .coordinator import SolakonCoordinator
 
 
+def device_info(identifier: str, model: str, **fields: Any) -> dict[str, Any]:
+    """Geräteinfo eines Geräts der Integration: Kennung, Hersteller, Modell, Softwarestand und `fields`."""
+    return {
+        "identifiers": {(DOMAIN, identifier)},
+        "manufacturer": "D4nte",
+        "model": model,
+        "sw_version": VERSION,
+        **fields,
+    }
+
+
 class SolakonEntity(Entity):
     _attr_has_entity_name = True
     _attr_should_poll = False
@@ -19,13 +30,10 @@ class SolakonEntity(Entity):
         for name, value in attrs.items():
             setattr(self, f"_attr_{name}", value)
         self._attr_unique_id = f"{coordinator.entry.entry_id}_{suffix}"
-        self._attr_device_info = {
-            "identifiers": {(DOMAIN, coordinator.entry.entry_id)},
-            "name": coordinator.entry.data.get(CONF_INSTANCE_NAME, FALLBACK_INSTANCE_NAME),
-            "manufacturer": "D4nte",
-            "model": "Nulleinspeisung",
-            "sw_version": VERSION,
-        }
+        self._attr_device_info = device_info(
+            coordinator.entry.entry_id, "Nulleinspeisung",
+            name=coordinator.entry.data.get(CONF_INSTANCE_NAME, FALLBACK_INSTANCE_NAME),
+        )
 
     async def async_added_to_hass(self) -> None:
         """Beim Coordinator als Listener anmelden."""
