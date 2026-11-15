@@ -273,14 +273,14 @@ class SolakonCoordinator:
         """Gesetzte Ausgangsleistung."""
         return self._flt(self.entry.data.get(CONF_ACTIVE_POWER, ""))
 
-    def live_values(self) -> dict[str, float]:
-        """Netz, Ist-Leistung und PV in W, SOC in %; ohne Zahl 0."""
+    def live_values(self) -> dict[str, float | None]:
+        """Netz, Ist-Leistung und PV in W, SOC in %; ohne Zahl `None`."""
         cfg = self.entry.data
         return {
-            "grid": self._flt_power(cfg.get(CONF_GRID_SENSOR, "")),
-            "actual_power": self._flt_power(cfg.get(CONF_ACTUAL_SENSOR, "")),
-            "solar": self._flt_power(cfg.get(CONF_SOLAR_SENSOR, "")),
-            "soc": self._flt(cfg.get(CONF_SOC_SENSOR, "")),
+            "grid": self._flt_power(cfg.get(CONF_GRID_SENSOR, ""), None),
+            "actual_power": self._flt_power(cfg.get(CONF_ACTUAL_SENSOR, ""), None),
+            "solar": self._flt_power(cfg.get(CONF_SOLAR_SENSOR, ""), None),
+            "soc": self._flt(cfg.get(CONF_SOC_SENSOR, ""), None),
         }
 
     # ── Ableiten: Regelzustand ───────────────────────────────────────────────

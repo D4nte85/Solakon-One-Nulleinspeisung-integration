@@ -1367,7 +1367,7 @@ ${this._textsMissing ? `
       "st-target":       st.operating_state === "target_charging"
                            ? `${phase} (${st.soc ?? "—"} % / ${this._cfg.saved.target_soc ?? "—"} %)` : phase,
       "st-active-fall":  this._es("active_fall", st.active_fall?.toLowerCase()),
-      "st-grid":         `${(st.grid ?? 0).toFixed(0)} W`,
+      "st-grid":         st.grid != null ? `${st.grid.toFixed(0)} W` : "—",
       "st-actual":       `${st.actual_power ?? "—"} W`,
       "st-solar":        `${st.solar ?? "—"} W`,
       "st-soc":          `${st.soc ?? "—"} %`,
