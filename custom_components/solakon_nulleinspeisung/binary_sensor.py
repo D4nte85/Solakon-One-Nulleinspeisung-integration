@@ -42,5 +42,5 @@ async def async_setup_entry(
         DiagBoolSensor(coord, "forecast_tariff_suppressed", "mdi:weather-sunny", "tariff.suppressed"),
         DiagBoolSensor(coord, "forecast_surplus_forced",    "mdi:weather-sunny-alert", "forecast.surplus_forced"),
         DiagBoolSensor(coord, "forecast_exit_lock",         "mdi:weather-cloudy-clock", "forecast.exit_lock"),
-        DiagBoolSensor(coord, "zone1_forced",               "mdi:weather-night-partly-cloudy", "forecast.zone1_forced"),
+        DiagBoolSensor(coord, "forecast_zone1_forced",      "mdi:weather-night-partly-cloudy", "forecast.zone1_forced"),
     ])

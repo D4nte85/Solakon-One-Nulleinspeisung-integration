@@ -25,6 +25,10 @@ OLD_SESSION_FLAGS = {
     SESSION_GRID: "grid_charge_active",
 }
 
+# Unique-ID-Suffix des Binärsensors der Nacht-Forcierung bis Config-Entry 1.2 und seither.
+OLD_ZONE1_FORCED_KEY = "zone1_forced"
+ZONE1_FORCED_KEY = "forecast_zone1_forced"
+
 
 def _grid_groups(hass: HomeAssistant) -> set[str]:
     """Netzsensoren aller Einträge, einer je Netzgruppe."""
@@ -138,11 +142,21 @@ class SolakonSocSwitchStore(Store):
 
 
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Config-Entry 1.1 → 1.2: Binärsensoren der Lade-Flags aus der Entitätsregistrierung entfernen."""
+    """Config-Entry-Schritte in der Entitätsregistrierung.
+
+    1.1 → 1.2: Binärsensoren der Lade-Flags entfernen. 1.2 → 1.3: unique_id der
+    Nacht-Forcierung auf `forecast_zone1_forced`; die Entity-ID bleibt.
+    """
     if entry.version == 1 and entry.minor_version < 2:
         registry = er.async_get(hass)
         for key in OLD_SESSION_FLAGS.values():
             if entity_id := registry.async_get_entity_id("binary_sensor", DOMAIN, f"{entry.entry_id}_{key}"):
                 registry.async_remove(entity_id)
         hass.config_entries.async_update_entry(entry, minor_version=2)
+    if entry.version == 1 and entry.minor_version < 3:
+        registry = er.async_get(hass)
+        old, new = (f"{entry.entry_id}_{key}" for key in (OLD_ZONE1_FORCED_KEY, ZONE1_FORCED_KEY))
+        if entity_id := registry.async_get_entity_id("binary_sensor", DOMAIN, old):
+            registry.async_update_entity(entity_id, new_unique_id=new)
+        hass.config_entries.async_update_entry(entry, minor_version=3)
     return True

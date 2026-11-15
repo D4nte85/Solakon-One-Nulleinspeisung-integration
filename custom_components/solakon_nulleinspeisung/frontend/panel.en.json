@@ -440,6 +440,7 @@
     "flag_pv_tariff":    "PV→Tariff",
     "flag_pv_surplus":   "PV→Surplus",
     "flag_exit_lock":    "Exit Lock",
+    "flag_zone1_forced": "Night Forcing",
     "offset_zone_ac":    "Zone AC Charge",
     "offset_zone_1":     "Zone 1",
     "offset_zone_1_night": "Zone 1 Night",

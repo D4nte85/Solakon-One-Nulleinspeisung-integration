@@ -440,6 +440,7 @@
     "flag_pv_tariff":    "PV→Tarif",
     "flag_pv_surplus":   "PV→Surplus",
     "flag_exit_lock":    "Austritts-Sperre",
+    "flag_zone1_forced": "Nacht-Forcierung",
     "offset_zone_ac":    "Zone AC Laden",
     "offset_zone_1":     "Zone 1",
     "offset_zone_1_night": "Zone 1 Nacht",

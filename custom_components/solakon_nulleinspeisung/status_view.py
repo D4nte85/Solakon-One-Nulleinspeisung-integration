@@ -54,6 +54,7 @@ def snapshot(coord: SolakonCoordinator) -> dict[str, Any]:
         "forecast_tariff_suppressed": coord.tariff.suppressed,
         "forecast_surplus_forced": coord.forecast.surplus_forced,
         "forecast_exit_lock": coord.forecast.exit_lock,
+        "forecast_zone1_forced": coord.forecast.zone1_forced,
         "allocated_power": coord.allocated_power,
     }
 

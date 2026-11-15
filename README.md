@@ -298,7 +298,7 @@ Alle Eingabefelder für Entity-IDs (z. B. Kapazitäts-, Vorhersage- und Preis-Se
 
 ### 📊 Status
 
-Echtzeit-Übersicht aller Regelzustände: aktive Zone mit farblichem Banner (Zone 0–3), Netzleistung, Solarleistung, Ausgangsleistung, SOC, Standardabweichung der Netzleistung roh und getrimmt (Stabilitätsindikator, getrimmt ausgegraut bei Trim 0), zugeteiltes Zone-1-Limit, PI-Integral-Wert (ausgegraut bei ausgeschaltetem Entlade-PI), aktiver Offset (Zone 1 / Zone 1 Nacht / Zone 2 / Zone AC) mit Quelle (dynamisch / statisch), Zeitabstand seit letzter Regelaktion und seit letztem Moduswechsel, letzte Aktion und etwaige Fehlermeldungen, Status-Flags: PI-Regler (grün bei eingeschaltetem Entlade-PI), Zyklus, Surplus, Lade-Session (zeigt die Art — AC Laden, Tarif-Laden oder Netz-Laden —, ohne Lade-Session grau „Laden“), Nacht, PV→Tarif, PV→Surplus, Austritts-Sperre. Bei eingeschaltetem Zielladen zusätzlich dessen Phase: Aufladen mit SOC und Ziel-SOC oder Entladepause. Rein lesend — manuelle Eingriffe liegen im **Debug**-Tab.
+Echtzeit-Übersicht aller Regelzustände: aktive Zone mit farblichem Banner (Zone 0–3), Netzleistung, Solarleistung, Ausgangsleistung, SOC, Standardabweichung der Netzleistung roh und getrimmt (Stabilitätsindikator, getrimmt ausgegraut bei Trim 0), zugeteiltes Zone-1-Limit, PI-Integral-Wert (ausgegraut bei ausgeschaltetem Entlade-PI), aktiver Offset (Zone 1 / Zone 1 Nacht / Zone 2 / Zone AC) mit Quelle (dynamisch / statisch), Zeitabstand seit letzter Regelaktion und seit letztem Moduswechsel, letzte Aktion und etwaige Fehlermeldungen, Status-Flags: PI-Regler (grün bei eingeschaltetem Entlade-PI), Zyklus, Surplus, Lade-Session (zeigt die Art — AC Laden, Tarif-Laden oder Netz-Laden —, ohne Lade-Session grau „Laden“), Nacht, PV→Tarif, PV→Surplus, Austritts-Sperre, Nacht-Forcierung. Bei eingeschaltetem Zielladen zusätzlich dessen Phase: Aufladen mit SOC und Ziel-SOC oder Entladepause. Rein lesend — manuelle Eingriffe liegen im **Debug**-Tab.
 
 ---
 
@@ -723,7 +723,7 @@ Alle Entitätsnamen kommen aus den Übersetzungen und erscheinen in der Sprache 
 | `binary_sensor.solakon_one_pv_vorhersage_surplus_austritt_gesperrt` | Binary Sensor | Austritts-Sperre aktiv (Vorhersage ≥ Faktor × Hard Limit Z0) |
 | `binary_sensor.solakon_one_pv_vorhersage_zone_1_nacht_forcierung_aktiv` | Binary Sensor | Zone-1-Nacht-Forcierung aktiv |
 
-Die Diagnose-Binärsensoren sind read-only — sie spiegeln interne Coordinator-Zustände wider.
+Die Diagnose-Binärsensoren sind read-only — sie spiegeln interne Coordinator-Zustände wider. Die vier Prognose-Sensoren tragen intern einheitlich das Präfix `forecast_`; die Nacht-Forcierung hieß bis 3.8.1 `zone1_forced`. Die Umstellung beim Update behält die Entity-ID, Automationen und Dashboards laufen unverändert weiter.
 
 ### Betriebszustand
 

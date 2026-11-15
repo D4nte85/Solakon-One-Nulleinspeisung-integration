@@ -194,7 +194,7 @@
       "forecast_exit_lock": {
         "name": "PV-Vorhersage: Surplus-Austritt gesperrt"
       },
-      "zone1_forced": {
+      "forecast_zone1_forced": {
         "name": "PV-Vorhersage: Zone-1-Nacht-Forcierung aktiv"
       }
     },

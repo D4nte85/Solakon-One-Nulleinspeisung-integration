@@ -295,8 +295,12 @@ class EntityRegistry:
 
     def async_update_entity(self, entity_id, **changes):
         self.hass.log("registry_update", entity_id, changes)
+        if "new_unique_id" in changes and entity_id in self.entities:
+            domain, platform, _ = self.entities[entity_id]
+            self.entities[entity_id] = (domain, platform, changes["new_unique_id"])
         for key, value in changes.items():
-            setattr(self.records[entity_id], key, value)
+            if entity_id in self.records:
+                setattr(self.records[entity_id], "unique_id" if key == "new_unique_id" else key, value)
 
     def async_get_entity_id(self, domain, platform, unique_id):
         return next((eid for eid, key in self.entities.items() if key == (domain, platform, unique_id)), None)

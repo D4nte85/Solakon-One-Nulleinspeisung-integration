@@ -287,7 +287,7 @@ COORD_ATTRS = (
     "dist_mode_effective", "_prev_actual", "_solar_zero_entry_armed",
     "_timer_toggled_in_cycle",
     "forecast_tariff_suppressed", "forecast_surplus_forced", "forecast_exit_lock",
-    "zone1_forced",
+    "forecast_zone1_forced",
 )
 
 _MISSING = "<fehlt>"
@@ -332,7 +332,7 @@ def groups_state(hass):
 COORD_PATHS = {"_tariff_unit_suspect_since": "tariff.unit_suspect_since",
                "forecast_tariff_suppressed": "tariff.suppressed",
                "forecast_surplus_forced": "forecast.surplus_forced", "forecast_exit_lock": "forecast.exit_lock",
-               "zone1_forced": "forecast.zone1_forced",
+               "forecast_zone1_forced": "forecast.zone1_forced",
                "_prev_actual": "surplus.prev_actual", "_solar_zero_entry_armed": "surplus.armed",
                "_output_warning": "_messages.hardware_msg",
                "grid_stddev": "dyn.stddev", "grid_stddev_raw": "dyn.stddev_raw",

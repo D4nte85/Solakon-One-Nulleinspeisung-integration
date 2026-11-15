@@ -536,7 +536,7 @@ def j1(c: Ctx):
     if c.flags["surplus_active"] or c.lade_session():
         return None
     z1 = c.settings[C.S_ZONE1_LIMIT]
-    if c.soc() <= z1 and not c.flags["zone1_forced"]:
+    if c.soc() <= z1 and not c.flags["forecast_zone1_forced"]:
         return f"Zyklusstart bei SOC {c.soc()} ≤ Zone 1 {z1} ohne Nacht-Forcierung"
     if _tarif_sperre(c):
         return f"Zyklusstart trotz Tarif-Sperre (Preis {_preis_gueltig(c)[0]})"
@@ -553,7 +553,7 @@ def j2(c: Ctx):
 
 
 def j3(c: Ctx):
-    if not c.normal() or not c.flags["zone1_forced"]:
+    if not c.normal() or not c.flags["forecast_zone1_forced"]:
         return None
     s = c.settings
     if not (c.pv() < s[C.S_PV_RESERVE] and c.soc() > s[C.S_ZONE1_FORCE_MIN_SOC]):

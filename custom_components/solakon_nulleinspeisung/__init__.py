@@ -45,7 +45,8 @@ WS_STATUS_KEYS = (
     *(dyn_key(zone, "enabled") for zone in DYN_ZONES),
     *((f"dyn_{zone}", f"dyn_offset_{zone}") for zone in DYN_ZONES),
     "active_fall", "operating_state", "discharge_locked", "dist_mode_effective", "is_night",
-    "forecast_tariff_suppressed", "forecast_surplus_forced", "forecast_exit_lock", "allocated_power",
+    "forecast_tariff_suppressed", "forecast_surplus_forced", "forecast_exit_lock", "forecast_zone1_forced",
+    "allocated_power",
     "offset_zone", "offset_dynamic", "offset_static", "offset_value", "capacity_kwh",
     "settings_rev", "dist_rev",
 )

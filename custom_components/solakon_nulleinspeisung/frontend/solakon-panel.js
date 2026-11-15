@@ -1416,6 +1416,7 @@ ${this._textsMissing ? `
       [s.flag_pv_tariff   || "",      st.forecast_tariff_suppressed],
       [s.flag_pv_surplus  || "",     st.forecast_surplus_forced],
       [s.flag_exit_lock   || "",      st.forecast_exit_lock],
+      [s.flag_zone1_forced || "",     st.forecast_zone1_forced],
     ].map(([n, v]) => `<span class="flag ${v ? "on" : "off"}">${v ? "●" : "○"} ${n}</span>`).join("");
 
     this._applyTexts(this._statusTexts(st));

@@ -101,6 +101,20 @@ def test_entry_migration_entfernt_die_binaersensoren_der_lade_flags():
         reg.entities[f"binary_sensor.a_{key}"] = ("binary_sensor", DOMAIN, f"entry_a_{key}")
     assert asyncio.run(mig.async_migrate_entry(hass, entry)) is True
     assert list(reg.entities) == ["binary_sensor.a_cycle_active"]
-    assert entry.minor_version == 2
+    assert entry.minor_version == 3
     assert asyncio.run(mig.async_migrate_entry(hass, entry)) is True
     assert list(reg.entities) == ["binary_sensor.a_cycle_active"]
+
+
+def test_entry_migration_nacht_forcierung_neue_unique_id_gleiche_entity_id():
+    hass = h.FakeHass("de")
+    entry = h.FakeEntry("entry_a", h.entry_data("a"))
+    entry.version, entry.minor_version = 1, 2
+    hass.config_entries.entries = [entry]
+    reg = h.ha_stubs.entity_registry_get(hass)
+    eid = "binary_sensor.a_pv_vorhersage_zone_1_nacht_forcierung_aktiv"
+    reg.entities[eid] = ("binary_sensor", DOMAIN, "entry_a_zone1_forced")
+    assert asyncio.run(mig.async_migrate_entry(hass, entry)) is True
+    assert reg.entities == {eid: ("binary_sensor", DOMAIN, "entry_a_forecast_zone1_forced")}
+    assert reg.async_get_entity_id("binary_sensor", DOMAIN, "entry_a_zone1_forced") is None
+    assert entry.minor_version == 3
