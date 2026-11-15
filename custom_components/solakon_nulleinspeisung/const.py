@@ -363,7 +363,7 @@ SETTINGS_SCHEMA: dict[str, Field] = {
     S_REST_IN_DISCHARGE: _bool(),
 
     S_PERIODIC_ENABLED:  _bool(),
-    S_PERIODIC_INTERVAL: _int(10, POSITIVE, 5, 300, 5),
+    S_PERIODIC_INTERVAL: _int(10, (5, None), 5, 300, 5),
 
     S_TARGET_CHARGE_ENABLED:   _bool(),
     S_TARGET_SOC:              _int(70, PERCENT, 10, 100, 1),

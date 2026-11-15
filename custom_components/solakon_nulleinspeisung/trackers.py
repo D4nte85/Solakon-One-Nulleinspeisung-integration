@@ -64,7 +64,7 @@ class Trackers:
     def _retrack(self, name: str) -> None:
         """Trigger `name` abmelden und neu registrieren, wenn aktiviert und Sensor gesetzt.
 
-        Der periodische Trigger läuft im Intervall S_PERIODIC_INTERVAL, mindestens 5 s.
+        Der periodische Trigger läuft im Intervall S_PERIODIC_INTERVAL.
         """
         self._untrack(name)
         self._inputs[name] = self._input(name)
@@ -72,7 +72,7 @@ class Trackers:
         if not any(settings[k] for k in TRACKERS[name]):
             return
         if name == "periodic":
-            interval = max(5, int(settings[S_PERIODIC_INTERVAL]))
+            interval = int(settings[S_PERIODIC_INTERVAL])
             self._unsubs[name] = async_track_time_interval(
                 self._hass, self._on_trigger, timedelta(seconds=interval)
             )
