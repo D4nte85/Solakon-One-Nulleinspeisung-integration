@@ -1,0 +1,15 @@
+titel: Betriebszustand zeigt nach Fall A bei Nacht einen Regelzyklus lang Nachtabschaltung
+bezug: fix-2026-11-15-nacht-aus-lage-vor-den-faellen
+# Nacht, PV 0, SOC über der Zone-1-Schwelle: Fall A startet den Zyklus, die Nacht gilt im selben Regelzyklus nicht mehr.
+stunde: 3
+netz: 300
+instanzen:
+  - prefix: a
+    settings: {regulation_enabled: true, night_enabled: true}
+    flags: {cycle_active: false}
+    sensoren: {soc: 90, solar: 0, modus: "1"}
+schritte:
+  - nach: 0
+erwartet:
+  - zustand: {cycle_active: true, is_night: false}
+  - zustand_nicht: {operating_state: night_off}

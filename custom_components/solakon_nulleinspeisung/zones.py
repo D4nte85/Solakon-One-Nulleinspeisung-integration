@@ -201,6 +201,11 @@ def surplus_step(
     return surplus_entry, armed
 
 
+def night_active(*, night_enabled: bool, dark: bool, cycle_active: bool) -> bool:
+    """Nachtabschaltung wirksam: eingeschaltet, dunkel und kein Zyklus."""
+    return night_enabled and dark and not cycle_active
+
+
 def night_step(
     *, dark: bool, solar: float, cycle_active: bool, pv_reserve: float, night_hysteresis: float,
     night_enabled: bool,
@@ -210,7 +215,7 @@ def night_step(
         dark = True
     elif solar >= pv_reserve + night_hysteresis:
         dark = False
-    return night_enabled and dark and not cycle_active, dark
+    return night_active(night_enabled=night_enabled, dark=dark, cycle_active=cycle_active), dark
 
 
 class Surplus:

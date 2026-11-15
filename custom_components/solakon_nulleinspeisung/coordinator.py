@@ -33,7 +33,7 @@ from .timeout import Timeout
 from .trackers import Trackers
 from .zones import (
     FlagUpdate, Night, Surplus, ZoneInputs, at_rest, charging_to_target, control_state, decide,
-    forecast_flags, required_discharge, rest_mode,
+    forecast_flags, night_active, required_discharge, rest_mode,
 )
 from .const import (
     DOMAIN, SETTINGS_DEFAULTS, SETTINGS_SCHEMA, CONF_GRID_SENSOR,
@@ -814,8 +814,10 @@ class SolakonCoordinator:
             return
 
         # Zustand hinter Fall TM: die Sperre selbst mit den Flags nach den Falls,
-        # nicht ihr Auslöser.
+        # nicht ihr Auslöser. Ebenso die Nachtabschaltung mit dem Zyklus nach den Falls.
         self.discharge_locked = tariff.discharge_locked(self.charge_session != SESSION_NONE, self.surplus_active)
+        self.is_night = night_active(night_enabled=cs.night_enabled, dark=self.night.dark,
+                                     cycle_active=self.cycle_active)
 
         # ── 10. Entladestrom mit Regelzustand abgleichen ─────────────────────
         mode = self._str(cfg[CONF_MODE_SELECT])
