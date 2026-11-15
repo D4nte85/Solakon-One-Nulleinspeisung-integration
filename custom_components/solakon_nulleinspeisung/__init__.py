@@ -124,7 +124,7 @@ async def _ws_get_config(
 async def _ws_save_config(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
 ) -> None:
-    """WS: Settings-Änderungen übernehmen; ungültige Werte als Befundliste zurück."""
+    """WS: Settings-Änderungen übernehmen und die danach wirksamen Settings liefern; ungültige Werte als Befundliste zurück."""
     if (coord := _coord_or_error(hass, connection, msg)) is None:
         return
     try:
@@ -132,7 +132,7 @@ async def _ws_save_config(
     except InvalidSettings as err:
         _send_invalid(connection, msg, err.findings)
         return
-    connection.send_result(msg["id"], {"success": True})
+    connection.send_result(msg["id"], {"success": True, "settings": dict(coord.settings)})
 
 
 @websocket_api.websocket_command({

@@ -313,7 +313,7 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
           return Promise.resolve({ ...inst.settings });
         case "save_config":
           Object.assign(inst.settings, msg.changes);
-          return Promise.resolve({ success: true });
+          return Promise.resolve({ success: true, settings: { ...inst.settings } });
         case "get_status":
           return Promise.resolve({
             ...inst.status, ...computeSnapshotExtras(msg.entry_id),

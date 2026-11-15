@@ -26,9 +26,6 @@ const TABS = [
   { id: "debug"    },
 ];
 
-// Settings, deren Änderung serverseitig weitere Settings mitschaltet: Zielladen und Regelung.
-const COUPLED_KEYS = ["regulation_enabled", "target_charge_enabled"];
-
 // Layout der Verteilungsseite: Karten mit Feldern wie im Settings-Layout. `lk` ist der Textschlüssel
 // unter `dist` (`<lk>_lbl`, `<lk>_desc`, `<lk>_ph`); `full` nur bei mindestens zwei geladenen Instanzen
 // der Netzgruppe; `activeIf` dimmt die Karte außerhalb dieses Modus; `inst` ist ein Feld je Instanz.
@@ -816,19 +813,11 @@ class SolakonPanel extends HTMLElement {
     return true;
   }
 
-  // true, wenn sich der Änderungszähler der Settings von `entryId` seit dem letzten Abruf geändert hat.
-  _settingsRevChanged(entryId, rev) {
-    const seen = (this._settingsRevs ??= {});
-    const changed = entryId in seen && seen[entryId] !== rev;
-    seen[entryId] = rev;
-    return changed;
-  }
-
-  // true, wenn sich der Änderungszähler der Verteilung der Netzgruppe `gk` seit dem letzten Abruf geändert hat.
-  _distRevChanged(gk, rev) {
-    const seen = (this._distRevs ??= {});
-    const changed = gk in seen && seen[gk] !== rev;
-    seen[gk] = rev;
+  // true, wenn sich der Änderungszähler `rev` von `key` (Art `kind`: Settings oder Verteilung) seit dem letzten Abruf geändert hat.
+  _revChanged(kind, key, rev) {
+    const seen = ((this._revs ??= {})[kind] ??= {});
+    const changed = key in seen && seen[key] !== rev;
+    seen[key] = rev;
     return changed;
   }
 
@@ -855,7 +844,7 @@ class SolakonPanel extends HTMLElement {
       if (!inst) return;
       try {
         const status = await this._hass.callWS({ type: `${DOMAIN}/get_status`, entry_id: inst.entry_id });
-        if (this._distRevChanged(g.key, status.dist_rev) && !this._distBuf(g.key).isDirty) {
+        if (this._revChanged("dist", g.key, status.dist_rev) && !this._distBuf(g.key).isDirty) {
           await this._loadDistConfig(g.key);
           this._rerenderDist();
         }
@@ -867,11 +856,11 @@ class SolakonPanel extends HTMLElement {
         this._status = status;
         // Regelung serverseitig umgeschaltet (Fall ZE, Schalter-Entität) oder Settings von außen
         // geändert (number-Entität) und keine ungespeicherte Eingabe: Settings neu laden.
-        const revChanged = this._settingsRevChanged(this._entryId, status.settings_rev);
+        const revChanged = this._revChanged("settings", this._entryId, status.settings_rev);
         if (status.regulation_enabled !== this._cfg.saved.regulation_enabled
             || (revChanged && !this._cfg.isDirty)) this._loadConfig();
         const g = this._groupOf(this._entryId);
-        if (g && this._distRevChanged(g.key, status.dist_rev) && !this._distBuf(g.key).isDirty) this._loadDistConfig(g.key);
+        if (g && this._revChanged("dist", g.key, status.dist_rev) && !this._distBuf(g.key).isDirty) this._loadDistConfig(g.key);
         this._updateStatusView();
         this._updateRegBanner();
       });
@@ -1594,12 +1583,10 @@ ${this._textsMissing ? `
   async _saveSettings() {
     if (!this._cfg.isDirty) return;
     const toast = this._t.toast || {};
-    const coupled = COUPLED_KEYS.some(k => k in this._cfg.dirty);
     await this._wsAction(async () => {
-      await this._forInstance(() => this._ws("save_config", { changes: this._cfg.dirty }), () => {
-        this._cfg.reset(this._cfg.merged());
+      await this._forInstance(() => this._ws("save_config", { changes: this._cfg.dirty }), res => {
+        this._cfg.reset(res.settings);
         this._renderActiveTab();
-        if (coupled) this._loadConfig();
       });
       this._showToast(toast.settings_saved || "");
     });
@@ -1608,9 +1595,10 @@ ${this._textsMissing ? `
   // Schalter-Setting sofort speichern; true, wenn die Instanz noch die angezeigte ist.
   async _saveSwitch(key, on, toastOn, toastOff) {
     const toast = this._t.toast || {};
-    const current = await this._forInstance(() => this._ws("save_config", { changes: { [key]: on } }), () => {
-      this._cfg.saved[key] = on;
-      if (COUPLED_KEYS.includes(key)) this._loadConfig();
+    const current = await this._forInstance(() => this._ws("save_config", { changes: { [key]: on } }), res => {
+      const coupled = Object.keys(res.settings).some(k => k !== key && res.settings[k] !== this._cfg.saved[k]);
+      this._cfg.saved = res.settings;
+      if (coupled) this._renderActiveTab();
     });
     this._showToast(on ? (toast[toastOn] || "") : (toast[toastOff] || ""));
     return current;

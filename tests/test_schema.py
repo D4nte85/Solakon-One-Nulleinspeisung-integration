@@ -164,6 +164,16 @@ def test_ws_save_config_antwortet_mit_befunden():
     assert json.loads(sent[0][3]) == [{"key": "x", "reason": "unknown", "min": None, "max": None}]
 
 
+def test_ws_save_config_liefert_gekoppelte_settings():
+    hass = h.FakeHass("de")
+    coord = _coord(hass)
+    asyncio.run(coord.async_setup())
+    sent = _ws(h.integration._ws_save_config, hass, entry_id="entry_a", changes={C.S_TARGET_CHARGE_ENABLED: True})
+    settings = sent[0][2]["settings"]
+    assert settings[C.S_TARGET_CHARGE_ENABLED] and settings[C.S_REGULATION_ENABLED]
+    assert settings == coord.settings
+
+
 def test_ws_save_distribution_config_weist_ab():
     hass = h.FakeHass("de")
     h.install_groups(hass, dist_store=h.migrations_mod.SolakonDistStore(hass, 2, "dist"))
