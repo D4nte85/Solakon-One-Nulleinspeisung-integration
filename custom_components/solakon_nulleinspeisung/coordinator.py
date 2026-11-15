@@ -28,7 +28,7 @@ from .schema import (
     CycleSettings, InvalidSettings, check, couple_target, cycle_settings, notify_reset,
     sanitize, soc_conflict,
 )
-from .tariff import Tariff, TariffState, forecast_suppressed
+from .tariff import Tariff, TariffState
 from .timeout import Timeout
 from .trackers import Trackers
 from .zones import (
@@ -143,7 +143,6 @@ class SolakonCoordinator:
         self.trackers = Trackers(
             hass, lambda: self.settings, self._effective, self._on_state_change, self._on_periodic,
         )
-        self.forecast_tariff_suppressed: bool = False
         self.forecast_surplus_forced: bool = False
         self.forecast_exit_lock: bool = False
         self.zone1_forced: bool = False
@@ -748,7 +747,7 @@ class SolakonCoordinator:
         # nicht aktualisiert.
         self.surplus_power = limits.surplus_power(self.surplus_active, solar, actual)
 
-        # ── 5. Prognoseflags ─────────────────────────────────────────────────
+        # ── 5. Prognoseflags und Prognose-Unterdrückung ──────────────────────
         forecast = forecast_flags(
             surplus_forecast=feature["surplus_forecast"], surplus_lock=feature["surplus_lock"],
             zone1_force=feature["zone1_force"], solar=solar, soc=soc,
@@ -759,8 +758,9 @@ class SolakonCoordinator:
         )
         self.forecast_surplus_forced = forecast.surplus_forced
         self.forecast_exit_lock = forecast.exit_lock
-        self.forecast_tariff_suppressed = forecast_suppressed(feature["pv_forecast"], cs.pv_forecast_threshold)
         self.zone1_forced = forecast.zone1_forced
+
+        self.tariff.forecast(feature["pv_forecast"], cs)
 
         # ── 6. Validierung ───────────────────────────────────────────────────
         invalid = soc_conflict(cs) or (None if self._entity_ok(cfg[CONF_MODE_SELECT]) else "err_mode_select")
@@ -772,19 +772,13 @@ class SolakonCoordinator:
         # ── 7. Export-Limit und Tariflage ────────────────────────────────────
         await self._sync_export_limit(limits.export)
 
-        # Preis ohne Einheitenumrechnung; die Einheitenwarnung der Tariflage geht als
-        # weicher Fehler in dieselbe Meldungskette ein.
         price, unit, price_warning = tariff_price(self.hass, cs.tariff_enabled, tariff_sensor)
-        if price_warning:
-            self._messages.warn(price_warning)
         tariff = self.tariff.assess(
-            enabled=cs.tariff_enabled and bool(tariff_sensor), suppressed=self.forecast_tariff_suppressed,
-            price=price, cheap_entity=feature["cheap"], cheap_setting=cs.tariff_cheap,
-            exp_entity=feature["exp"], exp_setting=cs.tariff_exp,
-            unit=unit, now=time.time(),
+            cs, price=price, unit=unit, price_warning=price_warning,
+            cheap_entity=feature["cheap"], exp_entity=feature["exp"], now=time.time(),
         )
-        if tariff.unit_warning:
-            self._messages.warn(tariff.unit_warning)
+        for warning in tariff.warnings:
+            self._messages.warn(warning)
 
         # ── 8. Überschuss und Nacht ──────────────────────────────────────────
         total_actual = self.group.discharge_actual(self, actual)

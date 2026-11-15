@@ -9,15 +9,19 @@ from tests import harness as h
 
 tariff = importlib.import_module(h.PKG + ".tariff")
 const = importlib.import_module(h.PKG + ".const")
+schema = importlib.import_module(h.PKG + ".schema")
 
 T0 = 1_800_000_000.0
 
 
-def _assess(t=None, **kw):
-    args = dict(enabled=True, suppressed=False, price=30.0, cheap_entity=None, cheap_setting=10.0,
-                exp_entity=None, exp_setting=25.0, unit="ct/kwh", now=T0)
+def _assess(t=None, enabled=True, suppressed=False, cheap_setting=10.0, exp_setting=25.0, **kw):
+    cs = schema.cycle_settings(const.SETTINGS_DEFAULTS)._replace(
+        tariff_enabled=enabled, tariff_cheap=cheap_setting, tariff_exp=exp_setting, pv_forecast_threshold=10.0)
+    t = t or tariff.Tariff()
+    t.forecast(10.0 if suppressed else None, cs)
+    args = dict(price=30.0, unit="ct/kwh", price_warning=None, cheap_entity=None, exp_entity=None, now=T0)
     args.update(kw)
-    return (t or tariff.Tariff()).assess(**args)
+    return t.assess(cs, **args)
 
 
 def test_schwellen_aus_entitaet_sonst_setting():
@@ -58,8 +62,20 @@ def test_abgeschaltet_ohne_vergleiche(kw):
 @pytest.mark.parametrize("value, threshold, expected", [
     (None, 10.0, False), (9.9, 10.0, False), (10.0, 10.0, True), (15.0, 10.0, True),
 ])
-def test_prognosesperre(value, threshold, expected):
-    assert tariff.forecast_suppressed(value, threshold) is expected
+def test_prognose_unterdrueckung(value, threshold, expected):
+    cs = schema.cycle_settings(const.SETTINGS_DEFAULTS)._replace(tariff_enabled=True, pv_forecast_threshold=threshold)
+    t = tariff.Tariff()
+    t.forecast(value, cs)
+    assert t.suppressed is expected
+    s = t.assess(cs, price=5.0, unit="ct/kwh", price_warning=None, cheap_entity=None, exp_entity=None, now=T0)
+    assert s.suppressed is expected
+    assert s.below_cheap is not expected
+
+
+def test_meldungen_preissensor_vor_einheit():
+    t = tariff.Tariff()
+    s = _assess(t, price=0.25, unit="€/kwh", price_warning=("err_tariff_x", {}))
+    assert s.warnings == (("err_tariff_x", {}), s.unit_warning)
 
 
 @pytest.mark.parametrize("charging, surplus, expected", [

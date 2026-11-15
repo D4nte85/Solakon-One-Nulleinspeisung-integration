@@ -1,6 +1,8 @@
 """Binary sensor platform — diagnostische Zustandsanzeigen (read-only)."""
 from __future__ import annotations
 
+from operator import attrgetter
+
 from homeassistant.components.binary_sensor import BinarySensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -12,16 +14,20 @@ from .entity_base import SolakonEntity
 
 
 class DiagBoolSensor(SolakonEntity, BinarySensorEntity):
-    """Zeigt internen Coordinator-Zustand als read-only Binärsensor an."""
+    """Zeigt internen Coordinator-Zustand als read-only Binärsensor an.
 
-    def __init__(self, coord: SolakonCoordinator, attr: str, icon: str) -> None:
-        super().__init__(coord, attr, translation_key=attr, icon=icon)
-        self._attr = attr
+    `key` ist Suffix der unique_id und `translation_key`; `path` der Attributpfad am
+    Coordinator, ohne Angabe gleich `key`.
+    """
+
+    def __init__(self, coord: SolakonCoordinator, key: str, icon: str, path: str | None = None) -> None:
+        super().__init__(coord, key, translation_key=key, icon=icon)
+        self._read = attrgetter(path or key)
 
     @property
     def is_on(self) -> bool:
         """Wahrheitswert des Coordinator-Attributs."""
-        return bool(getattr(self._coordinator, self._attr, False))
+        return bool(self._read(self._coordinator))
 
 
 async def async_setup_entry(
@@ -33,7 +39,7 @@ async def async_setup_entry(
         DiagBoolSensor(coord, "cycle_active",               "mdi:battery-arrow-up"),
         DiagBoolSensor(coord, "surplus_active",             "mdi:solar-power"),
         DiagBoolSensor(coord, "is_night",                   "mdi:weather-night"),
-        DiagBoolSensor(coord, "forecast_tariff_suppressed", "mdi:weather-sunny"),
+        DiagBoolSensor(coord, "forecast_tariff_suppressed", "mdi:weather-sunny", "tariff.suppressed"),
         DiagBoolSensor(coord, "forecast_surplus_forced",    "mdi:weather-sunny-alert"),
         DiagBoolSensor(coord, "forecast_exit_lock",         "mdi:weather-cloudy-clock"),
         DiagBoolSensor(coord, "zone1_forced",               "mdi:weather-night-partly-cloudy"),
