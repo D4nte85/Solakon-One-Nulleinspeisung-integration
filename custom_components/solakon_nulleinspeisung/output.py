@@ -108,7 +108,7 @@ class Output:
             await self._confirm_zero(ac_charge_mode)
 
     async def _wait_for_target(self, target: float, ac_charge_mode: bool = False) -> None:
-        """Wartet, bis die Ist-Leistung den Zielwert erreicht, höchstens `S_WAIT_TIME` Sekunden.
+        """Wartet, bis die Ist-Leistung den Zielwert erreicht, höchstens `S_WAIT_TIME` Sekunden ab dem Aufruf.
 
         Ohne `S_SELF_ADJUST` wird die volle Wartezeit abgewartet, bei Wartezeit 0 gar nicht.
         """
@@ -121,10 +121,9 @@ class Output:
         tolerance = self._tolerance
         compare_target = -target if ac_charge_mode else target
 
-        await asyncio.sleep(1.0)
-
         start = time.monotonic()
-        remaining = wait_max - 1.0
+        await asyncio.sleep(min(1.0, wait_max))
+        remaining = wait_max - (time.monotonic() - start)
 
         while remaining > 0:
             actual, deviation = self._vs(target, ac_charge_mode)

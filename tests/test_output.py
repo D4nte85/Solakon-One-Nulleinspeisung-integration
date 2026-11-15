@@ -29,3 +29,12 @@ def test_wartezeit_null_wartet_nicht(self_adjust):
     assert written == [100]
     assert h.CLOCK.now == start
 
+
+
+def test_adaptive_wartezeit_wartet_hoechstens_die_wartezeit():
+    written: list[float] = []
+    out = _output(written)
+    out.begin_cycle(3, True, 2)
+    start = h.CLOCK.now
+    asyncio.run(out.set_and_wait(100))
+    assert h.CLOCK.now - start == pytest.approx(3.0)
