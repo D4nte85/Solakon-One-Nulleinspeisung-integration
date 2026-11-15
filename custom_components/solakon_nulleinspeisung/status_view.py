@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from .const import DYN_ZONES, S_REGULATION_ENABLED, S_Z1_NIGHT_ENABLED, dyn_key
+from .const import DYN_ZONES, S_REGULATION_ENABLED, S_Z1_NIGHT_ENABLED, capacity_key, dyn_key
 from .dynamic_offset import offset_params
 
 if TYPE_CHECKING:
@@ -18,7 +18,7 @@ def snapshot(coord: SolakonCoordinator) -> dict[str, Any]:
     """
     offset_zone = coord.offset_zone(coord.settings[S_Z1_NIGHT_ENABLED])
     offset_dynamic, offset_static, offset_value = coord.dyn.offset(offset_zone, offset_params(coord.settings))
-    cap_sensor = str(coord.group.dist_cfg().get(f"inst_{coord.entry.entry_id}_capacity_sensor", ""))
+    cap_sensor = str(coord.group.dist_cfg().get(capacity_key(coord.entry.entry_id), ""))
     return {
         "offset_zone": offset_zone,
         "offset_dynamic": offset_dynamic,

@@ -7,7 +7,7 @@ from typing import Any, Callable
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 
-from .const import CONF_GRID_SENSOR, DIST_DEFAULTS, DIST_INST_FIELDS, DIST_SCHEMA, DOMAIN
+from .const import CAPACITY_KEY, CONF_GRID_SENSOR, DIST_DEFAULTS, DIST_INST_FIELDS, DIST_SCHEMA, DOMAIN
 from .grid_group import NetGroup
 from .i18n import translate
 from .migrations import SolakonDistStore, SolakonSocSwitchStore
@@ -112,14 +112,45 @@ class GroupStore:
         if findings := check(changes, DIST_SCHEMA, DIST_INST_FIELDS):
             return findings
         self.dist[grid_sensor] = {**self.dist.get(grid_sensor, {}), **changes}
+        await self._commit_dist({grid_sensor})
+        return []
+
+    async def tidy_capacity(self) -> None:
+        """Kapazitätssensoren der Verteilung den Config-Entries nachführen.
+
+        Ein Schlüssel ohne Config-Entry entfällt. Liegt er in einer anderen Netzgruppe als der
+        seines Eintrags, wandert er dorthin, sofern dort keiner gesetzt ist; sonst entfällt er.
+        """
+        owners = {e.entry_id: e.data.get(CONF_GRID_SENSOR, "") for e in self.hass.config_entries.async_entries(DOMAIN)}
+        changed: set[str] = set()
+        moved: dict[str, dict] = {}
+        for grid_sensor, cfg in self.dist.items():
+            for key in list(cfg):
+                if (match := CAPACITY_KEY.fullmatch(key)) is None or owners.get(match[1]) == grid_sensor:
+                    continue
+                value = cfg.pop(key)
+                changed.add(grid_sensor)
+                if (target := owners.get(match[1])) is not None:
+                    moved.setdefault(target, {})[key] = value
+        for grid_sensor, values in moved.items():
+            cfg = self.dist.setdefault(grid_sensor, {})
+            for key, value in values.items():
+                if not cfg.get(key):
+                    cfg[key] = value
+                    changed.add(grid_sensor)
+        if changed:
+            await self._commit_dist(changed)
+
+    async def _commit_dist(self, grid_sensors: set[str]) -> None:
+        """Verteilung speichern; je Gruppe Revision erhöhen, Mitglieder und Beobachter benachrichtigen."""
         if self._dist_store is not None:
             await self._dist_store.async_save(self.dist)
-        self._dist_revs[grid_sensor] = self.dist_rev(grid_sensor) + 1
-        for coord in group_for(self.hass, grid_sensor).members().values():
-            coord.apply_group_change()
-        for listener in list(self._dist_listeners.get(grid_sensor, ())):
-            listener()
-        return []
+        for grid_sensor in sorted(grid_sensors):
+            self._dist_revs[grid_sensor] = self.dist_rev(grid_sensor) + 1
+            for coord in group_for(self.hass, grid_sensor).members().values():
+                coord.apply_group_change()
+            for listener in list(self._dist_listeners.get(grid_sensor, ())):
+                listener()
 
     def listen_dist(self, grid_sensor: str, listener: Callable[[], None]) -> Callable[[], None]:
         """`listener` nach jeder gespeicherten Verteilung der Gruppe aufrufen; gibt die Abmeldung zurück."""

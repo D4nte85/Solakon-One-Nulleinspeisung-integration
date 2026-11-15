@@ -19,7 +19,7 @@ from .const import (
     DOMAIN, PLATFORMS,
     CONF_INSTANCE_NAME,
     CONF_GRID_SENSOR,
-    DIST_DEFAULTS, DIST_SCHEMA, DYN_ZONES, SETTINGS_SCHEMA, VERSION, dyn_key,
+    CAPACITY_FIELD, DIST_DEFAULTS, DIST_INST_FIELDS, DIST_SCHEMA, DYN_ZONES, SETTINGS_SCHEMA, VERSION, dyn_key,
 )
 from . import group_store, number
 from .migrations import SolakonSettingsStore, async_migrate_entry as async_migrate_entry
@@ -232,10 +232,11 @@ async def _ws_save_distribution_config(
 async def _ws_get_schema(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
 ) -> None:
-    """WS: Typ, Bereich und Schrittweite aller Settings und der Verteilung, Domains der Entitätsfelder."""
+    """WS: Typ, Bereich und Schrittweite aller Settings, der Verteilung und ihrer Felder je Instanz, Domains der Entitätsfelder."""
     connection.send_result(msg["id"], {
         "settings":        {key: field._asdict() for key, field in SETTINGS_SCHEMA.items()},
         "distribution":    {key: field._asdict() for key, field in DIST_SCHEMA.items()},
+        "distribution_instance": {CAPACITY_FIELD: DIST_INST_FIELDS[1]._asdict()},
         "numeric_domains": list(NUMERIC_DOMAINS),
     })
 
@@ -274,7 +275,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     from .coordinator import SolakonCoordinator
 
     # Gruppen-Stores vor dem Coordinator laden: seine Trigger lesen globale Sensoren der Verteilung.
-    await group_store.async_load(hass)
+    # Kapazitätssensoren folgen dem Netzsensor ihres Eintrags.
+    store = await group_store.async_load(hass)
+    await store.tidy_capacity()
 
     try:
         coordinator = SolakonCoordinator(hass, entry)
@@ -351,7 +354,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Store der Instanz löschen; mit der letzten Instanz auch die Gruppen-Stores, sonst die Netzgruppe neu zählen."""
+    """Store der Instanz löschen; mit der letzten Instanz auch die Gruppen-Stores, sonst Kapazitätssensoren nachführen und die Netzgruppe neu zählen."""
     await SolakonSettingsStore(hass, entry.entry_id).async_remove()
 
     # Home Assistant traegt den Entry vor diesem Aufruf aus der Registrierung aus.
@@ -362,7 +365,7 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
         return
     # Läuft keine Instanz mehr (die übrigen sind deaktiviert), ist der Gruppenspeicher
     # schon abgeräumt: für die Träger-Verwaltung laden und danach wieder entfernen.
-    await group_store.async_load(hass)
+    await (await group_store.async_load(hass)).tidy_capacity()
     await number.assign_carrier(hass, entry.data.get(CONF_GRID_SENSOR, ""))
     if not hass.data.get(DOMAIN):
         await _drop_shared_data(hass)

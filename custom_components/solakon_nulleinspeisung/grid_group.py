@@ -5,7 +5,10 @@ import math
 from dataclasses import dataclass
 from typing import Any, Callable, Protocol
 
-from .const import DIST_DEFAULTS, DOMAIN, SESSION_AC, SESSION_NONE
+from .const import (
+    DIST_DEFAULTS, DIST_GLOBAL_MAX, DIST_MODE, DIST_SOC_SWITCH_DIVERGENCE, DOMAIN, SESSION_AC, SESSION_NONE,
+    capacity_key,
+)
 from .dynamic_offset import Sigma
 
 # Warnschlüssel bei Rückfall des Verteilungsmodus, je Grund: (Entlade-Pool, AC-Pool).
@@ -212,7 +215,7 @@ class NetGroup:
         if n == 0:
             return Shares({})
         dist = self.dist_cfg()
-        mode = effective = dist["distribution_mode"]
+        mode = effective = dist[DIST_MODE]
         if ac and mode == "soc_switch":
             mode = effective = "soc"
         warning = ""
@@ -238,7 +241,7 @@ class NetGroup:
         if mode == "capacity":
             def _cap_kwh(eid: str, m: Member) -> float | None:
                 """Kapazität der Instanz in kWh; None ohne Sensor oder ohne gültigen Wert."""
-                cap_s = str(dist.get(f"inst_{eid}_capacity_sensor", ""))
+                cap_s = str(dist.get(capacity_key(eid), ""))
                 if not cap_s:
                     return None
                 return m.capacity_kwh(cap_s)
@@ -300,7 +303,7 @@ class NetGroup:
         if len(zone0) > 1:
             result = {eid: (1.0 / len(zone0) if eid in zone0 else 0.0) for eid in socs}
         else:
-            divergence = float(self.dist_cfg()["soc_switch_divergence"])
+            divergence = float(self.dist_cfg()[DIST_SOC_SWITCH_DIVERGENCE])
 
             if zone0:
                 z0_leader = next(iter(zone0))
@@ -349,7 +352,7 @@ class NetGroup:
             return (1.0 if me.member_id in active else 0.0), None, None
 
         shares = self.all_shares(active, me, own_soc)
-        global_max = float(self.dist_cfg()["global_max_power"])
+        global_max = float(self.dist_cfg()[DIST_GLOBAL_MAX])
         allocations = waterfill(active, shares.values, global_max)
         others = sum(m.allocated_power or 0 for m in active.values() if m is not me)
         own = allocations.get(me.member_id)

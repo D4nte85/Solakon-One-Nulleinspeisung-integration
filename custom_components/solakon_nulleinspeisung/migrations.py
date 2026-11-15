@@ -9,8 +9,9 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers import entity_registry as er
 
 from .const import (
-    CHARGE_SESSION_KEY, CONF_GRID_SENSOR, DOMAIN, S_HARD_LIMIT_Z0, S_HARD_LIMIT_Z1, S_PV_FORECAST_SENSOR,
+    CHARGE_SESSION_KEY, CONF_GRID_SENSOR, DIST_GLOBAL_MAX, DIST_MODE, DOMAIN, S_HARD_LIMIT_Z0, S_HARD_LIMIT_Z1, S_PV_FORECAST_SENSOR,
     SESSION_AC, SESSION_GRID, SESSION_NONE, SESSION_TARIFF, STORAGE_MINOR_VERSION, STORAGE_VERSION,
+    capacity_key,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -41,9 +42,9 @@ def _migrate_dist_mode(cfg: dict) -> dict:
         return cfg
     migrated = dict(cfg)
     if migrated.pop("capacity_weighting", False):
-        migrated["distribution_mode"] = "capacity"
-    elif migrated.get("distribution_mode") == "weighted":
-        migrated["distribution_mode"] = "soc"
+        migrated[DIST_MODE] = "capacity"
+    elif migrated.get(DIST_MODE) == "weighted":
+        migrated[DIST_MODE] = "soc"
     return migrated
 
 
@@ -77,7 +78,7 @@ async def _capacity_to_dist(hass: HomeAssistant, entry_id: str, data: dict) -> d
     migrated = dict(data)
     sensor = migrated.pop(OLD_CAPACITY_SENSOR)
     grid_sensor = entry.data.get(CONF_GRID_SENSOR, "")
-    key = f"inst_{entry_id}_capacity_sensor"
+    key = capacity_key(entry_id)
     if sensor and not store.dist_view(grid_sensor).get(key):
         await store.save_dist(grid_sensor, {key: sensor})
     return migrated
@@ -104,6 +105,7 @@ class SolakonStore(Store):
         """Wie `Store.async_delay_save`; merkt den Auftrag bis zu seinem Schreiben vor."""
 
         def write():
+            """Auftrag als geschrieben vermerken und die Daten liefern."""
             self._pending = None
             return data_func()
 
@@ -146,7 +148,7 @@ class SolakonDistStore(SolakonStore):
         if old_major_version >= 2 or not old_data:
             return old_data
 
-        if "distribution_mode" in old_data or "global_max_power" in old_data:
+        if DIST_MODE in old_data or DIST_GLOBAL_MAX in old_data:
             flat = _migrate_dist_mode(old_data)
             return {gk: dict(flat) for gk in _grid_groups(self.hass)}
         return {gk: _migrate_dist_mode(cfg) for gk, cfg in old_data.items()}

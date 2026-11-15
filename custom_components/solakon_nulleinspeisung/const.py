@@ -232,6 +232,19 @@ SIGNED = (None, None)
 
 DIST_MODES = ("equal", "soc", "capacity", "soc_switch")
 
+# Schlüssel der Verteilung einer Netzgruppe.
+DIST_MODE = "distribution_mode"
+DIST_GLOBAL_MAX = "global_max_power"
+DIST_SOC_SWITCH_DIVERGENCE = "soc_switch_divergence"
+# Feld je Instanz in der Verteilung, gespeichert unter `capacity_key(entry_id)`.
+CAPACITY_FIELD = "capacity_sensor"
+CAPACITY_KEY = re.compile(rf"inst_(.+)_{CAPACITY_FIELD}")
+
+
+def capacity_key(entry_id: str) -> str:
+    """Schlüssel des Kapazitätssensors der Instanz `entry_id` in der Verteilung ihrer Netzgruppe."""
+    return f"inst_{entry_id}_{CAPACITY_FIELD}"
+
 
 class Field(NamedTuple):
     """Ein Setting: Standardwert, Typ, harte Grenzen und Anzeigebereich des Panels.
@@ -367,12 +380,12 @@ SETTINGS_SCHEMA: dict[str, Field] = {
 SETTINGS_DEFAULTS: dict = {key: field.default for key, field in SETTINGS_SCHEMA.items()}
 
 DIST_SCHEMA: dict[str, Field] = {
-    "global_max_power":  _int(800, AMOUNT, 0, 9600, 10),
-    "distribution_mode": Field("equal", "enum", choices=DIST_MODES),
+    DIST_GLOBAL_MAX: _int(800, AMOUNT, 0, 9600, 10),
+    DIST_MODE:       Field("equal", "enum", choices=DIST_MODES),
     # Divergenz-Schwelle (Prozentpunkte) für Modus `soc_switch`: exklusiv
     # aktive Instanz gibt ab, sobald ihr SOC seit Aktivierung um diesen Wert
     # gefallen ist — Rotation an die Instanz mit dem höchsten verbleibenden SOC.
-    "soc_switch_divergence": _int(5, PERCENT, 1, 50, 1),
+    DIST_SOC_SWITCH_DIVERGENCE: _int(5, PERCENT, 1, 50, 1),
     # Instanzübergreifende Sensor-Vorgaben — jede Instanz kann
     # diese optional lokal überschreiben (S_PV_FORECAST_SENSOR, S_ZONE1_FORCE_SENSOR,
     # S_SURPLUS_LOCK_SENSOR, S_TARIFF_PRICE_SENSOR, S_TARIFF_CHEAP_ENTITY,
@@ -386,5 +399,5 @@ DIST_SCHEMA: dict[str, Field] = {
     "global_tariff_exp_entity":           _str(),
 }
 DIST_DEFAULTS: dict = {key: field.default for key, field in DIST_SCHEMA.items()}
-# Werte je Instanz in der Verteilung: `inst_<entry_id>_capacity_sensor`.
-DIST_INST_FIELDS = (re.compile(r"inst_.+_capacity_sensor"), _str())
+# Werte je Instanz in der Verteilung: Muster der Schlüssel und ihr Feld.
+DIST_INST_FIELDS = (CAPACITY_KEY, _str())

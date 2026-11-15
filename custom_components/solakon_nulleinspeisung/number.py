@@ -12,14 +12,13 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import group_store
 from .const import (
-    DIST_SCHEMA, DOMAIN, S_HARD_LIMIT_Z0, S_HARD_LIMIT_Z1, S_TARGET_GRID_POWER, S_TARGET_SOC,
+    DIST_GLOBAL_MAX, DIST_SCHEMA, DOMAIN, S_HARD_LIMIT_Z0, S_HARD_LIMIT_Z1, S_TARGET_GRID_POWER, S_TARGET_SOC,
     SETTINGS_SCHEMA, VERSION,
 )
 from .coordinator import SolakonCoordinator
 from .entity_base import SolakonEntity
 from .schema import InvalidSettings
 
-GROUP_LIMIT_KEY = "global_max_power"
 # `hass.data`-Schlüssel (ohne DOMAIN-Präfix) der Träger-Verwaltung, entfernt mit der letzten Instanz.
 DATA_KEY = "group_limit"
 
@@ -51,7 +50,7 @@ class GroupLimitNumber(NumberEntity):
 
     _attr_has_entity_name = True
     _attr_should_poll = False
-    _attr_translation_key = GROUP_LIMIT_KEY
+    _attr_translation_key = DIST_GLOBAL_MAX
     _attr_icon = "mdi:transmission-tower-export"
     _attr_native_unit_of_measurement = UnitOfPower.WATT
     _attr_mode = NumberMode.BOX
@@ -62,9 +61,9 @@ class GroupLimitNumber(NumberEntity):
         self.grid_sensor = grid_sensor
         self.carrier = carrier
         self._unsub: Callable[[], None] | None = None
-        lo, hi, step = DIST_SCHEMA[GROUP_LIMIT_KEY].ui
+        lo, hi, step = DIST_SCHEMA[DIST_GLOBAL_MAX].ui
         self._attr_native_min_value, self._attr_native_max_value, self._attr_native_step = lo, hi, step
-        self._attr_unique_id = f"group_{number}_{GROUP_LIMIT_KEY}"
+        self._attr_unique_id = f"group_{number}_{DIST_GLOBAL_MAX}"
         self._attr_device_info = {
             "identifiers": {(DOMAIN, f"group_{number}")},
             "translation_key": "net_group",
@@ -77,11 +76,11 @@ class GroupLimitNumber(NumberEntity):
     @property
     def native_value(self) -> int:
         """Gesamtlimit der Netzgruppe."""
-        return int(self._store.dist_view(self.grid_sensor)[GROUP_LIMIT_KEY])
+        return int(self._store.dist_view(self.grid_sensor)[DIST_GLOBAL_MAX])
 
     async def async_set_native_value(self, value: float) -> None:
         """Gesamtlimit der Netzgruppe speichern; InvalidSettings bei verletztem Schema."""
-        if findings := await self._store.save_dist(self.grid_sensor, {GROUP_LIMIT_KEY: int(value)}):
+        if findings := await self._store.save_dist(self.grid_sensor, {DIST_GLOBAL_MAX: int(value)}):
             raise InvalidSettings(findings)
 
     async def async_added_to_hass(self) -> None:
@@ -105,7 +104,7 @@ def _drop_group_limit(hass: Any, grid_sensor: str) -> None:
     if (number := group_store.require_store(hass).numbers.get(grid_sensor)) is None:
         return
     entities = er.async_get(hass)
-    if entity_id := entities.async_get_entity_id("number", DOMAIN, f"group_{number}_{GROUP_LIMIT_KEY}"):
+    if entity_id := entities.async_get_entity_id("number", DOMAIN, f"group_{number}_{DIST_GLOBAL_MAX}"):
         entities.async_remove(entity_id)
     devices = dr.async_get(hass)
     if device := devices.async_get_device(identifiers={(DOMAIN, f"group_{number}")}):

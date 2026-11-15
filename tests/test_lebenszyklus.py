@@ -273,3 +273,59 @@ def test_loeschen_der_letzten_instanz_binnen_der_frist_hinterlaesst_keinen_grupp
 
     _run(lauf())
     assert sorted(u.hass.storage) == []
+
+
+# ── Kapazitätssensoren der Verteilung ────────────────────────────────────────
+
+CAP = C.capacity_key
+
+
+def _caps(u, grid="sensor.grid") -> dict:
+    """Kapazitätsschlüssel der gespeicherten Verteilung einer Netzgruppe."""
+    dist = h.stored(u.hass, DIST_KEY, {}).get(grid, {})
+    return {k: v for k, v in dist.items() if C.CAPACITY_KEY.fullmatch(k)}
+
+
+def test_loeschen_entfernt_den_kapazitaetssensor_der_instanz():
+    u = Umgebung("abc")
+    h.put_store(u.hass, DIST_KEY, {"sensor.grid": {
+        CAP("entry_a"): "sensor.cap_a", CAP("entry_b"): "sensor.cap_b", CAP("entry_c"): "sensor.cap_c"}})
+    _run(u.setup("a", "b", "c"))
+    _run(u.remove("b"))
+    assert _caps(u) == {CAP("entry_a"): "sensor.cap_a", CAP("entry_c"): "sensor.cap_c"}
+
+
+def test_setup_entfernt_kapazitaetssensor_ohne_eintrag():
+    u = Umgebung("ab")
+    h.put_store(u.hass, DIST_KEY, {"sensor.grid": {CAP("entry_a"): "sensor.cap_a", CAP("entry_x"): "sensor.cap_x"}})
+    _run(u.setup("a", "b"))
+    assert _caps(u) == {CAP("entry_a"): "sensor.cap_a"}
+
+
+def _wechsel(u, p, grid):
+    """Netzsensor im Options-Flow ändern: Eintrag mit neuer Zuweisung neu laden."""
+    async def lauf():
+        await u.unload(p)
+        u.entries[p].data = {**u.entries[p].data, C.CONF_GRID_SENSOR: grid}
+        await u.setup(p)
+    _run(lauf())
+
+
+def test_netzsensor_wechsel_nimmt_den_kapazitaetssensor_mit():
+    u = Umgebung("abc")
+    h.put_store(u.hass, DIST_KEY, {"sensor.grid": {CAP("entry_a"): "sensor.cap_a", CAP("entry_b"): "sensor.cap_b"}})
+    _run(u.setup("a", "b", "c"))
+    _wechsel(u, "a", "sensor.other")
+    assert _caps(u) == {CAP("entry_b"): "sensor.cap_b"}
+    assert _caps(u, "sensor.other") == {CAP("entry_a"): "sensor.cap_a"}
+    assert u.coord("a").group.dist_cfg()[CAP("entry_a")] == "sensor.cap_a"
+
+
+def test_netzsensor_wechsel_behaelt_den_eintrag_der_neuen_netzgruppe():
+    u = Umgebung("abc")
+    h.put_store(u.hass, DIST_KEY, {"sensor.grid": {CAP("entry_a"): "sensor.cap_alt"}})
+    _run(u.setup("a", "b", "c"))
+    h.group_store_mod.require_store(u.hass).dist["sensor.other"] = {CAP("entry_a"): "sensor.cap_neu"}
+    _wechsel(u, "a", "sensor.other")
+    assert _caps(u) == {}
+    assert _caps(u, "sensor.other") == {CAP("entry_a"): "sensor.cap_neu"}
