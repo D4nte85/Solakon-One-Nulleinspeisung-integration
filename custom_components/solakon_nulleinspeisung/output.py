@@ -110,11 +110,11 @@ class Output:
     async def _wait_for_target(self, target: float, ac_charge_mode: bool = False) -> None:
         """Wartet, bis die Ist-Leistung den Zielwert erreicht, höchstens `S_WAIT_TIME` Sekunden.
 
-        Ohne `S_SELF_ADJUST` wird die volle Wartezeit abgewartet.
+        Ohne `S_SELF_ADJUST` wird die volle Wartezeit abgewartet, bei Wartezeit 0 gar nicht.
         """
         wait_max = self._wait_time
 
-        if not self._self_adjust:
+        if not self._self_adjust or wait_max <= 0:
             await asyncio.sleep(wait_max)
             return
 

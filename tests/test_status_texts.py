@@ -42,3 +42,13 @@ def test_ohne_aktion_bleibt_text_leer():
     hass, _ = _coord("en")
     assert _status(hass, language="de")["last_action"] == ""
     assert _status(hass, language="de")["last_error"] == ""
+
+
+def test_nicht_formatierbarer_text_warnt_einmal(monkeypatch):
+    logs = h.capture_logs()
+    monkeypatch.setattr(i18n, "_WARNED", set())
+    monkeypatch.setitem(i18n._TEXTS, "x_test", {"de": "Wert {fehlt}", "en": "value {fehlt}"})
+    assert i18n.translate("de", "x_test") == "Wert {fehlt}"
+    assert i18n.translate("de", "x_test") == "Wert {fehlt}"
+    assert [r[0] for r in logs.records] == ["WARNING"]
+    assert "x_test" in logs.records[0][1]

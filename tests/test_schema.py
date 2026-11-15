@@ -174,9 +174,20 @@ def test_ws_save_config_liefert_gekoppelte_settings():
     assert settings == coord.settings
 
 
+def test_ws_save_distribution_config_unbekannte_gruppe():
+    hass = h.FakeHass("de")
+    h.install_groups(hass, dist_store=h.migrations_mod.SolakonDistStore(hass, 2, "dist"))
+    hass.config_entries.entries.append(h.FakeEntry("entry_a", h.entry_data("a")))
+    sent = _ws(h.integration._ws_save_distribution_config, hass,
+               grid_sensor="sensor.fremd", distribution={"distribution_mode": "equal"})
+    assert sent[0][:3] == ("error", 1, "unknown_group")
+    assert "dist" not in hass.storage
+
+
 def test_ws_save_distribution_config_weist_ab():
     hass = h.FakeHass("de")
     h.install_groups(hass, dist_store=h.migrations_mod.SolakonDistStore(hass, 2, "dist"))
+    hass.config_entries.entries.append(h.FakeEntry("entry_a", h.entry_data("a")))
     sent = _ws(h.integration._ws_save_distribution_config, hass,
                grid_sensor="sensor.grid", distribution={"distribution_mode": "weighted"})
     assert sent[0][:3] == ("error", 1, "invalid_settings")
@@ -271,3 +282,14 @@ R, T, N = "regulation_enabled", "target_charge_enabled", "target_grid_charge"
 def test_kopplung_einmal_aus_dem_alten_stand(before, changes, after):
     settings = {**const.SETTINGS_DEFAULTS, **before}
     assert schema.couple_target(settings, changes) == after
+
+
+def test_zustandsflags_nicht_in_den_settings():
+    hass = h.FakeHass("de")
+    h.install_groups(hass)
+    coord = h.make_coord(hass, stored={"cycle_active": True, C.CHARGE_SESSION_KEY: C.SESSION_AC})
+    asyncio.run(coord.async_setup())
+    assert coord.cycle_active and coord.charge_session == C.SESSION_AC
+    assert "cycle_active" not in coord.settings and C.CHARGE_SESSION_KEY not in coord.settings
+    sent = _ws(h.integration._ws_get_config, hass, entry_id="entry_a")
+    assert "cycle_active" not in sent[0][2]

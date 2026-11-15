@@ -2,9 +2,14 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 
 DEFAULT_LANGUAGE = "en"
+
+_LOGGER = logging.getLogger(__name__)
+# Schlüssel, zu denen schon eine Warnung im Log steht.
+_WARNED: set[str] = set()
 
 # Textbaustein als (Schlüssel, Parameter), erst beim Anzeigen übersetzt.
 Msg = tuple[str, dict[str, object]]
@@ -353,19 +358,28 @@ _TEXTS: dict[str, dict[str, str]] = {
 }
 
 
+def _warn_once(tag: str, msg: str, *args: object) -> None:
+    """Warnung ins Log, je `tag` nur einmal."""
+    if tag in _WARNED:
+        return
+    _WARNED.add(tag)
+    _LOGGER.warning(msg, *args)
+
+
 def _load_mode_texts() -> None:
     """Modus-Label aus translations/<lang>.json nach _TEXTS übernehmen.
 
     Die Zustandstexte des Sensors "Betriebsmodus" werden unter "mode_<key>"
     eingehängt und von translate() wie jeder andere Text aufgelöst. Fehlt eine
-    Datei oder ein Schlüssel, bleibt der Rohschlüssel stehen.
+    Datei oder ein Schlüssel, bleibt der Rohschlüssel stehen und eine Warnung steht im Log.
     """
     ordner = Path(__file__).parent / "translations"
     for sprache in ("de", "en"):
         try:
             daten = json.loads((ordner / f"{sprache}.json").read_text(encoding="utf-8"))
             zustaende = daten["entity"]["sensor"]["mode_label"]["state"]
-        except (OSError, ValueError, KeyError):
+        except (OSError, ValueError, KeyError) as err:
+            _warn_once(f"file:{sprache}", "Solakon: Modustexte aus %s.json nicht lesbar: %s", sprache, err)
             continue
         for zustand, text in zustaende.items():
             _TEXTS.setdefault(f"mode_{zustand}", {})[sprache] = text
@@ -382,7 +396,8 @@ def translate(language: str, key: str, **params: object) -> str:
     template = texts.get((language or "").split("-")[0].lower()) or texts[DEFAULT_LANGUAGE]
     try:
         return template.format(**params)
-    except (KeyError, IndexError, ValueError):
+    except (KeyError, IndexError, ValueError) as err:
+        _warn_once(key, "Solakon: Text %s nicht formatierbar (%r), Vorlage bleibt stehen", key, err)
         return template
 
 

@@ -121,6 +121,17 @@ def test_ohne_haken_bleibt_deaktiviert():
     assert stubs.entity_registry_get(fh).async_get(ids[C.CONF_DISCHARGE_CURRENT]).disabled_by == "integration"
 
 
+def test_abbruch_bei_belegtem_modus_select_aktiviert_nichts():
+    fh = _hass()
+    ids = _device(fh, "d1", "s", disabled=("battery_max_discharge_current",))
+    fh.config_entries.entries = [h.FakeEntry("entry_x", {C.CONF_MODE_SELECT: ids[C.CONF_MODE_SELECT]})]
+    flow = _flow(fh)
+    data = {**ids, C.CONF_INSTANCE_NAME: "S", C.CONF_GRID_SENSOR: "sensor.grid", "enable_disabled": True}
+    result = _run(flow.async_step_entities(data))
+    assert result["type"] == "abort" and result["reason"] == "already_configured"
+    assert stubs.entity_registry_get(fh).async_get(ids[C.CONF_DISCHARGE_CURRENT]).disabled_by == "integration"
+
+
 def test_anpassen_ersetzt_nur_fehlende_entitaeten():
     fh = _hass()
     ids = _device(fh, "d1", "keller_solakon_one")

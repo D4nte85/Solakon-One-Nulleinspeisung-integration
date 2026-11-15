@@ -555,7 +555,8 @@ class SolakonCoordinator:
         stored = await self._store.async_load()
         if stored:
             stored, reset = sanitize(stored, SETTINGS_SCHEMA)
-            self.settings = {**SETTINGS_DEFAULTS, **stored}
+            flag_keys = {key for key, _, _, _ in PERSISTED_FLAGS}
+            self.settings = {**SETTINGS_DEFAULTS, **{k: v for k, v in stored.items() if k not in flag_keys}}
             for key, attr, default, allowed in PERSISTED_FLAGS:
                 value = stored.get(key, default)
                 if allowed is None:

@@ -220,6 +220,9 @@ async def _ws_save_distribution_config(
     )
     if store is None:
         return
+    if group_store.configured_members(hass, msg["grid_sensor"]) == 0:
+        connection.send_error(msg["id"], "unknown_group", "Keine Instanz nutzt diesen Netzsensor")
+        return
     try:
         await store.save_dist(msg["grid_sensor"], msg["distribution"])
     except InvalidSettings as err:

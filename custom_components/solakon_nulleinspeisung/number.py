@@ -152,7 +152,9 @@ class Carriers:
     async def release(self, entry_id: str, grid_sensor: str) -> None:
         """Entladenen Eintrag austragen; trug er ein Gesamtlimit, übernimmt die nächste Mitgliedsinstanz.
 
-        Seine Entität entfernt HA mit der Plattform; sie wird nur ausgetragen.
+        Seine Entität entfernt HA mit der Plattform; sie wird nur ausgetragen. Beim Löschen der
+        vorletzten Instanz zieht die Entität dabei kurz zur Schwester um, bis `async_remove_entry`
+        sie entfernt; das Entladen unterscheidet Löschen nicht von Neuladen.
         """
         if self._adders.pop(entry_id, None) is None:
             return

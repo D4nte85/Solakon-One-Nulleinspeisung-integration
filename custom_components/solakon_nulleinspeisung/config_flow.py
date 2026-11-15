@@ -158,10 +158,11 @@ class _EntityFlow:
         """Entitäten-Zuweisung; Abbruch, wenn der Modus-Select schon vergeben ist."""
         if user_input is not None:
             data = dict(user_input)
-            if data.pop(CONF_ENABLE_DISABLED, False):
-                _enable(self.hass, _disabled(self.hass, data))
+            enable = data.pop(CONF_ENABLE_DISABLED, False)
             if _mode_select_taken(self.hass, data.get(CONF_MODE_SELECT, ""), self._exclude):
                 return self.async_abort(reason="already_configured")
+            if enable:
+                _enable(self.hass, _disabled(self.hass, data))
             return self._finish(data)
         disabled = _disabled(self.hass, self._values)
         return self.async_show_form(
