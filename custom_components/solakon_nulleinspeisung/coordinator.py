@@ -7,8 +7,7 @@ import time
 from operator import attrgetter
 from typing import Any, Callable, Iterable, NamedTuple
 
-from homeassistant.core import HomeAssistant, Event, callback
-from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.util import dt as dt_util
 
 from .display import Display
@@ -180,9 +179,9 @@ class SolakonCoordinator:
         )
         self._lock = asyncio.Lock()
         self._listeners: list[Callable[[], None]] = []
-        self._unsub_trackers: list[Callable] = []
         self.trackers = Trackers(
-            hass, lambda: self.settings, self._effective, self._on_state_change, self._on_periodic,
+            hass, lambda: self.settings, self._effective, self._on_trigger,
+            lambda: [self.entry.data.get(key, "") for key, _, triggers, _ in CORE_SENSORS if triggers],
         )
         # Prognoselage des letzten Regelzyklus.
         self.forecast = ForecastFlags(False, False, False)
@@ -583,23 +582,10 @@ class SolakonCoordinator:
             self.settings = SETTINGS_DEFAULTS.copy()
             _LOGGER.info("Solakon: Standardwerte geladen")
 
-        cfg = self.entry.data
-        entities_to_track = [cfg.get(key, "") for key, _, triggers, _ in CORE_SENSORS if triggers]
-        entities_to_track = [e for e in entities_to_track if e]
-
-        if entities_to_track:
-            unsub = async_track_state_change_event(
-                self.hass, entities_to_track, self._on_state_change
-            )
-            self._unsub_trackers.append(unsub)
-
         self.trackers.start()
 
     async def async_shutdown(self) -> None:
         """Listener abräumen."""
-        for unsub in self._unsub_trackers:
-            unsub()
-        self._unsub_trackers.clear()
         self.trackers.stop()
 
     async def async_update_settings(self, changes: dict[str, Any]) -> None:
@@ -678,13 +664,8 @@ class SolakonCoordinator:
     # ── Ausführung: Regelzyklus ──────────────────────────────────────────────
 
     @callback
-    def _on_state_change(self, event: Event) -> None:
-        """Zustandsänderung eines Trigger-Sensors: Regelzyklus anstoßen."""
-        self.request_regulation()
-
-    @callback
-    def _on_periodic(self, _now: object) -> None:
-        """Periodischer Trigger: Regelzyklus anstoßen."""
+    def _on_trigger(self, _event: object) -> None:
+        """Trigger aus `Trackers` (Zustandsänderung oder Intervall): Regelzyklus anstoßen."""
         self.request_regulation()
 
     async def _async_regulate(self) -> None:

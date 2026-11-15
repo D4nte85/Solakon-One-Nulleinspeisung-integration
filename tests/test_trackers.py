@@ -11,14 +11,14 @@ C = h.const
 
 
 def _state_targets(hass) -> list[list[str]]:
-    """Sensoren aller noch angemeldeten Zustands-Trigger."""
+    """Sensoren aller noch angemeldeten Zustands-Trigger mit einem Sensor; der Kern-Trigger hat mehrere."""
     handles = {}
     for event in hass.events:
         if event[0] == "track" and event[1] == "state":
             handles[event[3]] = event[2]
         elif event[0] == "untrack":
             handles.pop(event[1], None)
-    return sorted(handles.values())
+    return sorted(t for t in handles.values() if len(t) == 1)
 
 
 def test_nacht_forcierung_wechselt_um_12_uhr_den_sensor(monkeypatch):

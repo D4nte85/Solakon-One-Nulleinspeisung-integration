@@ -32,7 +32,7 @@ def test_globaler_sensor_trigger_nach_setup():
         await h.integration.async_setup_entry(hass, entries[0])
 
     asyncio.run(run())
-    assert _triggers(hass, "a") == ["tariff"]
+    assert _triggers(hass, "a") == ["core", "tariff"]
 
 
 def test_globaler_sensor_trigger_bei_parallelem_setup(monkeypatch):
@@ -52,7 +52,7 @@ def test_globaler_sensor_trigger_bei_parallelem_setup(monkeypatch):
         await asyncio.gather(*(h.integration.async_setup_entry(hass, e) for e in entries))
 
     asyncio.run(run())
-    assert {p: _triggers(hass, p) for p in "ab"} == {"a": ["tariff"], "b": ["tariff"]}
+    assert {p: _triggers(hass, p) for p in "ab"} == {"a": ["core", "tariff"], "b": ["core", "tariff"]}
 
 
 def test_config_schema_nur_ueber_config_entry():
