@@ -13,6 +13,7 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 - **Verteilungsseite bei Ladefehler:** Scheiterte das Laden der Verteilung, versuchte die Seite es ohne Pause erneut, solange sie offen war. Jetzt erscheint eine Meldung, der nächste Seitenaufruf lädt neu (`solakon-panel.js`).
 - **Fehlertext bei einseitiger Grenze:** Statt „nur 0 bis null erlaubt“ meldet das Panel bei Feldern ohne Obergrenze „mindestens …“ bzw. ohne Untergrenze „höchstens …“ (`solakon-panel.js`).
 - **Fehlerkette nach dem Ausschalten der Regelung:** Die letzte Meldung eines Regelzyklus, etwa ein Kernsensor ohne Zahl, blieb nach dem Ausschalten der Regelung unbegrenzt sichtbar, weil die Fehlerkette im ausgeschalteten Zustand nicht neu begann. Jetzt beginnt das Abschalten eine neue Fehlerkette; sichtbar bleibt nur, was die Abschaltsequenz selbst meldet, etwa eine unbestätigte Output-Nullung (`coordinator.py`).
+- **Anzeige bei ausgeschalteter Regelung:** Startete die Integration mit ausgeschalteter Regelung, zeigten Zone und Betriebsmodus dauerhaft „Initialisierung…“ und „Warten auf Daten“, weil der Regelzyklus im ausgeschalteten Zustand nur den Betriebszustand nachzog. Jetzt folgen Zone und Betriebsmodus auch bei ausgeschalteter Regelung SOC und Modus-Select; Modus `'0'` zeigt „Disabled (Regelung inaktiv)“ (`coordinator.py`, `display.py`).
 
 ## [3.8.1] – 2026-11-11
 

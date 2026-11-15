@@ -50,13 +50,14 @@ class Display:
             self.mode_label = f"{self.mode_label}: {raw}"
 
     def update(
-        self, language: str, soc: float, zone3_limit: int, mode: str, at_rest: bool,
-        surplus_active: bool, cycle_active: bool,
+        self, language: str, soc: float, zone3_limit: float, mode: str, at_rest: bool,
+        surplus_active: bool, cycle_active: bool, regulation_on: bool = True,
     ) -> None:
         """Anzeigezone und Modus aus SOC, Flags und Modus des Wechselrichters.
 
         Zone 3 bei SOC ≤ zone3, sonst 0 bei Surplus, 1 bei Zyklus, sonst 2.
-        Modus '1' im Ruhezustand zeigt `rest_discharge`.
+        Modus '1' im Ruhezustand zeigt `rest_discharge`, Modus '0' bei
+        ausgeschalteter Regelung `disabled_regulation_off`.
         """
         if soc <= zone3_limit:
             self.zone = 3
@@ -71,6 +72,8 @@ class Display:
         key = MODE_KEY_BY_MODE.get(mode, "unknown")
         if mode == MODE_DISCHARGE and at_rest:
             key = "rest_discharge"
+        elif mode == MODE_DISABLED and not regulation_on:
+            key = "disabled_regulation_off"
         self.set_mode(key, language, mode)
 
     def update_state(

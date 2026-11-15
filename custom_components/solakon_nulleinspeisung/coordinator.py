@@ -344,13 +344,13 @@ class SolakonCoordinator:
 
     # ── Darstellen: Anzeigezustand ───────────────────────────────────────────
 
-    def _update_display(self, soc: float, zone3: int, mode: str) -> None:
-        """Anzeigezone, Modus und Betriebszustand nachziehen."""
+    def _update_display(self, soc: float, zone3: float, mode: str) -> bool:
+        """Anzeigezone, Modus und Betriebszustand nachziehen; True bei Wechsel des Betriebszustands."""
         self.display.update(
             self.hass.config.language, soc, zone3, mode, self._at_rest(mode),
-            self.surplus_active, self.cycle_active,
+            self.surplus_active, self.cycle_active, self._regulation_on,
         )
-        self._update_operating_state()
+        return self._update_operating_state()
 
     def _update_operating_state(self) -> bool:
         """Betriebszustand aus den Zustandsflags nachziehen; True bei Wechsel."""
@@ -681,7 +681,10 @@ class SolakonCoordinator:
 
         # ── 0. Regelung aktiv? ───────────────────────────────────────────────
         if not self._regulation_on:
-            self._end_cycle(notify_on_change=True)
+            soc = self.soc_reading()
+            mode = self._str(cfg[CONF_MODE_SELECT])
+            display = None if soc is None or mode == "unknown" else (soc, self.zone3_limit(), mode)
+            self._end_cycle(display=display, notify_on_change=True)
             return
 
         self.timeout.start_cycle()
@@ -956,8 +959,7 @@ class SolakonCoordinator:
         if blocked:
             self._cycle_blocked = True
         if display is not None:
-            self._update_display(*display)
-            changed = True
+            changed = self._update_display(*display)
         else:
             changed = self._update_operating_state()
         changed = changed or shown != (self.last_error_msgs, self.display.zone, self.display.mode_key)

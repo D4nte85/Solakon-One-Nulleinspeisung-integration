@@ -1,0 +1,12 @@
+titel: Zone und Modus bleiben nach dem Start mit ausgeschalteter Regelung auf dem Startwert
+bezug: fix-2026-11-15-anzeige-bei-start-mit-regelung-aus
+# Regelung aus, SOC unter der Zone-3-Schwelle, Modus '0': Anzeige zeigt Zone 3 und „Regelung inaktiv“.
+netz: 100
+instanzen:
+  - prefix: a
+    settings: {regulation_enabled: false}
+    sensoren: {soc: 5, modus: "0"}
+schritte:
+  - nach: 0
+erwartet:
+  - zustand: {current_zone: 3, mode_key: disabled_regulation_off}
