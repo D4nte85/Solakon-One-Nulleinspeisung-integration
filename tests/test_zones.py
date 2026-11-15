@@ -76,13 +76,13 @@ def test_je_fall_ein_treffer(kw, name):
     assert _decide(**kw).name == name
 
 
-@pytest.mark.parametrize("below_exp, cycle, rest", [(False, True, None), (True, False, "0")])
+@pytest.mark.parametrize("below_exp, cycle, rest", [(False, True, False), (True, False, True)])
 def test_0b_in_tarifsperre_ruht(below_exp, cycle, rest):
     """Issue #57: 0B startet in der Tarifsperre keinen Zyklus und führt in den Ruhezustand."""
     d = _decide(surplus_active=True, cycle_active=True, mode="1", at_rest=False, soc=96, below_exp=below_exp)
     assert d.name == "0B"
-    assert d.transition["flags"].cycle_active is cycle
-    assert d.transition.get("rest") == rest
+    assert d.transition.flags.cycle_active is cycle
+    assert d.transition.rest is rest
 
 
 @pytest.mark.parametrize("kw, name", [
@@ -102,13 +102,13 @@ def test_reihenfolge(kw, name):
 
 def test_0a_ohne_moduswechsel_in_laufendem_modus_1():
     d = _decide(surplus_enabled=True, new_surplus=True, mode="1", at_rest=False)
-    assert d.transition == {"flags": zones.FlagUpdate(surplus_active=True, cycle_active=True),
-                            "timer": False, "mode": None}
+    assert d.transition == zones.Transition(flags=zones.FlagUpdate(surplus_active=True, cycle_active=True),
+                                            timer=False, mode=None)
 
 
 def test_0b_leitet_zyklus_aus_soc_ab():
     d = _decide(surplus_active=True, soc=70)
-    assert d.transition["flags"] == zones.FlagUpdate(surplus_active=False, cycle_active=True)
+    assert d.transition.flags == zones.FlagUpdate(surplus_active=False, cycle_active=True)
 
 
 def test_a_erzwungen_unter_zone1():
@@ -118,7 +118,7 @@ def test_a_erzwungen_unter_zone1():
 
 def test_d_session_kehrt_unter_zone3_in_modus_3_zurueck():
     d = _decide(ac_enabled=True, session="ac_charge", soc=15)
-    assert (d.name, d.transition) == ("D", {"mode": "3"})
+    assert (d.name, d.transition) == ("D", zones.Transition(mode="3"))
 
 
 @pytest.mark.parametrize("soc, hyst, gt", [
@@ -133,12 +133,12 @@ def test_d_durch_tarif_lock_gesperrt():
     assert _decide(cycle_active=True, below_exp=True) is None
 
 
-@pytest.mark.parametrize("cycle_active, rest", [(False, "0"), (True, None)])
-def test_end_charge_ruhe_nur_ohne_zyklus(cycle_active, rest):
+@pytest.mark.parametrize("cycle_active, mode, rest", [(False, "0", True), (True, "1", False)])
+def test_end_charge_ruhe_nur_ohne_zyklus(cycle_active, mode, rest):
     d = _decide(ac_enabled=True, session="ac_charge", mode="3", at_rest=False, soc=95,
                 cycle_active=cycle_active)
-    assert d.transition == {"reset_integral": True, "flags": zones.FlagUpdate(session="none"),
-                            "output": 0, "mode": "1", "rest": rest}
+    assert d.transition == zones.Transition(reset_integral=True, flags=zones.FlagUpdate(session="none"),
+                                            output=0, mode=mode, rest=rest)
     assert d.action == "act_fall_h"
 
 
@@ -160,7 +160,7 @@ def test_g_eintritt_symmetrisch_zum_austritt_um_den_offset(offset, grid, fall):
 
 def test_d_folgt_session_mit_abgeschalteter_option_nicht():
     d = _decide(session="tariff_charge", cycle_active=True, soc=70)
-    assert (d.name, d.transition) == ("D", {"mode": "1"})
+    assert (d.name, d.transition) == ("D", zones.Transition(mode="1"))
 
 
 def test_gt_startet_nicht_neben_laufender_ac_session():
@@ -170,7 +170,7 @@ def test_gt_startet_nicht_neben_laufender_ac_session():
 
 def test_i_loescht_flags_und_laesst_modus_stehen():
     d = _decide(ac_enabled=True, session="ac_charge", mode="1", at_rest=False)
-    assert d.transition == {"reset_integral": True, "flags": zones.FlagUpdate(session="none")}
+    assert d.transition == zones.Transition(reset_integral=True, flags=zones.FlagUpdate(session="none"))
     assert d.action == "act_fall_i_session"
 
 
@@ -426,16 +426,16 @@ def test_ze_vor_allem_setzt_flags_zurueck_und_schaltet_regelung_ab():
     d = _decide(**TARGET, soc=80, surplus_enabled=True, new_surplus=True, surplus_active=True,
                 cycle_active=True, session="tariff_charge", mode="3", at_rest=False)
     assert (d.name, d.regulation_off, d.action, d.params) == ("ZE", True, "act_fall_ze", {"soc": 80})
-    assert d.transition == {"reset_integral": True, "timer": False, "flags": zones.FlagUpdate(
-        cycle_active=False, surplus_active=False, session="none")}
+    assert d.transition == zones.Transition(reset_integral=True, timer=False, flags=zones.FlagUpdate(
+        cycle_active=False, surplus_active=False, session="none"))
 
 
 def test_gn_vor_gt_mit_max_ladeleistung():
     d = _decide(**TARGET, grid_charge_enabled=True, grid_charge_power=1000,
                 below_cheap=True, below_exp=True, mode="1", at_rest=True)
     assert d.name == "GN"
-    assert d.transition == {"flags": zones.FlagUpdate(session="grid_charge"), "output": 1000,
-                            "ac_charge_mode": True, "timer_first": True, "mode": "3"}
+    assert d.transition == zones.Transition(flags=zones.FlagUpdate(session="grid_charge"), output=1000,
+                                            ac_charge_mode=True, timer_first=True, mode="3")
 
 
 def test_zb_vor_tarifsperre():
@@ -445,8 +445,8 @@ def test_zb_vor_tarifsperre():
 
 def test_zb_ruht_wie_tm():
     d = _decide(**TARGET, battery_priority=True, mode="1", at_rest=False, cycle_active=True)
-    assert d.transition == {"reset_integral": True, "flags": zones.FlagUpdate(cycle_active=False),
-                            "output": 0, "rest": "0"}
+    assert d.transition == zones.Transition(reset_integral=True, flags=zones.FlagUpdate(cycle_active=False),
+                                            output=0, mode="0", rest=True)
 
 
 @pytest.mark.parametrize("kw", [
@@ -486,4 +486,4 @@ def test_i_faengt_netz_laden_ohne_modus_3():
 
 def test_d_folgt_netz_laden_auch_unter_zone3():
     d = _decide(**TARGET, session="grid_charge", grid_charge_enabled=True, soc=15)
-    assert (d.name, d.transition) == ("D", {"mode": "3"})
+    assert (d.name, d.transition) == ("D", zones.Transition(mode="3"))

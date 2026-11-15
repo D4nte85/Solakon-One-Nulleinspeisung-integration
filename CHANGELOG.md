@@ -33,6 +33,7 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 - **PI-Phase mit Schnappschuss und Grenzen:** Die Pfadwahl bekommt Schnappschuss und Leistungsgrenzen als Ganzes und rechnet Obergrenze und PV-Deckel selbst; die Grenzen entstehen auch für das Hard-Limit der Verteilung aus derselben Funktion. Zweitlesung und Offset laufen erst nach der Rückkehr im Ruhemodus. Keine Verhaltensänderung (`paths.py`, `limits.py`, `coordinator.py`, `zones.py`).
 - **Eine Tabelle der Funktionen mit Sensor:** Gelesene Werte, Fehlermeldungen und Trigger der Funktionen mit Sensor stehen in `feature_sensors.FEATURES`; die Trigger werden daraus abgeleitet. Keine Verhaltensänderung (`feature_sensors.py`, `trackers.py`).
 - **Zonen des Dynamic Offset aus einer Liste:** Settings-Schema, Offsetrechnung, Status und Sensor-Attribute lesen die vier Offsetzonen aus `DYN_ZONES`. Der Status führt dadurch auch `dyn_z1_night_enabled`, das bisher fehlte. Sonst keine Verhaltensänderung (`const.py`, `dynamic_offset.py`, `status_view.py`, `sensor.py`, `__init__.py`).
+- **Übergang eines Falls als Wert:** Die Fallentscheidung liefert ihren Übergang als `Transition` mit dem Zielmodus und der Kennung „Ruhemodus“ statt als Wörterbuch; der Ruhemodus überschreibt keinen anderen Modus mehr still. Keine Verhaltensänderung (`zones.py`, `coordinator.py`).
 
 ## [3.8.1] – 2026-11-11
 

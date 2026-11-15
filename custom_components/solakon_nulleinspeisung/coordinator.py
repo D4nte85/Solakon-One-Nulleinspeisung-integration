@@ -32,7 +32,7 @@ from .tariff import Tariff, TariffState
 from .timeout import Timeout
 from .trackers import Trackers
 from .zones import (
-    FlagUpdate, ForecastFlags, Night, Surplus, ZoneInputs, at_rest, charging_to_target, control_state, decide,
+    FlagUpdate, ForecastFlags, Night, Surplus, Transition, ZoneInputs, at_rest, charging_to_target, control_state, decide,
     forecast_flags, night_active, required_discharge, rest_mode,
 )
 from .const import (
@@ -446,7 +446,7 @@ class SolakonCoordinator:
             return
         self._warn_hardware("warn_output_stuck", {"actual": actual, "limit": limit},
                             f" (Versuch {self.out.stall_actions})")
-        await self._transition(reset_integral=True, output=0, rest=rest_mode(rest_in_discharge))
+        await self._transition(Transition(reset_integral=True, output=0, mode=rest_mode(rest_in_discharge), rest=True))
         self._set_last_action("act_output_recovery", actual=actual, limit=limit)
 
     async def _set_fixed_output(
@@ -471,43 +471,33 @@ class SolakonCoordinator:
 
     # ── Schreiben: Zustandsübergang und Integral ─────────────────────────────
 
-    async def _transition(
-        self, *, reset_integral: bool = False, flags: FlagUpdate | None = None,
-        output: float | None = None, wait: bool = True, ac_charge_mode: bool = False,
-        timer: bool = True, timer_first: bool = False, mode: str | None = None,
-        rest: str | None = None,
-    ) -> None:
-        """Zustandsübergang in fester Folge: Integral, Flags, Output, Timer, Modus.
+    async def _transition(self, t: Transition) -> None:
+        """Zustandsübergang in fester Folge: Integral, Flags, Output, Timer, Modus (siehe `zones.Transition`).
 
-        `flags` setzt nur die Zustandsflags, die nicht None sind. `output` None lässt die
-        Ausgangsleistung unberührt, `wait=False` schreibt sie ohne Konvergenzwarten.
-        `timer_first` schaltet den Timer vor den Output. `mode` None schreibt keinen Modus.
-        `rest` ist der Ruhemodus und wird statt `mode` geschrieben; jeder geschriebene Modus
-        setzt `resting` (wahr nur mit `rest`).
+        `flags` setzt nur die Zustandsflags, die nicht None sind. Jeder geschriebene Modus
+        setzt `resting` auf `t.rest`.
         """
-        if reset_integral:
+        if t.reset_integral:
             self.pi.reset()
-        if flags is not None:
-            if flags.cycle_active is not None:
-                self.cycle_active = flags.cycle_active
-            if flags.surplus_active is not None:
-                self.surplus_active = flags.surplus_active
-            if flags.session is not None:
-                self.charge_session = flags.session
-        if timer and timer_first:
+        if t.flags is not None:
+            if t.flags.cycle_active is not None:
+                self.cycle_active = t.flags.cycle_active
+            if t.flags.surplus_active is not None:
+                self.surplus_active = t.flags.surplus_active
+            if t.flags.session is not None:
+                self.charge_session = t.flags.session
+        if t.timer and t.timer_first:
             await self.timeout.toggle()
-        if output is not None:
-            if wait:
-                await self.out.set_and_wait(output, ac_charge_mode=ac_charge_mode)
+        if t.output is not None:
+            if t.wait:
+                await self.out.set_and_wait(t.output, ac_charge_mode=t.ac_charge_mode)
             else:
-                await self.out.set(output)
-        if timer and not timer_first:
+                await self.out.set(t.output)
+        if t.timer and not t.timer_first:
             await self.timeout.toggle()
-        if rest is not None:
-            mode = rest
-        if mode is not None:
-            self.resting = rest is not None
-            await self._set_mode(mode)
+        if t.mode is not None:
+            self.resting = t.rest
+            await self._set_mode(t.mode)
 
     @property
     def integral(self) -> float:
@@ -529,7 +519,7 @@ class SolakonCoordinator:
     async def async_set_cycle(self, active: bool) -> None:
         """Unter dem Lock: Zyklus über `_transition` setzen (Integral nullen, Timer-Toggle), speichern, benachrichtigen; danach Regelzyklus anstoßen."""
         async with self._lock:
-            await self._transition(reset_integral=True, flags=FlagUpdate(cycle_active=active))
+            await self._transition(Transition(reset_integral=True, flags=FlagUpdate(cycle_active=active)))
             self.schedule_save()
             self.notify_listeners()
         self.request_regulation()
@@ -622,9 +612,9 @@ class SolakonCoordinator:
         """Abschaltpfad bei noch aktiver Regelung: neue Fehlerkette, Output 0, Entladestrom auf Gerätemaximum, Modus '0'."""
         self._messages = CycleMessages()
         _LOGGER.info("Solakon: Regelung wird deaktiviert — setze Output 0, Modus Disabled")
-        await self._transition(output=0, wait=False, timer=False)
+        await self._transition(Transition(output=0, wait=False, timer=False))
         await self._set_discharge(DEVICE_MAX_CURRENT)
-        await self._transition(mode=MODE_DISABLED)
+        await self._transition(Transition(mode=MODE_DISABLED))
         self.display.set_mode("disabled_regulation_off", self.hass.config.language)
 
     def schedule_save(self) -> None:
@@ -835,7 +825,7 @@ class SolakonCoordinator:
         ))
         if d is None:
             return None
-        await self._transition(**d.transition)
+        await self._transition(d.transition)
         self._set_last_action(d.action, **d.params)
         if d.regulation_off:
             await self._switch_off_sequence()
