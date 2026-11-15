@@ -274,20 +274,18 @@ def entry_data(prefix: str, grid_sensor: str = "sensor.grid", export_limit: bool
 
 # ── Aufzeichnung ─────────────────────────────────────────────────────────────
 
+# Zustand am Coordinator für Aufzeichnungen; Schlüssel ist der Pfad (Teilobjekt.Attribut).
 COORD_ATTRS = (
-    "current_zone", "zone_label", "mode_key", "mode_label",
-    "last_action", "last_action_key", "last_action_params", "last_action_ts",
-    "last_error", "last_error_msgs", "integral", "active_fall",
-    "cycle_active", "surplus_active", "charge_session", "resting",
-    "is_night", "discharge_locked", "operating_state", "operating_state_ts",
-    "_cycle_blocked", "last_output_ts", "mode_label_ts",
-    "grid_stddev", "grid_stddev_raw", "dyn_offset_z1", "dyn_offset_z2", "dyn_offset_ac",
-    "allocated_power", "surplus_power", "_output_warning",
-    "_output_stall_actions", "_output_stall_last_ts", "_tariff_unit_suspect_since",
-    "dist_mode_effective", "_prev_actual", "_solar_zero_entry_armed",
-    "_timer_toggled_in_cycle",
-    "forecast_tariff_suppressed", "forecast_surplus_forced", "forecast_exit_lock",
-    "forecast_zone1_forced",
+    "display.zone", "display.zone_label", "display.mode_key", "display.mode_label", "last_action",
+    "last_action_key", "last_action_params", "last_action_ts", "last_error", "last_error_msgs",
+    "integral", "active_fall", "cycle_active", "surplus_active", "charge_session", "resting",
+    "is_night", "discharge_locked", "display.operating_state", "display.operating_state_ts",
+    "_cycle_blocked", "out.last_ts", "display.mode_ts", "dyn.stddev", "dyn.stddev_raw",
+    "dyn.offsets.z1", "dyn.offsets.z1_night", "dyn.offsets.z2", "dyn.offsets.ac",
+    "allocated_power", "surplus_power", "_messages.hardware_msg", "out.stall_actions",
+    "out.stall_last_ts", "tariff.unit_suspect_since", "dist_mode_effective", "surplus.prev_actual",
+    "surplus.armed", "timeout.toggled_in_cycle", "tariff.suppressed", "forecast.surplus_forced",
+    "forecast.exit_lock", "forecast.zone1_forced", "settings_rev",
 )
 
 _MISSING = "<fehlt>"
@@ -328,27 +326,9 @@ def groups_state(hass):
     return jsonable(out)
 
 
-# Zustände, die in ein Teilobjekt gewandert sind: Protokollschlüssel → Pfad am Coordinator.
-COORD_PATHS = {"_tariff_unit_suspect_since": "tariff.unit_suspect_since",
-               "forecast_tariff_suppressed": "tariff.suppressed",
-               "forecast_surplus_forced": "forecast.surplus_forced", "forecast_exit_lock": "forecast.exit_lock",
-               "forecast_zone1_forced": "forecast.zone1_forced",
-               "_prev_actual": "surplus.prev_actual", "_solar_zero_entry_armed": "surplus.armed",
-               "_output_warning": "_messages.hardware_msg",
-               "grid_stddev": "dyn.stddev", "grid_stddev_raw": "dyn.stddev_raw",
-               "dyn_offset_z1": "dyn.offsets.z1", "dyn_offset_z2": "dyn.offsets.z2", "dyn_offset_ac": "dyn.offsets.ac",
-               "last_output_ts": "out.last_ts", "_output_stall_actions": "out.stall_actions",
-               "_output_stall_last_ts": "out.stall_last_ts",
-               "current_zone": "display.zone", "zone_label": "display.zone_label",
-               "mode_key": "display.mode_key", "mode_label": "display.mode_label",
-               "mode_label_ts": "display.mode_ts", "operating_state": "display.operating_state",
-               "operating_state_ts": "display.operating_state_ts",
-               "_timer_toggled_in_cycle": "timeout.toggled_in_cycle"}
-
-
 def _coord_attr(coord, name):
     obj = coord
-    for part in COORD_PATHS.get(name, name).split("."):
+    for part in name.split("."):
         obj = obj.get(part, _MISSING) if isinstance(obj, dict) else getattr(obj, part, _MISSING)
     return obj
 

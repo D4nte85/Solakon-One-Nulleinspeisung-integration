@@ -124,6 +124,21 @@ def gen_settings(rng) -> dict:
     return s
 
 
+def gen_settings_ext(rng) -> dict:
+    """Settings aus eigenem Zufallsstrom: Pfad ohne PI und Nacht-Offset der Zone 1.
+    Der Hauptstrom bleibt dadurch unverändert."""
+    s: dict = {
+        C.S_PI_ENABLED: _chance(rng, 0.85),
+        C.S_Z1_NIGHT_ENABLED: _chance(rng, 0.35),
+        C.S_OFFSET_1_NIGHT: _pick(rng, [30, 0, -20, 80]),
+    }
+    s[C.dyn_key("z1_night", "enabled")] = _chance(rng, 0.25)
+    s[C.dyn_key("z1_night", "negative")] = _chance(rng, 0.2)
+    s[C.dyn_key("z1_night", "min")] = _pick(rng, [30, 0, 100])
+    s[C.dyn_key("z1_night", "max")] = _pick(rng, [250, 20, 400])
+    return s
+
+
 def gen_dist(rng) -> dict:
     d = {
         "distribution_mode": _pick(rng, ["equal", "soc", "capacity", "soc_switch"]),
@@ -432,6 +447,7 @@ def gen_settings_change(rng) -> dict:
 
 def generate(kind: str) -> list[dict]:
     rng = random.Random(f"solakon-{kind}")
+    ext = random.Random(f"solakon-{kind}-ext")
     out = []
     for idx in range(COUNTS[kind]):
         if kind == "cycle":
@@ -452,6 +468,8 @@ def generate(kind: str) -> list[dict]:
             spec = gen_grid_charge(rng)
         else:
             spec = {}
+        for inst in spec.get("instances", []):
+            inst["settings"].update(gen_settings_ext(ext))
         spec["id"] = f"{kind}-{idx:04d}"
         out.append(spec)
     return out

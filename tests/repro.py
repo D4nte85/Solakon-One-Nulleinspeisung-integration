@@ -261,7 +261,7 @@ def bericht(szenario: dict, rec: dict) -> list[str]:
             geaendert = [f"{k}: {alt[k]!r} → {v!r}" for k, v in st.items()
                          if k in alt and alt[k] != v and not k.endswith("_ts")]
             if not alt:
-                geaendert = [f"{k}={st[k]!r}" for k in ("active_fall", "operating_state", "current_zone",
+                geaendert = [f"{k}={st[k]!r}" for k in ("active_fall", "display.operating_state", "display.zone",
                                                         "cycle_active", "resting", "last_error")]
             for g in geaendert:
                 zeilen.append(f"  {prefix}         {g}")

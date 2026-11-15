@@ -9,4 +9,4 @@ instanzen:
 schritte:
   - nach: 0
 erwartet:
-  - zustand: {current_zone: 3, mode_key: disabled_regulation_off}
+  - zustand: {display.zone: 3, display.mode_key: disabled_regulation_off}

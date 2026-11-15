@@ -12,4 +12,4 @@ schritte:
   - nach: 0
 erwartet:
   - zustand: {cycle_active: true, is_night: false}
-  - zustand_nicht: {operating_state: night_off}
+  - zustand_nicht: {display.operating_state: night_off}

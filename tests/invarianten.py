@@ -352,7 +352,7 @@ def e1(c: Ctx):
     if preis >= guenstig or c.soc() >= ziel:
         return None
     # Laufendes AC- oder Netz-Laden wird nicht abgelöst; eine Ablösung käme nur als Tarif-Schalter.
-    if (f["surplus_active"] or f["forecast_tariff_suppressed"] or _art(c.flags_vorher, C.SESSION_AC)
+    if (f["surplus_active"] or f["tariff.suppressed"] or _art(c.flags_vorher, C.SESSION_AC)
             or _art(c.flags_vorher, C.SESSION_GRID)):
         return None
     if not _art(f, C.SESSION_TARIFF) or c.modus() != C.MODE_AC_CHARGE:
@@ -366,7 +366,7 @@ def e2(c: Ctx):
     if not t or t[0] is None:
         return None
     preis, guenstig, teuer = t
-    if not guenstig <= preis < teuer or c.flags["surplus_active"] or c.lade_session() or c.flags["forecast_tariff_suppressed"]:
+    if not guenstig <= preis < teuer or c.flags["surplus_active"] or c.lade_session() or c.flags["tariff.suppressed"]:
         return None
     if c.modus() == C.MODE_DISCHARGE and (c.leistung() or 0) > 0:
         return f"Preis {preis} im Sperrband [{guenstig}, {teuer}): Modus 1 mit {c.leistung()} W"
@@ -409,7 +409,7 @@ def f3(c: Ctx):
 
 def f4(c: Ctx):
     s = c.settings
-    if not c.normal() or not c.flags["surplus_active"] or c.flags["forecast_surplus_forced"]:
+    if not c.normal() or not c.flags["surplus_active"] or c.flags["forecast.surplus_forced"]:
         return None
     grenze = s[C.S_SURPLUS_SOC_THRESHOLD] - s[C.S_SURPLUS_SOC_HYST]
     if c.soc() < grenze:
@@ -447,7 +447,7 @@ def h2(c: Ctx):
     f = c.flags
     if preis >= guenstig or c.soc() < c.settings[C.S_TARIFF_SOC_TARGET]:
         return None
-    if f["surplus_active"] or c.lade_session() or f["forecast_tariff_suppressed"]:
+    if f["surplus_active"] or c.lade_session() or f["tariff.suppressed"]:
         return None
     if c.modus() == C.MODE_DISCHARGE and (c.leistung() or 0) > 0:
         return f"Preis {preis} < günstig, Ladeziel erreicht: Modus 1 mit {c.leistung()} W"
@@ -466,7 +466,7 @@ def h3(c: Ctx):
 
 
 def h4(c: Ctx):
-    if not c.normal() or not c.flags["forecast_tariff_suppressed"]:
+    if not c.normal() or not c.flags["tariff.suppressed"]:
         return None
     if _art(c.flags, C.SESSION_TARIFF) and not _art(c.flags_vorher, C.SESSION_TARIFF):
         return "Tarif-Laden startet trotz PV-Vorhersage-Unterdrückung"
@@ -495,12 +495,12 @@ def i2(c: Ctx):
     if not c.normal() or c.flags_vorher.get("surplus_active") or not c.flags["surplus_active"]:
         return None
     schwelle = c.settings[C.S_SURPLUS_SOC_THRESHOLD]
-    if c.soc() < schwelle and not c.flags["forecast_surplus_forced"]:
+    if c.soc() < schwelle and not c.flags["forecast.surplus_forced"]:
         return f"Zone-0-Eintritt bei SOC {c.soc()} < {schwelle} ohne Forcierung"
 
 
 def i3(c: Ctx):
-    if not c.normal() or not c.flags["forecast_surplus_forced"]:
+    if not c.normal() or not c.flags["forecast.surplus_forced"]:
         return None
     pv, hz0, z3 = c.pv(), c.settings[C.S_HARD_LIMIT_Z0], c.settings[C.S_ZONE3_LIMIT]
     if not (pv > hz0 and c.soc() > z3):
@@ -527,7 +527,7 @@ def i5(c: Ctx):
 
 def _tarif_sperre(c: Ctx) -> bool:
     t = _preis_gueltig(c)
-    return bool(t) and t[0] < t[2] and not c.flags["forecast_tariff_suppressed"]
+    return bool(t) and t[0] < t[2] and not c.flags["tariff.suppressed"]
 
 
 def j1(c: Ctx):
@@ -536,7 +536,7 @@ def j1(c: Ctx):
     if c.flags["surplus_active"] or c.lade_session():
         return None
     z1 = c.settings[C.S_ZONE1_LIMIT]
-    if c.soc() <= z1 and not c.flags["forecast_zone1_forced"]:
+    if c.soc() <= z1 and not c.flags["forecast.zone1_forced"]:
         return f"Zyklusstart bei SOC {c.soc()} ≤ Zone 1 {z1} ohne Nacht-Forcierung"
     if _tarif_sperre(c):
         return f"Zyklusstart trotz Tarif-Sperre (Preis {_preis_gueltig(c)[0]})"
@@ -553,7 +553,7 @@ def j2(c: Ctx):
 
 
 def j3(c: Ctx):
-    if not c.normal() or not c.flags["forecast_zone1_forced"]:
+    if not c.normal() or not c.flags["forecast.zone1_forced"]:
         return None
     s = c.settings
     if not (c.pv() < s[C.S_PV_RESERVE] and c.soc() > s[C.S_ZONE1_FORCE_MIN_SOC]):
@@ -625,7 +625,7 @@ def k3(c: Ctx):
             continue  # andere Netzgruppe, eigener Pool
         if (c.vorher.get(cfg[C.CONF_MODE_SELECT]) or {}).get("state") != C.MODE_DISCHARGE:
             continue
-        if _fl.get("operating_state") == "disabled" or _fl.get("resting"):
+        if _fl.get("display.operating_state") == "disabled" or _fl.get("resting"):
             continue
         kap = c.dist.get(f"inst_entry_{p}_capacity_sensor")
 
@@ -658,12 +658,12 @@ def k4(c: Ctx):
         soll = "night_off"
     elif f["cycle_active"]:
         soll = "battery_supply"
-    elif f["current_zone"] == 3:
+    elif f["display.zone"] == 3:
         soll = "safety_stop"
     else:
         soll = "pv_direct"
-    if f["operating_state"] != soll:
-        return f"Betriebszustand {f['operating_state']!r} statt {soll!r}"
+    if f["display.operating_state"] != soll:
+        return f"Betriebszustand {f['display.operating_state']!r} statt {soll!r}"
 
 
 def k5(c: Ctx):

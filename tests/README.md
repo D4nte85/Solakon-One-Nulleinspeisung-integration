@@ -11,6 +11,10 @@ importiert. Drei Schichten nutzen das:
 | Reproduktion | einen Fehlervorgang als benanntes Szenario abspielen | `python tests/repro.py tests/repro/<name>.yaml` |
 | Panel | Render-Vergleich von `solakon-panel.js` gegen einen git-Stand | `python tests/panel/vergleich.py [REV]` |
 
+Der Szenariogenerator (`scenarios.py`) zieht aus einem Zufallsstrom je Szenarioart. Neue
+Settings kommen über `gen_settings_ext` aus einem zweiten Strom (`solakon-<art>-ext`) dazu; so
+bleibt die Hauptfolge stabil und ein neues Golden zeigt nur die Wirkung der neuen Felder.
+
 ## Einrichtung
 
 Die Tests laufen im System-Python (`/usr/bin/python3`) — kein venv, keine pyenv-Version.
@@ -97,7 +101,7 @@ erwartet:
 
 `nach_aufruf` setzt Sensoren mitten im Regelzyklus, sobald die Integration zum ersten Mal auf `entity` schreibt. So lässt sich ein Ausfall zwischen zwei Lesungen desselben Regelzyklus nachstellen. Der Eintrag gilt nur für seinen Schritt.
 
-`zustand` prüft Attribute aus `COORD_ATTRS` in `harness.py` auf Gleichheit, `zustand_nicht` auf Ungleichheit (z. B. `last_error: ""` für „Fehlermeldung gesetzt"). `aufruf`/`kein_aufruf` prüfen
+`zustand` prüft Attribute aus `COORD_ATTRS` in `harness.py` auf Gleichheit; der Schlüssel ist der Pfad am Coordinator (`display.operating_state`, `surplus.prev_actual`, `dyn.offsets.z1_night`). `zustand_nicht` auf Ungleichheit (z. B. `last_error: ""` für „Fehlermeldung gesetzt"). `aufruf`/`kein_aufruf` prüfen
 die Schreibbefehle eines Schritts auf eine Entity, optional mit `wert`, `wert_min`,
 `wert_max`. Trägt eine Erwartung mehrere Prüfarten, ist sie nur erfüllt, wenn jede erfüllt ist.
 
