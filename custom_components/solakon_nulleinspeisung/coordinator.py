@@ -35,7 +35,7 @@ from .zones import (
     forecast_flags, night_active, required_discharge, rest_mode,
 )
 from .const import (
-    DOMAIN, SETTINGS_DEFAULTS, SETTINGS_SCHEMA, CONF_GRID_SENSOR,
+    DOMAIN, SETTINGS_DEFAULTS, SETTINGS_SCHEMA, CONF_GRID_SENSOR, CONF_INSTANCE_NAME,
     CONF_ACTUAL_SENSOR, CONF_SOLAR_SENSOR, CONF_SOC_SENSOR, CONF_TIMEOUT_COUNTDOWN,
     CONF_ACTIVE_POWER, CONF_DISCHARGE_CURRENT, CONF_TIMEOUT_SET, CONF_MODE_SELECT,
     CONF_EXPORT_LIMIT, MODE_DISABLED, MODE_DISCHARGE, MODE_AC_CHARGE, S_REGULATION_ENABLED,
@@ -254,6 +254,11 @@ class SolakonCoordinator:
     def member_id(self) -> str:
         """Kennung in der Netzgruppe: die entry_id."""
         return self.entry.entry_id
+
+    @property
+    def instance_name(self) -> str:
+        """Anzeigename der Instanz: Instanzname, sonst Titel, sonst entry_id."""
+        return self.entry.data.get(CONF_INSTANCE_NAME) or self.entry.title or self.entry.entry_id
 
     @property
     def grid_sensor(self) -> str:

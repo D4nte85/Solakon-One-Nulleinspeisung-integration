@@ -1,8 +1,9 @@
-"""Binary sensor platform — diagnostische Zustandsanzeigen (read-only)."""
+"""Binärsensor-Plattform: Zustandsflags der Instanz als Diagnose-Entitäten (read-only)."""
 from __future__ import annotations
 
 from homeassistant.components.binary_sensor import BinarySensorEntity
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -19,7 +20,7 @@ class DiagBoolSensor(SolakonEntity, BinarySensorEntity):
     """
 
     def __init__(self, coord: SolakonCoordinator, key: str, icon: str) -> None:
-        super().__init__(coord, key, translation_key=key, icon=icon)
+        super().__init__(coord, key, translation_key=key, icon=icon, entity_category=EntityCategory.DIAGNOSTIC)
         self._key = key
 
     @property

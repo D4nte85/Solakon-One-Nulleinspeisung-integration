@@ -17,7 +17,6 @@ import homeassistant.helpers.config_validation as cv
 
 from .const import (
     DOMAIN, PLATFORMS,
-    CONF_INSTANCE_NAME,
     CONF_GRID_SENSOR,
     CAPACITY_FIELD, DIST_DEFAULTS, DIST_INST_FIELDS, DIST_SCHEMA, SETTINGS_SCHEMA, VERSION,
 )
@@ -66,10 +65,9 @@ async def _ws_get_all_instances(
     """WS: alle Instanzen mit Name und Netzsensor, nach Name sortiert."""
     instances = []
     for entry_id, coord in hass.data.get(DOMAIN, {}).items():
-        name = coord.entry.data.get(CONF_INSTANCE_NAME) or coord.entry.title or entry_id
         instances.append({
             "entry_id":      entry_id,
-            "instance_name": name,
+            "instance_name": coord.instance_name,
             "grid_sensor":   coord.entry.data.get(CONF_GRID_SENSOR, ""),
         })
     instances.sort(key=lambda x: x["instance_name"].lower())

@@ -255,3 +255,16 @@ def test_netzgruppen_nennen_geladene_und_eingerichtete_instanzen():
     sent = asyncio.run(h.ws_call(h.integration._ws_get_groups, hass))
     groups = {g["grid_sensor"]: (g["members"], g["configured"]) for g in sent[0][2]["groups"]}
     assert groups == {"sensor.grid": (["entry_a"], 2), "sensor.grid_other": (["entry_c"], 1)}
+
+
+def test_instanzname_ohne_eintrag_faellt_auf_titel_zurueck():
+    hass = h.FakeHass("de")
+    h.install_groups(hass)
+    coord = h.make_coord(hass)
+    del coord.entry.data[h.const.CONF_INSTANCE_NAME]
+    coord.entry.title = "Keller"
+    assert coord.instance_name == "Keller"
+    sensor = h.sensor_mod.CoordinatorSensor(coord, "integral", lambda c: 0)
+    assert sensor.device_info["name"] == "Keller"
+    sent = asyncio.run(h.ws_call(h.integration._ws_get_all_instances, hass, 1))
+    assert h.jsonable(sent)[0][2]["instances"][0]["instance_name"] == "Keller"

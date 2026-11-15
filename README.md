@@ -723,7 +723,7 @@ Alle Entitätsnamen kommen aus den Übersetzungen und erscheinen in der Sprache 
 | `binary_sensor.solakon_one_pv_vorhersage_surplus_austritt_gesperrt` | Binary Sensor | Austritts-Sperre aktiv (Vorhersage ≥ Faktor × Hard Limit Z0) |
 | `binary_sensor.solakon_one_pv_vorhersage_zone_1_nacht_forcierung_aktiv` | Binary Sensor | Zone-1-Nacht-Forcierung aktiv |
 
-Die Diagnose-Binärsensoren sind read-only — sie spiegeln interne Coordinator-Zustände wider. Die vier Prognose-Sensoren tragen intern einheitlich das Präfix `forecast_`; die Nacht-Forcierung hieß bis 3.8.1 `zone1_forced`. Die Umstellung beim Update behält die Entity-ID, Automationen und Dashboards laufen unverändert weiter.
+Die Diagnose-Binärsensoren sind read-only — sie spiegeln interne Coordinator-Zustände wider und stehen als Diagnose-Entitäten auf der Geräteseite unter „Diagnose“; automatisch erzeugte Dashboards zeigen sie nicht. Die vier Prognose-Sensoren tragen intern einheitlich das Präfix `forecast_`; die Nacht-Forcierung hieß bis 3.8.1 `zone1_forced`. Die Umstellung beim Update behält die Entity-ID, Automationen und Dashboards laufen unverändert weiter.
 
 ### Betriebszustand
 
