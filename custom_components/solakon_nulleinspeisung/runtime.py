@@ -2,13 +2,14 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from .const import DOMAIN
 
 if TYPE_CHECKING:
     from .group_store import GroupStore
+    from .number import Carriers
 
 RUNTIME_KEY = f"{DOMAIN}_runtime"
 
@@ -22,7 +23,7 @@ class Runtime:
 
     store: GroupStore | None = None
     loading: asyncio.Future | None = None
-    carriers: dict[str, dict] = field(default_factory=lambda: {"adders": {}, "entities": {}})
+    carriers: Carriers | None = None
     panel_registered: bool = False
 
 

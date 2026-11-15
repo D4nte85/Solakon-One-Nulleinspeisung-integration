@@ -223,7 +223,7 @@ def test_gesamtlimit_bei_zwei_eintraegen_auch_wenn_nur_einer_geladen():
     entries = [h.FakeEntry("entry_a", h.entry_data("a")), h.FakeEntry("entry_b", h.entry_data("b"))]
     hass, added = _group_setup(entries[:1])
     hass.config_entries.entries = entries
-    asyncio.run(h.number_mod.assign_carrier(hass, "sensor.grid"))
+    asyncio.run(h.number_mod.carriers(hass).assign("sensor.grid"))
     assert [e.carrier for e in _group_limits(added)["entry_a"]] == ["entry_a"]
 
 
@@ -232,7 +232,7 @@ def test_loeschen_bei_deaktivierter_schwester_entfernt_gesamtlimit_und_geraet():
     entries = [h.FakeEntry("entry_a", h.entry_data("a")), h.FakeEntry("entry_b", h.entry_data("b"))]
     hass, added = _group_setup(entries[:1])
     hass.config_entries.entries = entries
-    asyncio.run(h.number_mod.assign_carrier(hass, "sensor.grid"))
+    asyncio.run(h.number_mod.carriers(hass).assign("sensor.grid"))
     ents, devs = _register_group_limit(hass, 1)
 
     async def run():

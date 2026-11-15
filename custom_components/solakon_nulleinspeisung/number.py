@@ -90,11 +90,6 @@ class GroupLimitNumber(NumberEntity):
             self._unsub = None
 
 
-def _carriers(hass: Any) -> dict[str, Any]:
-    """Träger-Verwaltung aus dem Laufzeitzustand: `adders` je geladenem Eintrag, `entities` je Netzsensor."""
-    return runtime.runtime(hass).carriers
-
-
 def _drop_group_limit(hass: Any, grid_sensor: str) -> None:
     """Gesamtlimit-Entität und Gerät der Netzgruppe aus Entitäts- und Geräteregistrierung entfernen."""
     if (number := group_store.require_store(hass).numbers.get(grid_sensor)) is None:
@@ -107,44 +102,66 @@ def _drop_group_limit(hass: Any, grid_sensor: str) -> None:
         devices.async_remove_device(device.id)
 
 
-async def assign_carrier(hass: Any, grid_sensor: str) -> None:
-    """Gesamtlimit-Entität der Gruppe an die geladene Mitgliedsinstanz mit der kleinsten entry_id geben.
+class Carriers:
+    """Träger der Gesamtlimit-Entitäten: Hinzufüge-Funktion je geladenem Eintrag, Entität je Netzsensor.
 
-    Haben weniger als zwei Config-Entries diesen Netzsensor, gibt es keine Netzgruppe: Entität und
-    Gerät werden entfernt. Trägt schon die richtige Instanz, bleibt alles, wie es ist. Sonst entfernt
-    sie die Entität des bisherigen noch geladenen Trägers und legt sie mit derselben unique_id beim
-    neuen Träger an.
+    Kandidaten sind die Mitglieder der Netzgruppe, deren number-Plattform geladen ist.
     """
-    reg = _carriers(hass)
-    members = sorted(eid for eid, (_, coord) in reg["adders"].items() if coord.grid_sensor == grid_sensor)
-    current = reg["entities"].get(grid_sensor)
-    lone = group_store.configured_members(hass, grid_sensor) < 2
-    carrier = None if lone or not members else members[0]
-    if current is not None and current.carrier == carrier:
-        return
-    if current is not None and current.carrier in reg["adders"]:
-        await current.async_remove()
-    reg["entities"].pop(grid_sensor, None)
-    if lone:
-        _drop_group_limit(hass, grid_sensor)
-    if carrier is None:
-        return
-    store = group_store.require_store(hass)
-    entity = GroupLimitNumber(store, grid_sensor, await store.group_number(grid_sensor), carrier)
-    reg["entities"][grid_sensor] = entity
-    reg["adders"][carrier][0]([entity])
+
+    def __init__(self, hass: Any) -> None:
+        self.hass = hass
+        self._adders: dict[str, AddEntitiesCallback] = {}
+        self._entities: dict[str, GroupLimitNumber] = {}
+
+    async def add(self, entry_id: str, add: AddEntitiesCallback, grid_sensor: str) -> None:
+        """Geladenen Eintrag als möglichen Träger eintragen und den Träger seiner Gruppe bestimmen."""
+        self._adders[entry_id] = add
+        await self.assign(grid_sensor)
+
+    async def assign(self, grid_sensor: str) -> None:
+        """Gesamtlimit-Entität der Gruppe an die geladene Mitgliedsinstanz mit der kleinsten entry_id geben.
+
+        Haben weniger als zwei Config-Entries diesen Netzsensor, gibt es keine Netzgruppe: Entität und
+        Gerät werden entfernt. Trägt schon die richtige Instanz, bleibt alles, wie es ist. Sonst entfernt
+        sie die Entität des bisherigen Trägers und legt sie mit derselben unique_id beim neuen an.
+        """
+        store = group_store.require_store(self.hass)
+        members = sorted(eid for eid in store.group(grid_sensor).members() if eid in self._adders)
+        current = self._entities.get(grid_sensor)
+        lone = group_store.configured_members(self.hass, grid_sensor) < 2
+        carrier = None if lone or not members else members[0]
+        if current is not None and current.carrier == carrier:
+            return
+        if current is not None:
+            await current.async_remove()
+        self._entities.pop(grid_sensor, None)
+        if lone:
+            _drop_group_limit(self.hass, grid_sensor)
+        if carrier is None:
+            return
+        entity = GroupLimitNumber(store, grid_sensor, await store.group_number(grid_sensor), carrier)
+        self._entities[grid_sensor] = entity
+        self._adders[carrier]([entity])
+
+    async def release(self, entry_id: str, grid_sensor: str) -> None:
+        """Entladenen Eintrag austragen; trug er ein Gesamtlimit, übernimmt die nächste Mitgliedsinstanz.
+
+        Seine Entität entfernt HA mit der Plattform; sie wird nur ausgetragen.
+        """
+        if self._adders.pop(entry_id, None) is None:
+            return
+        current = self._entities.get(grid_sensor)
+        if current is not None and current.carrier == entry_id:
+            self._entities.pop(grid_sensor)
+        await self.assign(grid_sensor)
 
 
-async def release_carrier(hass: Any, entry_id: str) -> None:
-    """Entladenen Eintrag austragen; trug er ein Gesamtlimit, übernimmt die nächste Mitgliedsinstanz."""
-    reg = _carriers(hass)
-    if (gone := reg["adders"].pop(entry_id, None)) is None:
-        return
-    grid_sensor = gone[1].grid_sensor
-    current = reg["entities"].get(grid_sensor)
-    if current is not None and current.carrier == entry_id:
-        reg["entities"].pop(grid_sensor)
-    await assign_carrier(hass, grid_sensor)
+def carriers(hass: Any) -> Carriers:
+    """Träger-Verwaltung aus dem Laufzeitzustand, bei Bedarf angelegt."""
+    rt = runtime.runtime(hass)
+    if rt.carriers is None:
+        rt.carriers = Carriers(hass)
+    return rt.carriers
 
 
 async def async_setup_entry(
@@ -158,5 +175,4 @@ async def async_setup_entry(
         SettingNumber(coord, S_HARD_LIMIT_Z0,     UnitOfPower.WATT, "mdi:solar-power"),
         SettingNumber(coord, S_HARD_LIMIT_Z1,     UnitOfPower.WATT, "mdi:battery-arrow-down"),
     ])
-    _carriers(hass)["adders"][entry.entry_id] = (add, coord)
-    await assign_carrier(hass, coord.grid_sensor)
+    await carriers(hass).add(entry.entry_id, add, coord.grid_sensor)

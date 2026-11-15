@@ -356,3 +356,44 @@ def test_programmierfehler_im_setup_bleibt_ein_fehler(monkeypatch):
     monkeypatch.setattr(h.coordinator_mod.SolakonCoordinator, "async_setup", kaputt)
     with pytest.raises(TypeError):
         _run(u.setup("a"))
+
+
+def test_gescheitertes_entladen_der_plattformen_laesst_die_instanz_laufen(monkeypatch):
+    u = Umgebung("a")
+    _run(u.setup("a"))
+    u.hass.events = []
+
+    async def scheitert(self, entry, platforms):
+        return False
+    monkeypatch.setattr(h.FakeConfigEntries, "async_unload_platforms", scheitert)
+    assert not _run(h.integration.async_unload_entry(u.hass, u.entries["a"]))
+    assert [e for e in u.hass.events if e[0] == "untrack"] == []
+    assert u.coord("a").trackers.active()
+    assert u.keys() == [DOMAIN, f"{DOMAIN}_runtime"]
+
+
+def test_gescheitertes_plattform_setup_raeumt_die_instanz_ab(monkeypatch):
+    u = Umgebung("ab")
+    _run(u.setup("a"))
+
+    async def scheitert(self, entry, platforms):
+        raise h.ha_stubs.HomeAssistantError("Plattform defekt")
+    monkeypatch.setattr(h.FakeConfigEntries, "async_forward_entry_setups", scheitert)
+    with pytest.raises(h.ha_stubs.ConfigEntryNotReady):
+        _run(u.setup("b"))
+    assert list(u.hass.data[DOMAIN]) == ["entry_a"]
+    assert [e for e in u.hass.events if e[0] == "panel_remove"] == []
+
+
+def test_gescheitertes_plattform_setup_der_einzigen_instanz_raeumt_alles_ab(monkeypatch):
+    u = Umgebung("a")
+
+    async def scheitert(self, entry, platforms):
+        raise h.ha_stubs.HomeAssistantError("Plattform defekt")
+    monkeypatch.setattr(h.FakeConfigEntries, "async_forward_entry_setups", scheitert)
+    with pytest.raises(h.ha_stubs.ConfigEntryNotReady):
+        _run(u.setup("a"))
+    angemeldet = {e[3] for e in u.hass.events if e[0] == "track"}
+    assert {e[1] for e in u.hass.events if e[0] == "untrack"} >= angemeldet
+    assert [e[0] for e in u.hass.events].count("panel_remove") == 1
+    assert u.keys() == []

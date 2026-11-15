@@ -250,6 +250,31 @@ WS_COMMANDS = (
 
 # ── Setup / Teardown ─────────────────────────────────────────────────────────
 
+async def _drop_shared_data(hass: HomeAssistant) -> None:
+    """Ausstehendes Speichern der Netzgruppen schreiben, Instanzliste und Laufzeitzustand entfernen; nur ohne geladene Instanz aufrufen."""
+    if (store := group_store.store_for(hass)) is not None:
+        await store.async_write_pending()
+    hass.data.pop(DOMAIN, None)
+    runtime.drop(hass)
+
+
+async def _teardown(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Coordinator der Instanz beenden und austragen, Träger abgeben; mit der letzten Instanz Panel und Laufzeitzustand entfernen."""
+    from homeassistant.components.frontend import async_remove_panel
+
+    if (coord := hass.data.get(DOMAIN, {}).get(entry.entry_id)) is not None:
+        await coord.async_shutdown()
+        hass.data[DOMAIN].pop(entry.entry_id)
+    if (rt := runtime.peek(hass)) is None:
+        return
+    if rt.carriers is not None:
+        await rt.carriers.release(entry.entry_id, entry.data.get(CONF_GRID_SENSOR, ""))
+    if not hass.data.get(DOMAIN):
+        if rt.panel_registered:
+            async_remove_panel(hass, DOMAIN)
+        await _drop_shared_data(hass)
+
+
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     """WebSocket-Commands registrieren, Panel-Skript und Übersetzungsdateien als statische Pfade ausliefern."""
     for handler in WS_COMMANDS:
@@ -310,41 +335,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     try:
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     except Exception as ex:
-        coord = hass.data[DOMAIN].pop(entry.entry_id, None)
-        if coord:
-            await coord.async_shutdown()
+        await _teardown(hass, entry)
         raise ConfigEntryNotReady(f"Solakon: Platform-Setup fehlgeschlagen: {ex}") from ex
 
     return True
 
 
-async def _drop_shared_data(hass: HomeAssistant) -> None:
-    """Ausstehendes Speichern der Netzgruppen schreiben, Instanzliste und Laufzeitzustand entfernen; nur ohne geladene Instanz aufrufen."""
-    if (store := group_store.store_for(hass)) is not None:
-        await store.async_write_pending()
-    hass.data.pop(DOMAIN, None)
-    runtime.drop(hass)
-
-
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Instanz beenden; mit der letzten Instanz auch Panel und globale Daten entfernen."""
-    from homeassistant.components.frontend import async_remove_panel
-
-    coord = hass.data.get(DOMAIN, {}).get(entry.entry_id)
-    if coord:
-        await coord.async_shutdown()
-
+    """Plattformen entladen, danach die Instanz beenden; scheitert das Entladen, läuft sie weiter."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-
     if unload_ok:
-        hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
-        await number.release_carrier(hass, entry.entry_id)
-
-        # Panel + Store nur entfernen wenn keine Instanz mehr läuft
-        if not hass.data.get(DOMAIN):
-            async_remove_panel(hass, DOMAIN)
-            await _drop_shared_data(hass)
-
+        await _teardown(hass, entry)
     return unload_ok
 
 
@@ -352,8 +353,8 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Store der Instanz löschen; mit der letzten Instanz auch die Gruppen-Stores, sonst Kapazitätssensoren nachführen und die Netzgruppe neu zählen."""
     await SolakonSettingsStore(hass, entry.entry_id).async_remove()
 
-    # Home Assistant traegt den Entry vor diesem Aufruf aus der Registrierung aus.
-    # Ist danach keiner mehr uebrig, werden auch die instanzuebergreifenden Stores
+    # Home Assistant trägt den Entry vor diesem Aufruf aus der Registrierung aus.
+    # Ist danach keiner mehr übrig, werden auch die instanzübergreifenden Stores
     # entfernt; bei weiteren Instanzen bleiben sie bestehen.
     if not hass.config_entries.async_entries(DOMAIN):
         await group_store.async_remove(hass)
@@ -361,6 +362,6 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     # Läuft keine Instanz mehr (die übrigen sind deaktiviert), ist der Gruppenspeicher
     # schon abgeräumt: für die Träger-Verwaltung laden und danach wieder entfernen.
     await (await group_store.async_load(hass)).tidy_capacity()
-    await number.assign_carrier(hass, entry.data.get(CONF_GRID_SENSOR, ""))
+    await number.carriers(hass).assign(entry.data.get(CONF_GRID_SENSOR, ""))
     if not hass.data.get(DOMAIN):
         await _drop_shared_data(hass)
