@@ -51,10 +51,6 @@
       "summary": "Zielladen — auf den Ziel-SOC laden, danach Entladepause",
       "text": "Aufladen: Zielladen an schaltet die Regelung ein. Die Batterie lädt bis zum Ziel-SOC über die zugeschalteten Ladequellen. Surplus (Zone 0) ist gesperrt, ein laufendes Surplus endet sofort (Fall 0B). AC Laden (Fall G) und Tarif-Laden (Fall GT) starten nur, wenn sie hier als Ladequelle zugeschaltet sind; ihr eigener Schalter im AC- bzw. Tarif-Tab muss zusätzlich an sein. Eine laufende Lade-Session ohne Zuschaltung endet (Fall H bzw. HT).\n\nPV mit Hausvorrang (Standard): Zone 1 und Zone 2 laufen, die Ausgangsleistung ist aber auch mit Zyklus auf PV − PV-Ladereserve gedeckelt. Die Batterie lädt nur PV über dem Hausverbrauch.\nPV mit Batterievorrang (Fall ZB): Ausgangsleistung 0 W im Ruhemodus, die ganze PV geht in die Batterie, das Haus bezieht vom Netz. Zone-1- und Zone-2-Start (A, E) sind gesperrt.\n\nNetz-Laden (Fälle GN/HN): lädt sofort mit der Netz-Ladeleistung im Modus '3', ohne Preisbedingung, und hat Vorrang vor dem Tarif-Laden. Es endet am Ziel-SOC oder wenn Netz-Laden oder Zielladen ausgeschaltet wird. Bei Multi-Instancing zählt Netz-Laden wie AC- und Tarif-Laden als Lade-Session: die übrigen Instanzen der Netzgruppe entladen in Zone 1 nur PV.\n\nEntladepause (Fall ZE): Bei SOC ≥ Ziel-SOC schaltet die Integration die Regelung ab — Ausgangsleistung 0 W, Entladestrom auf Gerätemaximum, Modus '0'. Das Gerät gibt im Standardzustand 0 W aus. Die Entladepause übersteht Neustarts. Sie endet erst, wenn Zielladen ausgeschaltet oder „Regelung aktiv“ eingeschaltet wird; beides stellt den normalen Betrieb her und schaltet Zielladen und Netz-Laden aus. Regelung von Hand aus während des Aufladens zieht die Entladepause vor.\n\nZiel-SOC ändern: Während des Aufladens gilt der neue Wert sofort. In der Entladepause bewirkt die Änderung nichts; sie gilt erst, wenn Zielladen erneut eingeschaltet wird.\n\nAnwendungsfälle: Winterpause (Einlagerung über den Winter) und Unwetter-Vorsorge über eine eigene Automation, die die Entitäten „Ziel-SOC“ und „Netz-Ladeleistung“ und die Schalter „Zielladen“ und „Netz-Laden“ setzt."
     },
-    "debug": {
-      "summary": "Debug — manuelle Eingriffe in den Regelzustand",
-      "text": "Integral zurücksetzen: Setzt den I-Anteil des PI-Reglers auf 0.\n\nZone manuell setzen: Schaltet den internen cycle_active-Flag, setzt das Integral zurück und toggelt den Timer wie jeder Fallwechsel.\n• Zone 1 aktivieren: cycle_active = true → aggressiver Entladebetrieb, voller Entladestrom.\n• Zone 2 aktivieren: cycle_active = false → batterieschonender Betrieb, 0 A Entladestrom, dynamisches Ausgangsleistungs-Limit.\n\nRuhezustand in Modus 1 (Standard aus): Alle Übergänge, die sonst Modus '0' schreiben — Fall B, C, F, TM, ZB, Lade-Ende und Fall I ohne Zyklus, Stillstands-Recovery —, schreiben stattdessen Modus '1' mit 0 W. Regelung aus schreibt immer Modus '0'. In dieser Ruhe läuft kein PI, die Instanz zählt nicht zum Entlade-Pool, und die Fälle E, A, D, 0A, G und GT holen sie zurück wie aus Modus '0'. Nicht empfohlen: das Gerät verlässt die Fernsteuerung nur noch bei ausgeschalteter Regelung. Gedacht für Geräte, die in Modus '0' nicht laden.\n\nAlle Aktionen werden unter 'Letzte Aktion' im Status-Tab protokolliert."
-    },
     "entities": {
       "summary": "Entitäten — alle optionalen Sensor-Zuweisungen dieser Instanz an einer Stelle",
       "text": "Bündelt die Entity-Picker-Felder, die sonst über Zonen-, Surplus- und Tarif-Tab verstreut wären. Enable-Flags und Zahlen-Schwellen bleiben in ihrem jeweiligen Feature-Tab — hier wird nur zugewiesen, WAS gelesen wird.\n\nBei Multi-Instancing existiert zusätzlich eine globale Vorgabe pro Sensor im Verteilungs-Tab: lokal (hier) überschreibt global, sonst gilt der globale Wert. Bleibt ein Feld sowohl hier als auch global leer, ist die jeweilige Funktion wirkungslos — auch wenn ihr Enable-Flag gesetzt ist."
@@ -454,9 +450,8 @@
     "soc":          "SOC",
     "output":       "Ausgang",
     "grid":         "Netz",
-    "fall":         "Fall",
     "state":         "Zustand",
-    "group_prefix": "Bereich",
+    "group_prefix": "Netzgruppe",
     "total_output": "Gesamt",
     "dist_mode":    "Verteilung"
   },
@@ -500,7 +495,7 @@
     "loading":            "Lade…",
     "load_error":         "Verteilung konnte nicht geladen werden — Seite erneut öffnen.",
     "tab_lbl":            "⚖️ Verteilung",
-    "group_prefix":       "Bereich",
+    "group_prefix":       "Netzgruppe",
     "groups_note":        "Instanzen werden automatisch nach ihrem konfigurierten Netz-Leistungssensor gruppiert — jede Netzgruppe (z. B. bei mehreren Smartmetern für getrennte Stromkreise) hat ihre eigene, unabhängige Leistungsverteilung. Bei nur einer Gruppe ist diese Zuordnung unsichtbar, es gibt nur einen gemeinsamen Pool. Der angezeigte Name ist der Home-Assistant-Bereich des Netzsensors, sonst dessen Anzeigename.",
     "global_hdr":         "🌐 Globale Einstellungen",
     "global_max_lbl":     "Gesamte Max. Ausgangsleistung (W)",

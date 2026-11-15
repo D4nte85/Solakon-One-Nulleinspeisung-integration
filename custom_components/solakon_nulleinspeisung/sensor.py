@@ -1,4 +1,4 @@
-"""Sensor-Plattform: Betriebszustand, Zone, Lade-Session, Modus, letzte Aktion, σ, Fall, Integral, Surplus-Leistung."""
+"""Sensor-Plattform: Betriebszustand, Zone, Lade-Session, Modus, letzte Aktion, σ, Fall, Integral, Überschussleistung."""
 from __future__ import annotations
 
 from typing import Any, Callable
