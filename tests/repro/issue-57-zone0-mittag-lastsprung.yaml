@@ -1,0 +1,76 @@
+titel: Mittag in der Tarifsperre, Wechsel zwischen Einspeisung und Bezug — kein Pendeln
+bezug: issue-57-zone0-schleife-tarifsperre
+# Einzelbetrieb, Tarifsperre (Preis 23,3 < Teuer-Schwelle 27), Überschuss an, Schwelle 95 %, SOC 96 %.
+# Start in Ruhe (TM, Modus '0'), Modul-PV 45 W, Haus bezieht 150 W.
+# 1: kein Eintritt (Bezug 150 + 50 > 45).
+# 2: leichte Einspeisung −30 W, PV 45 W: kein Eintritt (0 + 50 > 45).
+# 3: Einspeisung −200 W, PV 60 W: Eintritt 0A.
+# 4: in Zone 0, Ist 160 W, Einspeisung −360 W: bleibt in Zone 0.
+# 5: Last an, Bezug +250 W: Austritt 0B in den Ruhezustand, kein PI-Schritt.
+# 6–8: Ruhe, Gerät regelt bei SOC ≥ Ladeobergrenze die Module ab (PV 0, Ist 0), Bezug 410 W:
+#      kein Wiedereintritt, auch nicht über den PV-0-Zweig (Austritt über den Verbrauch hat entschärft).
+stunde: 12
+netz: 150
+sensoren:
+  sensor.preis: {wert: 23.3, einheit: ct/kWh}
+instanzen:
+  - prefix: a
+    settings:
+      regulation_enabled: true
+      surplus_enabled: true
+      surplus_soc_threshold: 95
+      surplus_soc_hyst: 5
+      surplus_pv_hyst: 50
+      hard_limit_z0: 1200
+      hard_limit_z1: 1200
+      discharge_max: 40
+      zone1_limit: 50
+      tariff_enabled: true
+      tariff_price_sensor: sensor.preis
+      tariff_cheap_threshold: 20.0
+      tariff_exp_threshold: 27.0
+    flags: {cycle_active: false, surplus_active: false, solar_zero_entry_armed: false}
+    sensoren: {soc: 96, solar: 45, ist: 0, modus: "0", leistung: 0, entladestrom: 40}
+    folgt_ist: 0
+schritte:
+  - nach: 0
+  - nach: 5
+    setzen: {netz: -30}
+  - nach: 5
+    setzen: {a.solar: 60, netz: -200}
+  - nach: 5
+    setzen: {a.ist: 160, netz: -360}
+  - nach: 5
+    setzen: {netz: 250}
+  - nach: 5
+    setzen: {a.ist: 0, a.solar: 0, netz: 410}
+  - nach: 5
+    setzen: {netz: 405}
+  - nach: 1
+erwartet:
+  - schritt: 1
+    instanz: a
+    zustand: {surplus_active: false}
+  - schritt: 2
+    instanz: a
+    zustand: {surplus_active: false}
+  - schritt: 3
+    instanz: a
+    zustand: {surplus_active: true, active_fall: "0A"}
+  - schritt: 4
+    instanz: a
+    zustand: {surplus_active: true}
+  - schritt: 5
+    instanz: a
+    zustand: {surplus_active: false, cycle_active: false}
+  - schritt: 5
+    kein_aufruf: {entity: a.leistung, wert_min: 1}
+  - schritt: 6
+    instanz: a
+    zustand: {surplus_active: false}
+  - schritt: 7
+    instanz: a
+    zustand: {surplus_active: false}
+  - schritt: 8
+    instanz: a
+    zustand: {surplus_active: false}
