@@ -8,20 +8,18 @@ from typing import Any, Callable, Iterator
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.event import async_track_state_change_event, async_track_time_interval
 
-from .const import (
-    S_PERIODIC_ENABLED, S_PERIODIC_INTERVAL, S_PV_FORECAST_ENABLED, S_SURPLUS_FORECAST_ENABLED,
-    S_SURPLUS_LOCK_ENABLED, S_TARIFF_ENABLED, S_ZONE1_FORCE_ENABLED,
-)
+from .const import S_PERIODIC_ENABLED, S_PERIODIC_INTERVAL
+from .feature_sensors import sensor_triggers
+from .schema import CYCLE_SETTINGS
 
-# Zusätzliche Regel-Trigger in Registrierungsreihenfolge: (Name, Aktivierungsschlüssel,
-# ODER-verknüpft). "periodic" ist ein Zeitintervall, alle übrigen lauschen auf ihren Sensor.
-TRACKERS = (
-    ("tariff", (S_TARIFF_ENABLED,)),
-    ("periodic", (S_PERIODIC_ENABLED,)),
-    ("pv_forecast", (S_PV_FORECAST_ENABLED, S_SURPLUS_FORECAST_ENABLED)),
-    ("surplus_lock", (S_SURPLUS_LOCK_ENABLED,)),
-    ("zone1_force", (S_ZONE1_FORCE_ENABLED,)),
-)
+# Zusätzliche Regel-Trigger in Registrierungsreihenfolge: Name → Aktivierungsschlüssel,
+# ODER-verknüpft. "periodic" ist ein Zeitintervall, alle übrigen lauschen auf den Sensor
+# ihrer Vorgabe laut `feature_sensors.FEATURES`.
+_KEY_OF_FIELD = dict(CYCLE_SETTINGS)
+TRACKERS: dict[str, tuple[str, ...]] = {
+    **{name: tuple(_KEY_OF_FIELD[field] for field in fields) for name, fields in sensor_triggers().items()},
+    "periodic": (S_PERIODIC_ENABLED,),
+}
 
 
 class Trackers:
@@ -42,13 +40,16 @@ class Trackers:
         self._on_periodic = on_periodic
         # Abmeldefunktionen nach Name
         self._unsubs: dict[str, Callable] = {}
+        # Eingaben je Trigger beim letzten Anmelden oder Prüfen
+        self._inputs: dict[str, tuple] = {}
 
     def _input(self, name: str) -> tuple:
-        """Eingaben eines Triggers: Aktivierungswerte und Sensor bzw. Intervall."""
+        """Eingaben eines Triggers: Aktivierungswerte und Sensor bzw. Intervall; ausgeschaltet ohne Ziel."""
         settings = self._settings()
-        keys = dict(TRACKERS)[name]
-        target = settings[S_PERIODIC_INTERVAL] if name == "periodic" else self._effective(name)
-        return tuple(settings[k] for k in keys), target
+        enables = tuple(settings[k] for k in TRACKERS[name])
+        if not any(enables):
+            return enables, None
+        return enables, settings[S_PERIODIC_INTERVAL] if name == "periodic" else self._effective(name)
 
     def _untrack(self, name: str) -> None:
         """Trigger `name` abmelden, falls registriert."""
@@ -62,8 +63,9 @@ class Trackers:
         Der periodische Trigger läuft im Intervall S_PERIODIC_INTERVAL, mindestens 5 s.
         """
         self._untrack(name)
+        self._inputs[name] = self._input(name)
         settings = self._settings()
-        if not any(settings[k] for k in dict(TRACKERS)[name]):
+        if not any(settings[k] for k in TRACKERS[name]):
             return
         if name == "periodic":
             interval = max(5, int(settings[S_PERIODIC_INTERVAL]))
@@ -79,26 +81,37 @@ class Trackers:
 
     def start(self) -> None:
         """Alle Trigger in Registrierungsreihenfolge anmelden."""
-        for name, _ in TRACKERS:
+        for name in TRACKERS:
             self._retrack(name)
 
     def stop(self) -> None:
         """Alle Trigger abmelden."""
-        for name, _ in TRACKERS:
+        for name in TRACKERS:
             self._untrack(name)
+        self._inputs.clear()
 
     @contextmanager
     def refreshing(self) -> Iterator[None]:
         """Rahmen um eine Settings-Änderung: danach die Trigger neu anmelden, deren Eingaben sich darin geändert haben."""
-        before = {name: self._input(name) for name, _ in TRACKERS}
+        before = {name: self._input(name) for name in TRACKERS}
         yield
-        for name, _ in TRACKERS:
+        for name in TRACKERS:
             if self._input(name) != before[name]:
+                self._retrack(name)
+
+    def refresh_changed(self) -> None:
+        """Angemeldete Trigger neu anmelden, deren Eingaben sich seit dem Anmelden geändert haben.
+
+        Fängt den Wechsel des wirksamen Sensors ohne Settings-Änderung, etwa der
+        Nacht-Forcierung um TOMORROW_FROM_HOUR.
+        """
+        for name, before in list(self._inputs.items()):
+            if self._input(name) != before:
                 self._retrack(name)
 
     def refresh_sensors(self) -> None:
         """Sensorgebundene Trigger neu registrieren, etwa nach geänderten globalen Vorgaben."""
-        for name, _ in TRACKERS:
+        for name in TRACKERS:
             if name != "periodic":
                 self._retrack(name)
 

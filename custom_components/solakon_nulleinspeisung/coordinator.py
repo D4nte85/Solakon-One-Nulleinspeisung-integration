@@ -676,6 +676,8 @@ class SolakonCoordinator:
         Settings beenden den Zyklus vorzeitig über `_end_cycle`.
         """
         cfg = self.entry.data
+        # Wirksamer Sensor kann ohne Settings-Änderung wechseln (Stunde, Verteilung).
+        self.trackers.refresh_changed()
 
         # ── 0. Regelung aktiv? ───────────────────────────────────────────────
         if not self._regulation_on:

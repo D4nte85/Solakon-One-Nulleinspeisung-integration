@@ -716,7 +716,8 @@ async def _lauf(kind: str, spec: dict) -> list[Ctx]:
         coord = coords[inst["prefix"]]
         await coord.async_setup()
         if not inst["stored"]:
-            coord.settings.update(inst["settings"])
+            with coord.trackers.refreshing():
+                coord.settings.update(inst["settings"])
         coord.integral = inst["integral"]
         coord.surplus.prev_actual = inst["prev_actual"]
     flags = {p: h.coord_state(c) for p, c in coords.items()}

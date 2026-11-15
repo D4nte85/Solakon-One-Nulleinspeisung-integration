@@ -506,7 +506,9 @@ async def _run_cycle_spec(spec) -> dict:
         coord = coords[inst["prefix"]]
         await coord.async_setup()
         if not inst["stored"]:
-            coord.settings.update(inst["settings"])
+            # Wie geladene Settings vor dem Start: Trigger folgen den Settings.
+            with coord.trackers.refreshing():
+                coord.settings.update(inst["settings"])
         coord.integral = inst["integral"]
         coord.surplus.prev_actual = inst["prev_actual"]
     rec["setup"] = hass.events
@@ -545,7 +547,8 @@ async def _run_settings_spec(spec) -> dict:
     coord = coords["a"]
     await coord.async_setup()
     if not spec["instances"][0]["stored"]:
-        coord.settings.update(spec["instances"][0]["settings"])
+        with coord.trackers.refreshing():
+            coord.settings.update(spec["instances"][0]["settings"])
     hass.events = []
     try:
         await coord.async_update_settings(dict(spec["changes"]))

@@ -1,7 +1,7 @@
 """Feature-Sensoren: wirksamer Sensor je Vorgabe, Werte in Zieleinheit, Meldungen ohne Zahl."""
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, NamedTuple
 
 from homeassistant.core import HomeAssistant
 
@@ -35,26 +35,56 @@ SENSOR_SOURCES = {
     "zone1_force": (S_ZONE1_FORCE_SENSOR, "global_pv_forecast_tomorrow_sensor"),
 }
 
-# Sensorgebundene Werte des Regelzyklus: (Name, SENSOR_SOURCES-Schlüssel, Enable-Feld
-# in CycleSettings, Fehlerpräfix, Einheitenskala, Entität optional). Ohne optionale
-# Entität wird nicht gelesen und nichts gemeldet.
-FEATURE_READINGS = (
-    ("cheap", "tariff_cheap", "tariff_enabled", "err_tariff_cheap", {}, True),
-    ("exp", "tariff_exp", "tariff_enabled", "err_tariff_exp", {}, True),
-    ("surplus_forecast", "pv_forecast", "surplus_forecast_enabled", "err_surplus_forecast", UNIT_SCALE_KWH, False),
-    ("surplus_lock", "surplus_lock", "surplus_lock_enabled", "err_exit_lock", UNIT_SCALE_KILO, False),
-    ("pv_forecast", "pv_forecast", "pv_forecast_enabled", "err_pv_forecast", UNIT_SCALE_KWH, False),
-    ("zone1_force", "zone1_force", "zone1_force_enabled", "err_zone1_force", UNIT_SCALE_KWH, False),
+# Ab dieser Stunde liest die Nacht-Forcierung die Prognose für morgen, davor die für heute.
+TOMORROW_FROM_HOUR = 12
+
+
+class Feature(NamedTuple):
+    """Sensorgebundener Wert des Regelzyklus.
+
+    `source` ist die Sensorvorgabe in SENSOR_SOURCES, `enabled` das Feld in CycleSettings,
+    das den Wert einschaltet. Ohne `optional` Entität wird nicht gelesen und nichts
+    gemeldet; nur Werte mit Pflicht-Entität stoßen bei Änderung den Regelzyklus an.
+    """
+
+    name: str
+    source: str
+    enabled: str
+    err_prefix: str
+    scale: dict[str, float]
+    optional: bool
+
+
+# Alle Funktionen mit Sensor. Der Tarifpreis liest `tariff_price` mit Einheit nach der
+# Validierung, die übrigen `feature_values` in Tabellenreihenfolge.
+FEATURES = (
+    Feature("price", "tariff", "tariff_enabled", "err_tariff", {}, False),
+    Feature("cheap", "tariff_cheap", "tariff_enabled", "err_tariff_cheap", {}, True),
+    Feature("exp", "tariff_exp", "tariff_enabled", "err_tariff_exp", {}, True),
+    Feature("surplus_forecast", "pv_forecast", "surplus_forecast_enabled", "err_surplus_forecast", UNIT_SCALE_KWH, False),
+    Feature("surplus_lock", "surplus_lock", "surplus_lock_enabled", "err_exit_lock", UNIT_SCALE_KILO, False),
+    Feature("pv_forecast", "pv_forecast", "pv_forecast_enabled", "err_pv_forecast", UNIT_SCALE_KWH, False),
+    Feature("zone1_force", "zone1_force", "zone1_force_enabled", "err_zone1_force", UNIT_SCALE_KWH, False),
 )
+PRICE = FEATURES[0]
+
+
+def sensor_triggers() -> dict[str, tuple[str, ...]]:
+    """Sensorvorgaben mit Trigger und ihre einschaltenden CycleSettings-Felder (ODER), in Tabellenreihenfolge."""
+    triggers: dict[str, tuple[str, ...]] = {}
+    for feature in FEATURES:
+        if not feature.optional:
+            triggers[feature.source] = (*triggers.get(feature.source, ()), feature.enabled)
+    return triggers
 
 
 def effective_sensor(name: str, settings: dict[str, Any], dist_cfg: dict[str, Any], hour: int) -> str:
     """Wirksamer Sensor aus SENSOR_SOURCES: lokaler Override, sonst globale Vorgabe aus `dist_cfg`.
 
-    `zone1_force` liest ab 12 Uhr die Vorhersage für morgen, davor die für heute
-    (`pv_forecast`) — derselbe Zieltag, nur der Sensor wechselt.
+    `zone1_force` liest ab TOMORROW_FROM_HOUR die Vorhersage für morgen, davor die für
+    heute (`pv_forecast`) — derselbe Zieltag, nur der Sensor wechselt.
     """
-    if name == "zone1_force" and hour < 12:
+    if name == "zone1_force" and hour < TOMORROW_FROM_HOUR:
         name = "pv_forecast"
     local, global_key = SENSOR_SOURCES[name]
     return str(settings[local]) or str(dist_cfg.get(global_key, ""))
@@ -79,14 +109,16 @@ def feature_reading(
 def feature_values(
     hass: HomeAssistant, cs: CycleSettings, settings: dict[str, Any], dist_cfg: dict[str, Any], hour: int,
 ) -> tuple[dict[str, float | None], list[Msg]]:
-    """Alle Werte aus FEATURE_READINGS nach Name und ihre Meldungen, in Tabellenreihenfolge gelesen."""
+    """Alle Werte aus FEATURES außer dem Tarifpreis nach Name und ihre Meldungen, in Tabellenreihenfolge gelesen."""
     values = {}
     warnings = []
-    for name, source, enabled, err_prefix, scale, optional in FEATURE_READINGS:
-        sensor = effective_sensor(source, settings, dist_cfg, hour)
-        on = getattr(cs, enabled) and (bool(sensor) or not optional)
-        reading, warning = feature_reading(hass, on, sensor, err_prefix, scale)
-        values[name] = reading.value
+    for feature in FEATURES:
+        if feature is PRICE:
+            continue
+        sensor = effective_sensor(feature.source, settings, dist_cfg, hour)
+        on = getattr(cs, feature.enabled) and (bool(sensor) or not feature.optional)
+        reading, warning = feature_reading(hass, on, sensor, feature.err_prefix, feature.scale)
+        values[feature.name] = reading.value
         if warning:
             warnings.append(warning)
     return values, warnings
@@ -94,5 +126,5 @@ def feature_values(
 
 def tariff_price(hass: HomeAssistant, enabled: bool, sensor: str) -> tuple[float | None, str, Msg | None]:
     """Tarifpreis ohne Einheitenumrechnung, seine Einheit und Meldung; Einheit "" ohne Preis."""
-    reading, warning = feature_reading(hass, enabled, sensor, "err_tariff", {})
+    reading, warning = feature_reading(hass, enabled, sensor, PRICE.err_prefix, PRICE.scale)
     return reading.value, reading.unit, warning
