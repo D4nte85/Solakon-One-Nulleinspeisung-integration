@@ -12,6 +12,7 @@ import importlib
 import json
 import logging
 import sys
+import weakref
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -199,12 +200,36 @@ class FakeHttp:
                                        for url, path, cache in paths])
 
 
+_LIVE_HASS: weakref.WeakSet = weakref.WeakSet()
+
+
+def close_open_tasks() -> None:
+    """Nicht abgearbeitete Tasks aller FakeHass schließen.
+
+    Szenarioläufe rufen `_async_regulate` je Schritt selbst auf; angestoßene Zyklen aus
+    `request_regulation` laufen nur in Tests mit `async_block_till_done`.
+    """
+    for hass in list(_LIVE_HASS):
+        hass.close_tasks()
+
+
+def run(coro):
+    """`asyncio.run` für einen Lauf; danach offene Tasks schließen."""
+    try:
+        return asyncio.run(coro)
+    finally:
+        close_open_tasks()
+
+
 class FakeHass:
     def __init__(self, language="de"):
+        _LIVE_HASS.add(self)
         self.states = FakeStates()
         self.services = FakeServices(self)
         self.data: dict = {}
-        self.storage: dict = {}
+        self.storage: dict = {}          # Schlüssel -> Umschlag wie in `.storage` (siehe ha_stubs.Store)
+        self.pending_stores: set = set()  # Stores mit vorgemerktem `async_delay_save`
+        self.tasks: list = []             # Koroutinen aus `async_create_task`, laufen in `async_block_till_done`
         self.config = FakeConfig(language)
         self.config_entries = FakeConfigEntries(self)
         self.http = FakeHttp(self)
@@ -235,9 +260,32 @@ class FakeHass:
             self.log("untrack", handle)
         return unsub
 
+    def clock_now(self) -> float:
+        return CLOCK.now
+
     def async_create_task(self, coro, *args, **kwargs):
+        """Wie HA: Koroutine einplanen, nicht im Aufrufer ausführen; sie läuft in `async_block_till_done`."""
         self.log("task", getattr(coro, "__qualname__", str(coro)))
-        coro.close()
+        self.tasks.append(coro)
+        return coro
+
+    async def async_block_till_done(self) -> None:
+        """Eingeplante Tasks abarbeiten, auch nachgeschobene, dann fällige Schreibaufträge der Stores."""
+        while True:
+            if self.tasks:
+                await self.tasks.pop(0)
+                continue
+            due = sorted((s for s in self.pending_stores if s.due <= CLOCK.now), key=lambda s: s.due)
+            if not due:
+                return
+            for store in due:
+                store.write_pending()
+
+    def close_tasks(self) -> None:
+        """Nicht abgearbeitete Tasks schließen (Testende ohne `async_block_till_done`)."""
+        for coro in self.tasks:
+            coro.close()
+        self.tasks = []
 
 
 class FakeEntry:
@@ -305,6 +353,32 @@ def jsonable(value):
     if hasattr(value, "value") and not callable(value.value):
         return jsonable(value.value)
     return repr(value)
+
+
+def _store_version(key: str) -> tuple[int, int]:
+    """Aktuelle (Haupt-, Neben-)Version des Stores unter `key`; Testschlüssel ohne Store: (1, 1)."""
+    gs = group_store_mod
+    versions = {gs.STORAGE_KEY_DIST: gs.STORAGE_VERSION_DIST, gs.STORAGE_KEY_SOC_SWITCH: gs.STORAGE_VERSION_SOC_SWITCH,
+                gs.STORAGE_KEY_NUMBERS: gs.STORAGE_VERSION_NUMBERS}
+    if key in versions:
+        return versions[key], 1
+    if key.startswith(f"{const.DOMAIN}_entry_"):
+        return const.STORAGE_VERSION, const.STORAGE_MINOR_VERSION
+    return 1, 1
+
+
+def put_store(hass, key: str, data, version: int | None = None, minor_version: int | None = None) -> None:
+    """Speicherstand wie eine Datei in `.storage` ablegen; ohne Version in der aktuellen des Stores."""
+    major, minor = _store_version(key)
+    if version is not None:
+        major, minor = version, 1 if minor_version is None else minor_version
+    hass.storage[key] = {"version": major, "minor_version": minor, "key": key, "data": data}
+
+
+def stored(hass, key: str, default=None):
+    """Gespeicherte Nutzdaten unter `key`, ohne Umschlag."""
+    env = hass.storage.get(key)
+    return default if env is None else env["data"]
 
 
 def install_groups(hass, dist=None, soc_switch=None, dist_store=None, soc_switch_store=None):

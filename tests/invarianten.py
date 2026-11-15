@@ -6,7 +6,6 @@ Funktion `(ctx) -> str | None`, die nach einem Regelzyklus einer Instanz einen V
 """
 from __future__ import annotations
 
-import asyncio
 import copy
 import sys
 from collections import defaultdict
@@ -767,7 +766,7 @@ async def _lauf(kind: str, spec: dict) -> list[Ctx]:
 
 
 def kontexte(kind: str, spec: dict) -> list[Ctx]:
-    return asyncio.run(_lauf(kind, spec))
+    return h.run(_lauf(kind, spec))
 
 
 def pruefen(kinds=KINDS, regeln=None) -> dict[str, list[tuple[str, int, str, str]]]:

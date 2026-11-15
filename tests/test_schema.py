@@ -93,7 +93,7 @@ def test_sanitize_schneidet_kommazahl_in_ganzzahlfeld_ab():
 def _coord(hass, stored=None):
     entry = h.FakeEntry("entry_a", h.entry_data("a"))
     if stored is not None:
-        hass.storage[f"{C.DOMAIN}_entry_a"] = stored
+        h.put_store(hass, f"{C.DOMAIN}_entry_a", stored)
     coord = h.coordinator_mod.SolakonCoordinator(hass, entry)
     hass.data.setdefault(C.DOMAIN, {})["entry_a"] = coord
     return coord
@@ -122,7 +122,7 @@ def test_laden_meldet_unbekannte_art_der_lade_session():
     assert [n[1] for n in notify] == [f"{C.DOMAIN}_settings_reset_entry_a"]
     assert "charge_session ('solar_charge' → 'none')" in notify[0][3]
     saved = next(e for e in hass.events if e[0] == "store_save")
-    assert hass.storage[f"{C.DOMAIN}_entry_a"]["charge_session"] == "none", saved
+    assert h.stored(hass, f"{C.DOMAIN}_entry_a")["charge_session"] == "none", saved
 
 
 def test_laden_uebernimmt_gueltige_art_der_lade_session_ohne_meldung():

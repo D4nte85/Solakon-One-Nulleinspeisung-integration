@@ -6,7 +6,6 @@ liegt in golden/<art>.jsonl.gz; `python tests/regen.py` schreibt sie neu.
 """
 from __future__ import annotations
 
-import asyncio
 import random
 from datetime import datetime, timezone
 
@@ -509,7 +508,7 @@ def _setup_env(spec, dist_store: bool = False):
                 (entry.data[C.CONF_ACTUAL_SENSOR], inst["follow_actual"])]
         if inst["stored"]:
             flags = {k: v for k, v in inst["flags"].items() if k not in inst.get("drop_flags", ())}
-            hass.storage[f"{C.DOMAIN}_{entry.entry_id}"] = {**inst["settings"], **flags}
+            h.put_store(hass, f"{C.DOMAIN}_{entry.entry_id}", {**inst["settings"], **flags})
         hass.config_entries.entries.append(entry)
         coord = h.coordinator_mod.SolakonCoordinator(hass, entry)
         hass.data.setdefault(C.DOMAIN, {})[entry.entry_id] = coord
@@ -598,9 +597,9 @@ async def _run_wiring() -> dict:
     mod = h.integration
     entries = [h.FakeEntry("entry_a", h.entry_data("a")), h.FakeEntry("entry_b", h.entry_data("b"))]
     hass.config_entries.entries = entries
-    hass.storage["solakon_nulleinspeisung_distribution"] = {"sensor.grid": {"distribution_mode": "soc"}}
-    hass.storage["solakon_nulleinspeisung_soc_switch_state"] = {
-        "sensor.grid": {"active_id": "entry_b", "start_soc": 55, "was_zone0": True}}
+    h.put_store(hass, "solakon_nulleinspeisung_distribution", {"sensor.grid": {"distribution_mode": "soc"}})
+    h.put_store(hass, "solakon_nulleinspeisung_soc_switch_state", {
+        "sensor.grid": {"active_id": "entry_b", "start_soc": 55, "was_zone0": True}})
     await mod.async_setup(hass, {})
     for e in entries:
         await mod.async_setup_entry(hass, e)
@@ -784,4 +783,4 @@ def run(kind: str, spec: dict) -> dict:
         coro = _run_derive()
     else:
         coro = _run_wiring()
-    return h.jsonable(asyncio.run(coro))
+    return h.jsonable(h.run(coro))

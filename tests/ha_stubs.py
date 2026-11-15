@@ -6,6 +6,7 @@ jeweiligen FakeHass (siehe harness.py).
 """
 from __future__ import annotations
 
+import copy
 import sys
 import types
 from datetime import datetime, timezone
@@ -65,25 +66,86 @@ def state_as_number(state) -> float:
 
 # ── helpers.storage ──────────────────────────────────────────────────────────
 
+class UnsupportedStorageVersionError(Exception):
+    """Gespeicherte Hauptversion ist neuer als die des Stores."""
+
+
 class Store:
-    def __init__(self, hass, version, key, *args, **kwargs):
+    """Nachbau von homeassistant.helpers.storage.Store.
+
+    `hass.storage[key]` hält den Umschlag wie die Datei in `.storage`: `version`,
+    `minor_version`, `key`, `data`. Laden migriert ältere Stände über
+    `_async_migrate_func` und speichert das Ergebnis. `async_delay_save` merkt den
+    Schreibauftrag dieser Instanz vor; `data_func` läuft erst beim Schreiben, das
+    `FakeHass.async_block_till_done` nach Ablauf der Frist auslöst. `async_remove`
+    verwirft nur den Auftrag der eigenen Instanz.
+    """
+
+    def __init__(self, hass, version, key, *args, minor_version=1, **kwargs):
         self.hass = hass
         self.version = version
+        self.minor_version = minor_version
         self.key = key
+        self._pending = None      # data_func des vorgemerkten Schreibauftrags
+        self.due = None           # Zeitpunkt des vorgemerkten Schreibauftrags
+
+    def _envelope(self, data):
+        return {"version": self.version, "minor_version": self.minor_version, "key": self.key, "data": data}
+
+    def _write(self, data):
+        # Wie die JSON-Datei: kein geteilter Zustand zwischen Speicher und Aufrufer.
+        self.hass.storage[self.key] = copy.deepcopy(self._envelope(data))
+
+    def _cancel(self):
+        self._pending = self.due = None
+        self.hass.pending_stores.discard(self)
 
     async def async_load(self):
-        data = self.hass.storage.get(self.key)
-        return None if data is None else dict(data)
+        if self._pending is not None:
+            data = self._envelope(self._pending())
+        else:
+            data = self.hass.storage.get(self.key)
+            if data is None:
+                return None
+        data = copy.deepcopy(data)
+        data.setdefault("minor_version", 1)
+        if data["version"] == self.version and data["minor_version"] == self.minor_version:
+            return data["data"]
+        if data["version"] > self.version:
+            raise UnsupportedStorageVersionError(self.key, data["version"], self.version)
+        try:
+            stored = await self._async_migrate_func(data["version"], data["minor_version"], data["data"])
+        except NotImplementedError:
+            if data["version"] != self.version:
+                raise
+            stored = data["data"]
+        await self.async_save(stored)
+        return stored
 
     async def async_save(self, data):
         self.hass.log_store("store_save", self.key, data)
-        self.hass.storage[self.key] = data
+        self._cancel()
+        self._write(data)
 
     def async_delay_save(self, data_func, delay=0):
         self.hass.log_store("store_delay_save", self.key, data_func(), delay)
+        self._pending = data_func
+        self.due = self.hass.clock_now() + delay
+        self.hass.pending_stores.add(self)
+
+    def write_pending(self):
+        """Vorgemerkten Schreibauftrag ausführen (Fristablauf in HA)."""
+        data_func = self._pending
+        self._cancel()
+        if data_func is not None:
+            self._write(data_func())
+
+    async def _async_migrate_func(self, old_major_version, old_minor_version, old_data):
+        raise NotImplementedError
 
     async def async_remove(self):
         self.hass.log("store_remove", self.key)
+        self._cancel()
         self.hass.storage.pop(self.key, None)
 
 
@@ -441,7 +503,8 @@ def install() -> None:
             SelectSelectorMode=SelectSelectorMode, SelectOptionDict=SelectOptionDict,
             BooleanSelector=BooleanSelector)
     _module("homeassistant.exceptions", ConfigEntryNotReady=ConfigEntryNotReady,
-            HomeAssistantError=HomeAssistantError)
+            HomeAssistantError=HomeAssistantError,
+            UnsupportedStorageVersionError=UnsupportedStorageVersionError)
     _module("homeassistant.components.http", StaticPathConfig=StaticPathConfig)
     _module("homeassistant.components.websocket_api", websocket_command=websocket_command,
             async_response=async_response, require_admin=require_admin,

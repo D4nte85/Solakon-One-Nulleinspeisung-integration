@@ -11,6 +11,16 @@ importiert. Drei Schichten nutzen das:
 | Reproduktion | einen Fehlervorgang als benanntes Szenario abspielen | `python tests/repro.py tests/repro/<name>.yaml` |
 | Panel | Render-Vergleich von `solakon-panel.js` gegen einen git-Stand | `python tests/panel/vergleich.py [REV]` |
 
+`Store` und Tasks folgen Home Assistant (`helpers/storage.py`). `hass.storage[key]` hält den
+Umschlag wie die Datei in `.storage` (`version`, `minor_version`, `data`): Tests legen Stände
+über `h.put_store` ab und lesen sie über `h.stored`. Laden migriert ältere Versionen über
+`_async_migrate_func` und speichert das Ergebnis. `async_delay_save` schreibt erst nach Ablauf
+der Frist, und zwar den Stand zum Schreibzeitpunkt. `async_remove` verwirft nur den
+Schreibauftrag der eigenen Instanz. `async_create_task` plant die Koroutine ein, statt sie im
+Aufrufer auszuführen. `await hass.async_block_till_done()` arbeitet die eingeplanten Tasks ab
+und danach die fälligen Schreibaufträge. Szenarioläufe rufen `_async_regulate` je Schritt
+selbst auf und schließen angestoßene Zyklen am Ende ungelaufen (`h.run`, `conftest.py`).
+
 Der Szenariogenerator (`scenarios.py`) zieht aus einem Zufallsstrom je Szenarioart. Neue
 Settings kommen über `gen_settings_ext` aus einem zweiten Strom (`solakon-<art>-ext`) dazu; so
 bleibt die Hauptfolge stabil und ein neues Golden zeigt nur die Wirkung der neuen Felder.

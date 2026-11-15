@@ -17,7 +17,7 @@ def _setup(dist=None):
     hass = h.FakeHass("de")
     hass.config_entries.entries = [h.FakeEntry("entry_a", h.entry_data("a"))]
     if dist is not None:
-        hass.storage[DIST_KEY] = dist
+        h.put_store(hass, DIST_KEY, dist)
     asyncio.run(h.group_store_mod.async_load(hass))
     return hass, mig.SolakonSettingsStore(hass, "entry_a")
 
@@ -30,14 +30,14 @@ def test_kapazitaetssensor_wandert_in_die_verteilung():
     hass, store = _setup()
     out = _migrate(store, 2, 1, {"zone1_limit": 50, mig.OLD_CAPACITY_SENSOR: "sensor.cap_a"})
     assert out == {"zone1_limit": 50, "charge_session": "none"}
-    assert hass.storage[DIST_KEY]["sensor.grid"][CAP_KEY] == "sensor.cap_a"
+    assert h.stored(hass, DIST_KEY)["sensor.grid"][CAP_KEY] == "sensor.cap_a"
 
 
 def test_vorhandener_sensor_in_der_verteilung_bleibt():
     hass, store = _setup({"sensor.grid": {CAP_KEY: "sensor.neu"}})
     out = _migrate(store, 2, 1, {mig.OLD_CAPACITY_SENSOR: "sensor.alt"})
     assert mig.OLD_CAPACITY_SENSOR not in out
-    assert hass.storage[DIST_KEY]["sensor.grid"][CAP_KEY] == "sensor.neu"
+    assert h.stored(hass, DIST_KEY)["sensor.grid"][CAP_KEY] == "sensor.neu"
 
 
 def test_leerer_altschluessel_wird_nur_entfernt():
@@ -51,7 +51,7 @@ def test_version_1_durchlaeuft_beide_schritte():
     hass, store = _setup()
     out = _migrate(store, 1, 1, {"hard_limit": 650, mig.OLD_CAPACITY_SENSOR: "sensor.cap_a"})
     assert out == {"hard_limit_z0": 650, "hard_limit_z1": 650, "charge_session": "none"}
-    assert hass.storage[DIST_KEY]["sensor.grid"][CAP_KEY] == "sensor.cap_a"
+    assert h.stored(hass, DIST_KEY)["sensor.grid"][CAP_KEY] == "sensor.cap_a"
 
 
 def test_neuere_nebenversion_bleibt_unveraendert():

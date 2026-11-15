@@ -8,7 +8,6 @@ nicht · 2: Szenario fehlerhaft.
 """
 from __future__ import annotations
 
-import asyncio
 import copy
 import sys
 from pathlib import Path
@@ -234,7 +233,7 @@ def lade(pfad: Path) -> dict:
 def spiele(szenario: dict) -> tuple[dict, list[tuple[bool, str]]]:
     """Szenario ausführen → (Protokoll, Ergebnis je Erwartung)."""
     spec = spec_aus(szenario)
-    rec = h.jsonable(asyncio.run(scenarios._run_cycle_spec(spec)))
+    rec = h.jsonable(h.run(scenarios._run_cycle_spec(spec)))
     return rec, [pruefe(e, rec) for e in szenario["erwartet"]]
 
 

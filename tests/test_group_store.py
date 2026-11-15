@@ -45,8 +45,8 @@ def test_register_eine_gruppe_je_netzsensor():
 
 def test_gruppe_bekommt_gespeicherten_zustand():
     hass = _hass()
-    hass.storage[DIST_KEY] = {"sensor.grid": SWITCH}
-    hass.storage[SWITCH_KEY] = {"sensor.grid": {"active_id": "a", "start_soc": 60}}
+    h.put_store(hass, DIST_KEY, {"sensor.grid": SWITCH})
+    h.put_store(hass, SWITCH_KEY, {"sensor.grid": {"active_id": "a", "start_soc": 60}})
     _load(hass)
     g = gs.group_for(hass, "sensor.grid")
     assert g.dist_cfg()["distribution_mode"] == "soc_switch"
@@ -55,7 +55,7 @@ def test_gruppe_bekommt_gespeicherten_zustand():
 
 def test_paralleles_laden_einmal_und_alle_warten():
     hass = _hass()
-    hass.storage[DIST_KEY] = {"sensor.grid": SWITCH}
+    h.put_store(hass, DIST_KEY, {"sensor.grid": SWITCH})
     loads = []
     load = h.ha_stubs.Store.async_load
 
@@ -81,7 +81,7 @@ def test_paralleles_laden_einmal_und_alle_warten():
 def test_soc_switch_zustand_je_gruppe_und_gespeichert():
     a, b, x = M("a"), M("b", soc=70.0), M("x", grid_sensor="sensor.other", soc=90.0)
     hass = _hass(a, b, x)
-    hass.storage[DIST_KEY] = {"sensor.grid": SWITCH, "sensor.other": SWITCH}
+    h.put_store(hass, DIST_KEY, {"sensor.grid": SWITCH, "sensor.other": SWITCH})
     _load(hass)
     gs.group_for(hass, "sensor.grid").soc_switch_shares({"a": a, "b": b}, a, 50)
     gs.group_for(hass, "sensor.other").soc_switch_shares({"x": x}, x, 90.0)
@@ -92,12 +92,12 @@ def test_soc_switch_zustand_je_gruppe_und_gespeichert():
 
 def test_speichern_erreicht_gruppe_und_behaelt_gruppe_ohne_instanz():
     hass = _hass()
-    hass.storage[DIST_KEY] = {"sensor.frei": {"distribution_mode": "soc"}}
+    h.put_store(hass, DIST_KEY, {"sensor.frei": {"distribution_mode": "soc"}})
     store = _load(hass)
     g = gs.group_for(hass, "sensor.grid")
     assert asyncio.run(store.save_dist("sensor.grid", {"distribution_mode": "capacity"})) == []
     assert g.dist_cfg()["distribution_mode"] == "capacity"
-    assert hass.storage[DIST_KEY] == {
+    assert h.stored(hass, DIST_KEY) == {
         "sensor.frei": {"distribution_mode": "soc"}, "sensor.grid": {"distribution_mode": "capacity"}}
     assert store.dist_view("sensor.frei")["distribution_mode"] == "soc"
 
@@ -113,8 +113,8 @@ def test_speichern_mit_befund_aendert_nichts():
 
 def test_entfernen_loescht_beide_stores():
     hass = _hass()
-    hass.storage[DIST_KEY] = {"sensor.grid": SWITCH}
-    hass.storage[SWITCH_KEY] = {"sensor.grid": {"active_id": "a"}}
+    h.put_store(hass, DIST_KEY, {"sensor.grid": SWITCH})
+    h.put_store(hass, SWITCH_KEY, {"sensor.grid": {"active_id": "a"}})
     asyncio.run(gs.async_remove(hass))
     assert DIST_KEY not in hass.storage and SWITCH_KEY not in hass.storage
 

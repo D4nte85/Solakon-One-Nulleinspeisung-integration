@@ -13,10 +13,10 @@ def _hass(prefixes: str) -> tuple[h.FakeHass, list[h.FakeEntry]]:
     hass = h.FakeHass("de")
     entries = [h.FakeEntry(f"entry_{p}", h.entry_data(p)) for p in prefixes]
     hass.config_entries.entries = entries
-    hass.storage[f"{DOMAIN}_distribution"] = {
-        "sensor.grid": {"global_tariff_price_sensor": "sensor.preis"}}
+    h.put_store(hass, f"{DOMAIN}_distribution", {
+        "sensor.grid": {"global_tariff_price_sensor": "sensor.preis"}})
     for p in prefixes:
-        hass.storage[f"{DOMAIN}_entry_{p}"] = {"tariff_enabled": True}
+        h.put_store(hass, f"{DOMAIN}_entry_{p}", {"tariff_enabled": True})
     return hass, entries
 
 
@@ -131,7 +131,7 @@ def test_gesamtlimit_setzen_speichert_nur_das_feld_und_stoesst_regelung_an():
     asyncio.run(entity.async_added_to_hass())
     hass.events.clear()
     asyncio.run(entity.async_set_native_value(400.0))
-    assert hass.storage[f"{DOMAIN}_distribution"]["sensor.grid"] == {"global_max_power": 400}
+    assert h.stored(hass, f"{DOMAIN}_distribution")["sensor.grid"] == {"global_max_power": 400}
     group = h.group_store_mod.group_for(hass, "sensor.grid")
     assert group.dist_cfg()["global_max_power"] == 400 and group.dist_rev == 1
     assert writes == [400]
@@ -163,7 +163,7 @@ def test_gruppennummer_fest_je_netzsensor_und_gespeichert():
     limits = _group_limits(added)
     assert limits["entry_a"][0].unique_id == "group_1_global_max_power"
     assert limits["entry_c"][0].unique_id == "group_2_global_max_power"
-    assert hass.storage[f"{DOMAIN}_group_numbers"] == {"sensor.grid": 1, "sensor.grid_other": 2}
+    assert h.stored(hass, f"{DOMAIN}_group_numbers") == {"sensor.grid": 1, "sensor.grid_other": 2}
 
 
 def _register_group_limit(hass: h.FakeHass, number: int) -> tuple:
@@ -178,12 +178,12 @@ def test_einzelinstanz_bekommt_kein_gesamtlimit():
     hass, added = _group_setup([h.FakeEntry("entry_a", h.entry_data("a")),
                                 h.FakeEntry("entry_c", h.entry_data("c", grid_sensor="sensor.grid_other"))])
     assert _group_limits(added) == {"entry_a": [], "entry_c": []}
-    assert "sensor.grid" not in hass.storage.get(f"{DOMAIN}_group_numbers", {})
+    assert "sensor.grid" not in h.stored(hass, f"{DOMAIN}_group_numbers", {})
 
 
 def test_einzelinstanz_raeumt_gesamtlimit_frueherer_laeufe_ab():
     hass = h.FakeHass("de")
-    hass.storage[f"{DOMAIN}_group_numbers"] = {"sensor.grid": 1, "sensor.grid_other": 2}
+    h.put_store(hass, f"{DOMAIN}_group_numbers", {"sensor.grid": 1, "sensor.grid_other": 2})
     ents, devs = _register_group_limit(hass, 1)
     _register_group_limit(hass, 2)
     entries = [h.FakeEntry("entry_a", h.entry_data("a")),
@@ -216,7 +216,7 @@ def test_loeschen_der_zweiten_instanz_entfernt_gesamtlimit_und_geraet():
     asyncio.run(run())
     assert _group_limits(added)["entry_a"][0].__dict__.get("removed") is True
     assert ents.entities == {} and devs.devices == {}
-    assert hass.storage[f"{DOMAIN}_group_numbers"] == {"sensor.grid": 1}
+    assert h.stored(hass, f"{DOMAIN}_group_numbers") == {"sensor.grid": 1}
 
 
 def test_gesamtlimit_bei_zwei_eintraegen_auch_wenn_nur_einer_geladen():
@@ -243,7 +243,7 @@ def test_loeschen_bei_deaktivierter_schwester_entfernt_gesamtlimit_und_geraet():
     asyncio.run(run())
     assert ents.entities == {} and devs.devices == {}
     assert [key for key in hass.data if key.startswith(DOMAIN)] == []
-    assert hass.storage[f"{DOMAIN}_group_numbers"] == {"sensor.grid": 1}
+    assert h.stored(hass, f"{DOMAIN}_group_numbers") == {"sensor.grid": 1}
 
 
 def test_instanzliste_nennt_eingerichtete_instanzen_am_netzsensor():
