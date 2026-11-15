@@ -5,7 +5,7 @@ import asyncio
 import logging
 import time
 from operator import attrgetter
-from typing import Any, Callable
+from typing import Any, Callable, Iterable, NamedTuple
 
 from homeassistant.core import HomeAssistant, Event, callback
 from homeassistant.helpers.event import async_track_state_change_event
@@ -57,16 +57,57 @@ PERSISTED_FLAGS = (
     (CHARGE_SESSION_KEY, "charge_session", SESSION_NONE, CHARGE_SESSIONS),
 )
 
-# Kernsensoren der Instanz: (Konfigschlüssel, löst Regelzyklus aus, Pflicht für den Zyklus).
+# Kernsensoren der Instanz: (Konfigschlüssel, Einheitenfaktoren, löst Regelzyklus aus, Pflicht für den Zyklus).
 # Ist-Leistung und Leistungssollwert werden gepollt und lösen keinen Zyklus aus.
 CORE_SENSORS = (
-    (CONF_GRID_SENSOR, True, True),
-    (CONF_SOLAR_SENSOR, True, True),
-    (CONF_ACTUAL_SENSOR, False, True),
-    (CONF_ACTIVE_POWER, False, True),
-    (CONF_SOC_SENSOR, True, True),
-    (CONF_MODE_SELECT, True, False),
+    (CONF_GRID_SENSOR, UNIT_SCALE_W, True, True),
+    (CONF_SOLAR_SENSOR, UNIT_SCALE_W, True, True),
+    (CONF_ACTUAL_SENSOR, UNIT_SCALE_W, False, True),
+    (CONF_ACTIVE_POWER, {}, False, True),
+    (CONF_SOC_SENSOR, {}, True, True),
+    (CONF_MODE_SELECT, {}, True, False),
 )
+_CORE_SCALE = {key: scale for key, scale, _, _ in CORE_SENSORS}
+
+
+class CoreValues(NamedTuple):
+    """Kernsensoren zu Beginn eines Regelzyklus.
+
+    `mode` ist 'unknown' und `mode_ok` False, wenn der Modus-Select keinen gültigen Zustand hat;
+    `timer` ist 0 ohne Zahl.
+    """
+
+    soc: float
+    grid: float
+    solar: float
+    actual: float
+    mode: str
+    timer: float
+    mode_ok: bool
+
+
+def read_required(hass: HomeAssistant, cfg: Any, keys: Iterable[str]) -> dict[str, float] | str:
+    """Kernsensoren `keys` in ihrer Einheit lesen; die Entity-ID des ersten ohne Zahl statt der Werte."""
+    values = {}
+    for key in keys:
+        value = read_scaled(hass, cfg[key], _CORE_SCALE[key]).value
+        if value is None:
+            return cfg[key]
+        values[key] = value
+    return values
+
+
+def read_core(hass: HomeAssistant, cfg: Any) -> CoreValues | str:
+    """Kernsensoren eines Regelzyklus; die Entity-ID des ersten Pflichtsensors ohne Zahl statt der Werte."""
+    values = read_required(hass, cfg, [key for key, _, _, required in CORE_SENSORS if required])
+    if isinstance(values, str):
+        return values
+    mode = valid_state(hass, cfg[CONF_MODE_SELECT])
+    timer = read_number(hass, cfg[CONF_TIMEOUT_COUNTDOWN]).value
+    return CoreValues(
+        values[CONF_SOC_SENSOR], values[CONF_GRID_SENSOR], values[CONF_SOLAR_SENSOR], values[CONF_ACTUAL_SENSOR],
+        mode.state if mode else "unknown", 0.0 if timer is None else timer, mode is not None,
+    )
 
 
 class SolakonCoordinator:
@@ -543,7 +584,7 @@ class SolakonCoordinator:
             _LOGGER.info("Solakon: Standardwerte geladen")
 
         cfg = self.entry.data
-        entities_to_track = [cfg.get(key, "") for key, triggers, _ in CORE_SENSORS if triggers]
+        entities_to_track = [cfg.get(key, "") for key, _, triggers, _ in CORE_SENSORS if triggers]
         entities_to_track = [e for e in entities_to_track if e]
 
         if entities_to_track:
@@ -687,20 +728,13 @@ class SolakonCoordinator:
 
         # ── 1. Kernsensoren lesen ────────────────────────────────────────────
         # Pflichtsensoren müssen eine Zahl liefern
-        missing = next((cfg[key] for key, _, required in CORE_SENSORS
-                        if required and read_number(self.hass, cfg[key]).value is None), None)
-        if missing is not None:
-            _LOGGER.debug("Solakon: Kernsensor %s ohne Zahlenwert, Zyklus übersprungen", missing)
-            self._messages.fail(("err_core_sensor", {"sensor": missing}))
+        core = read_core(self.hass, cfg)
+        if isinstance(core, str):
+            _LOGGER.debug("Solakon: Kernsensor %s ohne Zahlenwert, Zyklus übersprungen", core)
+            self._messages.fail(("err_core_sensor", {"sensor": core}))
             self._end_cycle(blocked=True, notify_on_change=True)
             return
-
-        soc = self._flt(cfg[CONF_SOC_SENSOR])
-        grid = self._flt_power(cfg[CONF_GRID_SENSOR])
-        solar = self._flt_power(cfg[CONF_SOLAR_SENSOR])
-        actual = self._flt_power(cfg[CONF_ACTUAL_SENSOR])
-        mode = self._str(cfg[CONF_MODE_SELECT])
-        timer_val = self._flt(cfg[CONF_TIMEOUT_COUNTDOWN])
+        soc, grid, solar, actual, mode, timer_val = core[:6]
 
         # ── 2. StdDev und dynamische Offsets ─────────────────────────────────
         # StdDev ist eine Eigenschaft der Netzgruppe, nicht der einzelnen Instanz:
@@ -739,7 +773,7 @@ class SolakonCoordinator:
         self.tariff.forecast(feature["pv_forecast"], cs)
 
         # ── 6. Validierung ───────────────────────────────────────────────────
-        invalid = soc_conflict(cs) or (None if self._entity_ok(cfg[CONF_MODE_SELECT]) else "err_mode_select")
+        invalid = soc_conflict(cs) or (None if core.mode_ok else "err_mode_select")
         if invalid:
             self._messages.fail((invalid, {}))
             self._end_cycle(blocked=True)
@@ -856,14 +890,11 @@ class SolakonCoordinator:
             return False
 
         # ── 11b. Zweitlesung nach den Falls ──────────────────────────────────
-        grid = read_scaled(self.hass, cfg[CONF_GRID_SENSOR], UNIT_SCALE_W).value
-        solar = read_scaled(self.hass, cfg[CONF_SOLAR_SENSOR], UNIT_SCALE_W).value
-
-        missing = next((cfg[key] for key, value in ((CONF_GRID_SENSOR, grid), (CONF_SOLAR_SENSOR, solar))
-                        if value is None), None)
-        if missing is not None:
-            self._messages.fail(("err_core_sensor", {"sensor": missing}))
+        second = read_required(self.hass, cfg, (CONF_GRID_SENSOR, CONF_SOLAR_SENSOR))
+        if isinstance(second, str):
+            self._messages.fail(("err_core_sensor", {"sensor": second}))
             return True
+        grid, solar = second[CONF_GRID_SENSOR], second[CONF_SOLAR_SENSOR]
 
         # Eine Energierichtung je Netzgruppe: lädt eine Schwester, entlädt Zone 1 nur PV.
         # Ebenso beim Aufladen mit Hausvorrang.
