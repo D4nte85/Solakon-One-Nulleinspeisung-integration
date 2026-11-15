@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .const import DEVICE_MAX_POWER, MODE_AC_CHARGE
+from .schema import CycleSettings
 
 
 @dataclass(frozen=True)
@@ -12,7 +13,8 @@ class PowerLimits:
 
     `zone0` und `zone12` sind die Hard-Limits, gedeckelt auf Gerätegrenze und
     zugeteilte Leistung. `ac` ist die AC-Ladegrenze auf Gerätegrenze, `export` der
-    Sollwert des Export-Limits aus den Panel-Werten.
+    Sollwert des Export-Limits aus den Panel-Werten, `pv_reserve` die PV-Ladereserve
+    für den PV-Deckel der PI-Phase.
     """
 
     zone0: int
@@ -53,11 +55,8 @@ def pv_cap_reason(sister_charging: bool, charging_to_target: bool, battery_prior
     return ""
 
 
-def power_limits(
-    *, hard_limit_z0: int, hard_limit_z1: int, ac_power_limit: int, pv_reserve: int,
-    allocated: float | None,
-) -> PowerLimits:
-    """Grenzen aus den Panel-Werten und der zugeteilten Leistung; `None` ohne Zuteilung."""
+def power_limits(cs: CycleSettings, allocated: float | None) -> PowerLimits:
+    """Grenzen aus dem Schnappschuss und der zugeteilten Leistung; `None` ohne Zuteilung."""
     def cap(limit: int) -> int:
         """`limit` gedeckelt auf Gerätemaximum und, falls vorhanden, auf die Zuteilung."""
         if allocated is None:
@@ -65,9 +64,9 @@ def power_limits(
         return int(min(int(allocated), limit, DEVICE_MAX_POWER))
 
     return PowerLimits(
-        zone0=cap(hard_limit_z0),
-        zone12=cap(hard_limit_z1),
-        ac=int(min(ac_power_limit, DEVICE_MAX_POWER)),
-        export=max(hard_limit_z0, hard_limit_z1),
-        pv_reserve=pv_reserve,
+        zone0=cap(cs.hard_limit_z0),
+        zone12=cap(cs.hard_limit_z1),
+        ac=int(min(cs.ac_power_limit, DEVICE_MAX_POWER)),
+        export=max(cs.hard_limit_z0, cs.hard_limit_z1),
+        pv_reserve=cs.pv_reserve,
     )

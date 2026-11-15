@@ -9,14 +9,15 @@ from tests import harness as h
 
 limits = importlib.import_module(h.PKG + ".limits")
 const = importlib.import_module(h.PKG + ".const")
+schema = importlib.import_module(h.PKG + ".schema")
 
 MAX = const.DEVICE_MAX_POWER
 
 
-def _limits(**kw):
-    args = dict(hard_limit_z0=800, hard_limit_z1=600, ac_power_limit=700, pv_reserve=50, allocated=None)
+def _limits(allocated=None, **kw):
+    args = dict(hard_limit_z0=800, hard_limit_z1=600, ac_power_limit=700, pv_reserve=50)
     args.update(kw)
-    return limits.power_limits(**args)
+    return limits.power_limits(schema.cycle_settings(const.SETTINGS_DEFAULTS)._replace(**args), allocated)
 
 
 @pytest.mark.parametrize("z0, z1, allocated, zone0, zone12", [

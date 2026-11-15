@@ -8,20 +8,39 @@ import pytest
 from tests import harness as h
 
 paths = importlib.import_module(h.PKG + ".paths")
+limits = importlib.import_module(h.PKG + ".limits")
+schema = importlib.import_module(h.PKG + ".schema")
 
+# Zyklus in Modus '1' mit viel PV: Obergrenze ist das Zone-1-Limit, auch mit PV-Deckel.
+CS = schema.cycle_settings(h.const.SETTINGS_DEFAULTS)._replace(
+    tolerance=25, tariff_power=800, grid_charge_power=800, ac_min_power=50,
+    pi_enabled=True, p_factor=1.3, i_factor=0.05,
+)
+LIMITS = limits.PowerLimits(zone0=1200, zone12=800, ac=800, export=1200, pv_reserve=50)
 BASE = dict(
-    grid=30.0, current_power=400.0, tolerance=25.0,
-    surplus_active=False, session="none",
-    capped="", zone0_power=1200.0, tariff_power=800.0, grid_charge_power=800.0,
-    ac_offset=-50.0, ac_limit=800.0, ac_min_charge=50.0, ac_share=1.0, ac_charge=300.0, ac_pool_charge=300.0,
-    target_offset=30.0, dynamic_max=800.0, pi_enabled=True, discharge=390.0, discharge_pool=390.0,
-    p_factor=1.3, i_factor=0.05, share=1.0,
-    discharge_base=400.0,
+    cs=CS, limits=LIMITS, mode="1", cycle_active=True, surplus_active=False, session="none", cap_reason="",
+    grid=30.0, solar=5000.0, current_power=400.0,
+    ac_offset=-50.0, target_offset=30.0, ac_share=1.0, share=1.0,
+    ac_charge=300.0, ac_pool_charge=300.0, discharge=390.0, discharge_pool=390.0, discharge_base=400.0,
 )
 
 
 def _decide(**over):
-    return paths.decide(paths.PathInputs(**{**BASE, **over}))
+    cs = CS._replace(**{k: over.pop(k) for k in CS._fields if k in over})
+    if "capped" in over:
+        over["cap_reason"] = over.pop("capped")
+    return paths.decide(paths.PathInputs(**{**BASE, "cs": cs, **over}))
+
+
+def test_deckel_nur_im_zyklus_in_modus_1():
+    for over in (dict(cycle_active=False), dict(mode="3")):
+        d = _decide(grid=200.0, cap_reason="sister_charging", **over)
+        assert d.kind == paths.PI_STEP and d.step.action == "act_pi"
+
+
+def test_deckel_begrenzt_auf_pv_minus_reserve():
+    d = _decide(grid=200.0, cap_reason="house_priority", solar=450.0, current_power=300.0)
+    assert (d.step.limit, d.step.action) == (400.0, "act_pi_house_priority")
 
 
 def test_surplus_schreibt_zone0_festwert():

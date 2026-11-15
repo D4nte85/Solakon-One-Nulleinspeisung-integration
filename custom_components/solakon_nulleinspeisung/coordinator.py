@@ -40,8 +40,8 @@ from .const import (
     CONF_ACTUAL_SENSOR, CONF_SOLAR_SENSOR, CONF_SOC_SENSOR, CONF_TIMEOUT_COUNTDOWN,
     CONF_ACTIVE_POWER, CONF_DISCHARGE_CURRENT, CONF_TIMEOUT_SET, CONF_MODE_SELECT,
     CONF_EXPORT_LIMIT, MODE_DISABLED, MODE_DISCHARGE, MODE_AC_CHARGE, S_REGULATION_ENABLED,
-    S_ZONE3_LIMIT, DEVICE_MAX_CURRENT, S_HARD_LIMIT_Z0, S_HARD_LIMIT_Z1, S_PV_RESERVE,
-    S_AC_SOC_TARGET, S_AC_POWER_LIMIT, S_REST_IN_DISCHARGE, S_PI_ENABLED,
+    S_ZONE3_LIMIT, DEVICE_MAX_CURRENT,
+    S_AC_SOC_TARGET, S_REST_IN_DISCHARGE, S_PI_ENABLED,
     S_TARGET_CHARGE_ENABLED, CHARGE_SESSION_KEY, CHARGE_SESSIONS, SESSION_AC, SESSION_NONE,
 )
 
@@ -245,11 +245,7 @@ class SolakonCoordinator:
 
     def hard_limit(self) -> float:
         """Hard-Limit der aktuellen Zone (Zone 0 bei Überschuss, sonst Zone 1/2), gedeckelt auf die Gerätegrenze."""
-        return float(power_limits(
-            hard_limit_z0=self._setting(S_HARD_LIMIT_Z0, int), hard_limit_z1=self._setting(S_HARD_LIMIT_Z1, int),
-            ac_power_limit=self._setting(S_AC_POWER_LIMIT, int), pv_reserve=self._setting(S_PV_RESERVE, int),
-            allocated=None,
-        ).zone_max(self.surplus_active))
+        return float(power_limits(cycle_settings(self.settings), None).zone_max(self.surplus_active))
 
     def zone3_limit(self) -> float:
         """SOC-Grenze der Zone 3 in % aus den Settings."""
@@ -439,7 +435,7 @@ class SolakonCoordinator:
 
         `REWRITTEN` setzt nur die letzte Aktion. `RECOVERY`: Schreibwarnung,
         Integral-Reset, Output 0, Timer-Toggle, Ruhezustand im Ruhemodus laut
-        `rest_in_discharge` — Fall D holt im Folgezyklus zurück.
+        `rest_in_discharge` — mit aktivem Zyklus holt Fall D im Folgezyklus zurück.
         """
         verdict = await self.out.check_stall(limit)
         if verdict is None:
@@ -737,10 +733,7 @@ class SolakonCoordinator:
         self.allocated_power = allocated_power
         if dist_warning := self._apply_shares(shares):
             self._messages.warn(dist_warning)
-        limits = power_limits(
-            hard_limit_z0=cs.hard_limit_z0, hard_limit_z1=cs.hard_limit_z1,
-            ac_power_limit=cs.ac_power_limit, pv_reserve=cs.pv_reserve, allocated=allocated_power,
-        )
+        limits = power_limits(cs, allocated_power)
 
         # Nutzt die Zone des vorherigen Zyklus — self.surplus_active ist hier noch
         # nicht aktualisiert.
@@ -832,7 +825,7 @@ class SolakonCoordinator:
         d = decide(ZoneInputs(
             cs=cs, soc=soc, grid=grid, actual=actual, total_output=total_output, mode=mode,
             new_surplus=new_surplus, ac_offset=ac_offset, tariff=tariff, is_night=is_night,
-            zone1_forced=self.forecast.zone1_forced,
+            zone1_forced=self.forecast.zone1_forced, charging_to_target=self.charging_to_target,
             surplus_active=self.surplus_active,
             session=self.charge_session,
             cycle_active=self.cycle_active,
@@ -855,41 +848,38 @@ class SolakonCoordinator:
     ) -> bool:
         """PI-Phase in Modus '1' oder '3': Timeout-Reset, dann ein Pfad je Regelzustand.
 
-        Pfade laut `paths.decide`: Zone-0-Festwert, AC-Stellwert, Tarif-Festwert oder Entladen
-        (PI-Schritt oder Stellwert) mit Stillstandsprüfung.
+        Pfade laut `paths.decide`: Zone-0-Festwert, AC-Stellwert, Tarif- oder Netz-Lade-Festwert
+        oder Entladen (PI-Schritt oder Stellwert) mit Stillstandsprüfung.
         Im Ruhemodus endet die Phase nach dem Timeout-Reset. Liefert die Zweitlesung von
         Netz oder PV keine Zahl, endet sie mit `err_core_sensor` ohne Schreibbefehl.
         True, wenn der Regelzyklus damit blockiert ist.
         """
         cfg = self.entry.data
 
-        # ── 11a. Zweitlesung nach den Falls ──────────────────────────────────
-        grid = read_scaled(self.hass, cfg[CONF_GRID_SENSOR], UNIT_SCALE_W).value
-        solar = read_scaled(self.hass, cfg[CONF_SOLAR_SENSOR], UNIT_SCALE_W).value
-
-        # Eine Energierichtung je Netzgruppe: lädt eine Schwester, entlädt Zone 1 nur PV.
-        # Ebenso beim Aufladen mit Hausvorrang.
-        cap_reason = pv_cap_reason(self.group.sister_charging(self), self.charging_to_target, cs.battery_priority)
-        capped = cap_reason if self.cycle_active and mode == MODE_DISCHARGE else ""
-
-        target_offset = self.dyn.value(self.offset_zone(cs.z1_night_enabled), cs.offsets)
-
-        # ── 11b. Timeout-Reset ───────────────────────────────────────────────
+        # ── 11a. Timeout-Reset ───────────────────────────────────────────────
         # Entfällt wenn ein Fall in diesem Zyklus bereits getoggelt hat
         await self.timeout.reset_if_due(timer_val)
 
         if at_rest(mode, cs.rest_in_discharge, self.resting):
             return False
 
+        # ── 11b. Zweitlesung nach den Falls ──────────────────────────────────
+        grid = read_scaled(self.hass, cfg[CONF_GRID_SENSOR], UNIT_SCALE_W).value
+        solar = read_scaled(self.hass, cfg[CONF_SOLAR_SENSOR], UNIT_SCALE_W).value
+
         missing = next((cfg[key] for key, value in ((CONF_GRID_SENSOR, grid), (CONF_SOLAR_SENSOR, solar))
                         if value is None), None)
         if missing is not None:
             self._messages.fail(("err_core_sensor", {"sensor": missing}))
             return True
-        dynamic_max = limits.pi_max(mode, self.cycle_active, solar, bool(cap_reason))
 
-        # Einzige CONF_ACTIVE_POWER-Lesung dieses Zyklus, nach dem letzten Await vor
-        # der PI-Entscheidung. Gemeinsam genutzt von Gate, PI-Basis und Log-Zeile.
+        # Eine Energierichtung je Netzgruppe: lädt eine Schwester, entlädt Zone 1 nur PV.
+        # Ebenso beim Aufladen mit Hausvorrang.
+        cap_reason = pv_cap_reason(self.group.sister_charging(self), self.charging_to_target, cs.battery_priority)
+        target_offset = self.dyn.value(self.offset_zone(cs.z1_night_enabled), cs.offsets)
+
+        # Ausgangsleistung nach dem letzten Await vor der Pfadwahl; Basis für Gate,
+        # PI-Basis und Aktionstext.
         current_power = self._flt(cfg[CONF_ACTIVE_POWER])
         # Ist-Leistung als Basis der Stellwertrechnung, im AC-Laden negativ.
         actual = self.actual_power()
@@ -901,16 +891,12 @@ class SolakonCoordinator:
 
         # ── 11c. PI-Pfade ────────────────────────────────────────────────────
         d = decide_path(PathInputs(
-            grid=grid, current_power=current_power, tolerance=cs.tolerance,
-            surplus_active=self.surplus_active, session=self.charge_session,
-            capped=capped, zone0_power=limits.zone0, tariff_power=cs.tariff_power, grid_charge_power=cs.grid_charge_power,
-            ac_offset=ac_offset, ac_limit=limits.ac, ac_min_charge=cs.ac_min_power,
-            ac_share=ac_error_share,
+            cs=cs, limits=limits, mode=mode, cycle_active=self.cycle_active,
+            surplus_active=self.surplus_active, session=self.charge_session, cap_reason=cap_reason,
+            grid=grid, solar=solar, current_power=current_power,
+            ac_offset=ac_offset, target_offset=target_offset, ac_share=ac_error_share, share=error_share,
             ac_charge=-actual, ac_pool_charge=-self.group.ac_actual(self, actual),
-            target_offset=target_offset, dynamic_max=dynamic_max,
-            pi_enabled=cs.pi_enabled, discharge=actual,
-            discharge_pool=self.group.discharge_actual(self, actual),
-            p_factor=cs.p_factor, i_factor=cs.i_factor, share=error_share,
+            discharge=actual, discharge_pool=self.group.discharge_actual(self, actual),
             discharge_base=self.group.pi_base(self, current_power, error_share),
         ))
         if d.decay:

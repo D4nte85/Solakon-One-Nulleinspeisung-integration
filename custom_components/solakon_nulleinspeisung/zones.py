@@ -75,11 +75,7 @@ class ZoneInputs:
     session: str
     cycle_active: bool
     at_rest: bool
-
-    @property
-    def charging_to_target(self) -> bool:
-        """Aufladen laut `charging_to_target`."""
-        return charging_to_target(self.cs.target_enabled, self.soc, self.cs.target_soc)
+    charging_to_target: bool
 
 
 @dataclass(frozen=True)

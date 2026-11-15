@@ -28,7 +28,7 @@ BASE = zones.ZoneInputs(
                               below_cheap=False),
     is_night=True, zone1_forced=False,
     surplus_active=False, session="none",
-    cycle_active=False, at_rest=True,
+    cycle_active=False, at_rest=True, charging_to_target=False,
 )
 
 
@@ -38,9 +38,11 @@ _TARIFF_KEYS = ("below_exp", "below_cheap")
 def _decide(**kw):
     """`decide` auf BASE mit überschriebenen Feldern: Preislage, Settings-Schnappschuss, Rest."""
     t = {k: kw.pop(k) for k in _TARIFF_KEYS if k in kw}
-    cs = {k: kw.pop(k) for k in BASE.cs._fields if k in kw}
+    cs = BASE.cs._replace(**{k: kw.pop(k) for k in BASE.cs._fields if k in kw})
+    # Aufladen wie im Coordinator aus Schnappschuss und SOC, sofern nicht vorgegeben.
+    kw.setdefault("charging_to_target", zones.charging_to_target(cs.target_enabled, kw.get("soc", BASE.soc), cs.target_soc))
     return zones.decide(dataclasses.replace(
-        BASE, tariff=dataclasses.replace(BASE.tariff, **t), cs=BASE.cs._replace(**cs), **kw))
+        BASE, tariff=dataclasses.replace(BASE.tariff, **t), cs=cs, **kw))
 
 
 def test_base_trifft_keinen_fall():
