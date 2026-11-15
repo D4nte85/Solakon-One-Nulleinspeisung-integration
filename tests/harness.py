@@ -39,6 +39,7 @@ switch_mod = importlib.import_module(PKG + ".switch")
 number_mod = importlib.import_module(PKG + ".number")
 config_flow_mod = importlib.import_module(PKG + ".config_flow")
 group_store_mod = importlib.import_module(PKG + ".group_store")
+runtime_mod = importlib.import_module(PKG + ".runtime")
 migrations_mod = importlib.import_module(PKG + ".migrations")
 
 DOMAIN = const.DOMAIN
@@ -386,7 +387,7 @@ def stored(hass, key: str, default=None):
 def install_groups(hass, dist=None, soc_switch=None, dist_store=None, soc_switch_store=None):
     """Speicher der Netzgruppen ohne Setup in `hass.data` legen."""
     store = group_store_mod.GroupStore(hass, dist_store, soc_switch_store, dist, soc_switch)
-    hass.data[f"{const.DOMAIN}_group_store"] = store
+    runtime_mod.runtime(hass).store = store
     return store
 
 

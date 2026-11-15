@@ -30,11 +30,16 @@ class Umgebung:
         self.entries = {p: h.FakeEntry(f"entry_{p}", h.entry_data(p)) for p in prefixes}
         self.hass.config_entries.entries = list(self.entries.values())
         self.added: dict[str, list] = {}
+        self._integration_setup = False
 
     def coord(self, p):
         return self.hass.data[DOMAIN][self.entries[p].entry_id]
 
     async def setup(self, *prefixes):
+        """Wie HA: `async_setup` der Integration einmal vor dem ersten Eintrag."""
+        if not self._integration_setup:
+            await h.integration.async_setup(self.hass, {})
+            self._integration_setup = True
         for p in prefixes:
             entry = self.entries[p]
             await h.integration.async_setup_entry(self.hass, entry)
@@ -329,3 +334,25 @@ def test_netzsensor_wechsel_behaelt_den_eintrag_der_neuen_netzgruppe():
     _wechsel(u, "a", "sensor.other")
     assert _caps(u) == {}
     assert _caps(u, "sensor.other") == {CAP("entry_a"): "sensor.cap_neu"}
+
+
+# ── Fehler im Setup ──────────────────────────────────────────────────────────
+
+def test_setup_mit_unlesbarem_gruppenspeicher_ist_nicht_bereit(monkeypatch):
+    u = Umgebung("a")
+
+    async def laden(self):
+        raise h.ha_stubs.HomeAssistantError("Speicher defekt")
+    monkeypatch.setattr(h.ha_stubs.Store, "async_load", laden)
+    with pytest.raises(h.ha_stubs.ConfigEntryNotReady):
+        _run(u.setup("a"))
+
+
+def test_programmierfehler_im_setup_bleibt_ein_fehler(monkeypatch):
+    u = Umgebung("a")
+
+    async def kaputt(self):
+        raise TypeError("Programmierfehler")
+    monkeypatch.setattr(h.coordinator_mod.SolakonCoordinator, "async_setup", kaputt)
+    with pytest.raises(TypeError):
+        _run(u.setup("a"))

@@ -27,8 +27,8 @@ def _load(hass):
 def test_register_eine_gruppe_je_netzsensor():
     hass = _hass()
     _load(hass)
-    assert gs.group_for(hass, "sensor.grid") is gs.group_for(hass, "sensor.grid")
-    assert gs.group_for(hass, "sensor.grid") is not gs.group_for(hass, "sensor.other")
+    assert gs.require_store(hass).group("sensor.grid") is gs.require_store(hass).group("sensor.grid")
+    assert gs.require_store(hass).group("sensor.grid") is not gs.require_store(hass).group("sensor.other")
 
 
 def test_gruppe_bekommt_gespeicherten_zustand():
@@ -36,7 +36,7 @@ def test_gruppe_bekommt_gespeicherten_zustand():
     h.put_store(hass, DIST_KEY, {"sensor.grid": SWITCH})
     h.put_store(hass, SWITCH_KEY, {"sensor.grid": {"active_id": "a", "start_soc": 60}})
     _load(hass)
-    g = gs.group_for(hass, "sensor.grid")
+    g = gs.require_store(hass).group("sensor.grid")
     assert g.dist_cfg()["distribution_mode"] == "soc_switch"
     assert g.soc_switch_state() == {"active_id": "a", "start_soc": 60, "was_zone0": False}
 
@@ -71,8 +71,8 @@ def test_soc_switch_zustand_je_gruppe_und_gespeichert():
     hass = _hass(a, b, x)
     h.put_store(hass, DIST_KEY, {"sensor.grid": SWITCH, "sensor.other": SWITCH})
     _load(hass)
-    gs.group_for(hass, "sensor.grid").soc_switch_shares({"a": a, "b": b}, a, 50)
-    gs.group_for(hass, "sensor.other").soc_switch_shares({"x": x}, x, 90.0)
+    gs.require_store(hass).group("sensor.grid").soc_switch_shares({"a": a, "b": b}, a, 50)
+    gs.require_store(hass).group("sensor.other").soc_switch_shares({"x": x}, x, 90.0)
     saves = [e for e in hass.events if e[0] == "store_delay_save" and e[1] == SWITCH_KEY]
     assert {g: st["active_id"] for g, st in saves[-1][2]["rest"].items()} == {
         "sensor.grid": "b", "sensor.other": "x"}
@@ -82,7 +82,7 @@ def test_speichern_erreicht_gruppe_und_behaelt_gruppe_ohne_instanz():
     hass = _hass()
     h.put_store(hass, DIST_KEY, {"sensor.frei": {"distribution_mode": "soc"}})
     store = _load(hass)
-    g = gs.group_for(hass, "sensor.grid")
+    g = gs.require_store(hass).group("sensor.grid")
     asyncio.run(store.save_dist("sensor.grid", {"distribution_mode": "capacity"}))
     assert g.dist_cfg()["distribution_mode"] == "capacity"
     assert h.stored(hass, DIST_KEY) == {
@@ -93,7 +93,7 @@ def test_speichern_erreicht_gruppe_und_behaelt_gruppe_ohne_instanz():
 def test_speichern_mit_befund_aendert_nichts():
     hass = _hass()
     store = _load(hass)
-    g = gs.group_for(hass, "sensor.grid")
+    g = gs.require_store(hass).group("sensor.grid")
     with pytest.raises(InvalidSettings):
         asyncio.run(store.save_dist("sensor.grid", {"distribution_mode": "weighted"}))
     assert g.dist_cfg() == store.dist_view("sensor.frei") and g.dist_rev == 0
@@ -110,8 +110,39 @@ def test_entfernen_loescht_beide_stores():
 
 def test_netzgruppe_ohne_gruppenspeicher_ist_ein_fehler():
     try:
-        gs.group_for(_hass(), "sensor.grid")
+        gs.require_store(_hass()).group("sensor.grid")
     except RuntimeError as err:
         assert "Gruppenspeicher" in str(err)
     else:
         raise AssertionError("Netzgruppe ohne Gruppenspeicher angelegt")
+
+
+def _scheiterndes_laden(fehler):
+    """`Store.async_load`, das für den Verteilungsspeicher nach drei Zwischenschritten `fehler` wirft."""
+    load = h.ha_stubs.Store.async_load
+
+    async def laden(self):
+        for _ in range(3):
+            await asyncio.sleep(0)
+        if self.key == DIST_KEY:
+            raise fehler
+        return await load(self)
+    return load, laden
+
+
+def test_gescheitertes_laden_trifft_alle_wartenden_und_der_naechste_laedt_neu():
+    hass = _hass()
+    h.put_store(hass, DIST_KEY, {"sensor.grid": SWITCH})
+    load, laden = _scheiterndes_laden(OSError("Datei nicht lesbar"))
+
+    async def run():
+        h.ha_stubs.Store.async_load = laden
+        try:
+            return await asyncio.gather(gs.async_load(hass), gs.async_load(hass), return_exceptions=True)
+        finally:
+            h.ha_stubs.Store.async_load = load
+
+    results = asyncio.run(run())
+    assert [type(r) for r in results] == [OSError, OSError]
+    assert gs.store_for(hass) is None
+    assert _load(hass).dist == {"sensor.grid": SWITCH}

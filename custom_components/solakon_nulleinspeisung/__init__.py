@@ -12,7 +12,7 @@ from homeassistant.components import websocket_api, panel_custom
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
 import homeassistant.helpers.config_validation as cv
 
 from .const import (
@@ -21,7 +21,7 @@ from .const import (
     CONF_GRID_SENSOR,
     CAPACITY_FIELD, DIST_DEFAULTS, DIST_INST_FIELDS, DIST_SCHEMA, DYN_ZONES, SETTINGS_SCHEMA, VERSION, dyn_key,
 )
-from . import group_store, number
+from . import group_store, number, runtime
 from .migrations import SolakonSettingsStore, async_migrate_entry as async_migrate_entry
 from .readings import NUMERIC_DOMAINS
 from .schema import InvalidSettings
@@ -29,8 +29,6 @@ from .status_view import snapshot_view
 
 _LOGGER = logging.getLogger(__name__)
 
-# Integrationsweite `hass.data`-Schlüssel (ohne DOMAIN-Präfix), entfernt mit der letzten Instanz.
-DATA_KEYS = ("panel_registered", "ws_registered", *group_store.DATA_KEYS, number.DATA_KEY)
 PANEL_JS_URL = f"/{DOMAIN}/panel.js"
 
 # Keine YAML-Konfiguration; async_setup liefert nur Panel und Übersetzungen aus.
@@ -243,7 +241,7 @@ async def _ws_get_schema(
     })
 
 
-# Beim ersten Setup registrierte WebSocket-Commands.
+# In `async_setup` registrierte WebSocket-Commands.
 WS_COMMANDS = (
     _ws_get_all_instances, _ws_get_config, _ws_save_config, _ws_get_status, _ws_get_schema,
     _ws_reset_integral, _ws_set_cycle, _ws_get_distribution_config, _ws_save_distribution_config,
@@ -253,7 +251,9 @@ WS_COMMANDS = (
 # ── Setup / Teardown ─────────────────────────────────────────────────────────
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
-    """Panel-Skript und Übersetzungsdateien als statische Pfade ausliefern."""
+    """WebSocket-Commands registrieren, Panel-Skript und Übersetzungsdateien als statische Pfade ausliefern."""
+    for handler in WS_COMMANDS:
+        websocket_api.async_register_command(hass, handler)
     frontend_dir = Path(__file__).parent / "frontend"
     translations_dir = Path(__file__).parent / "translations"
     # Übersetzungsdateien für das Panel ausliefern: Zustandstexte, Entitätsnamen.
@@ -273,18 +273,17 @@ async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> Non
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Coordinator anlegen, WS-Commands und Panel einmalig registrieren, Plattformen laden."""
+    """Gruppenspeicher laden, Coordinator anlegen, Panel einmalig registrieren, Plattformen laden."""
     from .coordinator import SolakonCoordinator
 
     # Gruppen-Stores vor dem Coordinator laden: seine Trigger lesen globale Sensoren der Verteilung.
     # Kapazitätssensoren folgen dem Netzsensor ihres Eintrags.
-    store = await group_store.async_load(hass)
-    await store.tidy_capacity()
-
     try:
+        store = await group_store.async_load(hass)
+        await store.tidy_capacity()
         coordinator = SolakonCoordinator(hass, entry)
         await coordinator.async_setup()
-    except Exception as ex:
+    except (HomeAssistantError, OSError) as ex:
         raise ConfigEntryNotReady(f"Solakon: Setup fehlgeschlagen: {ex}") from ex
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
@@ -292,14 +291,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Eintrag neu laden wenn die Entitäten-Zuweisung im OptionsFlow geändert wurde
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
-    # WebSocket-Commands nur einmal registrieren
-    if not hass.data.get(f"{DOMAIN}_ws_registered"):
-        for handler in WS_COMMANDS:
-            websocket_api.async_register_command(hass, handler)
-        hass.data[f"{DOMAIN}_ws_registered"] = True
-
     # Panel nur einmal registrieren — kein entry_id in config
-    if not hass.data.get(f"{DOMAIN}_panel_registered"):
+    rt = runtime.runtime(hass)
+    if not rt.panel_registered:
         await panel_custom.async_register_panel(
             hass,
             webcomponent_name="solakon-panel",
@@ -311,7 +305,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             config={},
             require_admin=False,
         )
-        hass.data[f"{DOMAIN}_panel_registered"] = True
+        rt.panel_registered = True
 
     try:
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -325,12 +319,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def _drop_shared_data(hass: HomeAssistant) -> None:
-    """Ausstehendes Speichern der Netzgruppen schreiben, integrationsweite `hass.data`-Schlüssel entfernen; nur ohne geladene Instanz aufrufen."""
+    """Ausstehendes Speichern der Netzgruppen schreiben, Instanzliste und Laufzeitzustand entfernen; nur ohne geladene Instanz aufrufen."""
     if (store := group_store.store_for(hass)) is not None:
         await store.async_write_pending()
     hass.data.pop(DOMAIN, None)
-    for key in DATA_KEYS:
-        hass.data.pop(f"{DOMAIN}_{key}", None)
+    runtime.drop(hass)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

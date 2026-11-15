@@ -10,7 +10,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from . import group_store
+from . import group_store, runtime
 from .const import (
     DIST_GLOBAL_MAX, DIST_SCHEMA, DOMAIN, S_HARD_LIMIT_Z0, S_HARD_LIMIT_Z1, S_TARGET_GRID_POWER, S_TARGET_SOC,
     SETTINGS_SCHEMA, VERSION,
@@ -18,8 +18,6 @@ from .const import (
 from .coordinator import SolakonCoordinator
 from .entity_base import SolakonEntity
 
-# `hass.data`-Schlüssel (ohne DOMAIN-Präfix) der Träger-Verwaltung, entfernt mit der letzten Instanz.
-DATA_KEY = "group_limit"
 
 
 class SettingNumber(SolakonEntity, NumberEntity):
@@ -93,8 +91,8 @@ class GroupLimitNumber(NumberEntity):
 
 
 def _carriers(hass: Any) -> dict[str, Any]:
-    """Träger-Verwaltung aus `hass.data`: `adders` je geladenem Eintrag, `entities` je Netzsensor."""
-    return hass.data.setdefault(f"{DOMAIN}_{DATA_KEY}", {"adders": {}, "entities": {}})
+    """Träger-Verwaltung aus dem Laufzeitzustand: `adders` je geladenem Eintrag, `entities` je Netzsensor."""
+    return runtime.runtime(hass).carriers
 
 
 def _drop_group_limit(hass: Any, grid_sensor: str) -> None:

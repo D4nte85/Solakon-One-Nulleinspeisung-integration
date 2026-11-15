@@ -666,9 +666,10 @@ async def _run_wiring() -> dict:
                     "coords": {e: h.coord_state(c) for e, c in hass.data.get(C.DOMAIN, {}).items()}}
     for name in ("get_dist", "save_dist"):
         handler, extra = handlers[name]
-        store = hass.data.pop(f"{C.DOMAIN}_group_store")
+        rt = h.runtime_mod.runtime(hass)
+        store, rt.store = rt.store, None
         ws[name + "_no_store"] = h.jsonable(await h.ws_call(handler, hass, 4, **extra))
-        hass.data[f"{C.DOMAIN}_group_store"] = store
+        rt.store = store
     rec["ws"] = ws
 
     hass.events = []

@@ -132,7 +132,7 @@ def test_gesamtlimit_setzen_speichert_nur_das_feld_und_stoesst_regelung_an():
     hass.events.clear()
     asyncio.run(entity.async_set_native_value(400.0))
     assert h.stored(hass, f"{DOMAIN}_distribution")["sensor.grid"] == {"global_max_power": 400}
-    group = h.group_store_mod.group_for(hass, "sensor.grid")
+    group = h.group_store_mod.require_store(hass).group("sensor.grid")
     assert group.dist_cfg()["global_max_power"] == 400 and group.dist_rev == 1
     assert writes == [400]
     assert [e for e in hass.events if e[0] == "task"] == [["task", "SolakonCoordinator._async_regulate"]] * 2

@@ -7,6 +7,7 @@ from typing import Any, Callable
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 
+from . import runtime
 from .const import CAPACITY_KEY, CONF_GRID_SENSOR, DIST_DEFAULTS, DIST_INST_FIELDS, DIST_SCHEMA, DOMAIN
 from .grid_group import NetGroup
 from .i18n import translate
@@ -21,10 +22,6 @@ STORAGE_KEY_SOC_SWITCH     = f"{DOMAIN}_soc_switch_state"
 
 STORAGE_VERSION_NUMBERS = 1
 STORAGE_KEY_NUMBERS     = f"{DOMAIN}_group_numbers"
-
-# `hass.data`-Schlüssel dieses Moduls (ohne DOMAIN-Präfix), entfernt mit der letzten Instanz.
-DATA_KEYS = ("group_store", "group_store_loaded", "groups")
-
 
 def _soc_switch_group_state(stored: dict) -> dict:
     """Laufzeitzustand einer Netzgruppe im Modus `soc_switch` aus dem gespeicherten Stand."""
@@ -66,12 +63,13 @@ def configured_members(hass: Any, grid_sensor: str) -> int:
 
 
 def store_for(hass: Any) -> GroupStore | None:
-    """Geladener Speicher aus `hass.data`, sonst None; nur für Aufrufer, die „nicht bereit“ selbst behandeln."""
-    return hass.data.get(f"{DOMAIN}_group_store")
+    """Geladener Speicher aus dem Laufzeitzustand, sonst None; nur für Aufrufer, die „nicht bereit“ selbst behandeln."""
+    rt = runtime.peek(hass)
+    return None if rt is None else rt.store
 
 
 def require_store(hass: Any) -> GroupStore:
-    """Geladener Speicher aus `hass.data`; RuntimeError, wenn er fehlt.
+    """Geladener Speicher aus dem Laufzeitzustand; RuntimeError, wenn er fehlt.
 
     Der Speicher lebt, solange mindestens eine Instanz geladen ist (`async_load` im Setup,
     Abräumen mit der letzten entladenen Instanz). Aufrufer außerhalb dieser Spanne laden ihn selbst.
@@ -82,17 +80,9 @@ def require_store(hass: Any) -> GroupStore:
     return store
 
 
-def group_for(hass: Any, grid_sensor: str) -> NetGroup:
-    """Netzgruppe zum Netzsensor aus dem Register, bei Bedarf mit ihrem gespeicherten Zustand angelegt."""
-    groups = hass.data.setdefault(f"{DOMAIN}_groups", {})
-    group = groups.get(grid_sensor)
-    if group is None:
-        group = groups[grid_sensor] = NetGroup(hass, grid_sensor, StoredGroup(require_store(hass), grid_sensor))
-    return group
-
-
 class GroupStore:
-    """Verteilung, `soc_switch`-Zustand und Gruppennummer je Netzsensor, auch für Gruppen ohne laufende Instanz.
+    """Verteilung, `soc_switch`-Zustand und Gruppennummer je Netzsensor, auch für Gruppen ohne laufende Instanz,
+    dazu das Register der Netzgruppen.
 
     Führende Stelle der Verteilung: Netzgruppen lesen sie und den `soc_switch`-Zustand über `StoredGroup`.
     Ohne HA-Store (`None`) wird nur gehalten, nicht gespeichert.
@@ -112,6 +102,13 @@ class GroupStore:
         self.numbers: dict[str, int] = {} if numbers is None else numbers
         self._dist_revs: dict[str, int] = {}
         self._dist_listeners: dict[str, list[Callable[[], None]]] = {}
+        self._groups: dict[str, NetGroup] = {}
+
+    def group(self, grid_sensor: str) -> NetGroup:
+        """Netzgruppe zum Netzsensor aus dem Register, bei Bedarf mit ihrem gespeicherten Zustand angelegt."""
+        if (group := self._groups.get(grid_sensor)) is None:
+            group = self._groups[grid_sensor] = NetGroup(self.hass, grid_sensor, StoredGroup(self, grid_sensor))
+        return group
 
     def dist_view(self, grid_sensor: str) -> dict:
         """Verteilung einer Gruppe, mit Defaults aufgefüllt."""
@@ -208,25 +205,40 @@ class GroupStore:
 
 
 
-async def async_load(hass: HomeAssistant) -> GroupStore:
-    """Speicher einmalig anlegen und alle Stores laden; weitere Aufrufer warten auf dasselbe Laden."""
-    if (loaded := hass.data.get(f"{DOMAIN}_group_store_loaded")) is not None:
-        await loaded.wait()
-        return hass.data[f"{DOMAIN}_group_store"]
-    loaded = hass.data[f"{DOMAIN}_group_store_loaded"] = asyncio.Event()
+async def _load_stores(hass: HomeAssistant) -> GroupStore:
+    """Speicher mit den drei HA-Stores anlegen und laden; die Verteilung gegen DIST_SCHEMA bereinigt."""
     dist_store = SolakonDistStore(hass, STORAGE_VERSION_DIST, STORAGE_KEY_DIST)
     soc_switch_store = SolakonSocSwitchStore(hass, STORAGE_VERSION_SOC_SWITCH, STORAGE_KEY_SOC_SWITCH)
     numbers_store = Store(hass, STORAGE_VERSION_NUMBERS, STORAGE_KEY_NUMBERS)
-    store = hass.data[f"{DOMAIN}_group_store"] = GroupStore(
-        hass, dist_store, soc_switch_store, numbers_store=numbers_store,
-    )
+    store = GroupStore(hass, dist_store, soc_switch_store, numbers_store=numbers_store)
+    store.dist = store._sanitize_dist(await dist_store.async_load() or {})
+    stored = await soc_switch_store.async_load() or {}
+    store.soc_switch = {gk: _soc_switch_group_state(st) for gk, st in stored.items()}
+    store.numbers = dict(await numbers_store.async_load() or {})
+    return store
+
+
+async def async_load(hass: HomeAssistant) -> GroupStore:
+    """Speicher einmalig anlegen und alle Stores laden; weitere Aufrufer warten auf dasselbe Laden.
+
+    Sichtbar über `store_for` erst nach erfolgreichem Laden. Scheitert es, erhalten alle
+    Wartenden den Fehler, und der nächste Aufruf lädt neu.
+    """
+    rt = runtime.runtime(hass)
+    if rt.store is not None:
+        return rt.store
+    if rt.loading is not None:
+        return await rt.loading
+    loading = rt.loading = asyncio.get_running_loop().create_future()
     try:
-        store.dist = store._sanitize_dist(await dist_store.async_load() or {})
-        stored = await soc_switch_store.async_load() or {}
-        store.soc_switch = {gk: _soc_switch_group_state(st) for gk, st in stored.items()}
-        store.numbers = dict(await numbers_store.async_load() or {})
-    finally:
-        loaded.set()
+        store = await _load_stores(hass)
+    except Exception as err:
+        rt.loading = None
+        loading.set_exception(err)
+        loading.exception()
+        raise
+    rt.store, rt.loading = store, None
+    loading.set_result(store)
     return store
 
 

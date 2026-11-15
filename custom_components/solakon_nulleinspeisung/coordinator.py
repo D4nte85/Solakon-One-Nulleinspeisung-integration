@@ -18,7 +18,7 @@ from .paths import FIXED, IDLE, PI_STEP, SETPOINT, STALL_CHECK, STALL_RESET, Pat
 from .pi import PIController
 from .readings import UNIT_SCALE_KWH, UNIT_SCALE_W, read_number, read_scaled, valid_state
 from .grid_group import NetGroup, Shares
-from .group_store import group_for, require_store
+from .group_store import require_store
 from .limits import PowerLimits, power_limits, pv_cap_reason
 from .messages import CycleMessages
 from .migrations import SolakonSettingsStore
@@ -253,7 +253,7 @@ class SolakonCoordinator:
     @property
     def group(self) -> NetGroup:
         """Netzgruppe dieser Instanz aus dem Register."""
-        return group_for(self.hass, self.grid_sensor)
+        return require_store(self.hass).group(self.grid_sensor)
 
     @property
     def member_id(self) -> str:
