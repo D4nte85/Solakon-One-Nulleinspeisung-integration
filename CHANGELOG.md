@@ -7,6 +7,7 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ### Behoben
 
+- **Aktionstext der Stillstandsprüfung:** Stand die Ausgangsleistung am PV-Deckel (Schwester lädt oder Hausvorrang) und schrieb die Stillstandsprüfung den Sollwert neu oder setzte den Ausgang auf 0, überschrieb der Hinweis auf den PV-Deckel im selben Regelzyklus „neu geschrieben“ bzw. die Recovery-Meldung. Jetzt bleibt die Meldung der Stillstandsprüfung stehen (`coordinator.py`).
 - **Trigger der Nacht-Forcierung um 12 Uhr:** Die Nacht-Forcierung liest ab 12 Uhr die Prognose für morgen, ihr Trigger lauschte aber weiter auf die Prognose für heute, bis Settings oder Verteilung sich änderten. Jetzt prüft jeder Regelzyklus, ob sich der wirksame Sensor eines Triggers geändert hat, und meldet ihn neu an (`trackers.py`, `coordinator.py`).
 - **Zone 0 pendelt in der Tarifsperre (Issue #57):** Bei vollem Akku, schwacher PV und Netzbezug lief eine Instanz etwa alle 30 s durch 0A → 0B → TM. Drei Ursachen: Eine ruhende Instanz außerhalb des Entlade-Pools trat mit Fehler-Anteil 0 bei jeder PV über 0 ein; der PV-0-Eintritt wurde durch PV scharf, die das Gerät selbst abgab oder durchreichte; 0B startete Zone 1 samt PI-Schritt mit vollem Entladestrom, obwohl die Tarifsperre galt. Jetzt rechnet die ruhende Instanz den Eintritt ungeteilt mit einem Lastbezug von mindestens 0, der PV-0-Eintritt wird nur durch PV scharf, die bei ruhender Instanz ohne Abgabe gemessen wird, jeder Austritt über den Verbrauch entschärft ihn, und 0B führt in der Tarifsperre in den Ruhezustand (`zones.py`, `coordinator.py`).
 - **Preis in Tarifsperre und Tarif-Laden:** Die Aktionstexte zeigten den Preis mit einer Nachkommastelle, €/kWh-Preise also als „0.2“. Jetzt mit bis zu vier gültigen Stellen (`i18n.py`).
@@ -35,6 +36,7 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 - **Zonen des Dynamic Offset aus einer Liste:** Settings-Schema, Offsetrechnung, Status und Sensor-Attribute lesen die vier Offsetzonen aus `DYN_ZONES`. Der Status führt dadurch auch `dyn_z1_night_enabled`, das bisher fehlte. Sonst keine Verhaltensänderung (`const.py`, `dynamic_offset.py`, `status_view.py`, `sensor.py`, `__init__.py`).
 - **Übergang eines Falls als Wert:** Die Fallentscheidung liefert ihren Übergang als `Transition` mit dem Zielmodus und der Kennung „Ruhemodus“ statt als Wörterbuch; der Ruhemodus überschreibt keinen anderen Modus mehr still. Keine Verhaltensänderung (`zones.py`, `coordinator.py`).
 - **PI-Schritt als ein Wert:** `PIController.calculate` bekommt den Schritt (`PiStep`) und den Netzwert statt neun Einzelwerten; die Basis des Schritts heißt dort `base` statt `current_power`. Keine Verhaltensänderung (`pi.py`, `paths.py`, `coordinator.py`).
+- **Ausführung der Pfade:** Die PI-Phase führt jede Art der Pfadentscheidung in einem eigenen Zweig aus, auch „nichts tun“; eine unbekannte Art bricht den Regelzyklus mit Fehler ab. Die Grenze der Stillstandsprüfung steht in einem eigenen Feld (`coordinator.py`, `paths.py`).
 
 ## [3.8.1] – 2026-11-11
 

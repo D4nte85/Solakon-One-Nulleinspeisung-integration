@@ -15,7 +15,7 @@ from .display import Display
 from .dynamic_offset import DynamicOffset
 from .feature_sensors import effective_sensor, feature_values, tariff_price
 from .i18n import Msg, translate, translate_msgs
-from .paths import SETPOINT, FIXED, PI_STEP, STALL_CHECK, STALL_RESET, PathInputs, decide as decide_path
+from .paths import FIXED, IDLE, PI_STEP, SETPOINT, STALL_CHECK, STALL_RESET, PathInputs, decide as decide_path
 from .pi import PIController
 from .readings import UNIT_SCALE_KWH, UNIT_SCALE_W, read_number, read_scaled, valid_state
 from .grid_group import NetGroup, Shares
@@ -430,8 +430,8 @@ class SolakonCoordinator:
         self._messages.hardware((key, params))
         _LOGGER.error("Solakon: %s%s", self._tr(key, **params), log_suffix)
 
-    async def _handle_output_stall(self, limit: float, rest_in_discharge: bool) -> None:
-        """Stillstand prüfen und das Urteil umsetzen.
+    async def _handle_output_stall(self, limit: float, rest_in_discharge: bool) -> bool:
+        """Stillstand prüfen und das Urteil umsetzen; True, wenn ein Urteil die letzte Aktion gesetzt hat.
 
         `REWRITTEN` setzt nur die letzte Aktion. `RECOVERY`: Schreibwarnung,
         Integral-Reset, Output 0, Timer-Toggle, Ruhezustand im Ruhemodus laut
@@ -439,15 +439,16 @@ class SolakonCoordinator:
         """
         verdict = await self.out.check_stall(limit)
         if verdict is None:
-            return
+            return False
         stall, actual = verdict
         if stall is Stall.REWRITTEN:
             self._set_last_action("act_output_rewritten", actual=actual, limit=limit)
-            return
+            return True
         self._warn_hardware("warn_output_stuck", {"actual": actual, "limit": limit},
                             f" (Versuch {self.out.stall_actions})")
         await self._transition(Transition(reset_integral=True, output=0, mode=rest_mode(rest_in_discharge), rest=True))
         self._set_last_action("act_output_recovery", actual=actual, limit=limit)
+        return True
 
     async def _set_fixed_output(
         self, target: float, current: float, action_key: str, ac_charge_mode: bool = False,
@@ -881,7 +882,10 @@ class SolakonCoordinator:
         ))
         if d.decay:
             self.pi.decay()
-        if d.kind == FIXED:
+        stall_action = False
+        if d.kind == IDLE:
+            pass
+        elif d.kind == FIXED:
             await self._set_fixed_output(d.value, current_power, d.action, ac_charge_mode=d.ac_charge_mode)
         elif d.kind == SETPOINT:
             self._set_last_action(d.action, frm=current_power, to=d.value)
@@ -891,10 +895,13 @@ class SolakonCoordinator:
             self._set_last_action(d.step.action, frm=current_power, to=new_pw)
             await self.out.set_and_wait(new_pw)
         elif d.kind == STALL_CHECK:
-            await self._handle_output_stall(d.value, cs.rest_in_discharge)
+            stall_action = await self._handle_output_stall(d.limit, cs.rest_in_discharge)
         elif d.kind == STALL_RESET:
             self.out.reset_stall()
-        if d.cap_note and self.last_action_key != f"act_zone1_{d.cap_note}":
+        else:
+            raise ValueError(f"unbekannte Pfadart {d.kind!r}")
+        # Der Hinweis auf den PV-Deckel überschreibt keine Aktion der Stillstandsprüfung.
+        if d.cap_note and not stall_action and self.last_action_key != f"act_zone1_{d.cap_note}":
             self._set_last_action(f"act_zone1_{d.cap_note}")
         return False
 

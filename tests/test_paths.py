@@ -85,7 +85,7 @@ def test_entladen_schritt(capped, action):
 ])
 def test_entladen_ohne_schritt_klingt_ab(over, kind):
     d = _decide(**over, capped="sister_charging")
-    assert (d.kind, d.value, d.decay, d.cap_note) == (kind, over["current_power"], True, "sister_charging")
+    assert (d.kind, d.limit, d.decay, d.cap_note) == (kind, over["current_power"], True, "sister_charging")
 
 
 @pytest.mark.parametrize("capped, action", [
@@ -111,7 +111,7 @@ def test_entladen_stellwert_aus_dem_pool():
 ])
 def test_entladen_stellwert_gate_bleibt(over, kind):
     d = _decide(**over, pi_enabled=False)
-    assert (d.kind, d.value, d.decay) == (kind, over["current_power"], True)
+    assert (d.kind, d.limit, d.decay) == (kind, over["current_power"], True)
 
 
 def test_entladen_stellwert_rampe_nichts():

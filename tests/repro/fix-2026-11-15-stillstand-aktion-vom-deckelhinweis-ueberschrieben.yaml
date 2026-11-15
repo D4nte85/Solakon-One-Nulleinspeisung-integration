@@ -1,0 +1,25 @@
+titel: Aktionstext der Stillstandsprüfung bleibt stehen, auch wenn der PV-Deckel gilt
+bezug: fix-2026-11-15-stillstand-aktion-vom-deckelhinweis-ueberschrieben
+# a lädt per Tarif, b entlädt in Zone 1 mit dem PV-Deckel 250 W (PV 300 W − Reserve 50 W).
+# Die Ausgangsleistung steht am Deckel, die Ist-Leistung bei 0 W und seit 400 s unverändert:
+# Die Stillstandsprüfung schreibt den Sollwert neu und meldet „neu geschrieben“.
+# Vor dem Fix überschrieb danach der Hinweis „Schwester lädt“ diesen Aktionstext.
+netz: 900
+sensoren:
+  sensor.preis: {wert: 8.0, einheit: ct/kWh}
+instanzen:
+  - prefix: a
+    settings: {regulation_enabled: true, tariff_enabled: true, tariff_price_sensor: sensor.preis}
+    flags: {charge_session: tariff_charge}
+    sensoren: {soc: 50, modus: "3", leistung: 800, ist: -800}
+  - prefix: b
+    settings: {regulation_enabled: true, pv_reserve: 50}
+    flags: {cycle_active: true}
+    sensoren: {soc: 80, modus: "1", leistung: 250, ist: {wert: 0, alter: 400}, solar: 300}
+schritte:
+  - nach: 0
+    wer: all
+erwartet:
+  - aufruf: {entity: b.leistung, wert: 250}
+  - instanz: b
+    zustand: {last_action_key: act_output_rewritten}
