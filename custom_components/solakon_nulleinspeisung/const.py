@@ -120,6 +120,12 @@ CHARGE_SESSIONS = [SESSION_NONE, SESSION_AC, SESSION_TARIFF, SESSION_GRID]
 # Speicherschlüssel der Art der Lade-Session in den Settings einer Instanz.
 CHARGE_SESSION_KEY = "charge_session"
 
+# Regelzustände laut `zones.control_state`: Surplus, eine Art der Lade-Session (SESSION_*),
+# Zyklus, sonst PV-Betrieb.
+STATE_SURPLUS = "surplus"
+STATE_CYCLE   = "cycle"
+STATE_PV      = "pv"
+
 # -- Inverter Mode Values -----------------------------------------------------
 MODE_DISABLED  = "0"
 MODE_DISCHARGE = "1"

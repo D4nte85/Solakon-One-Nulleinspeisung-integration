@@ -39,6 +39,7 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 - **Ausführung der Pfade:** Die PI-Phase führt jede Art der Pfadentscheidung in einem eigenen Zweig aus, auch „nichts tun“; eine unbekannte Art bricht den Regelzyklus mit Fehler ab. Die Grenze der Stillstandsprüfung steht in einem eigenen Feld (`coordinator.py`, `paths.py`).
 - **Regelung abschalten an einer Stelle:** Speichern im Panel und Fall ZE schalten die Regelung über dieselbe Methode ab, die den Abschaltpfad vor dem Setzen der Regelung auf aus fährt; Settings-Revision und Speichern laufen über eine gemeinsame Methode. Keine Verhaltensänderung (`coordinator.py`).
 - **Kernsensoren einmal lesen:** Der Regelzyklus liest die Kernsensoren in einem Aufruf, der die Werte oder den ersten Pflichtsensor ohne Zahl liefert; die doppelte Lesung zu Beginn entfällt, die Prüfung des Modus-Selects und die Zweitlesung von Netz und PV nutzen dieselbe Funktion. Keine Verhaltensänderung (`coordinator.py`).
+- **Regelzustände als Konstanten:** Entladestrom und Betriebszustand je Regelzustand lesen die Zustände aus Konstanten; die Regel „Zyklus → Max. Entladestrom“ steht ausdrücklich in `required_discharge` statt im Standardwert der Tabelle. Keine Verhaltensänderung (`const.py`, `zones.py`, `display.py`).
 
 ## [3.8.1] – 2026-11-11
 

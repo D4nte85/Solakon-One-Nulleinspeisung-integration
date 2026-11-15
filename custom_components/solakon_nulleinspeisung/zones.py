@@ -5,25 +5,28 @@ from dataclasses import dataclass, field
 
 from .const import (
     MODE_AC_CHARGE, MODE_DISABLED, MODE_DISCHARGE, SESSION_AC, SESSION_GRID, SESSION_NONE, SESSION_TARIFF,
+    STATE_CYCLE, STATE_PV, STATE_SURPLUS,
 )
 from .schema import CycleSettings
 from .tariff import TariffState
 
-# Entladestrom in A je Regelzustand; der Zyklus nutzt den eingestellten Maximalstrom.
+# Entladestrom in A je Regelzustand ohne Zyklus; der Zyklus nutzt den eingestellten Maximalstrom
+# (`required_discharge`). Surplus: 2 A schalten den Ausgabepfad frei, der Output kommt aus der PV
+# (siehe Hardware-Limitierungen im Wiki). Laden und PV-Betrieb: 0 A, die Batterie gibt nichts ab.
 DISCHARGE_BY_STATE = {
-    "surplus": 2.0, "tariff_charge": 0.0, "grid_charge": 0.0, "ac_charge": 0.0, "pv": 0.0,
+    STATE_SURPLUS: 2.0, SESSION_TARIFF: 0.0, SESSION_GRID: 0.0, SESSION_AC: 0.0, STATE_PV: 0.0,
 }
 
 
 def control_state(surplus: bool, session: str, cycle: bool) -> str:
     """Regelzustand aus den Flags; es gilt surplus → Art der Lade-Session → cycle → pv."""
     if surplus:
-        return "surplus"
+        return STATE_SURPLUS
     if session != SESSION_NONE:
         return session
     if cycle:
-        return "cycle"
-    return "pv"
+        return STATE_CYCLE
+    return STATE_PV
 
 
 def charging_to_target(target_enabled: bool, soc: float, target_soc: float) -> bool:
@@ -46,14 +49,14 @@ def at_rest(mode: str, rest_in_discharge: bool, resting: bool) -> bool:
 
 
 def required_discharge(state: str, mode: str, discharge_max: int) -> float:
-    """Entladestrom für den Regelzustand `state` laut DISCHARGE_BY_STATE.
+    """Entladestrom für den Regelzustand `state`.
 
-    Ohne Zyklus und Lade-Session gilt 0 A nur in Modus '1' (Zone 2, Ruhe in Modus 1);
-    in jedem anderen Modus `discharge_max`.
+    Im Zyklus gilt `discharge_max`. Im PV-Betrieb gilt 0 A nur in Modus '1' (Zone 2, Ruhe in
+    Modus 1), in jedem anderen Modus `discharge_max`. Sonst der Wert aus DISCHARGE_BY_STATE.
     """
-    if state == "pv" and mode != MODE_DISCHARGE:
+    if state == STATE_CYCLE or (state == STATE_PV and mode != MODE_DISCHARGE):
         return float(discharge_max)
-    return DISCHARGE_BY_STATE.get(state, float(discharge_max))
+    return DISCHARGE_BY_STATE[state]
 
 
 @dataclass(frozen=True)

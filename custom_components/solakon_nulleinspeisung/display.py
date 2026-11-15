@@ -4,16 +4,19 @@ from __future__ import annotations
 import time
 
 from .i18n import translate
-from .const import CHARGE_SESSIONS, MODE_AC_CHARGE, MODE_DISABLED, MODE_DISCHARGE
+from .const import (
+    CHARGE_SESSIONS, MODE_AC_CHARGE, MODE_DISABLED, MODE_DISCHARGE, SESSION_AC, SESSION_GRID, SESSION_TARIFF,
+    STATE_CYCLE, STATE_PV, STATE_SURPLUS,
+)
 
 # Regelzustand → Betriebszustand. Laden liegt als Zustand über dem Zyklus.
 OPERATING_BY_STATE = {
-    "surplus": "exporting",
-    "tariff_charge": "tariff_charging",
-    "grid_charge": "target_charging",
-    "ac_charge": "ac_charging",
-    "cycle": "battery_supply",
-    "pv": "pv_direct",
+    STATE_SURPLUS: "exporting",
+    SESSION_TARIFF: "tariff_charging",
+    SESSION_GRID: "target_charging",
+    SESSION_AC: "ac_charging",
+    STATE_CYCLE: "battery_supply",
+    STATE_PV: "pv_direct",
 }
 
 # Modus des Wechselrichters → Schlüssel aus MODE_KEYS; andere Modi gelten als "unknown".
@@ -92,13 +95,13 @@ class Display:
             state = "blocked"
         elif charging_to_target:
             state = "target_charging"
-        elif control == "surplus" or control in CHARGE_SESSIONS:
+        elif control == STATE_SURPLUS or control in CHARGE_SESSIONS:
             state = OPERATING_BY_STATE[control]
         elif discharge_locked:
             state = "discharge_locked"
         elif is_night:
             state = "night_off"
-        elif control == "pv" and self.zone == 3:
+        elif control == STATE_PV and self.zone == 3:
             state = "safety_stop"
         else:
             state = OPERATING_BY_STATE[control]
