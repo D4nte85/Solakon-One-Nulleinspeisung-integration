@@ -579,7 +579,7 @@ class SolakonCoordinator:
                 and not changes[S_REGULATION_ENABLED]
             )
             if turning_off:
-                await self._switch_off_sequence()
+                await self._disable_regulation()
 
             with self.trackers.refreshing():
                 if S_REST_IN_DISCHARGE in changes and changes[S_REST_IN_DISCHARGE] != self._setting(S_REST_IN_DISCHARGE, bool):
@@ -587,8 +587,7 @@ class SolakonCoordinator:
                 if S_PI_ENABLED in changes and changes[S_PI_ENABLED] != self._setting(S_PI_ENABLED, bool):
                     self.pi.reset()
                 self.settings.update(changes)
-                self.settings_rev += 1
-                await self._store.async_save(self._store_data())
+                await self._save_settings()
                 _LOGGER.info("Solakon: Einstellungen gespeichert")
 
         self.notify_listeners()
@@ -596,6 +595,20 @@ class SolakonCoordinator:
         # Neuen Zustand sofort anwenden
         if self._regulation_on:
             self.request_regulation()
+
+    async def _disable_regulation(self) -> None:
+        """Regelung abschalten: erst der Abschaltpfad, dann `S_REGULATION_ENABLED` aus.
+
+        Die Reihenfolge ist fest, weil `_set_number` und `_set_mode` bei ausgeschalteter
+        Regelung jeden Schreibbefehl sperren. Speichern übernimmt der Aufrufer mit `_save_settings`.
+        """
+        await self._switch_off_sequence()
+        self.settings[S_REGULATION_ENABLED] = False
+
+    async def _save_settings(self) -> None:
+        """Settings-Revision erhöhen und Settings samt Zustandsflags sofort speichern."""
+        self.settings_rev += 1
+        await self._store.async_save(self._store_data())
 
     async def _switch_off_sequence(self) -> None:
         """Abschaltpfad bei noch aktiver Regelung: neue Fehlerkette, Output 0, Entladestrom auf Gerätemaximum, Modus '0'."""
@@ -817,10 +830,8 @@ class SolakonCoordinator:
         await self._transition(d.transition)
         self._set_last_action(d.action, **d.params)
         if d.regulation_off:
-            await self._switch_off_sequence()
-            self.settings[S_REGULATION_ENABLED] = False
-            self.settings_rev += 1
-            await self._store.async_save(self._store_data())
+            await self._disable_regulation()
+            await self._save_settings()
         return d.name
 
     async def _run_pi_phase(

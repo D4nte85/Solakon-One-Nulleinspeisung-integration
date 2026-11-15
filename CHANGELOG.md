@@ -37,6 +37,7 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 - **Übergang eines Falls als Wert:** Die Fallentscheidung liefert ihren Übergang als `Transition` mit dem Zielmodus und der Kennung „Ruhemodus“ statt als Wörterbuch; der Ruhemodus überschreibt keinen anderen Modus mehr still. Keine Verhaltensänderung (`zones.py`, `coordinator.py`).
 - **PI-Schritt als ein Wert:** `PIController.calculate` bekommt den Schritt (`PiStep`) und den Netzwert statt neun Einzelwerten; die Basis des Schritts heißt dort `base` statt `current_power`. Keine Verhaltensänderung (`pi.py`, `paths.py`, `coordinator.py`).
 - **Ausführung der Pfade:** Die PI-Phase führt jede Art der Pfadentscheidung in einem eigenen Zweig aus, auch „nichts tun“; eine unbekannte Art bricht den Regelzyklus mit Fehler ab. Die Grenze der Stillstandsprüfung steht in einem eigenen Feld (`coordinator.py`, `paths.py`).
+- **Regelung abschalten an einer Stelle:** Speichern im Panel und Fall ZE schalten die Regelung über dieselbe Methode ab, die den Abschaltpfad vor dem Setzen der Regelung auf aus fährt; Settings-Revision und Speichern laufen über eine gemeinsame Methode. Keine Verhaltensänderung (`coordinator.py`).
 
 ## [3.8.1] – 2026-11-11
 
