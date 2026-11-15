@@ -753,9 +753,10 @@ async def _run_derive() -> dict:
         if ac:
             # früherer AC-Modus: Fehlerrichtung invertiert, über negiertes Netz und Offset
             grid, cur, off, *rest = args
-            out = coord.pi.calculate(-grid, cur, -off, *rest, error_share=share)
+            out = coord.pi.calculate(h.pi_mod.PiStep(cur, -off, *rest, share), -grid)
         else:
-            out = coord.pi.calculate(*args, error_share=share)
+            grid, cur, *rest = args
+            out = coord.pi.calculate(h.pi_mod.PiStep(cur, *rest, share), grid)
         pi.append([list(args), ac, share, integ, out, round(coord.integral, 6)])
     dyn = []
     for sd in (-1.0, 0.0, 10.0, 40.0, 500.0):

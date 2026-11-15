@@ -34,6 +34,7 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 - **Eine Tabelle der Funktionen mit Sensor:** Gelesene Werte, Fehlermeldungen und Trigger der Funktionen mit Sensor stehen in `feature_sensors.FEATURES`; die Trigger werden daraus abgeleitet. Keine Verhaltensänderung (`feature_sensors.py`, `trackers.py`).
 - **Zonen des Dynamic Offset aus einer Liste:** Settings-Schema, Offsetrechnung, Status und Sensor-Attribute lesen die vier Offsetzonen aus `DYN_ZONES`. Der Status führt dadurch auch `dyn_z1_night_enabled`, das bisher fehlte. Sonst keine Verhaltensänderung (`const.py`, `dynamic_offset.py`, `status_view.py`, `sensor.py`, `__init__.py`).
 - **Übergang eines Falls als Wert:** Die Fallentscheidung liefert ihren Übergang als `Transition` mit dem Zielmodus und der Kennung „Ruhemodus“ statt als Wörterbuch; der Ruhemodus überschreibt keinen anderen Modus mehr still. Keine Verhaltensänderung (`zones.py`, `coordinator.py`).
+- **PI-Schritt als ein Wert:** `PIController.calculate` bekommt den Schritt (`PiStep`) und den Netzwert statt neun Einzelwerten; die Basis des Schritts heißt dort `base` statt `current_power`. Keine Verhaltensänderung (`pi.py`, `paths.py`, `coordinator.py`).
 
 ## [3.8.1] – 2026-11-11
 

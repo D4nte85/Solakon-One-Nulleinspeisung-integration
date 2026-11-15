@@ -1,6 +1,8 @@
 """PI-Regler: Integral, Gate, Schritt mit Anti-Windup und Abklingen."""
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from .const import DEVICE_MAX_POWER
 
 # Ergebnisse der Gates.
@@ -31,6 +33,23 @@ def gate_discharge(grid: float, current: float, offset: float, limit: float, tol
     return SATURATED if saturated_high else HOLD
 
 
+@dataclass(frozen=True)
+class PiStep:
+    """Eingaben eines PI-Schritts außer dem Netzwert.
+
+    `base` ist die Ausgangsleistung, von der der Schritt ausgeht, `offset` der Ziel-Offset,
+    `limit` die Obergrenze, `share` der Poolanteil am Netzfehler, `action` der Aktionstext.
+    """
+
+    base: float
+    offset: float
+    limit: float
+    p_factor: float
+    i_factor: float
+    share: float = 1.0
+    action: str = ""
+
+
 class PIController:
     """Integral, Rechenschritt und Abklingen."""
 
@@ -46,37 +65,29 @@ class PIController:
         if abs(self.integral) > 10:
             self.integral *= 0.95
 
-    def calculate(
-        self,
-        grid_power: float,
-        current_power: float,
-        target_offset: float,
-        max_power: float,
-        p_factor: float,
-        i_factor: float,
-        error_share: float = 1.0,
-    ) -> float:
+    def calculate(self, step: PiStep, grid: float) -> float:
         """PI-Schritt des Entladens mit Anti-Windup via Back-Calculation.
 
-        max_power wird auf DEVICE_MAX_POWER gedeckelt, damit Klemmung und
+        Die Grenze wird auf DEVICE_MAX_POWER gedeckelt, damit Klemmung und
         Back-Calculation gegen die real erreichbare Grenze rechnen.
         """
-        max_power = min(max_power, DEVICE_MAX_POWER)
+        max_power = min(step.limit, DEVICE_MAX_POWER)
+        base, p_factor, i_factor = step.base, step.p_factor, step.i_factor
 
-        raw_error = (grid_power - target_offset) * error_share
+        raw_error = (grid - step.offset) * step.share
 
         if raw_error > 0:
-            error = min(raw_error, max(0.0, max_power - current_power))
+            error = min(raw_error, max(0.0, max_power - base))
         else:
-            error = max(raw_error, 0 - current_power)
+            error = max(raw_error, 0 - base)
 
         integral_candidate = self.integral + error
         correction = error * p_factor + integral_candidate * i_factor
-        new_power = current_power + correction
+        new_power = base + correction
         final = clamp(new_power, 0, max_power)
 
         if i_factor != 0:
-            integral_candidate = (final - current_power - error * p_factor) / i_factor
+            integral_candidate = (final - base - error * p_factor) / i_factor
         self.integral = clamp(integral_candidate, -max_power, max_power)
 
         return round(final, 1)

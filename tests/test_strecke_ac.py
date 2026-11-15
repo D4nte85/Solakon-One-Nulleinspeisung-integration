@@ -26,7 +26,7 @@ def _ac_pi(p_factor: float, i_factor: float = 0.0):
         if abs(netz - OFFSET) <= TOLERANZ:
             c.decay()
             return None
-        return c.calculate(-netz, sollwert, -OFFSET, LIMIT, p_factor, i_factor)
+        return c.calculate(pi.PiStep(sollwert, -OFFSET, LIMIT, p_factor, i_factor), -netz)
     return regler
 
 

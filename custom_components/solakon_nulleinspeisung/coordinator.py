@@ -457,18 +457,6 @@ class SolakonCoordinator:
             self._set_last_action(action_key, power=target)
             await self.out.set_and_wait(target, ac_charge_mode=ac_charge_mode)
 
-    async def _pi_step(
-        self, grid: float, power_base: float, offset: float, limit: float, p_factor: float,
-        i_factor: float, share: float, current_power: float, action_key: str,
-    ) -> None:
-        """Ein PI-Schritt: Sollwert aus Poolanteil berechnen, Aktion setzen, schreiben."""
-        new_pw = self.pi.calculate(
-            grid, power_base, offset, limit, p_factor, i_factor,
-            error_share=share,
-        )
-        self._set_last_action(action_key, frm=current_power, to=new_pw)
-        await self.out.set_and_wait(new_pw)
-
     # ── Schreiben: Zustandsübergang und Integral ─────────────────────────────
 
     async def _transition(self, t: Transition) -> None:
@@ -899,9 +887,9 @@ class SolakonCoordinator:
             self._set_last_action(d.action, frm=current_power, to=d.value)
             await self.out.set_and_wait(d.value, ac_charge_mode=d.ac_charge_mode)
         elif d.kind == PI_STEP:
-            st = d.step
-            await self._pi_step(grid, st.base, st.offset, st.limit, st.p_factor, st.i_factor,
-                                st.share, current_power, st.action)
+            new_pw = self.pi.calculate(d.step, grid)
+            self._set_last_action(d.step.action, frm=current_power, to=new_pw)
+            await self.out.set_and_wait(new_pw)
         elif d.kind == STALL_CHECK:
             await self._handle_output_stall(d.value, cs.rest_in_discharge)
         elif d.kind == STALL_RESET:

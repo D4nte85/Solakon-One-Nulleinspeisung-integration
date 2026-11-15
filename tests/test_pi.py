@@ -56,7 +56,7 @@ def test_reset():
 
 def test_schritt_ohne_begrenzung():
     c = _ctrl(0.0)
-    out = c.calculate(130, 400, 30, 800, 1.0, 0.1)
+    out = c.calculate(pi.PiStep(400, 30, 800, 1.0, 0.1), 130)
     # Fehler 100: P 100 + I 10
     assert out == 510.0
     assert c.integral == pytest.approx(100.0)
@@ -64,7 +64,7 @@ def test_schritt_ohne_begrenzung():
 
 def test_back_calculation_bei_begrenzung():
     c = _ctrl(0.0)
-    out = c.calculate(1000, 700, 0, 800, 1.0, 0.1)
+    out = c.calculate(pi.PiStep(700, 0, 800, 1.0, 0.1), 1000)
     # Fehler auf 100 bis zum Limit begrenzt, Ergebnis geklemmt auf 800
     assert out == 800.0
     assert c.integral == pytest.approx((800 - 700 - 100 * 1.0) / 0.1)
@@ -72,17 +72,17 @@ def test_back_calculation_bei_begrenzung():
 
 def test_ohne_i_faktor_keine_back_calculation():
     c = _ctrl(50.0)
-    c.calculate(1000, 700, 0, 800, 1.0, 0.0)
+    c.calculate(pi.PiStep(700, 0, 800, 1.0, 0.0), 1000)
     assert c.integral == pytest.approx(150.0)
 
 
 def test_limit_auf_geraetemaximum_gedeckelt():
     c = _ctrl(0.0)
-    out = c.calculate(5000, 0, 0, 5000, 1.0, 0.0)
+    out = c.calculate(pi.PiStep(0, 0, 5000, 1.0, 0.0), 5000)
     assert out == pi.DEVICE_MAX_POWER
     assert abs(c.integral) <= pi.DEVICE_MAX_POWER
 
 
 def test_anteil_skaliert_fehler():
-    out = _ctrl().calculate(130, 400, 30, 800, 1.0, 0.0, error_share=0.5)
+    out = _ctrl().calculate(pi.PiStep(400, 30, 800, 1.0, 0.0, 0.5), 130)
     assert out == 450.0

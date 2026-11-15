@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from . import setpoint
 from .const import MODE_DISCHARGE, SESSION_AC, SESSION_GRID, SESSION_TARIFF
 from .limits import PowerLimits
-from .pi import SATURATED, STEP, gate_discharge
+from .pi import SATURATED, STEP, PiStep, gate_discharge
 from .schema import CycleSettings
 
 # Arten der Pfadentscheidung.
@@ -45,19 +45,6 @@ class PathInputs:
     discharge: float
     discharge_pool: float
     discharge_base: float
-
-
-@dataclass(frozen=True)
-class PiStep:
-    """Argumente eines PI-Schritts für `_pi_step`."""
-
-    base: float
-    offset: float
-    limit: float
-    p_factor: float
-    i_factor: float
-    share: float
-    action: str
 
 
 @dataclass(frozen=True)
