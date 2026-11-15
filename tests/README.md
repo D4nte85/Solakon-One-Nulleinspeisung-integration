@@ -124,10 +124,8 @@ Regellauf einer Instanz: Eingänge davor, Schreibbefehle, Zustand danach.
 
 - Gezählt werden nur Läufe mit konsistentem Startzustand; Treffer aus widersprüchlichen
   Startflags prüfen das Heilen und laufen getrennt mit.
-- Der Szenariogenerator schreibt die Lade-Session noch als drei Flags (`ac_charge_active`,
-  `tariff_charge_active`, `grid_charge_active`); `scenarios.py` führt sie vor dem Speichern
-  durch die Settings-Migration 2.3 zu `charge_session`, mehrere gesetzte Flags ergeben `none`.
-  Die Regeln lesen die Art über abgeleitete Flags gleichen Namens (`invarianten._zustand`).
+- Der Szenariogenerator schreibt die Art der Lade-Session direkt als `charge_session` in den
+  Speicherstand; die Regeln lesen sie über `invarianten._art` und `invarianten._session`.
 - Regeln in `VERZOEGERT` gelten nur in Läufen ohne Übergang (kein Fallwechsel, kein
   geschriebener Modus), weil der erste zutreffende Fall gewinnt.
 - `test_invarianten.py` prüft jede Regel einzeln. Eine Regel mit offener Bugfix-Seite steht

@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 
 from tests import geraet, harness as h
 from tests.ha_stubs import ActiveConnection, _DtState
-from custom_components.solakon_nulleinspeisung.migrations import SolakonSettingsStore, _session_from_flags
+from custom_components.solakon_nulleinspeisung.migrations import SolakonSettingsStore
 from custom_components.solakon_nulleinspeisung.schema import InvalidSettings
 
 C = h.const
@@ -180,22 +180,24 @@ def gen_instance(rng, prefix, grid_sensor="sensor.grid") -> dict:
     if stored and _chance(rng, 0.05):
         key, value = _pick(rng, INVALID_SETTINGS)
         settings[key] = value
+    export_limit = _chance(rng, 0.8)
+    cycle, surplus = _chance(rng, 0.45), _chance(rng, 0.2)
+    ac, tariff = _chance(rng, 0.15), _chance(rng, 0.12)
+    session = "tariff_charge" if tariff else "ac_charge" if ac else "none"
+    flags = {"cycle_active": cycle, "surplus_active": surplus, "charge_session": session,
+             "solar_zero_entry_armed": _chance(rng, 0.7)}
+    # Ein Zug je Feld; die Art der Lade-Session fehlt im Speicherstand, wenn der Zug ihrer Art fällt.
+    drop = {k: _chance(rng, 0.08) for k in ("cycle_active", "surplus_active", "ac_charge",
+                                             "tariff_charge", "solar_zero_entry_armed")}
     return {
         "prefix": prefix,
         "grid_sensor": grid_sensor,
-        "export_limit": _chance(rng, 0.8),
+        "export_limit": export_limit,
         "settings": settings,
-        "flags": {
-            "cycle_active": _chance(rng, 0.45),
-            "surplus_active": _chance(rng, 0.2),
-            "ac_charge_active": _chance(rng, 0.15),
-            "tariff_charge_active": _chance(rng, 0.12),
-            "solar_zero_entry_armed": _chance(rng, 0.7),
-        },
+        "flags": flags,
         "stored": stored,
-        "drop_flags": [k for k in ("cycle_active", "surplus_active", "ac_charge_active",
-                                   "tariff_charge_active", "solar_zero_entry_armed")
-                       if _chance(rng, 0.08)],
+        "drop_flags": [k for k in ("cycle_active", "surplus_active", "solar_zero_entry_armed") if drop[k]]
+                      + (["charge_session"] if drop.get(session) else []),
         "integral": _pick(rng, [0.0, 50.0, -30.0, 5.0]),
         "prev_actual": _pick(rng, [0.0, 100.0]),
         "follow_actual": _pick(rng, [None, 1, -1, 0]),
@@ -294,8 +296,8 @@ def gen_stall(rng) -> dict:
     s.update({C.S_REGULATION_ENABLED: True, C.S_SURPLUS_ENABLED: False, C.S_AC_ENABLED: False,
               C.S_TARIFF_ENABLED: False, C.S_NIGHT_ENABLED: False, C.S_PV_FORECAST_ENABLED: False,
               C.S_ZONE1_FORCE_ENABLED: False, C.S_SURPLUS_FORECAST_ENABLED: False})
-    inst["flags"] = {"cycle_active": True, "surplus_active": False, "ac_charge_active": False,
-                     "tariff_charge_active": False, "solar_zero_entry_armed": True}
+    inst["flags"] = {"cycle_active": True, "surplus_active": False, "charge_session": "none",
+                     "solar_zero_entry_armed": True}
     limit = min(s[C.S_HARD_LIMIT_Z1], 1200)
     inst["states"]["sensor.a_soc"] = {"state": 70, "attrs": {}}
     inst["states"]["select.a_mode"] = {"state": "1"}
@@ -323,7 +325,10 @@ def gen_tariff(rng) -> dict:
     price = _pick(rng, [cheap - 1.0, cheap, cheap + 1.0, exp, exp + 1.0, "nan"])
     spec["shared"]["sensor.local_price"] = {"state": price, "attrs": {"unit_of_measurement": "ct/kWh"}}
     spec["shared"]["sensor.local_pv_today"] = {"state": _pick(rng, [2.0, 20.0]), "attrs": {"unit_of_measurement": "kWh"}}
-    inst["flags"]["tariff_charge_active"] = _chance(rng, 0.5)
+    if _chance(rng, 0.5):
+        inst["flags"]["charge_session"] = "tariff_charge"
+    elif inst["flags"]["charge_session"] == "tariff_charge":
+        inst["flags"]["charge_session"] = "none"
     inst["states"]["sensor.a_soc"] = {"state": _pick(rng, [30, 45, 55, 70, 95]), "attrs": {"unit_of_measurement": "%"}}
     return spec
 
@@ -343,7 +348,7 @@ def gen_grid_charge(rng) -> dict:
         C.S_TARGET_SOURCE_TARIFF: _chance(rng, 0.5),
     })
     session = _pick(rng, ["grid_charge", "grid_charge", "none", "none", "ac_charge"])
-    inst["flags"].update({"ac_charge_active": False, "tariff_charge_active": False, "charge_session": session})
+    inst["flags"]["charge_session"] = session
     inst["stored"] = True
     inst["drop_flags"] = []
     spec["has_dist_config"] = False
@@ -486,8 +491,6 @@ def _setup_env(spec, dist_store: bool = False):
                 (entry.data[C.CONF_ACTUAL_SENSOR], inst["follow_actual"])]
         if inst["stored"]:
             flags = {k: v for k, v in inst["flags"].items() if k not in inst.get("drop_flags", ())}
-            # Lade-Flags der Szenarien wie aus Settings 2.2: über die Migration zur Art der Lade-Session.
-            flags = _session_from_flags(flags)
             hass.storage[f"{C.DOMAIN}_{entry.entry_id}"] = {**inst["settings"], **flags}
         hass.config_entries.entries.append(entry)
         coord = h.coordinator_mod.SolakonCoordinator(hass, entry)
@@ -702,24 +705,20 @@ async def _run_derive() -> dict:
     entry = h.FakeEntry("entry_a", h.entry_data("a"))
     coord = h.coordinator_mod.SolakonCoordinator(hass, entry)
     hass.data[C.DOMAIN] = {"entry_a": coord}
-    flags = ("surplus_active", "tariff_charge_active", "ac_charge_active", "cycle_active",
-             "discharge_locked", "is_night", "_cycle_blocked")
+    flags = ("surplus_active", "cycle_active", "discharge_locked", "is_night", "_cycle_blocked")
     rows = []
-    for combo in itertools.product((False, True), repeat=len(flags)):
+    for combo, session in itertools.product(itertools.product((False, True), repeat=len(flags)), C.CHARGE_SESSIONS):
         for regulation in (False, True):
             for soc in (19, 20, 21, 60):
                 for mode in ("0", "1", "3", "x"):
                     for name, val in zip(flags, combo):
-                        if name not in ("tariff_charge_active", "ac_charge_active"):
-                            setattr(coord, name, val)
-                    # Zwei Bits der Aufzählung ergeben eine Art der Lade-Session; sind beide gesetzt, Tarif-Laden.
-                    tariff_on, ac_on = combo[1], combo[2]
-                    coord.charge_session = "tariff_charge" if tariff_on else "ac_charge" if ac_on else "none"
+                        setattr(coord, name, val)
+                    coord.charge_session = session
                     coord.settings[C.S_REGULATION_ENABLED] = regulation
                     coord.display.operating_state = ""
                     coord.display.mode_key = "waiting"
                     coord._update_display(soc, 20, mode)
-                    rows.append([int("".join("1" if v else "0" for v in combo), 2), regulation, soc, mode,
+                    rows.append([int("".join("1" if v else "0" for v in combo), 2), session, regulation, soc, mode,
                                  coord.display.operating_state, coord.display.zone, coord.display.zone_label,
                                  coord.display.mode_key, coord.display.mode_label, h.zones_mod.required_discharge(coord._control_state, mode, 40)])
     rng = random.Random("solakon-pi")

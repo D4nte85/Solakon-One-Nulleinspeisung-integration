@@ -17,17 +17,17 @@ from tests import scenarios
 
 C = h.const
 
-# Flags einer Lade-Session.
-LADE_FLAGS = ("ac_charge_active", "tariff_charge_active", "grid_charge_active")
-SESSION_FLAG = {"ac_charge": "ac_charge_active", "tariff_charge": "tariff_charge_active",
-                "grid_charge": "grid_charge_active"}
+
+def _art(flags: dict, art: str) -> bool:
+    """Läuft eine Lade-Session der Art `art`?"""
+    return flags.get("charge_session") == art
 
 
-def _zustand(coord) -> dict:
-    """Zustand des Coordinators, dazu je Art der Lade-Session ein Flag für die Regeln."""
-    z = h.coord_state(coord)
-    z.update({flag: z["charge_session"] == art for art, flag in SESSION_FLAG.items()})
-    return z
+def _session(flags: dict) -> bool:
+    """Läuft eine Lade-Session?"""
+    return flags.get("charge_session", C.SESSION_NONE) != C.SESSION_NONE
+
+
 KINDS = ("cycle", "multi", "stall", "tariff", "domain", "rest", "gridcharge")
 NICHT_ZAHL = ("unavailable", "unknown", "None", "abc", "nan", "on", "off")
 
@@ -131,13 +131,13 @@ class Ctx:
         return C.MODE_DISCHARGE if self.settings.get(C.S_REST_IN_DISCHARGE) else C.MODE_DISABLED
 
     def lade_session(self) -> bool:
-        return any(self.flags[k] for k in LADE_FLAGS)
+        return _session(self.flags)
 
     def start_konsistent(self) -> bool:
         """Startzustand erfüllt selbst D1–D4 — sonst prüft die Regel das Heilen, nicht das Halten."""
         f = self.flags_vorher
         modus = (self.vorher.get(self.e(C.CONF_MODE_SELECT)) or {}).get("state")
-        session = any(f.get(k) for k in LADE_FLAGS)
+        session = _session(f)
         return not (
             (f.get("surplus_active") and (not f.get("cycle_active") or session))
             or (modus == C.MODE_AC_CHARGE and not session)
@@ -299,7 +299,9 @@ def d3(c: Ctx):
     f = c.flags
     if not c.normal() or not f["surplus_active"]:
         return None
-    teile = [k for k in (*LADE_FLAGS, "discharge_locked", "is_night") if f[k]]
+    teile = [k for k in ("discharge_locked", "is_night") if f[k]]
+    if _session(f):
+        teile.insert(0, f"charge_session={f['charge_session']}")
     if teile:
         return "surplus_active mit " + ", ".join(teile)
 
@@ -317,9 +319,9 @@ def d5(c: Ctx):
 def d6(c: Ctx):
     if not c.normal() or c.aus_seit is not None:
         return None
-    for flag, option, art in (("ac_charge_active", C.S_AC_ENABLED, "AC"),
-                              ("tariff_charge_active", C.S_TARIFF_ENABLED, "Tarif")):
-        if c.flags[flag] and not c.settings[option]:
+    for session, option, art in ((C.SESSION_AC, C.S_AC_ENABLED, "AC"),
+                                 (C.SESSION_TARIFF, C.S_TARIFF_ENABLED, "Tarif")):
+        if _art(c.flags, session) and not c.settings[option]:
             return f"{art}-Lade-Session bei abgeschalteter Option"
 
 
@@ -345,16 +347,16 @@ def e1(c: Ctx):
     preis, guenstig, _ = t
     f = c.flags
     ziel = c.settings[C.S_TARIFF_SOC_TARGET]
-    if not c.flags_vorher.get("tariff_charge_active"):
+    if not _art(c.flags_vorher, C.SESSION_TARIFF):
         ziel -= c.settings[C.S_TARIFF_SOC_HYST]
     if preis >= guenstig or c.soc() >= ziel:
         return None
     # Laufendes AC- oder Netz-Laden wird nicht abgelöst; eine Ablösung käme nur als Tarif-Schalter.
-    if (f["surplus_active"] or f["forecast_tariff_suppressed"] or c.flags_vorher.get("ac_charge_active")
-            or c.flags_vorher.get("grid_charge_active")):
+    if (f["surplus_active"] or f["forecast_tariff_suppressed"] or _art(c.flags_vorher, C.SESSION_AC)
+            or _art(c.flags_vorher, C.SESSION_GRID)):
         return None
-    if not f["tariff_charge_active"] or c.modus() != C.MODE_AC_CHARGE:
-        return f"Preis {preis} < {guenstig}, SOC {c.soc()}: tariff_charge={f['tariff_charge_active']}, Modus {c.modus()!r}"
+    if not _art(f, C.SESSION_TARIFF) or c.modus() != C.MODE_AC_CHARGE:
+        return f"Preis {preis} < {guenstig}, SOC {c.soc()}: charge_session={f['charge_session']}, Modus {c.modus()!r}"
 
 
 def e2(c: Ctx):
@@ -371,7 +373,7 @@ def e2(c: Ctx):
 
 
 def f1(c: Ctx):
-    if not c.normal() or c.flags_vorher.get("ac_charge_active") or not c.flags["ac_charge_active"]:
+    if not c.normal() or _art(c.flags_vorher, C.SESSION_AC) or not _art(c.flags, C.SESSION_AC):
         return None
     # Ist-Leistung vorzeichenrichtig: Entladen positiv, Laden negativ. Die eigene Instanz
     # zählt immer, die übrigen nur am selben Netzsensor, mit Regelung, in Modus '1' und
@@ -427,7 +429,7 @@ def _preis_gueltig(c: Ctx):
 
 
 def h1(c: Ctx):
-    if not c.normal() or not c.flags["tariff_charge_active"] or c.modus() != C.MODE_AC_CHARGE:
+    if not c.normal() or not _art(c.flags, C.SESSION_TARIFF) or c.modus() != C.MODE_AC_CHARGE:
         return None
     soll = min(c.settings[C.S_TARIFF_POWER], C.DEVICE_MAX_POWER)
     for a in c.schreibt(c.e(C.CONF_ACTIVE_POWER)):
@@ -452,7 +454,7 @@ def h2(c: Ctx):
 
 
 def h3(c: Ctx):
-    if not c.normal() or not c.flags["tariff_charge_active"]:
+    if not c.normal() or not _art(c.flags, C.SESSION_TARIFF):
         return None
     t = _preis_gueltig(c)
     if not t:
@@ -466,7 +468,7 @@ def h3(c: Ctx):
 def h4(c: Ctx):
     if not c.normal() or not c.flags["forecast_tariff_suppressed"]:
         return None
-    if c.flags["tariff_charge_active"] and not c.flags_vorher.get("tariff_charge_active"):
+    if _art(c.flags, C.SESSION_TARIFF) and not _art(c.flags_vorher, C.SESSION_TARIFF):
         return "Tarif-Laden startet trotz PV-Vorhersage-Unterdrückung"
     if c.flags["discharge_locked"]:
         return "Tarifsperre trotz PV-Vorhersage-Unterdrückung"
@@ -575,9 +577,10 @@ def j5(c: Ctx):
 def c4(c: Ctx):
     if not c.abgeschaltet_jetzt:
         return None
-    for k in ("cycle_active", "tariff_charge_active"):
-        if c.flags[k] != c.flags_vorher.get(k):
-            return f"Abschalten ändert {k}: {c.flags_vorher.get(k)} → {c.flags[k]}"
+    if c.flags["cycle_active"] != c.flags_vorher.get("cycle_active"):
+        return f"Abschalten ändert cycle_active: {c.flags_vorher.get('cycle_active')} → {c.flags['cycle_active']}"
+    if _art(c.flags, C.SESSION_TARIFF) != _art(c.flags_vorher, C.SESSION_TARIFF):
+        return f"Abschalten ändert Tarif-Laden: {c.flags_vorher.get('charge_session')} → {c.flags['charge_session']}"
 
 
 def c5(c: Ctx):
@@ -615,7 +618,7 @@ def k3(c: Ctx):
         return None
     eigener = (c.vorher.get(c.e(C.CONF_MODE_SELECT)) or {}).get("state")
     fv = c.flags_vorher
-    if eigener != C.MODE_DISCHARGE or fv.get("resting") or fv.get("ac_charge_active") or fv.get("tariff_charge_active"):
+    if eigener != C.MODE_DISCHARGE or fv.get("resting") or _art(fv, C.SESSION_AC) or _art(fv, C.SESSION_TARIFF):
         return None  # nur Instanzen, die zu Zyklusbeginn im Entlade-Pool stehen
     for p, (cfg, _fl, _nach) in c.alle.items():
         if p == c.prefix or cfg[C.CONF_GRID_SENSOR] != c.e(C.CONF_GRID_SENSOR):
@@ -645,9 +648,9 @@ def k4(c: Ctx):
         soll = "target_charging"
     elif f["surplus_active"]:
         soll = "exporting"
-    elif f["tariff_charge_active"]:
+    elif _art(f, C.SESSION_TARIFF):
         soll = "tariff_charging"
-    elif f["ac_charge_active"]:
+    elif _art(f, C.SESSION_AC):
         soll = "ac_charging"
     elif f["discharge_locked"]:
         soll = "discharge_locked"
@@ -716,7 +719,7 @@ async def _lauf(kind: str, spec: dict) -> list[Ctx]:
             coord.settings.update(inst["settings"])
         coord.integral = inst["integral"]
         coord.surplus.prev_actual = inst["prev_actual"]
-    flags = {p: _zustand(c) for p, c in coords.items()}
+    flags = {p: h.coord_state(c) for p, c in coords.items()}
     aus_seit = {p: None for p in coords}
     out = []
     for idx, step in enumerate(spec["steps"]):
@@ -745,7 +748,7 @@ async def _lauf(kind: str, spec: dict) -> list[Ctx]:
             aufrufe = [e for e in hass.events if e[0] == "call"]
             if p in abgeschaltet:
                 aufrufe = ereignisse_aenderung + aufrufe
-            neu = _zustand(coord)
+            neu = h.coord_state(coord)
             runde.append(Ctx(kind, spec["id"], idx, p, coord.entry.data, dict(coord.settings), vorher,
                              schnappschuss(hass), flags[p], neu, aufrufe,
                              dist=spec["dist"] if spec.get("has_dist_config") else None,
