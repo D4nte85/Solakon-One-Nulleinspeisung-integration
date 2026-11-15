@@ -10,7 +10,9 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util import dt as dt_util
 
-from .const import CHARGE_SESSIONS, DOMAIN, FALL_KEYS, MODE_KEYS, OPERATING_STATES
+from .const import (
+    CHARGE_SESSIONS, DOMAIN, FALL_KEYS, MODE_KEYS, OPERATING_STATES, S_STDDEV_TRIM_COUNT, S_STDDEV_WINDOW,
+)
 from .coordinator import SolakonCoordinator
 from .dynamic_offset import any_dynamic
 from .entity_base import SolakonEntity
@@ -134,13 +136,17 @@ class GridStdDevSensor(CoordinatorSensor):
 
     @property
     def extra_state_attributes(self) -> dict:
-        """Fensterparameter und Rohwert; bei dynamischem Offset zusätzlich die Offsets je Zone."""
+        """Fenster und Trimmung des σ-Puffers der Netzgruppe, Rohwert; bei dynamischem Offset die Offsets je Zone.
+
+        Vor der ersten Aufnahme gelten Fenster und Trimmung der eigenen Settings.
+        """
         s = self._coordinator.settings
+        sigma = self._coordinator.group.sigma
         dyn = any_dynamic(s)
         attrs = {
-            "window_seconds": s.get("stddev_window", 60),
-            "sample_count": len(self._coordinator.group.sigma.samples),
-            "trim_count": s.get("stddev_trim_count", 0),
+            "window_seconds": sigma.window if sigma.window is not None else s[S_STDDEV_WINDOW],
+            "sample_count": len(sigma.samples),
+            "trim_count": sigma.trim if sigma.trim is not None else s[S_STDDEV_TRIM_COUNT],
             "stddev_raw": self._coordinator.dyn.stddev_raw,
             "dynamic_offset_active": dyn,
         }

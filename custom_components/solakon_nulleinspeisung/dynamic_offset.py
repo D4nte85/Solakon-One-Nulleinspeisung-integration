@@ -64,16 +64,23 @@ def dynamic_offset(
 
 
 class Sigma:
-    """σ-Puffer einer Netzgruppe: Netzwerte (timestamp, value) im Fenster, σ roh und getrimmt."""
+    """σ-Puffer einer Netzgruppe: Netzwerte (timestamp, value) im Fenster, σ roh und getrimmt.
+
+    `window` und `trim` sind die Parameter der letzten Aufnahme, `None` bis dahin.
+    """
 
     def __init__(self) -> None:
         self.samples: deque[tuple[float, float]] = deque()
         self.stddev: float = 0.0
         self.stddev_raw: float = 0.0
+        self.window: int | None = None
+        self.trim: int | None = None
 
     def record(self, grid_value: float, now: float, settings: dict) -> None:
         """Netzwert aufnehmen, Werte außerhalb des Fensters verwerfen, σ neu berechnen."""
-        cutoff = now - int(settings[S_STDDEV_WINDOW])
+        self.window = int(settings[S_STDDEV_WINDOW])
+        self.trim = int(settings[S_STDDEV_TRIM_COUNT])
+        cutoff = now - self.window
 
         self.samples.append((now, grid_value))
 
@@ -91,7 +98,7 @@ class Sigma:
 
         # Getrimmte StdDev: die `trim` größten und kleinsten Samples im Fenster
         # ausschließen, bevor die Streuung berechnet wird.
-        trim = int(settings[S_STDDEV_TRIM_COUNT])
+        trim = self.trim
         if trim > 0 and n - 2 * trim >= 2:  # Fallback: mind. 2 Kernwerte nötig, sonst ungetrimmt
             core = sorted(values)[trim: n - trim]
             self.stddev = _stddev_of(core)
