@@ -42,3 +42,10 @@ def test_zahlenfelder_im_schema():
 def test_mock_antwortet_wie_get_schema():
     block = re.search(r"// SCHEMA-BEGIN\n *const SCHEMA = (.*);\n *// SCHEMA-END", MOCK)
     assert block and json.loads(block.group(1)) == _schema()
+
+
+def test_jeder_ws_statusschluessel_wird_im_panel_gelesen():
+    status_view = __import__(h.PKG + ".status_view", fromlist=["WS_STATUS_KEYS"])
+    names = [n if isinstance(n, str) else n[0] for n in status_view.WS_STATUS_KEYS]
+    ungelesen = [n for n in names if not re.search(rf"\.{n}\b|\b{n}:|\"{n}\"", PANEL)]
+    assert ungelesen == []

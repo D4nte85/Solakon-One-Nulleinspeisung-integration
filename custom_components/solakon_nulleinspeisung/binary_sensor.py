@@ -1,8 +1,6 @@
 """Binary sensor platform — diagnostische Zustandsanzeigen (read-only)."""
 from __future__ import annotations
 
-from operator import attrgetter
-
 from homeassistant.components.binary_sensor import BinarySensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -11,23 +9,23 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .const import DOMAIN
 from .coordinator import SolakonCoordinator
 from .entity_base import SolakonEntity
+from .status_view import status_value
 
 
 class DiagBoolSensor(SolakonEntity, BinarySensorEntity):
-    """Zeigt internen Coordinator-Zustand als read-only Binärsensor an.
+    """Zeigt einen Statuswert der Instanz als read-only Binärsensor an.
 
-    `key` ist Suffix der unique_id und `translation_key`; `path` der Attributpfad am
-    Coordinator, ohne Angabe gleich `key`.
+    `key` ist Suffix der unique_id, `translation_key` und Name in `status_view.STATUS`.
     """
 
-    def __init__(self, coord: SolakonCoordinator, key: str, icon: str, path: str | None = None) -> None:
+    def __init__(self, coord: SolakonCoordinator, key: str, icon: str) -> None:
         super().__init__(coord, key, translation_key=key, icon=icon)
-        self._read = attrgetter(path or key)
+        self._key = key
 
     @property
     def is_on(self) -> bool:
-        """Wahrheitswert des Coordinator-Attributs."""
-        return bool(self._read(self._coordinator))
+        """Wahrheitswert des Statuswerts."""
+        return bool(status_value(self._coordinator, self._key))
 
 
 async def async_setup_entry(
@@ -39,8 +37,8 @@ async def async_setup_entry(
         DiagBoolSensor(coord, "cycle_active",               "mdi:battery-arrow-up"),
         DiagBoolSensor(coord, "surplus_active",             "mdi:solar-power"),
         DiagBoolSensor(coord, "is_night",                   "mdi:weather-night"),
-        DiagBoolSensor(coord, "forecast_tariff_suppressed", "mdi:weather-sunny", "tariff.suppressed"),
-        DiagBoolSensor(coord, "forecast_surplus_forced",    "mdi:weather-sunny-alert", "forecast.surplus_forced"),
-        DiagBoolSensor(coord, "forecast_exit_lock",         "mdi:weather-cloudy-clock", "forecast.exit_lock"),
-        DiagBoolSensor(coord, "forecast_zone1_forced",      "mdi:weather-night-partly-cloudy", "forecast.zone1_forced"),
+        DiagBoolSensor(coord, "forecast_tariff_suppressed", "mdi:weather-sunny"),
+        DiagBoolSensor(coord, "forecast_surplus_forced",    "mdi:weather-sunny-alert"),
+        DiagBoolSensor(coord, "forecast_exit_lock",         "mdi:weather-cloudy-clock"),
+        DiagBoolSensor(coord, "forecast_zone1_forced",      "mdi:weather-night-partly-cloudy"),
     ])

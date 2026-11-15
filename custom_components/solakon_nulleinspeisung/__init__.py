@@ -19,13 +19,13 @@ from .const import (
     DOMAIN, PLATFORMS,
     CONF_INSTANCE_NAME,
     CONF_GRID_SENSOR,
-    CAPACITY_FIELD, DIST_DEFAULTS, DIST_INST_FIELDS, DIST_SCHEMA, DYN_ZONES, SETTINGS_SCHEMA, VERSION, dyn_key,
+    CAPACITY_FIELD, DIST_DEFAULTS, DIST_INST_FIELDS, DIST_SCHEMA, SETTINGS_SCHEMA, VERSION,
 )
 from . import group_store, number, runtime
 from .migrations import SolakonSettingsStore, async_migrate_entry as async_migrate_entry
 from .readings import NUMERIC_DOMAINS
 from .schema import InvalidSettings
-from .status_view import snapshot_view
+from .status_view import WS_STATUS_KEYS, snapshot_view
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -33,22 +33,6 @@ PANEL_JS_URL = f"/{DOMAIN}/panel.js"
 
 # Keine YAML-Konfiguration; async_setup liefert nur Panel und Übersetzungen aus.
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
-
-# Schlüssel des WS-Status: Name im Panel oder Paar (Panel, Schnappschuss).
-WS_STATUS_KEYS = (
-    ("zone", "current_zone"), "zone_label", "mode_key", "mode_label", "last_action", "last_action_ts",
-    "last_output_ts", "mode_label_ts", "last_error", "integral",
-    "cycle_active", "surplus_active", "charge_session", "regulation_enabled",
-    ("stddev", "grid_stddev"), ("stddev_raw", "grid_stddev_raw"),
-    *(dyn_key(zone, "enabled") for zone in DYN_ZONES),
-    *((f"dyn_{zone}", f"dyn_offset_{zone}") for zone in DYN_ZONES),
-    "active_fall", "operating_state", "discharge_locked", "dist_mode_effective", "is_night",
-    "forecast_tariff_suppressed", "forecast_surplus_forced", "forecast_exit_lock", "forecast_zone1_forced",
-    "allocated_power",
-    "offset_zone", "offset_dynamic", "offset_static", "offset_value", "capacity_kwh",
-    "settings_rev", "dist_rev",
-)
-
 
 # ── WebSocket Commands ───────────────────────────────────────────────────────
 

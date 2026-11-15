@@ -1,66 +1,94 @@
-"""Statusansicht einer Instanz für Panel und Sensoren: Anzeigezustand unter internen Namen."""
+"""Statusansicht einer Instanz für Panel und Entitäten: ein Leser je Statusschlüssel."""
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from functools import cached_property
+from typing import TYPE_CHECKING, Any, Callable
 
-from .const import DYN_ZONES, S_REGULATION_ENABLED, S_Z1_NIGHT_ENABLED, capacity_key, dyn_key
+from .const import S_REGULATION_ENABLED, S_Z1_NIGHT_ENABLED, capacity_key
 from .dynamic_offset import offset_params
 
 if TYPE_CHECKING:
     from .coordinator import SolakonCoordinator
 
 
-def snapshot(coord: SolakonCoordinator) -> dict[str, Any]:
-    """Anzeigezustand unter internen Namen, ohne Live-Sensorwerte.
+# Leser je Statusschlüssel (interner Name), ohne Live-Sensorwerte.
+STATUS: dict[str, Callable[["_Reading"], Any]] = {
+    "offset_zone": lambda r: r.offset[0],
+    "offset_dynamic": lambda r: r.offset[1],
+    "offset_static": lambda r: r.offset[2],
+    "offset_value": lambda r: r.offset[3],
+    "capacity_kwh": lambda r: r.capacity_kwh(),
+    "current_zone": lambda r: r.c.display.zone,
+    "zone_label": lambda r: r.c.display.zone_label,
+    "mode_key": lambda r: r.c.display.mode_key,
+    "mode_label": lambda r: r.c.display.mode_label,
+    "last_action": lambda r: r.c.last_action,
+    "last_output_ts": lambda r: r.c.out.last_ts,
+    "mode_label_ts": lambda r: r.c.display.mode_ts,
+    "last_error": lambda r: r.c.last_error,
+    "integral": lambda r: round(r.c.integral, 2),
+    "cycle_active": lambda r: r.c.cycle_active,
+    "surplus_active": lambda r: r.c.surplus_active,
+    "charge_session": lambda r: r.c.charge_session,
+    "regulation_enabled": lambda r: r.c.settings.get(S_REGULATION_ENABLED, False),
+    "settings_rev": lambda r: r.c.settings_rev,
+    "dist_rev": lambda r: r.c.group.dist_rev,
+    "grid_stddev": lambda r: r.c.dyn.stddev,
+    "grid_stddev_raw": lambda r: r.c.dyn.stddev_raw,
+    "active_fall": lambda r: r.c.active_fall,
+    "operating_state": lambda r: r.c.display.operating_state,
+    "operating_state_ts": lambda r: r.c.display.operating_state_ts,
+    "dist_mode_effective": lambda r: r.c.dist_mode_effective,
+    "is_night": lambda r: r.c.is_night,
+    "forecast_tariff_suppressed": lambda r: r.c.tariff.suppressed,
+    "forecast_surplus_forced": lambda r: r.c.forecast.surplus_forced,
+    "forecast_exit_lock": lambda r: r.c.forecast.exit_lock,
+    "forecast_zone1_forced": lambda r: r.c.forecast.zone1_forced,
+    "allocated_power": lambda r: r.c.allocated_power,
+}
 
-    Offsetzone: AC-Laden, sonst Zone 1 bei aktivem Zyklus (bei Dunkelheit Nacht-Offset), sonst Zone 2.
-    Kapazität in kWh aus dem Verteilungs-Sensor der Instanz, None ohne gültigen Wert.
-    """
-    offset_zone = coord.offset_zone(coord.settings[S_Z1_NIGHT_ENABLED])
-    offset_dynamic, offset_static, offset_value = coord.dyn.offset(offset_zone, offset_params(coord.settings))
-    cap_sensor = str(coord.group.dist_cfg().get(capacity_key(coord.entry.entry_id), ""))
-    return {
-        "offset_zone": offset_zone,
-        "offset_dynamic": offset_dynamic,
-        "offset_static": offset_static,
-        "offset_value": offset_value,
-        "capacity_kwh": coord.capacity_kwh(cap_sensor) if cap_sensor else None,
-        "current_zone": coord.display.zone,
-        "zone_label": coord.display.zone_label,
-        "mode_key": coord.display.mode_key,
-        "mode_label": coord.display.mode_label,
-        "last_action": coord.last_action,
-        "last_action_ts": coord.last_action_ts,
-        "last_output_ts": coord.out.last_ts,
-        "mode_label_ts": coord.display.mode_ts,
-        "last_error": coord.last_error,
-        "integral": round(coord.integral, 2),
-        "cycle_active": coord.cycle_active,
-        "surplus_active": coord.surplus_active,
-        "charge_session": coord.charge_session,
-        "regulation_enabled": coord.settings.get(S_REGULATION_ENABLED, False),
-        "settings_rev": coord.settings_rev,
-        "dist_rev": coord.group.dist_rev,
-        "grid_stddev": coord.dyn.stddev,
-        "grid_stddev_raw": coord.dyn.stddev_raw,
-        **{dyn_key(zone, "enabled"): coord.settings[dyn_key(zone, "enabled")] for zone in DYN_ZONES},
-        **{f"dyn_offset_{zone}": coord.dyn.offsets[zone] for zone in DYN_ZONES},
-        "active_fall": coord.active_fall,
-        "operating_state": coord.display.operating_state,
-        "operating_state_ts": coord.display.operating_state_ts,
-        "discharge_locked": coord.discharge_locked,
-        "dist_mode_effective": coord.dist_mode_effective,
-        "is_night": coord.is_night,
-        "forecast_tariff_suppressed": coord.tariff.suppressed,
-        "forecast_surplus_forced": coord.forecast.surplus_forced,
-        "forecast_exit_lock": coord.forecast.exit_lock,
-        "forecast_zone1_forced": coord.forecast.zone1_forced,
-        "allocated_power": coord.allocated_power,
-    }
+# Schlüssel des WS-Status: Name im Panel oder Paar (Panel, interner Name).
+WS_STATUS_KEYS = (
+    ("zone", "current_zone"), "mode_key", "mode_label", "last_action",
+    "last_output_ts", "mode_label_ts", "last_error", "integral",
+    "cycle_active", "surplus_active", "charge_session", "regulation_enabled",
+    ("stddev", "grid_stddev"), ("stddev_raw", "grid_stddev_raw"),
+    "active_fall", "operating_state", "dist_mode_effective", "is_night",
+    "forecast_tariff_suppressed", "forecast_surplus_forced", "forecast_exit_lock", "forecast_zone1_forced",
+    "allocated_power",
+    "offset_zone", "offset_dynamic", "offset_static", "offset_value", "capacity_kwh",
+    "settings_rev", "dist_rev",
+)
+
+
+class _Reading:
+    """Ein Abruf der Statusansicht; die Offsetlage wird höchstens einmal gerechnet."""
+
+    def __init__(self, coord: SolakonCoordinator) -> None:
+        self.c = coord
+
+    @cached_property
+    def offset(self) -> tuple[str, bool, Any, float]:
+        """(Offsetzone, dynamisch, statischer Wert, wirksamer Offset).
+
+        Offsetzone: AC-Laden, sonst Zone 1 bei aktivem Zyklus (bei Dunkelheit Nacht-Offset), sonst Zone 2.
+        """
+        zone = self.c.offset_zone(self.c.settings[S_Z1_NIGHT_ENABLED])
+        return (zone, *self.c.dyn.offset(zone, offset_params(self.c.settings)))
+
+    def capacity_kwh(self) -> float | None:
+        """Kapazität in kWh aus dem Verteilungs-Sensor der Instanz, None ohne gültigen Wert."""
+        sensor = str(self.c.group.dist_cfg().get(capacity_key(self.c.entry.entry_id), ""))
+        return self.c.capacity_kwh(sensor) if sensor else None
+
+
+def status_value(coord: SolakonCoordinator, name: str) -> Any:
+    """Ein Statuswert unter seinem internen Namen."""
+    return STATUS[name](_Reading(coord))
 
 
 def snapshot_view(coord: SolakonCoordinator, names: tuple[str | tuple[str, str], ...]) -> dict[str, Any]:
-    """Auswahl aus `snapshot`; ein Paar (außen, innen) benennt den Schlüssel um."""
-    snap = snapshot(coord)
+    """Statuswerte zu `names`; ein Paar (außen, innen) benennt den Schlüssel um."""
+    reading = _Reading(coord)
     pairs = (n if isinstance(n, tuple) else (n, n) for n in names)
-    return {outer: snap[inner] for outer, inner in pairs}
+    return {outer: STATUS[inner](reading) for outer, inner in pairs}

@@ -153,7 +153,9 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
   // Vorschau Zustände, die nicht zu den übrigen Flags der Karte passen.
   function mkOperatingState(o) {
     if (o.regulation_enabled === false) return o.target_charge_enabled ? "discharge_pause" : "disabled";
+    if (o.blocked)                      return "blocked";
     if (o.target_charge_enabled && o.soc < (o.target_soc ?? 70)) return "target_charging";
+    if (o.charge_session === "grid_charge") return "target_charging";
     if (o.surplus_active)               return "exporting";
     if (o.charge_session === "tariff_charge") return "tariff_charging";
     if (o.charge_session === "ac_charge")     return "ac_charging";
@@ -166,15 +168,14 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
 
   function mkStatus(o) {
     return {
-      zone: o.zone, zone_label: `Zone ${o.zone}`, mode_key: o.mode_key ?? "discharge", mode_label: o.mode_label ?? "INV Discharge PV Priority",
-      last_action: "Output → " + o.actual_power + " W", last_action_ts: now() - 12,
+      zone: o.zone, mode_key: o.mode_key ?? "discharge", mode_label: o.mode_label ?? "INV Discharge PV Priority",
+      last_action: "Output → " + o.actual_power + " W",
       last_output_ts: now() - 12, mode_label_ts: now() - 340,
       last_error: o.last_error ?? null, integral: 4.2, grid: o.grid, actual_power: o.actual_power,
       solar: 850, soc: o.soc, cycle_active: o.cycle_active, surplus_active: false,
       charge_session: o.charge_session ?? "none", regulation_enabled: o.regulation_enabled ?? true, stddev: 8.4, stddev_raw: 8.4,
-      dyn_z1_enabled: false, dyn_z1_night_enabled: false, dyn_z2_enabled: false, dyn_ac_enabled: false,
-      dyn_z1: 0, dyn_z1_night: 0, dyn_z2: 0, dyn_ac: 0, active_fall: o.active_fall, is_night: false,
-      operating_state: mkOperatingState(o), discharge_locked: o.discharge_locked ?? false,
+      active_fall: o.active_fall, is_night: false,
+      operating_state: mkOperatingState(o),
       forecast_tariff_suppressed: false, forecast_surplus_forced: false, forecast_exit_lock: false, forecast_zone1_forced: false, allocated_power: 400,
       settings_rev: 0, dist_rev: 0,
     };
@@ -211,10 +212,10 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
   // bei jedem get_status frisch, damit Zyklus-Schalter, gespeicherte Offsets und
   // geänderte Kapazitätssensoren sofort in der Vorschau wirken.
   const OFFSET_SOURCES = {
-    ac: ["dyn_ac_enabled", "ac_offset", "dyn_ac"],
-    z1: ["dyn_z1_enabled", "offset_1", "dyn_z1"],
-    z1_night: ["dyn_z1_night_enabled", "offset_1_night", "dyn_z1_night"],
-    z2: ["dyn_z2_enabled", "offset_2", "dyn_z2"],
+    ac: ["dyn_ac_enabled", "ac_offset"],
+    z1: ["dyn_z1_enabled", "offset_1"],
+    z1_night: ["dyn_z1_night_enabled", "offset_1_night"],
+    z2: ["dyn_z2_enabled", "offset_2"],
   };
   const KWH_SCALE = { wh: 0.001, mwh: 1000 };
   function computeSnapshotExtras(entryId) {
@@ -222,7 +223,7 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
     const st = inst.status, s = inst.settings;
     const night = !!(st.dark && s.z1_night_enabled);
     const zone = st.charge_session === "ac_charge" ? "ac" : st.cycle_active ? (night ? "z1_night" : "z1") : "z2";
-    const [enabledKey, staticKey, dynKey] = OFFSET_SOURCES[zone];
+    const [enabledKey, staticKey] = OFFSET_SOURCES[zone];
     const dynamic = !!s[enabledKey];
     const capSensor = (distConfig[inst.grid_sensor] || {})[`inst_${entryId}_capacity_sensor`];
     const capState = capSensor ? STATES[capSensor] : null;
@@ -230,7 +231,7 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
     const capKwh = capState ? parseFloat(capState.state) * (KWH_SCALE[unit] ?? 1) : NaN;
     return {
       offset_zone: zone, offset_dynamic: dynamic, offset_static: s[staticKey],
-      offset_value: dynamic ? st[dynKey] : s[staticKey],
+      offset_value: dynamic ? 0 : s[staticKey],
       capacity_kwh: Number.isFinite(capKwh) ? capKwh : null,
     };
   }
