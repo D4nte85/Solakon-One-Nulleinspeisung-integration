@@ -79,6 +79,8 @@ async function run(scenario, lang) {
         const inp = sr.querySelector('#content input[type="number"]');
         if (inp) { inp.value = "2.5"; fire(inp, "change"); await shot(`${prefix}/pi-dirty`); }
         click(sr.querySelector("#save-bar button")); await shot(`${prefix}/pi-saved`);
+        const leer = sr.querySelector('#content input[type="number"]');
+        if (leer) { leer.value = "7"; fire(leer, "change"); leer.value = ""; fire(leer, "change"); await shot(`${prefix}/pi-cleared`); }
       }
       if (id === "surplus") {
         const cb = sr.querySelector('#content input[data-key="surplus_enabled"]');

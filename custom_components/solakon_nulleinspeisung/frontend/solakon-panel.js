@@ -4,6 +4,9 @@
 
 const DOMAIN = "solakon_nulleinspeisung";
 
+// Text für den Einsatz in HTML maskieren.
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+
 // Zone colors and icons — not translated
 const ZONE_STYLE = {
   0: { color: "#f59e0b", icon: "☀️" },
@@ -313,6 +316,9 @@ class ConfigBuffer {
 
   // Änderung puffern.
   set(key, value) { this.dirty[key] = value; }
+
+  // Gepufferte Änderung verwerfen.
+  discard(key) { delete this.dirty[key]; }
 
   // True, solange ungespeicherte Änderungen anliegen.
   get isDirty() { return Object.keys(this.dirty).length > 0; }
@@ -702,7 +708,7 @@ class SolakonPanel extends HTMLElement {
         const id = inst.entry_id;
         return `<div class="ov-card" id="ov-card-${id}" data-eid="${id}">
           <div class="ov-hdr" id="ov-hdr-${id}">
-            <span id="ov-icon-${id}"></span> ${inst.instance_name}<span id="ov-err-${id}"></span>
+            <span id="ov-icon-${id}"></span> ${esc(inst.instance_name)}<span id="ov-err-${id}"></span>
           </div>
           <div class="ov-body">
             ${row(ov.soc || "", `ov-soc-${id}`)}
@@ -715,7 +721,7 @@ class SolakonPanel extends HTMLElement {
 
       const headerHtml = showGroupHdr ? `
         <div class="ov-group-hdr">
-          <span>${ov.group_prefix || ""}: ${g.label}</span>
+          <span>${ov.group_prefix || ""}: ${esc(g.label)}</span>
         </div>` : "";
 
       // Gesamtwerte in derselben Karten-/Zeilenform wie die Einzelgeräte.
@@ -1204,6 +1210,7 @@ ${this._textsMissing ? `
     return {
       get: k => this._cfg.get(k),
       set: (k, v) => { this._cfg.set(k, v); this._updateSaveBar(); },
+      discard: k => { this._cfg.discard(k); this._updateSaveBar(); },
       schema: this._schema.settings,
       label: f => this._fl(f.k),
       desc: f => this._fd(f.k),
@@ -1218,6 +1225,7 @@ ${this._textsMissing ? `
     return {
       get: k => this._distVal(k),
       set: (k, v) => this._setDistVal(k, v),
+      discard: k => { this._distBuf().discard(k); this._rerenderDist(); },
       schema: this._schema.distribution,
       label: f => f.label ?? (dt[`${f.lk}_lbl`] || f.k),
       desc: f => f.label != null ? null : (dt[`${f.lk}_desc`] || "").replace(/\n/g, "<br>"),
@@ -1242,7 +1250,15 @@ ${this._textsMissing ? `
     } else if (f.t === "num") {
       div = this._htmlEl(this._fieldHtml(label, desc,
         `<input type="number" ${src.attr(f)} ${this._numAttrs(field)} value="${cur ?? field?.default}"/>`));
-      div.querySelector("input").addEventListener("change", (e) => src.set(f.k, parseFloat(e.target.value)));
+      div.querySelector("input").addEventListener("change", (e) => {
+        // Leeres Feld: Änderung verwerfen, gespeicherten Wert wieder anzeigen.
+        if (e.target.value.trim() === "") {
+          src.discard(f.k);
+          e.target.value = src.get(f.k) ?? field?.default;
+          return;
+        }
+        src.set(f.k, parseFloat(e.target.value));
+      });
     } else if (f.t === "enum") {
       div = this._htmlEl(this._fieldHtml(label, desc,
         `<select ${src.attr(f)}>${(field?.choices || []).map(c =>
@@ -1724,7 +1740,7 @@ ${this._textsMissing ? `
     const mode = this._distVal("distribution_mode");
     const groupNumber = shownGroup.number != null ? (dt.group_number || "").replace("{n}", shownGroup.number) : "";
     const groupsNote = this._groups.length > 1
-      ? `<p class="desc" style="padding:0 0 8px">${dt.groups_note || ""} — <strong>${dt.group_prefix || ""}: ${shownGroup.label}</strong>${groupNumber ? ` · ${groupNumber}` : ""}</p>`
+      ? `<p class="desc" style="padding:0 0 8px">${dt.groups_note || ""} — <strong>${dt.group_prefix || ""}: ${esc(shownGroup.label)}</strong>${groupNumber ? ` · ${groupNumber}` : ""}</p>`
       : groupNumber ? `<p class="desc" style="padding:0 0 8px"><strong>${groupNumber}</strong></p>` : "";
     c.innerHTML = groupsNote;
 
@@ -1739,7 +1755,7 @@ ${this._textsMissing ? `
       const body = el.lastChild;
       const fields = card.inst
         ? shownGroup.instances.map(inst => ({ ...card.inst, k: `inst_${inst.entry_id}_${card.inst.k}`,
-            field: card.inst.k, inst: inst.entry_id, label: inst.instance_name }))
+            field: card.inst.k, inst: inst.entry_id, label: esc(inst.instance_name) }))
         : card.fields;
       for (const f of fields) body.appendChild(this._makeField(f, src));
       if (card.hdr === "global_hdr" && sisterDown) {
