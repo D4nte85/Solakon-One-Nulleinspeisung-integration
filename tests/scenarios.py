@@ -10,7 +10,7 @@ import random
 from datetime import datetime, timezone
 
 from tests import geraet, harness as h
-from tests.ha_stubs import ActiveConnection, _DtState
+from tests.ha_stubs import _DtState
 from custom_components.solakon_nulleinspeisung.migrations import SolakonSettingsStore
 from custom_components.solakon_nulleinspeisung.schema import InvalidSettings
 
@@ -606,10 +606,9 @@ async def _run_settings_spec(spec) -> dict:
            "settings": h.jsonable(coord.settings), "rejected": rejected}
     if spec["dist_save"]:
         hass.events = []
-        conn = ActiveConnection()
-        await h.integration._ws_save_distribution_config(
-            hass, conn, {"id": 7, "grid_sensor": "sensor.grid", "distribution": spec["dist"]})
-        rec["dist_save"] = {"events": hass.events, "sent": h.jsonable(conn.sent)}
+        sent = await h.ws_call(h.integration._ws_save_distribution_config, hass, 7,
+                               grid_sensor="sensor.grid", distribution=spec["dist"])
+        rec["dist_save"] = {"events": hass.events, "sent": h.jsonable(sent)}
     hass.events = []
     await coord.async_shutdown()
     await coord.async_shutdown()
@@ -658,20 +657,17 @@ async def _run_wiring() -> dict:
     ws = {}
     for name, (handler, extra) in handlers.items():
         hass.events = []
-        conn = ActiveConnection()
         for c in hass.data.get(C.DOMAIN, {}).values():
             c.integral = 12.5
-        await handler(hass, conn, {"id": 3, **extra})
-        ws[name] = {"sent": h.jsonable(conn.sent), "events": hass.events,
+        sent = await h.ws_call(handler, hass, 3, **extra)
+        ws[name] = {"sent": h.jsonable(sent), "events": hass.events,
                     "schema": sorted(str(k) for k in getattr(handler, "ws_schema", {})),
                     "admin": bool(getattr(handler, "ws_require_admin", False)),
                     "coords": {e: h.coord_state(c) for e, c in hass.data.get(C.DOMAIN, {}).items()}}
     for name in ("get_dist", "save_dist"):
         handler, extra = handlers[name]
         store = hass.data.pop(f"{C.DOMAIN}_group_store")
-        conn = ActiveConnection()
-        await handler(hass, conn, {"id": 4, **extra})
-        ws[name + "_no_store"] = h.jsonable(conn.sent)
+        ws[name + "_no_store"] = h.jsonable(await h.ws_call(handler, hass, 4, **extra))
         hass.data[f"{C.DOMAIN}_group_store"] = store
     rec["ws"] = ws
 

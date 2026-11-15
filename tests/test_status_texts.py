@@ -5,7 +5,6 @@ import asyncio
 import importlib
 
 from tests import harness as h
-from tests.ha_stubs import ActiveConnection
 
 integration = h.integration
 i18n = importlib.import_module(h.PKG + ".i18n")
@@ -14,16 +13,11 @@ i18n = importlib.import_module(h.PKG + ".i18n")
 def _coord(language: str):
     hass = h.FakeHass(language)
     h.install_groups(hass)
-    entry = h.FakeEntry("entry_a", h.entry_data("a"))
-    coord = h.coordinator_mod.SolakonCoordinator(hass, entry)
-    hass.data.setdefault(h.const.DOMAIN, {})[entry.entry_id] = coord
-    return hass, coord
+    return hass, h.make_coord(hass)
 
 
 def _status(hass, **extra) -> dict:
-    conn = ActiveConnection()
-    asyncio.run(integration._ws_get_status(hass, conn, {"id": 1, "entry_id": "entry_a", **extra}))
-    return conn.sent[0][2]
+    return asyncio.run(h.ws_call(integration._ws_get_status, hass, entry_id="entry_a", **extra))[0][2]
 
 
 def test_panelsprache_ueberschreibt_instanzsprache():

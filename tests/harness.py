@@ -13,6 +13,7 @@ import json
 import logging
 import sys
 import weakref
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -480,7 +481,75 @@ def entity_state(entity, static=False) -> dict:
     return rec
 
 
-async def ws_status(hass, entry_id) -> list:
+async def ws_call(handler, hass, msg_id: int = 1, **msg) -> list:
+    """WS-Handler mit einer frischen Verbindung aufrufen; liefert die gesendeten Nachrichten."""
     conn = ha_stubs.ActiveConnection()
-    await integration._ws_get_status(hass, conn, {"id": 1, "entry_id": entry_id})
-    return jsonable(conn.sent)
+    await handler(hass, conn, {"id": msg_id, **msg})
+    return conn.sent
+
+
+async def ws_status(hass, entry_id) -> list:
+    return jsonable(await ws_call(integration._ws_get_status, hass, entry_id=entry_id))
+
+
+def make_coord(hass, prefix: str = "a", stored: dict | None = None):
+    """Coordinator für `entry_<prefix>` anlegen und in `hass.data` eintragen; `stored` als Speicherstand."""
+    entry = FakeEntry(f"entry_{prefix}", entry_data(prefix))
+    if stored is not None:
+        put_store(hass, f"{const.DOMAIN}_{entry.entry_id}", stored)
+    coord = coordinator_mod.SolakonCoordinator(hass, entry)
+    hass.data.setdefault(const.DOMAIN, {})[entry.entry_id] = coord
+    return coord
+
+
+@dataclass(eq=False)
+class FakeMember:
+    """Attrappe für `grid_group.Member`; zählt SOC-Lesungen."""
+
+    member_id: str
+    grid_sensor: str = "sensor.grid"
+    regulating: bool = True
+    discharge: bool = True
+    surplus_active: bool = False
+    charge_session: str = "none"
+    allocated_power: float | None = None
+    soc: float | None = 50.0
+    limit: float = 800.0
+    zone3: float = 20.0
+    ac_target: float = 90.0
+    capacity: dict = field(default_factory=dict)
+    actual: float = 0.0
+    setpoint: float = 0.0
+    soc_reads: int = 0
+
+    def in_discharge_pool(self):
+        return self.regulating and self.discharge
+
+    def soc_reading(self):
+        self.soc_reads += 1
+        return self.soc
+
+    def hard_limit(self):
+        return self.limit
+
+    def zone3_limit(self):
+        return self.zone3
+
+    def ac_soc_target(self):
+        return self.ac_target
+
+    def capacity_kwh(self, entity_id):
+        return self.capacity.get(entity_id)
+
+    def actual_power(self):
+        return self.actual
+
+    def output_setpoint(self):
+        return self.setpoint
+
+
+def hass_with_members(*members) -> FakeHass:
+    """FakeHass, dessen `hass.data[DOMAIN]` die Mitglieder nach `member_id` hält."""
+    hass = FakeHass("de")
+    hass.data[const.DOMAIN] = {m.member_id: m for m in members}
+    return hass

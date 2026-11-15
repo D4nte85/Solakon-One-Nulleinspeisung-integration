@@ -6,16 +6,14 @@ import json
 import re
 
 from tests import harness as h
-from tests.ha_stubs import ActiveConnection
 
 PANEL = (h.ROOT / "custom_components/solakon_nulleinspeisung/frontend/solakon-panel.js").read_text(encoding="utf-8")
 MOCK = (h.ROOT / "index.html").read_text(encoding="utf-8")
 
 
 def _schema() -> dict:
-    conn = ActiveConnection()
-    asyncio.run(h.integration._ws_get_schema(h.FakeHass("de"), conn, {"id": 1}))
-    return json.loads(json.dumps(conn.sent[0][2]))
+    sent = asyncio.run(h.ws_call(h.integration._ws_get_schema, h.FakeHass("de")))
+    return json.loads(json.dumps(sent[0][2]))
 
 
 def _num_keys() -> set[str]:

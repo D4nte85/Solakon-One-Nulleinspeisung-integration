@@ -12,24 +12,8 @@ SWITCH_KEY = f"{DOMAIN}_soc_switch_state"
 SWITCH = {"distribution_mode": "soc_switch", "soc_switch_divergence": 5}
 
 
-class M:
-    """Minimales Mitglied für Pools und `soc_switch`."""
-
-    surplus_active = False
-    charge_session = "none"
-
-    def __init__(self, member_id, grid_sensor="sensor.grid", soc=50.0):
-        self.member_id, self.grid_sensor, self.soc = member_id, grid_sensor, soc
-        self.regulating = True
-
-    def soc_reading(self):
-        return self.soc
-
-
-def _hass(*members):
-    hass = h.FakeHass("de")
-    hass.data[DOMAIN] = {m.member_id: m for m in members}
-    return hass
+M = h.FakeMember
+_hass = h.hass_with_members
 
 
 def _load(hass):

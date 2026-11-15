@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import importlib
-from dataclasses import dataclass, field
 from pathlib import Path
 
 import pytest
@@ -13,59 +12,11 @@ group = importlib.import_module(h.PKG + ".grid_group")
 DOMAIN = h.const.DOMAIN
 
 
-@dataclass(eq=False)
-class M:
-    """Attrappe für group.Member; zählt SOC-Lesungen."""
-
-    member_id: str
-    grid_sensor: str = "sensor.grid"
-    regulating: bool = True
-    discharge: bool = True
-    surplus_active: bool = False
-    charge_session: str = "none"
-    allocated_power: float | None = None
-    soc: float | None = 50.0
-    limit: float = 800.0
-    zone3: float = 20.0
-    ac_target: float = 90.0
-    capacity: dict = field(default_factory=dict)
-    actual: float = 0.0
-    setpoint: float = 0.0
-    soc_reads: int = 0
-
-    def in_discharge_pool(self):
-        return self.regulating and self.discharge
-
-    def soc_reading(self):
-        self.soc_reads += 1
-        return self.soc
-
-    def hard_limit(self):
-        return self.limit
-
-    def zone3_limit(self):
-        return self.zone3
-
-    def ac_soc_target(self):
-        return self.ac_target
-
-    def capacity_kwh(self, entity_id):
-        return self.capacity.get(entity_id)
-
-    def actual_power(self):
-        return self.actual
-
-    def output_setpoint(self):
-        return self.setpoint
-
-
-class Hass:
-    def __init__(self, *members):
-        self.data = {DOMAIN: {m.member_id: m for m in members}}
+M = h.FakeMember
 
 
 def _group(*members, dist=None, soc_switch=None, on_change=None):
-    hass = Hass(*members)
+    hass = h.hass_with_members(*members)
     read = None if dist is None else (lambda: {**group.DIST_DEFAULTS, **dist})
     return hass, group.NetGroup(hass, "sensor.grid", dist=read, soc_switch=soc_switch,
                                 on_soc_switch_change=on_change)

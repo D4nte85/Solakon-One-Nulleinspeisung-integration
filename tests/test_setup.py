@@ -252,7 +252,6 @@ def test_instanzliste_nennt_eingerichtete_instanzen_am_netzsensor():
                h.FakeEntry("entry_c", h.entry_data("c", grid_sensor="sensor.grid_other"))]
     hass, _ = _group_setup([entries[0], entries[2]])
     hass.config_entries.entries = entries
-    conn = h.ha_stubs.ActiveConnection()
-    asyncio.run(h.integration._ws_get_all_instances(hass, conn, {"id": 1}))
-    instances = {i["entry_id"]: i["configured_members"] for i in conn.sent[0][2]["instances"]}
+    sent = asyncio.run(h.ws_call(h.integration._ws_get_all_instances, hass))
+    instances = {i["entry_id"]: i["configured_members"] for i in sent[0][2]["instances"]}
     assert instances == {"entry_a": 2, "entry_c": 1}

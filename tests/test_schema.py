@@ -8,7 +8,6 @@ import json
 import pytest
 
 from tests import harness as h
-from tests.ha_stubs import ActiveConnection
 
 schema = importlib.import_module(h.PKG + ".schema")
 const = h.const
@@ -91,12 +90,7 @@ def test_sanitize_schneidet_kommazahl_in_ganzzahlfeld_ab():
 
 
 def _coord(hass, stored=None):
-    entry = h.FakeEntry("entry_a", h.entry_data("a"))
-    if stored is not None:
-        h.put_store(hass, f"{C.DOMAIN}_entry_a", stored)
-    coord = h.coordinator_mod.SolakonCoordinator(hass, entry)
-    hass.data.setdefault(C.DOMAIN, {})["entry_a"] = coord
-    return coord
+    return h.make_coord(hass, stored=stored)
 
 
 def test_laden_setzt_zurueck_meldet_und_speichert():
@@ -155,9 +149,7 @@ def test_speichern_weist_ganze_menge_ab():
 
 
 def _ws(handler, hass, **msg):
-    conn = ActiveConnection()
-    asyncio.run(handler(hass, conn, {"id": 1, **msg}))
-    return conn.sent
+    return asyncio.run(h.ws_call(handler, hass, **msg))
 
 
 def test_ws_save_config_antwortet_mit_befunden():
