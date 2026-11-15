@@ -233,10 +233,8 @@ def test_neu_laden_nach_der_frist_stellt_settings_und_gruppe_wieder_her():
     assert h.groups_state(u.hass) == gruppen
 
 
-# ── Befunde der geschärften Attrappen (offen) ────────────────────────────────
+# ── Ausstehendes Speichern beim Abräumen (L1–L3) ────────────────────────────────
 
-@pytest.mark.xfail(strict=True, reason="Befund L1: Entladen schreibt ausstehendes async_delay_save nicht sofort; "
-                                        "Neu laden binnen der Frist lädt den alten Stand")
 def test_neu_laden_binnen_der_frist_sieht_den_letzten_stand():
     u = Umgebung("a")
 
@@ -250,8 +248,6 @@ def test_neu_laden_binnen_der_frist_sieht_den_letzten_stand():
     assert u.coord("a").cycle_active is True
 
 
-@pytest.mark.xfail(strict=True, reason="Befund L2: ausstehendes async_delay_save der gelöschten Instanz "
-                                        "legt ihren Store nach dem Löschen wieder an")
 def test_loeschen_binnen_der_frist_hinterlaesst_keinen_store():
     u = Umgebung("a")
 
@@ -265,8 +261,6 @@ def test_loeschen_binnen_der_frist_hinterlaesst_keinen_store():
     assert _key(u.entries["a"]) not in u.hass.storage
 
 
-@pytest.mark.xfail(strict=True, reason="Befund L3: ausstehendes async_delay_save des soc_switch-Zustands "
-                                        "legt den Gruppen-Store nach dem Löschen der letzten Instanz wieder an")
 def test_loeschen_der_letzten_instanz_binnen_der_frist_hinterlaesst_keinen_gruppen_store():
     u = Umgebung("ab")
     h.put_store(u.hass, DIST_KEY, {"sensor.grid": {"distribution_mode": "soc_switch"}})

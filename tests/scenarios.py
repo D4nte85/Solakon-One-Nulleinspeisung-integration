@@ -492,8 +492,8 @@ def _setup_env(spec, dist_store: bool = False):
         hass,
         dist={"sensor.grid": spec["dist"], **spec.get("dist_other", {})} if spec["has_dist_config"] else None,
         soc_switch=None if switch is None else {"sensor.grid": dict(switch)},
-        soc_switch_store=None if switch is None else h.ha_stubs.Store(hass, 1, "soc_switch"),
-        dist_store=h.ha_stubs.Store(hass, 2, "dist") if dist_store else None,
+        soc_switch_store=None if switch is None else h.migrations_mod.SolakonSocSwitchStore(hass, 1, "soc_switch"),
+        dist_store=h.migrations_mod.SolakonDistStore(hass, 2, "dist") if dist_store else None,
     )
     _apply_states(hass, {"sensor.grid": spec["grid"], "sensor.grid_other": spec["grid"]})
     _apply_states(hass, spec["shared"])

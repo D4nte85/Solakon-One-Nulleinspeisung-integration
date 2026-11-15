@@ -39,6 +39,7 @@ switch_mod = importlib.import_module(PKG + ".switch")
 number_mod = importlib.import_module(PKG + ".number")
 config_flow_mod = importlib.import_module(PKG + ".config_flow")
 group_store_mod = importlib.import_module(PKG + ".group_store")
+migrations_mod = importlib.import_module(PKG + ".migrations")
 
 DOMAIN = const.DOMAIN
 

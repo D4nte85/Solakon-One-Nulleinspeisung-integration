@@ -93,7 +93,30 @@ def _session_from_flags(data: dict) -> dict:
     return migrated
 
 
-class SolakonSettingsStore(Store):
+class SolakonStore(Store):
+    """Store, dessen ausstehender `async_delay_save` sich vor dem Abräumen sofort schreiben lässt."""
+
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self._pending = None
+
+    def async_delay_save(self, data_func, delay: float = 0) -> None:
+        """Wie `Store.async_delay_save`; merkt den Auftrag bis zu seinem Schreiben vor."""
+
+        def write():
+            self._pending = None
+            return data_func()
+
+        self._pending = write
+        super().async_delay_save(write, delay)
+
+    async def async_write_pending(self) -> None:
+        """Ausstehenden Auftrag jetzt schreiben; ohne Auftrag nichts."""
+        if self._pending is not None:
+            await self.async_save(self._pending())
+
+
+class SolakonSettingsStore(SolakonStore):
     """Settings-Speicher der Instanz `entry_id` unter `<DOMAIN>_<entry_id>`, in der aktuellen Speicherversion."""
 
     def __init__(self, hass: HomeAssistant, entry_id: str) -> None:
@@ -113,7 +136,7 @@ class SolakonSettingsStore(Store):
         return old_data
 
 
-class SolakonDistStore(Store):
+class SolakonDistStore(SolakonStore):
     """Verteilungsspeicher aller Netzgruppen."""
 
     async def _async_migrate_func(
@@ -129,7 +152,7 @@ class SolakonDistStore(Store):
         return {gk: _migrate_dist_mode(cfg) for gk, cfg in old_data.items()}
 
 
-class SolakonSocSwitchStore(Store):
+class SolakonSocSwitchStore(SolakonStore):
     """Speicher des `soc_switch`-Zustands aller Netzgruppen."""
 
     async def _async_migrate_func(

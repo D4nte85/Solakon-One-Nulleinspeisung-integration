@@ -585,8 +585,9 @@ class SolakonCoordinator:
         self.trackers.start()
 
     async def async_shutdown(self) -> None:
-        """Listener abräumen."""
+        """Listener abräumen, ausstehendes Speichern sofort schreiben."""
         self.trackers.stop()
+        await self._store.async_write_pending()
 
     async def async_update_settings(self, changes: dict[str, Any]) -> None:
         """Änderungen prüfen, mit der Kopplung von Zielladen und Regelung übernehmen und speichern.

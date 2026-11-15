@@ -142,6 +142,12 @@ class GroupStore:
             snapshot = {gk: dict(st) for gk, st in self.soc_switch.items()}
             self._soc_switch_store.async_delay_save(lambda: snapshot, 2)
 
+    async def async_write_pending(self) -> None:
+        """Ausstehendes Speichern von Verteilung und `soc_switch`-Zustand sofort schreiben."""
+        for store in (self._dist_store, self._soc_switch_store):
+            if store is not None:
+                await store.async_write_pending()
+
     def _sanitize_dist(self, stored: dict) -> dict:
         """Verteilung je Gruppe gegen DIST_SCHEMA prüfen; Zurückgesetztes melden und speichern."""
         groups = {}
