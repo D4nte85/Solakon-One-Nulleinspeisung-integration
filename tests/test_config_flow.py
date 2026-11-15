@@ -147,3 +147,21 @@ def test_anpassen_ohne_vorhandenes_geraet_nichts_vorgewaehlt():
     fh.config_entries.entries = [entry]
     form = _run(_options_flow(fh, entry).async_step_init(None))
     assert "device" not in {k for k, v in _defaults(form).items() if v}
+
+
+def test_anpassen_uebernimmt_instanznamen_als_titel():
+    fh = _hass()
+    entry = h.FakeEntry("entry_a", {**h.entry_data("a"), C.CONF_INSTANCE_NAME: "Alt"}, title="Alt")
+    fh.config_entries.entries = [entry]
+    opt = _options_flow(fh, entry)
+    opt._finish({C.CONF_INSTANCE_NAME: "Neu"})
+    assert entry.data[C.CONF_INSTANCE_NAME] == "Neu"
+    assert entry.title == "Neu"
+
+
+def test_unveraenderter_instanzname_laesst_titel_stehen():
+    fh = _hass()
+    entry = h.FakeEntry("entry_a", {**h.entry_data("a"), C.CONF_INSTANCE_NAME: "Alt"}, title="Von Hand")
+    fh.config_entries.entries = [entry]
+    _options_flow(fh, entry)._finish({C.CONF_INSTANCE_NAME: "Alt"})
+    assert entry.title == "Von Hand"

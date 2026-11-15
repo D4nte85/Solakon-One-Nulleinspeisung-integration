@@ -185,10 +185,17 @@ class SolakonOptionsFlow(_EntityFlow, config_entries.OptionsFlow):
         return await self._show_device(entry.device_id if entry is not None else None)
 
     def _finish(self, data: dict) -> FlowResult:
-        """Entitäten-Zuweisung in `entry.data` speichern; der Reload läuft über den Update-Listener."""
+        """Entitäten-Zuweisung in `entry.data` speichern; ein geänderter Instanzname wird Titel.
+
+        Der Reload läuft über den Update-Listener.
+        """
+        entry = self.config_entry
+        name = data.get(CONF_INSTANCE_NAME)
+        renamed = name is not None and name != entry.data.get(CONF_INSTANCE_NAME)
         self.hass.config_entries.async_update_entry(
-            self.config_entry,
-            data={**self.config_entry.data, **data},
+            entry,
+            data={**entry.data, **data},
+            title=name if renamed else entry.title,
         )
         return self.async_create_entry(title="", data={})
 
