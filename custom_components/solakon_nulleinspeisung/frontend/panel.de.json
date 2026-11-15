@@ -496,7 +496,7 @@
     "unknown":  "{label}: unbekannte Einstellung"
   },
   "dist": {
-    "single_instance_note": "Leistungsverteilung wird nur bei mehreren Instanzen benötigt.",
+    "single_instance_note": "Leistungsverteilung wird nur bei mehreren Instanzen am selben Netz-Leistungssensor benötigt.",
     "loading":            "Lade…",
     "load_error":         "Verteilung konnte nicht geladen werden — Seite erneut öffnen.",
     "tab_lbl":            "⚖️ Verteilung",
@@ -509,7 +509,7 @@
     "global_max_inactive": "Das Gesamtlimit wirkt erst, wenn eine zweite Instanz dieser Netzgruppe läuft. Der Wert wird gespeichert.",
     "cap_hdr":                 "🔋 Kapazitätssensoren",
     "cap_sensor_desc":         "Batteriekapazitätssensor (in kWh) pro Instanz — bestimmt die Leistungsaufteilung bei Modus „Kapazitätsgewichtet\". Der Punkt neben dem Feld zeigt die Gültigkeit der Entity live: grün = liefert eine Zahl, gelb = existiert, aber unknown/unavailable oder ohne Zahl, rot = existiert nicht (Tippfehler prüfen):",
-    "cap_sensor_placeholder":  "sensor.solakon_one_batteriekapazitat",
+    "cap_sensor_ph":  "sensor.solakon_one_batteriekapazitat",
     "mode_hdr":           "⚖️ Verteilungs-Modus",
     "mode_lbl":           "Modus",
     "mode_desc":          "Gleichverteilung → jede aktive Instanz (Modus '1', Nulleinspeisung) erhält gleich viel\nSOC-gewichtet → Instanz mit mehr nutzbarer Energie (SOC über Minimum) erhält mehr Leistung, unabhängig von der Batteriegröße — SOC-Werte gleichen sich über Zeit an\nKapazitätsgewichtet → wie SOC-gewichtet, zusätzlich × Batteriekapazität (kWh) — sinnvoll bei unterschiedlich großen Batterien, damit der SOC aller Instanzen gleich schnell sinkt. Erfordert einen gültigen Kapazitätssensor pro Instanz unten.\nSOC-Umschaltung → immer nur eine Instanz entlädt exklusiv (100 %), die anderen stehen still. Übergabe an die Instanz mit dem höchsten verbleibenden SOC, sobald die aktive Instanz um die Divergenz-Schwelle unten gefallen ist — Geräte werden nacheinander abgearbeitet statt parallel angezapft.\n\nAC-Laden hat einen eigenen, unabhängigen Verteilungs-Pool (siehe Tab „AC Laden\") und gewichtet dort nach dem Platz bis zum Ladeziel.\n\nIst bei SOC-gewichtet/Kapazitätsgewichtet/SOC-Umschaltung der SOC-Sensor einer fremden Instanz gerade nicht verfügbar, fällt der Pool für diesen Zyklus auf Gleichverteilung zurück; fehlt bei Kapazitätsgewichtet nur eine Kapazität, auf SOC-gewichtet — erscheint als Meldung im Status-/Fehlerfeld, kein stiller Fallback.",

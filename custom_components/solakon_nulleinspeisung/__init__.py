@@ -63,22 +63,41 @@ def _coord_or_error(hass: HomeAssistant, connection: websocket_api.ActiveConnect
 async def _ws_get_all_instances(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
 ) -> None:
-    """WS: alle Instanzen mit Name, Netzsensor, Gruppennummer und Zahl der eingerichteten Instanzen am Netzsensor, nach Name sortiert."""
-    store = group_store.store_for(hass)
-    numbers = {} if store is None else store.numbers
+    """WS: alle Instanzen mit Name und Netzsensor, nach Name sortiert."""
     instances = []
     for entry_id, coord in hass.data.get(DOMAIN, {}).items():
         name = coord.entry.data.get(CONF_INSTANCE_NAME) or coord.entry.title or entry_id
-        grid_sensor = coord.entry.data.get(CONF_GRID_SENSOR, "")
         instances.append({
             "entry_id":      entry_id,
             "instance_name": name,
-            "grid_sensor":   grid_sensor,
-            "group_number":  numbers.get(grid_sensor),
-            "configured_members": group_store.configured_members(hass, grid_sensor),
+            "grid_sensor":   coord.entry.data.get(CONF_GRID_SENSOR, ""),
         })
     instances.sort(key=lambda x: x["instance_name"].lower())
     connection.send_result(msg["id"], {"instances": instances})
+
+
+@websocket_api.websocket_command({
+    vol.Required("type"): f"{DOMAIN}/get_groups",
+})
+@websocket_api.async_response
+async def _ws_get_groups(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """WS: Netzgruppen der geladenen Instanzen mit Netzsensor, Gruppennummer, geladenen Mitgliedern und Zahl der eingerichteten Instanzen."""
+    store = group_store.store_for(hass)
+    numbers = {} if store is None else store.numbers
+    members: dict[str, list[str]] = {}
+    for entry_id, coord in hass.data.get(DOMAIN, {}).items():
+        members.setdefault(coord.grid_sensor, []).append(entry_id)
+    connection.send_result(msg["id"], {"groups": [
+        {
+            "grid_sensor": grid_sensor,
+            "number":      numbers.get(grid_sensor),
+            "members":     ids,
+            "configured":  group_store.configured_members(hass, grid_sensor),
+        }
+        for grid_sensor, ids in members.items()
+    ]})
 
 
 @websocket_api.websocket_command({
@@ -227,7 +246,7 @@ async def _ws_get_schema(
 
 # In `async_setup` registrierte WebSocket-Commands.
 WS_COMMANDS = (
-    _ws_get_all_instances, _ws_get_config, _ws_save_config, _ws_get_status, _ws_get_schema,
+    _ws_get_all_instances, _ws_get_groups, _ws_get_config, _ws_save_config, _ws_get_status, _ws_get_schema,
     _ws_reset_integral, _ws_set_cycle, _ws_get_distribution_config, _ws_save_distribution_config,
 )
 

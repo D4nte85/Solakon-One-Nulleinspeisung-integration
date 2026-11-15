@@ -32,11 +32,17 @@ def test_layout_ohne_grenzen():
 
 
 def test_zahlenfelder_im_schema():
-    settings = _schema()["settings"]
+    schema = _schema()
+    fields = {**schema["distribution"], **schema["settings"]}
     keys = _num_keys()
     assert len(keys) >= 40
-    assert sorted(k for k in keys if settings.get(k, {}).get("kind") not in ("int", "float")) == []
-    assert sorted(k for k in keys if len(settings[k].get("ui") or ()) != 3) == []
+    assert sorted(k for k in keys if fields.get(k, {}).get("kind") not in ("int", "float")) == []
+    assert sorted(k for k in keys if len(fields[k].get("ui") or ()) != 3) == []
+
+
+def test_verteilungsseite_fuehrt_jedes_feld_der_verteilung():
+    layout = set(re.findall(r'\{ *k: *"([a-z0-9_]+)", *t: *"[a-z]+", *lk:', PANEL))
+    assert layout == set(_schema()["distribution"]) | {"capacity_sensor"}
 
 
 def test_mock_antwortet_wie_get_schema():

@@ -640,6 +640,7 @@ async def _run_wiring() -> dict:
 
     handlers = {
         "get_all_instances": (mod._ws_get_all_instances, {}),
+        "get_groups": (mod._ws_get_groups, {}),
         "get_config": (mod._ws_get_config, {"entry_id": "entry_a"}),
         "get_config_missing": (mod._ws_get_config, {"entry_id": "nope"}),
         "save_config": (mod._ws_save_config, {"entry_id": "entry_a", "changes": {"offset_1": 44}}),

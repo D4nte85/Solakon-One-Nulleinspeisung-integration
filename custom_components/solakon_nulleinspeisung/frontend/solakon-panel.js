@@ -29,9 +29,30 @@ const TABS = [
 // Settings, deren Änderung serverseitig weitere Settings mitschaltet: Zielladen und Regelung.
 const COUPLED_KEYS = ["regulation_enabled", "target_charge_enabled"];
 
-// Verteilungsmodi in Anzeigereihenfolge; Text je Modus unter `dist.mode_<modus>`.
-// Beschriftung der Verteilungsfelder in den Panel-Texten, für Fehlermeldungen.
-const DIST_LABELS = { global_max_power: "global_max_lbl", soc_switch_divergence: "soc_switch_divergence_lbl" };
+// Layout der Verteilungsseite: Karten mit Feldern wie im Settings-Layout. `lk` ist der Textschlüssel
+// unter `dist` (`<lk>_lbl`, `<lk>_desc`, `<lk>_ph`); `full` nur bei mindestens zwei geladenen Instanzen
+// der Netzgruppe; `activeIf` dimmt die Karte außerhalb dieses Modus; `inst` ist ein Feld je Instanz.
+// Grenzen, Defaults und Modi liefert get_schema.
+const DIST_LAYOUT = [
+  { hdr: "global_hdr", color: "#0891b2", fields: [{ k: "global_max_power", t: "num", lk: "global_max" }] },
+  { hdr: "mode_hdr", color: "#7c3aed", full: true, fields: [{ k: "distribution_mode", t: "enum", lk: "mode" }] },
+  { hdr: "cap_hdr", color: "#059669", full: true, desc: "cap_sensor_desc", activeIf: "capacity",
+    inst: { k: "capacity_sensor", t: "entity", lk: "cap_sensor" } },
+  { hdr: "soc_switch_hdr", color: "#ea580c", full: true, activeIf: "soc_switch",
+    fields: [{ k: "soc_switch_divergence", t: "num", lk: "soc_switch_divergence" }] },
+  { hdr: "global_sensors_hdr", color: "#0284c7", full: true, desc: "global_sensors_desc", fields: [
+    { k: "global_pv_forecast_today_sensor",    t: "entity", lk: "global_pv_today" },
+    { k: "global_pv_forecast_tomorrow_sensor", t: "entity", lk: "global_pv_tomorrow" },
+    { k: "global_surplus_lock_sensor",         t: "entity", lk: "global_surplus_lock" },
+    { k: "global_tariff_price_sensor",         t: "entity", lk: "global_tariff_price" },
+    { k: "global_tariff_cheap_entity",         t: "entity", lk: "global_tariff_cheap" },
+    { k: "global_tariff_exp_entity",           t: "entity", lk: "global_tariff_exp" },
+  ] },
+];
+// Textschlüssel je Verteilungsfeld aus DIST_LAYOUT.
+const DIST_TEXT_KEYS = Object.fromEntries(DIST_LAYOUT.flatMap(c => (c.fields || []).map(f => [f.k, f.lk])));
+// Schlüssel eines Felds je Instanz in der Verteilung: `inst_<entry_id>_<feld>`.
+const DIST_INST_KEY = /^inst_(.+)_([a-z_]+_sensor)$/;
 
 // Tab icons — not translated
 const TAB_ICONS = {
@@ -325,6 +346,7 @@ class SolakonPanel extends HTMLElement {
     this._allStatuses    = {};
     // Netzgruppen — Instanzen mit gleichem grid_power_sensor
     this._groups          = [];
+    this._groupInfo       = [];
     this._activeGroup     = null;
     // Verteilungs-Config je Netzgruppe: {groupKey: ConfigBuffer}
     this._dist           = {};
@@ -429,12 +451,17 @@ class SolakonPanel extends HTMLElement {
   async _loadInstances() {
     await this._loadSchema();
     try {
-      const res = await this._hass.callWS({ type: `${DOMAIN}/get_all_instances` });
+      const [res, grp] = await Promise.all([
+        this._hass.callWS({ type: `${DOMAIN}/get_all_instances` }),
+        this._hass.callWS({ type: `${DOMAIN}/get_groups` }),
+      ]);
       this._instances = res.instances || [];
+      this._groupInfo = grp.groups || [];
     } catch (_) {
       this._instances = this._entryId
         ? [{ entry_id: this._entryId, instance_name: "Solakon ONE", grid_sensor: "" }]
         : [];
+      this._groupInfo = [];
     }
     this._computeGroups();
     if (this._instances.length > 0 && !this._activeInstance) {
@@ -448,9 +475,7 @@ class SolakonPanel extends HTMLElement {
     this._renderInstBar();
     // Verteilungs-Config aller Gruppen vorab laden — die Übersicht liest daraus
     // SOC-Mittelwert und Verteilungs-Modus je Gruppe.
-    const distPreload = this._instances.length > 1
-      ? Promise.all(this._groups.map(g => this._loadDistConfig(g.key)))
-      : Promise.resolve();
+    const distPreload = Promise.all(this._groups.filter(g => g.isGroup).map(g => this._loadDistConfig(g.key)));
     await Promise.all([this._loadConfig(), distPreload]);
   }
 
@@ -463,26 +488,24 @@ class SolakonPanel extends HTMLElement {
     return areaId ? (this._hass?.areas?.[areaId]?.name || null) : null;
   }
 
-  // Gruppiert Instanzen nach grid_power_sensor. Instanzen ohne gesetzten Sensor
-  // fallen einzeln auf ihre eigene entry_id als Gruppenschlüssel zurück.
-  // Anzeigename ist der Bereich des Netzsensors, sonst sein Anzeigename, sonst
-  // die Entity-ID — der Gruppenschlüssel bleibt immer die Entity-ID.
+  // Netzgruppen aus get_groups; Instanzen in der Reihenfolge der Instanzliste. Eine Instanz,
+  // die dort fehlt (Rückfall ohne WS), bildet eine eigene Gruppe. Anzeigename ist der Bereich
+  // des Netzsensors, sonst sein Anzeigename, sonst die Entity-ID — der Schlüssel bleibt die Entity-ID.
+  // `isGroup`: mindestens zwei eingerichtete Instanzen, auch nicht geladene (deaktivierte).
   _computeGroups() {
-    const map = new Map();
+    const info = (this._groupInfo || []).map(g => ({ ...g, members: new Set(g.members) }));
+    const groups = info.map(g => ({
+      key: g.grid_sensor, number: g.number ?? null, configured: g.configured,
+      instances: this._instances.filter(i => g.members.has(i.entry_id)),
+    }));
     for (const inst of this._instances) {
-      const key = inst.grid_sensor || `__ungrouped__${inst.entry_id}`;
-      if (!map.has(key)) map.set(key, []);
-      map.get(key).push(inst);
+      if (info.some(g => g.members.has(inst.entry_id))) continue;
+      groups.push({ key: inst.grid_sensor || `__ungrouped__${inst.entry_id}`, number: null, configured: 1, instances: [inst] });
     }
-    this._groups = [...map.entries()].map(([key, instances]) => ({
-      key,
-      label: this._areaNameFor(key)
-             || this._hass?.states?.[key]?.attributes?.friendly_name
-             || key,
-      number: instances[0].group_number ?? null,
-      // Eingerichtete Instanzen am Netzsensor, auch nicht geladene (deaktivierte).
-      configured: Math.max(instances.length, ...instances.map(i => i.configured_members ?? 0)),
-      instances,
+    this._groups = groups.filter(g => g.instances.length).map(g => ({
+      ...g,
+      label: this._areaNameFor(g.key) || this._hass?.states?.[g.key]?.attributes?.friendly_name || g.key,
+      isGroup: g.configured > 1,
     }));
     this._groups.sort((a, b) => a.label.localeCompare(b.label));
   }
@@ -490,7 +513,7 @@ class SolakonPanel extends HTMLElement {
   // Eine Instanz der Gruppe läuft, eine weitere ist eingerichtet, aber nicht geladen:
   // Das Gesamtlimit existiert als Entität, wirkt aber noch nicht.
   _sisterDown(g) {
-    return !!g && g.instances.length === 1 && g.configured > 1;
+    return !!g && g.isGroup && g.instances.length === 1;
   }
 
   // Netzgruppe, die die Instanz `entryId` enthält.
@@ -567,7 +590,7 @@ class SolakonPanel extends HTMLElement {
     bar.innerHTML = "";
     if (subBar) subBar.innerHTML = "";
     const single = this._instances.length <= 1;
-    if (single && !this._sisterDown(this._groups[0])) return;
+    if (single && !this._groups.some(g => g.isGroup)) return;
 
     const dt = this._t.dist || {};
     const mkTab = (container, id, label, active) => {
@@ -1187,30 +1210,59 @@ ${this._textsMissing ? `
     }
   }
 
-  _makeField(f) {
-    const cur = this._cfg.get(f.k);
+  // Quelle der Settings-Felder für `_makeField`: Puffer, Schema und Texte unter `fields`.
+  _settingsSource() {
+    return {
+      get: k => this._cfg.get(k),
+      set: (k, v) => { this._cfg.set(k, v); this._updateSaveBar(); },
+      schema: this._schema.settings,
+      label: f => this._fl(f.k),
+      desc: f => this._fd(f.k),
+      placeholder: () => "sensor.xxx",
+      attr: f => f.t === "bool" ? `data-key="${f.k}"` : "",
+    };
+  }
+
+  // Quelle der Verteilungsfelder für `_makeField`: Puffer der Netzgruppe, Schema und Texte unter `dist`.
+  _distSource() {
+    const dt = this._t.dist || {};
+    return {
+      get: k => this._distVal(k),
+      set: (k, v) => this._setDistVal(k, v),
+      schema: this._schema.distribution,
+      label: f => f.label ?? (dt[`${f.lk}_lbl`] || f.k),
+      desc: f => f.label != null ? null : (dt[`${f.lk}_desc`] || "").replace(/\n/g, "<br>"),
+      placeholder: f => dt[`${f.lk}_ph`] || "",
+      choice: c => dt[`mode_${c}`] || c,
+      attr: f => f.inst ? `data-dist-inst="${f.inst}" data-dist-key="${f.field}"` : `data-dist-key="${f.k}"`,
+    };
+  }
+
+  // Feld des Layouts; `src` liefert Wert, Speichern, Schema und Texte (Standard: Settings).
+  _makeField(f, src = this._settingsSource()) {
+    const cur = src.get(f.k);
     let div = document.createElement("div");
     div.className = "field";
-    const label = this._fl(f.k);
-    const desc  = this._fd(f.k);
+    const label = src.label(f);
+    const desc  = src.desc(f);
+    const field = src.schema?.[f.k] ?? src.schema?.[f.field];
 
     if (f.t === "bool") {
-      div.innerHTML = `<label class="toggle"><input type="checkbox" data-key="${f.k}" ${cur ? "checked" : ""}/> ${label}</label><div class="desc">${desc}</div>`;
-      div.querySelector("input").addEventListener("change", (e) => {
-        this._cfg.set(f.k, e.target.checked);
-        this._updateSaveBar();
-      });
+      div.innerHTML = `<label class="toggle"><input type="checkbox" ${src.attr(f)} ${cur ? "checked" : ""}/> ${label}</label><div class="desc">${desc}</div>`;
+      div.querySelector("input").addEventListener("change", (e) => src.set(f.k, e.target.checked));
     } else if (f.t === "num") {
       div = this._htmlEl(this._fieldHtml(label, desc,
-        `<input type="number" ${this._numAttrs(this._schema.settings[f.k])} value="${cur ?? this._schema.settings[f.k]?.ui?.[0]}"/>`));
-      div.querySelector("input").addEventListener("change", (e) => {
-        this._cfg.set(f.k, parseFloat(e.target.value));
-        this._updateSaveBar();
-      });
+        `<input type="number" ${src.attr(f)} ${this._numAttrs(field)} value="${cur ?? field?.default}"/>`));
+      div.querySelector("input").addEventListener("change", (e) => src.set(f.k, parseFloat(e.target.value)));
+    } else if (f.t === "enum") {
+      div = this._htmlEl(this._fieldHtml(label, desc,
+        `<select ${src.attr(f)}>${(field?.choices || []).map(c =>
+          `<option value="${c}"${cur === c ? " selected" : ""}>${src.choice(c)}</option>`).join("")}</select>`));
+      div.querySelector("select").addEventListener("change", (e) => src.set(f.k, e.target.value));
     } else if (f.t === "entity") {
       const eid = `ep_${f.k}`;
       div = this._htmlEl(this._fieldHtml(label, desc,
-        this._entityRowHtml(cur || "", `list="${eid}_list" placeholder="sensor.xxx"`)
+        this._entityRowHtml(cur || "", `${src.attr(f)} list="${eid}_list" placeholder="${src.placeholder(f)}"`)
         + `<datalist id="${eid}_list"></datalist>`));
       const inp = div.querySelector("input");
       const dot = div.querySelector(".entity-dot");
@@ -1226,14 +1278,14 @@ ${this._textsMissing ? `
         });
       }
       this._bindEntityDot(inp, dot);
-      inp.addEventListener("change", () => { this._cfg.set(f.k, inp.value); this._updateSaveBar(); });
+      inp.addEventListener("change", () => src.set(f.k, inp.value));
     } else if (f.t === "note") {
       div.className = "field field-note";
       div.innerHTML = `<div class="desc">${desc}</div>`;
     }
     if (f.dimIf) {
       div.dataset.dimIf = f.dimIf;
-      div.classList.toggle("dimmed", !this._cfg.get(f.dimIf));
+      div.classList.toggle("dimmed", !src.get(f.dimIf));
     }
     return div;
   }
@@ -1522,7 +1574,9 @@ ${this._textsMissing ? `
     const errors = this._t.errors || {};
     const dt = this._t.dist || {};
     return JSON.parse(e.message).map(({ key, reason, min, max }) => {
-      const label = this._t.fields?.[key]?.l || dt[DIST_LABELS[key]] || key;
+      const inst = key.match(DIST_INST_KEY);
+      const label = this._t.fields?.[key]?.l || dt[`${DIST_TEXT_KEYS[key]}_lbl`]
+        || (inst && `${this._instances.find(i => i.entry_id === inst[1])?.instance_name ?? inst[1]}: ${dt.cap_hdr || ""}`) || key;
       // Offene Grenze: nur die gesetzte Seite nennen.
       const kind = reason === "range" && max == null ? "range_min" : reason === "range" && min == null ? "range_max" : reason;
       return (errors[kind] || reason).replace("{label}", label).replace("{min}", min).replace("{max}", max);
@@ -1654,33 +1708,17 @@ ${this._textsMissing ? `
     this._rerenderDist();
   }
 
-  _distInstVal(entry_id, key) {
-    return this._distVal(`inst_${entry_id}_${key}`) ?? "";
-  }
-
-  _setDistInstVal(entry_id, key, value) {
-    this._setDistVal(`inst_${entry_id}_${key}`, value);
-  }
-
-  // Instanzen der aktuell aktiven Gruppe — bei nur einer Gruppe alle Instanzen.
-  _currentGroupInstances() {
-    if (this._groups.length <= 1) return this._instances;
-    const g = this._activeGroupObj();
-    return g ? g.instances : this._instances;
-  }
-
   _renderVerteilung(c) {
     const dt = this._t.dist || {};
     const shownGroup = this._groups.length > 1 ? this._activeGroupObj() : this._groups[0];
-    const sisterDown = this._sisterDown(shownGroup);
-    // Modus, Kapazitäts- und globale Sensoren nur, wenn mehrere Instanzen laufen.
-    const fullDist = this._instances.length > 1;
-
-    if (!fullDist && !sisterDown) {
+    if (!shownGroup?.isGroup) {
       c.innerHTML = `<p style="font-size:.88em;color:var(--secondary-text-color,#888);padding:12px 0">
         ${dt.single_instance_note || ""}</p>`;
       return;
     }
+    const sisterDown = this._sisterDown(shownGroup);
+    // Modus, Kapazitäts- und globale Sensoren nur, wenn mindestens zwei Instanzen der Gruppe laufen.
+    const fullDist = shownGroup.instances.length > 1;
 
     const gk = this._distGroupKey();
     const buf = this._distBuf(gk);
@@ -1695,82 +1733,34 @@ ${this._textsMissing ? `
       return;
     }
 
-    const mode          = this._distVal("distribution_mode")     ?? "equal";
-    const globalMax     = this._distVal("global_max_power")      ?? 800;
-    const socSwitchDiv  = this._distVal("soc_switch_divergence") ?? 5;
-
-    // Instanzübergreifende Entity-Picker: jede Instanz
-    // kann lokal überschreiben (Zonen-/Tarif-Tab), sonst greift dieser Wert.
-    const GLOBAL_SENSOR_FIELDS = [
-      { key: "global_pv_forecast_today_sensor",    lk: "global_pv_today" },
-      { key: "global_pv_forecast_tomorrow_sensor", lk: "global_pv_tomorrow" },
-      { key: "global_surplus_lock_sensor",         lk: "global_surplus_lock" },
-      { key: "global_tariff_price_sensor",         lk: "global_tariff_price" },
-      { key: "global_tariff_cheap_entity",         lk: "global_tariff_cheap" },
-      { key: "global_tariff_exp_entity",           lk: "global_tariff_exp" },
-    ];
-    const globalSensorCards = GLOBAL_SENSOR_FIELDS.map(f => this._fieldHtml(
-      dt[`${f.lk}_lbl`] || f.key, dt[`${f.lk}_desc`] || "",
-      this._entityRowHtml(this._distVal(f.key) || "",
-        `placeholder="${dt[`${f.lk}_ph`] || ""}" data-dist-key="${f.key}"`),
-    )).join("");
-
-    const instCards = this._currentGroupInstances().map(inst => this._fieldHtml(
-      inst.instance_name, null,
-      this._entityRowHtml(this._distInstVal(inst.entry_id, "capacity_sensor"),
-        `placeholder="${dt.cap_sensor_placeholder || ""}" data-dist-inst="${inst.entry_id}" data-dist-key="capacity_sensor"`),
-    )).join("");
-
-    const isGroup = this._currentGroupInstances().length > 1 || sisterDown;
-    const inactiveNote = sisterDown
-      ? `<div class="desc" style="margin-top:8px;color:var(--warning-color,#f59e0b)">⚠️ ${dt.global_max_inactive || ""}</div>`
-      : "";
-    const groupNumber = isGroup && shownGroup?.number != null
-      ? (dt.group_number || "").replace("{n}", shownGroup.number)
-      : "";
+    const mode = this._distVal("distribution_mode");
+    const groupNumber = shownGroup.number != null ? (dt.group_number || "").replace("{n}", shownGroup.number) : "";
     const groupsNote = this._groups.length > 1
-      ? `<p class="desc" style="padding:0 0 8px">${dt.groups_note || ""} — <strong>${dt.group_prefix || ""}: ${shownGroup?.label ?? ""}</strong>${groupNumber ? ` · ${groupNumber}` : ""}</p>`
+      ? `<p class="desc" style="padding:0 0 8px">${dt.groups_note || ""} — <strong>${dt.group_prefix || ""}: ${shownGroup.label}</strong>${groupNumber ? ` · ${groupNumber}` : ""}</p>`
       : groupNumber ? `<p class="desc" style="padding:0 0 8px"><strong>${groupNumber}</strong></p>` : "";
+    c.innerHTML = groupsNote;
 
-    c.innerHTML = `
-      ${groupsNote}
-      ${isGroup ? this._cardHtml("#0891b2", dt.global_hdr || "", this._fieldHtml(dt.global_max_lbl || "", dt.global_max_desc || "",
-        `<input type="number" ${this._numAttrs(this._schema.distribution.global_max_power)} value="${globalMax}" data-dist-key="global_max_power"/>`) + inactiveNote,
-        { extraClass: "top-item" }) : ""}
-
-      ${!fullDist ? "" : `${this._cardHtml("#7c3aed", dt.mode_hdr || "", this._fieldHtml(dt.mode_lbl || "", (dt.mode_desc || "").replace(/\n/g, "<br>"),
-        `<select data-dist-key="distribution_mode">${this._distModes().map(m =>
-          `<option value="${m}"${mode === m ? " selected" : ""}>${dt[`mode_${m}`] || ""}</option>`).join("")}</select>`),
-        { extraClass: "top-item" })}
-
-      ${this._cardHtml("#059669", dt.cap_hdr || "", `<div class="desc" style="margin-bottom:8px">${dt.cap_sensor_desc || ""}</div>${instCards}`,
-        { extraClass: "top-item", style: mode !== "capacity" ? "opacity:.4;pointer-events:none" : "" })}
-
-      ${this._cardHtml("#ea580c", dt.soc_switch_hdr || "", this._fieldHtml(dt.soc_switch_divergence_lbl || "", dt.soc_switch_divergence_desc || "",
-        `<input type="number" ${this._numAttrs(this._schema.distribution.soc_switch_divergence)} value="${socSwitchDiv}" data-dist-key="soc_switch_divergence"/>`),
-        { extraClass: "top-item", style: mode !== "soc_switch" ? "opacity:.4;pointer-events:none" : "" })}
-
-      ${this._cardHtml("#0284c7", dt.global_sensors_hdr || "", `<div class="desc" style="margin-bottom:8px">${dt.global_sensors_desc || ""}</div>${globalSensorCards}`,
-        { extraClass: "top-item" })}`}
-
-      ${this._saveBarHtml("dist-save-bar", dt, "_saveDistConfig", buf.isDirty)}
-    `;
-
-    c.querySelectorAll("[data-dist-key]").forEach(el => {
-      const key  = el.dataset.distKey;
-      const inst = el.dataset.distInst;
-      el.addEventListener("change", () => {
-        const val = el.type === "checkbox" ? el.checked
-                  : el.type === "number"   ? parseFloat(el.value)
-                  : el.value;
-        if (inst) this._setDistInstVal(inst, key, val);
-        else      this._setDistVal(key, val);
+    const src = this._distSource();
+    for (const card of DIST_LAYOUT) {
+      if (card.full && !fullDist) continue;
+      const el = this._cardEl(card.color, dt[card.hdr] || "", {
+        extraClass: "top-item",
+        style: card.activeIf && mode !== card.activeIf ? "opacity:.4;pointer-events:none" : "",
+        body: card.desc ? `<div class="desc" style="margin-bottom:8px">${dt[card.desc] || ""}</div>` : "",
       });
-    });
-
-    c.querySelectorAll(".entity-row").forEach(row => {
-      this._bindEntityDot(row.querySelector("input"), row.querySelector(".entity-dot"));
-    });
+      const body = el.lastChild;
+      const fields = card.inst
+        ? shownGroup.instances.map(inst => ({ ...card.inst, k: `inst_${inst.entry_id}_${card.inst.k}`,
+            field: card.inst.k, inst: inst.entry_id, label: inst.instance_name }))
+        : card.fields;
+      for (const f of fields) body.appendChild(this._makeField(f, src));
+      if (card.hdr === "global_hdr" && sisterDown) {
+        body.insertAdjacentHTML("beforeend",
+          `<div class="desc" style="margin-top:8px;color:var(--warning-color,#f59e0b)">⚠️ ${dt.global_max_inactive || ""}</div>`);
+      }
+      c.appendChild(el);
+    }
+    c.insertAdjacentHTML("beforeend", this._saveBarHtml("dist-save-bar", dt, "_saveDistConfig", buf.isDirty));
   }
 
   disconnectedCallback() {

@@ -496,7 +496,7 @@
     "unknown":  "{label}: unknown setting"
   },
   "dist": {
-    "single_instance_note": "Power distribution is only needed with multiple instances.",
+    "single_instance_note": "Power distribution is only needed with multiple instances on the same grid power sensor.",
     "tab_lbl":            "⚖️ Distribution",
     "group_prefix":       "Area",
     "groups_note":        "Instances are grouped automatically by their configured grid power sensor — each grid group (e.g. multiple smart meters for separate circuits) gets its own, independent power distribution. With only one group this grouping is invisible, there's just a single shared pool. The displayed name is the Home Assistant area of the grid sensor, otherwise its display name.",
@@ -509,7 +509,7 @@
     "global_max_inactive": "The total limit only takes effect once a second instance of this grid group is running. The value is saved.",
     "cap_hdr":                 "🔋 Capacity Sensors",
     "cap_sensor_desc":         "Battery capacity sensor (in kWh) per instance — used to weight the power split in \"Capacity-weighted\" mode. The dot next to the field shows entity validity live: green = provides a number, amber = exists but unknown/unavailable or not numeric, red = does not exist (check for typos):",
-    "cap_sensor_placeholder":  "sensor.solakon_one_battery_capacity",
+    "cap_sensor_ph":  "sensor.solakon_one_battery_capacity",
     "mode_hdr":           "⚖️ Distribution Mode",
     "mode_lbl":           "Mode",
     "mode_desc":          "Equal → each active instance (mode '1', zero feed-in) receives the same share\nSOC-weighted → instance with more usable energy (SOC above minimum) gets more power, regardless of battery size — SOC values equalise over time\nCapacity-weighted → like SOC-weighted, additionally × battery capacity (kWh) — useful with differently sized batteries, so the SOC of all instances drops at the same rate. Requires a valid capacity sensor per instance below.\nSOC-switching → only one instance discharges at a time, exclusively (100 %), the others sit idle. Hands over to the instance with the highest remaining SOC once the active one has dropped by the divergence threshold — instances are worked through one after another instead of drawing on all of them in parallel.\n\nAC charging has its own, independent distribution pool (see the \"AC Charging\" tab), weighted there by the room left to the charge target.\n\nIf, under SOC-weighted/Capacity-weighted/SOC-switching, another instance's SOC sensor is currently unavailable, the pool falls back to equal distribution for that cycle; if only a capacity is missing under Capacity-weighted, it falls back to SOC-weighted — shown as a message in the status/error field, never a silent fallback.",

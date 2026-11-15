@@ -246,12 +246,12 @@ def test_loeschen_bei_deaktivierter_schwester_entfernt_gesamtlimit_und_geraet():
     assert h.stored(hass, f"{DOMAIN}_group_numbers") == {"sensor.grid": 1}
 
 
-def test_instanzliste_nennt_eingerichtete_instanzen_am_netzsensor():
+def test_netzgruppen_nennen_geladene_und_eingerichtete_instanzen():
     """Das Panel zeigt das Gesamtlimit, sobald zwei Instanzen eingerichtet sind, auch wenn nur eine läuft."""
     entries = [h.FakeEntry("entry_a", h.entry_data("a")), h.FakeEntry("entry_b", h.entry_data("b")),
                h.FakeEntry("entry_c", h.entry_data("c", grid_sensor="sensor.grid_other"))]
     hass, _ = _group_setup([entries[0], entries[2]])
     hass.config_entries.entries = entries
-    sent = asyncio.run(h.ws_call(h.integration._ws_get_all_instances, hass))
-    instances = {i["entry_id"]: i["configured_members"] for i in sent[0][2]["instances"]}
-    assert instances == {"entry_a": 2, "entry_c": 1}
+    sent = asyncio.run(h.ws_call(h.integration._ws_get_groups, hass))
+    groups = {g["grid_sensor"]: (g["members"], g["configured"]) for g in sent[0][2]["groups"]}
+    assert groups == {"sensor.grid": (["entry_a"], 2), "sensor.grid_other": (["entry_c"], 1)}
