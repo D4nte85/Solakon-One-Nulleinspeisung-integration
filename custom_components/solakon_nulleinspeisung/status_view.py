@@ -3,7 +3,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from .const import DYN_ZONES, S_REGULATION_ENABLED, dyn_key
+from .const import DYN_ZONES, S_REGULATION_ENABLED, S_Z1_NIGHT_ENABLED, dyn_key
+from .dynamic_offset import offset_params
 
 if TYPE_CHECKING:
     from .coordinator import SolakonCoordinator
@@ -15,8 +16,8 @@ def snapshot(coord: SolakonCoordinator) -> dict[str, Any]:
     Offsetzone: AC-Laden, sonst Zone 1 bei aktivem Zyklus (bei Dunkelheit Nacht-Offset), sonst Zone 2.
     Kapazität in kWh aus dem Verteilungs-Sensor der Instanz, None ohne gültigen Wert.
     """
-    offset_zone = coord.offset_zone()
-    offset_dynamic, offset_static, offset_value = coord.dyn.offset(offset_zone, coord.settings)
+    offset_zone = coord.offset_zone(coord.settings[S_Z1_NIGHT_ENABLED])
+    offset_dynamic, offset_static, offset_value = coord.dyn.offset(offset_zone, offset_params(coord.settings))
     cap_sensor = str(coord.group.dist_cfg().get(f"inst_{coord.entry.entry_id}_capacity_sensor", ""))
     return {
         "offset_zone": offset_zone,

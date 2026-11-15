@@ -74,13 +74,13 @@ def test_je_fall_ein_treffer(kw, name):
     assert _decide(**kw).name == name
 
 
-@pytest.mark.parametrize("below_exp, cycle, rest", [(False, True, None), (True, False, True)])
+@pytest.mark.parametrize("below_exp, cycle, rest", [(False, True, None), (True, False, "0")])
 def test_0b_in_tarifsperre_ruht(below_exp, cycle, rest):
     """Issue #57: 0B startet in der Tarifsperre keinen Zyklus und führt in den Ruhezustand."""
     d = _decide(surplus_active=True, cycle_active=True, mode="1", at_rest=False, soc=96, below_exp=below_exp)
     assert d.name == "0B"
     assert d.transition["flags"].cycle_active is cycle
-    assert d.transition.get("rest") is rest
+    assert d.transition.get("rest") == rest
 
 
 @pytest.mark.parametrize("kw, name", [
@@ -131,7 +131,7 @@ def test_d_durch_tarif_lock_gesperrt():
     assert _decide(cycle_active=True, below_exp=True) is None
 
 
-@pytest.mark.parametrize("cycle_active, rest", [(False, True), (True, False)])
+@pytest.mark.parametrize("cycle_active, rest", [(False, "0"), (True, None)])
 def test_end_charge_ruhe_nur_ohne_zyklus(cycle_active, rest):
     d = _decide(ac_enabled=True, session="ac_charge", mode="3", at_rest=False, soc=95,
                 cycle_active=cycle_active)
@@ -444,7 +444,7 @@ def test_zb_vor_tarifsperre():
 def test_zb_ruht_wie_tm():
     d = _decide(**TARGET, battery_priority=True, mode="1", at_rest=False, cycle_active=True)
     assert d.transition == {"reset_integral": True, "flags": zones.FlagUpdate(cycle_active=False),
-                            "output": 0, "rest": True}
+                            "output": 0, "rest": "0"}
 
 
 @pytest.mark.parametrize("kw", [

@@ -346,7 +346,11 @@ def entity_registry_get(hass):
     return hass.entity_registry
 
 
-class ConfigEntryNotReady(Exception):
+class HomeAssistantError(Exception):
+    pass
+
+
+class ConfigEntryNotReady(HomeAssistantError):
     pass
 
 
@@ -432,7 +436,8 @@ def install() -> None:
             SelectSelector=SelectSelector, SelectSelectorConfig=SelectSelectorConfig,
             SelectSelectorMode=SelectSelectorMode, SelectOptionDict=SelectOptionDict,
             BooleanSelector=BooleanSelector)
-    _module("homeassistant.exceptions", ConfigEntryNotReady=ConfigEntryNotReady)
+    _module("homeassistant.exceptions", ConfigEntryNotReady=ConfigEntryNotReady,
+            HomeAssistantError=HomeAssistantError)
     _module("homeassistant.components.http", StaticPathConfig=StaticPathConfig)
     _module("homeassistant.components.websocket_api", websocket_command=websocket_command,
             async_response=async_response, require_admin=require_admin,

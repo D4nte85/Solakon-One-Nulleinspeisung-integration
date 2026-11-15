@@ -41,7 +41,7 @@ from .const import (
     CONF_ACTIVE_POWER, CONF_DISCHARGE_CURRENT, CONF_TIMEOUT_SET, CONF_MODE_SELECT,
     CONF_EXPORT_LIMIT, MODE_DISABLED, MODE_DISCHARGE, MODE_AC_CHARGE, S_REGULATION_ENABLED,
     S_ZONE3_LIMIT, DEVICE_MAX_CURRENT, S_HARD_LIMIT_Z0, S_HARD_LIMIT_Z1, S_PV_RESERVE,
-    S_AC_SOC_TARGET, S_AC_POWER_LIMIT, S_REST_IN_DISCHARGE, S_PI_ENABLED, S_Z1_NIGHT_ENABLED,
+    S_AC_SOC_TARGET, S_AC_POWER_LIMIT, S_REST_IN_DISCHARGE, S_PI_ENABLED,
     S_TARGET_CHARGE_ENABLED, CHARGE_SESSION_KEY, CHARGE_SESSIONS, SESSION_AC, SESSION_NONE,
 )
 
@@ -110,7 +110,7 @@ class SolakonCoordinator:
         self.last_action_ts: float = time.time()
         self.out = Output(
             lambda value: self._set_number(self.entry.data[CONF_ACTIVE_POWER], value),
-            self._read_actual, lambda: self.settings, self._warn_hardware,
+            self._read_actual, self._warn_hardware,
         )
 
         self.dyn = DynamicOffset()
@@ -359,9 +359,9 @@ class SolakonCoordinator:
             self._setting(S_TARGET_CHARGE_ENABLED, bool), self.charging_to_target,
         )
 
-    def offset_zone(self) -> str:
-        """Offsetzone des Regelzustands; Nacht-Offset bei Dunkelheit, wenn eingeschaltet."""
-        night = self.night.dark and bool(self.settings.get(S_Z1_NIGHT_ENABLED, False))
+    def offset_zone(self, night_enabled: bool) -> str:
+        """Offsetzone des Regelzustands; Nacht-Offset bei Dunkelheit, wenn `night_enabled`."""
+        night = self.night.dark and night_enabled
         return DynamicOffset.zone_of(self.charge_session == SESSION_AC, self.cycle_active, night)
 
     # ── Darstellen: Entity-Listener ──────────────────────────────────────────
@@ -436,12 +436,12 @@ class SolakonCoordinator:
         self._messages.hardware((key, params))
         _LOGGER.error("Solakon: %s%s", self._tr(key, **params), log_suffix)
 
-    async def _handle_output_stall(self, limit: float) -> None:
+    async def _handle_output_stall(self, limit: float, rest_in_discharge: bool) -> None:
         """Stillstand prüfen und das Urteil umsetzen.
 
         `REWRITTEN` setzt nur die letzte Aktion. `RECOVERY`: Schreibwarnung,
-        Integral-Reset, Output 0, Timer-Toggle, Ruhezustand — Fall D holt im
-        Folgezyklus zurück.
+        Integral-Reset, Output 0, Timer-Toggle, Ruhezustand im Ruhemodus laut
+        `rest_in_discharge` — Fall D holt im Folgezyklus zurück.
         """
         verdict = await self.out.check_stall(limit)
         if verdict is None:
@@ -452,7 +452,7 @@ class SolakonCoordinator:
             return
         self._warn_hardware("warn_output_stuck", {"actual": actual, "limit": limit},
                             f" (Versuch {self.out.stall_actions})")
-        await self._transition(reset_integral=True, output=0, rest=True)
+        await self._transition(reset_integral=True, output=0, rest=rest_mode(rest_in_discharge))
         self._set_last_action("act_output_recovery", actual=actual, limit=limit)
 
     async def _set_fixed_output(
@@ -481,14 +481,15 @@ class SolakonCoordinator:
         self, *, reset_integral: bool = False, flags: FlagUpdate | None = None,
         output: float | None = None, wait: bool = True, ac_charge_mode: bool = False,
         timer: bool = True, timer_first: bool = False, mode: str | None = None,
-        rest: bool = False,
+        rest: str | None = None,
     ) -> None:
         """Zustandsübergang in fester Folge: Integral, Flags, Output, Timer, Modus.
 
         `flags` setzt nur die Zustandsflags, die nicht None sind. `output` None lässt die
         Ausgangsleistung unberührt, `wait=False` schreibt sie ohne Konvergenzwarten.
         `timer_first` schaltet den Timer vor den Output. `mode` None schreibt keinen Modus.
-        `rest` schreibt den Ruhemodus statt `mode`; jeder geschriebene Modus setzt `resting`.
+        `rest` ist der Ruhemodus und wird statt `mode` geschrieben; jeder geschriebene Modus
+        setzt `resting` (wahr nur mit `rest`).
         """
         if reset_integral:
             self.pi.reset()
@@ -508,10 +509,10 @@ class SolakonCoordinator:
                 await self.out.set(output)
         if timer and not timer_first:
             await self.timeout.toggle()
-        if rest:
-            mode = rest_mode(self._setting(S_REST_IN_DISCHARGE, bool))
+        if rest is not None:
+            mode = rest
         if mode is not None:
-            self.resting = rest
+            self.resting = rest is not None
             await self._set_mode(mode)
 
     @property
@@ -590,29 +591,32 @@ class SolakonCoordinator:
     async def async_update_settings(self, changes: dict[str, Any]) -> None:
         """Änderungen prüfen, mit der Kopplung von Zielladen und Regelung übernehmen und speichern.
 
+        Läuft unter dem Lock: wartet einen laufenden Regelzyklus ab, damit dieser Settings,
+        `resting` und Integral nicht mitten im Zyklus wechseln sieht.
+
         InvalidSettings, wenn eine Änderung das Schema verletzt.
         """
         if findings := check(changes, SETTINGS_SCHEMA):
             raise InvalidSettings(findings)
-        changes = couple_target(self.settings, changes)
-        turning_off = (
-            self._regulation_on
-            and S_REGULATION_ENABLED in changes
-            and not changes[S_REGULATION_ENABLED]
-        )
-        if turning_off:
-            async with self._lock:
+        async with self._lock:
+            changes = couple_target(self.settings, changes)
+            turning_off = (
+                self._regulation_on
+                and S_REGULATION_ENABLED in changes
+                and not changes[S_REGULATION_ENABLED]
+            )
+            if turning_off:
                 await self._switch_off_sequence()
 
-        with self.trackers.refreshing():
-            if S_REST_IN_DISCHARGE in changes:
-                self.resting = False
-            if S_PI_ENABLED in changes and changes[S_PI_ENABLED] != self._setting(S_PI_ENABLED, bool):
-                self.pi.reset()
-            self.settings.update(changes)
-            self.settings_rev += 1
-            await self._store.async_save(self._store_data())
-            _LOGGER.info("Solakon: Einstellungen gespeichert")
+            with self.trackers.refreshing():
+                if S_REST_IN_DISCHARGE in changes and changes[S_REST_IN_DISCHARGE] != self._setting(S_REST_IN_DISCHARGE, bool):
+                    self.resting = False
+                if S_PI_ENABLED in changes and changes[S_PI_ENABLED] != self._setting(S_PI_ENABLED, bool):
+                    self.pi.reset()
+                self.settings.update(changes)
+                self.settings_rev += 1
+                await self._store.async_save(self._store_data())
+                _LOGGER.info("Solakon: Einstellungen gespeichert")
 
         self.notify_listeners()
 
@@ -714,14 +718,14 @@ class SolakonCoordinator:
         # StdDev ist eine Eigenschaft der Netzgruppe, nicht der einzelnen Instanz:
         # nur der Gruppen-Leader nimmt in den σ-Puffer auf, alle Instanzen übernehmen
         # σ aus der Netzgruppe.
+        cs = cycle_settings(self.settings)
         if self.group.leader() is self:
-            self.group.sigma.record(grid, time.monotonic(), self.settings)
-        self.dyn.update(self.group.sigma, self.settings)
+            self.group.sigma.record(grid, time.monotonic(), cs.stddev_window, cs.stddev_trim)
+        self.dyn.update(self.group.sigma, cs.offsets)
 
         # ── 3. Settings und Feature-Sensoren ─────────────────────────────────
-        cs = cycle_settings(self.settings)
-
-        ac_offset = self.dyn.value("ac", self.settings)
+        self.out.begin_cycle(cs.wait_time, cs.self_adjust, cs.self_adjust_tol)
+        ac_offset = self.dyn.value("ac", cs.offsets)
 
         tariff_sensor = self._effective("tariff")
         feature, feature_warnings = feature_values(
@@ -849,7 +853,7 @@ class SolakonCoordinator:
             surplus_active=self.surplus_active,
             session=self.charge_session,
             cycle_active=self.cycle_active,
-            at_rest=self._at_rest(mode),
+            at_rest=at_rest(mode, cs.rest_in_discharge, self.resting),
         ))
         if d is None:
             return None
@@ -885,13 +889,13 @@ class SolakonCoordinator:
         cap_reason = pv_cap_reason(self.group.sister_charging(self), self.charging_to_target, cs.battery_priority)
         capped = cap_reason if self.cycle_active and mode == MODE_DISCHARGE else ""
 
-        target_offset = self.dyn.value(self.offset_zone(), self.settings)
+        target_offset = self.dyn.value(self.offset_zone(cs.z1_night_enabled), cs.offsets)
 
         # ── 11b. Timeout-Reset ───────────────────────────────────────────────
         # Entfällt wenn ein Fall in diesem Zyklus bereits getoggelt hat
         await self.timeout.reset_if_due(timer_val)
 
-        if self._at_rest(mode):
+        if at_rest(mode, cs.rest_in_discharge, self.resting):
             return False
 
         missing = next((cfg[key] for key, value in ((CONF_GRID_SENSOR, grid), (CONF_SOLAR_SENSOR, solar))
@@ -938,7 +942,7 @@ class SolakonCoordinator:
             await self._pi_step(grid, st.base, st.offset, st.limit, st.p_factor, st.i_factor,
                                 st.share, current_power, st.action)
         elif d.kind == STALL_CHECK:
-            await self._handle_output_stall(d.value)
+            await self._handle_output_stall(d.value, cs.rest_in_discharge)
         elif d.kind == STALL_RESET:
             self.out.reset_stall()
         if d.cap_note and self.last_action_key != f"act_zone1_{d.cap_note}":

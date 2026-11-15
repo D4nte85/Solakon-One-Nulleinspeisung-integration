@@ -23,6 +23,9 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ### Geändert
 
+- **Speichern wartet auf den laufenden Regelzyklus:** Settings-Änderungen aus Panel, Schaltern und Zahlen-Entitäten werden erst übernommen, wenn ein laufender Regelzyklus fertig ist; das Speichern kann dadurch um die Wartezeit eines Schreibbefehls verzögert sein. Bisher konnte ein Zyklus, der auf die Ist-Leistung wartete, danach mit einer Mischung aus alten und neuen Settings weiterrechnen. Der Regelzyklus liest Ruhemodus, Nacht-Offset, σ-Fenster, Wartezeit und Offsets einmal zu Beginn (`coordinator.py`, `schema.py`, `output.py`, `zones.py`, `dynamic_offset.py`).
+- **Ruhezustand bei unverändertem Ruhemodus:** Ein Speichern, das „Ruhe in Modus 1“ auf den bisherigen Wert setzt, beendet den Ruhezustand nicht mehr (`coordinator.py`).
+- **Ungültige Werte an Zahlen-Entitäten:** Die Prüfung meldet sich in HA als Fehler der Integration statt als unbehandelte Ausnahme (`schema.py`).
 - **Zonen des Dynamic Offset aus einer Liste:** Settings-Schema, Offsetrechnung, Status und Sensor-Attribute lesen die vier Offsetzonen aus `DYN_ZONES`. Der Status führt dadurch auch `dyn_z1_night_enabled`, das bisher fehlte. Sonst keine Verhaltensänderung (`const.py`, `dynamic_offset.py`, `status_view.py`, `sensor.py`, `__init__.py`).
 
 ## [3.8.1] – 2026-11-11

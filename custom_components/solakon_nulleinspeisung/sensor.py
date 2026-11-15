@@ -14,7 +14,7 @@ from .const import (
     CHARGE_SESSIONS, DOMAIN, FALL_KEYS, MODE_KEYS, OPERATING_STATES, S_STDDEV_TRIM_COUNT, S_STDDEV_WINDOW,
 )
 from .coordinator import SolakonCoordinator
-from .dynamic_offset import any_dynamic
+from .dynamic_offset import any_dynamic, offset_params
 from .entity_base import SolakonEntity
 from .status_view import snapshot_view
 
@@ -142,7 +142,7 @@ class GridStdDevSensor(CoordinatorSensor):
         """
         s = self._coordinator.settings
         sigma = self._coordinator.group.sigma
-        dyn = any_dynamic(s)
+        dyn = any_dynamic(offset_params(s))
         attrs = {
             "window_seconds": sigma.window if sigma.window is not None else s[S_STDDEV_WINDOW],
             "sample_count": len(sigma.samples),

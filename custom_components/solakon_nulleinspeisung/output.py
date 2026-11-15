@@ -9,7 +9,7 @@ from typing import Any, Awaitable, Callable, NamedTuple
 
 from .const import (
     DEVICE_MAX_POWER, OUTPUT_STALL_SECONDS, OUTPUT_STALL_DEVIATION, OUTPUT_STALL_MIN_LIMIT,
-    S_WAIT_TIME, S_SELF_ADJUST, S_SELF_ADJUST_TOL,
+    S_WAIT_TIME, S_SELF_ADJUST, S_SELF_ADJUST_TOL, SETTINGS_DEFAULTS,
 )
 from .pi import clamp as _clamp
 
@@ -39,24 +39,31 @@ class Output:
     """Ausgangsleistung eines Geräts mit Schreibzeitpunkt und Stillstandszählern.
 
     `write` schreibt den Sollwert (Guard beim Aufrufer), `read_actual` liefert einen
-    frischen `Actual`, `settings` die aktuellen Einstellungen, `warn(key, params)`
-    meldet eine Schreibwarnung in die Fehlerkette.
+    frischen `Actual`, `warn(key, params)` meldet eine Schreibwarnung in die Fehlerkette.
+    Wartezeit, Selbstanpassung und ihre Toleranz setzt `begin_cycle` je Regelzyklus.
     """
 
     def __init__(
         self,
         write: Callable[[float], Awaitable[Any]],
         read_actual: Callable[[], Actual],
-        settings: Callable[[], dict],
         warn: Callable[[str, dict], None],
     ) -> None:
         self._write = write
         self._read = read_actual
-        self._settings = settings
         self._warn = warn
         self.last_ts: float = time.time()
         self.stall_actions: int = 0
         self.stall_last_ts: float = 0.0
+        self._wait_time = float(SETTINGS_DEFAULTS[S_WAIT_TIME])
+        self._self_adjust = bool(SETTINGS_DEFAULTS[S_SELF_ADJUST])
+        self._tolerance = float(SETTINGS_DEFAULTS[S_SELF_ADJUST_TOL])
+
+    def begin_cycle(self, wait_time: float, self_adjust: bool, tolerance: float) -> None:
+        """Wartezeit, Selbstanpassung und Toleranz aus dem Schnappschuss des Regelzyklus übernehmen."""
+        self._wait_time = float(wait_time)
+        self._self_adjust = self_adjust
+        self._tolerance = float(tolerance)
 
     # ── Lesen: Ist-Leistung ──────────────────────────────────────────────────
 
@@ -105,14 +112,13 @@ class Output:
 
         Ohne `S_SELF_ADJUST` wird die volle Wartezeit abgewartet.
         """
-        settings = self._settings()
-        wait_max = float(settings[S_WAIT_TIME])
+        wait_max = self._wait_time
 
-        if not settings[S_SELF_ADJUST]:
+        if not self._self_adjust:
             await asyncio.sleep(wait_max)
             return
 
-        tolerance = float(settings[S_SELF_ADJUST_TOL])
+        tolerance = self._tolerance
         compare_target = -target if ac_charge_mode else target
 
         await asyncio.sleep(1.0)
@@ -148,7 +154,7 @@ class Output:
         if not self._read().ok:
             return  # kein Sensor zur Verifikation verfügbar — nichts zu prüfen
 
-        tolerance = float(self._settings()[S_SELF_ADJUST_TOL])
+        tolerance = self._tolerance
 
         for attempt in range(max_retries):
             actual, deviation = self._vs(0)

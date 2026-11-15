@@ -2,12 +2,9 @@
 from __future__ import annotations
 
 from collections import deque
-from typing import Any
+from typing import Any, NamedTuple
 
-from .const import (
-    DYN_ZONES, S_STDDEV_WINDOW, S_STDDEV_TRIM_COUNT, S_OFFSET_1, S_OFFSET_2, S_AC_OFFSET, S_OFFSET_1_NIGHT,
-    dyn_key,
-)
+from .const import DYN_ZONES, S_OFFSET_1, S_OFFSET_2, S_AC_OFFSET, S_OFFSET_1_NIGHT, dyn_key
 from .pi import clamp as _clamp
 
 # Parameter der Offset-Formel in der Reihenfolge von `dynamic_offset`, mit Cast.
@@ -17,9 +14,32 @@ DYN_PARAMS = (("min", int), ("max", int), ("noise", float), ("factor", float), (
 STATIC_OFFSETS = {"z1": S_OFFSET_1, "z1_night": S_OFFSET_1_NIGHT, "z2": S_OFFSET_2, "ac": S_AC_OFFSET}
 
 
-def any_dynamic(settings: dict) -> bool:
-    """True, wenn der Offset mindestens einer Zone aus DYN_ZONES dynamisch ist."""
-    return any(settings[dyn_key(zone, "enabled")] for zone in DYN_ZONES)
+class OffsetParams(NamedTuple):
+    """Offset-Settings einer Zone: dynamisch an, statischer Wert und die Parameter der Offset-Formel."""
+
+    dynamic: bool
+    static: Any
+    min: int
+    max: int
+    noise: float
+    factor: float
+    negative: bool
+
+
+def offset_params(settings: dict) -> dict[str, OffsetParams]:
+    """Offset-Settings je Zone aus DYN_ZONES."""
+    return {
+        zone: OffsetParams(
+            bool(settings[dyn_key(zone, "enabled")]), settings[STATIC_OFFSETS[zone]],
+            *(cast(settings[dyn_key(zone, part)]) for part, cast in DYN_PARAMS),
+        )
+        for zone in DYN_ZONES
+    }
+
+
+def any_dynamic(offsets: dict[str, OffsetParams]) -> bool:
+    """True, wenn der Offset mindestens einer Zone dynamisch ist."""
+    return any(params.dynamic for params in offsets.values())
 
 
 def _stddev_of(values: list[float]) -> float:
@@ -58,10 +78,10 @@ class Sigma:
         self.window: int | None = None
         self.trim: int | None = None
 
-    def record(self, grid_value: float, now: float, settings: dict) -> None:
-        """Netzwert aufnehmen, Werte außerhalb des Fensters verwerfen, σ neu berechnen."""
-        self.window = int(settings[S_STDDEV_WINDOW])
-        self.trim = int(settings[S_STDDEV_TRIM_COUNT])
+    def record(self, grid_value: float, now: float, window: int, trim: int) -> None:
+        """Netzwert aufnehmen, Werte außerhalb des Fensters `window` (s) verwerfen, σ roh und um `trim` getrimmt neu berechnen."""
+        self.window = window
+        self.trim = trim
         cutoff = now - self.window
 
         self.samples.append((now, grid_value))
@@ -96,25 +116,25 @@ class DynamicOffset:
         self.stddev_raw: float = 0.0
         self.offsets: dict[str, float] = {zone: 0.0 for zone in DYN_ZONES}
 
-    def update(self, sigma: Sigma, settings: dict) -> None:
+    def update(self, sigma: Sigma, offsets: dict[str, OffsetParams]) -> None:
         """σ aus der Netzgruppe übernehmen; Offsets aller Zonen neu berechnen, wenn eine Zone dynamisch ist."""
         self.stddev = sigma.stddev
         self.stddev_raw = sigma.stddev_raw
-        if not any_dynamic(settings):
+        if not any_dynamic(offsets):
             return
-        for zone in DYN_ZONES:
-            args = (cast(settings[dyn_key(zone, part)]) for part, cast in DYN_PARAMS)
-            self.offsets[zone] = dynamic_offset(self.stddev, *args)
+        for zone, params in offsets.items():
+            self.offsets[zone] = dynamic_offset(
+                self.stddev, params.min, params.max, params.noise, params.factor, params.negative,
+            )
 
-    def offset(self, zone: str, settings: dict) -> tuple[bool, Any, float]:
-        """(dynamisch, statischer Settings-Wert, wirksamer Offset) der Zone aus DYN_ZONES."""
-        dynamic = bool(settings[dyn_key(zone, "enabled")])
-        static = settings[STATIC_OFFSETS[zone]]
-        return dynamic, static, self.offsets[zone] if dynamic else static
+    def offset(self, zone: str, offsets: dict[str, OffsetParams]) -> tuple[bool, Any, float]:
+        """(dynamisch, statischer Settings-Wert, wirksamer Offset) der Zone."""
+        params = offsets[zone]
+        return params.dynamic, params.static, self.offsets[zone] if params.dynamic else params.static
 
-    def value(self, zone: str, settings: dict) -> float:
+    def value(self, zone: str, offsets: dict[str, OffsetParams]) -> float:
         """Wirksamer Offset der Zone in W."""
-        return float(self.offset(zone, settings)[2])
+        return float(self.offset(zone, offsets)[2])
 
     @staticmethod
     def zone_of(ac_charge: bool, cycle: bool, night: bool) -> str:

@@ -105,11 +105,16 @@ class FallDecision:
     regulation_off: bool = False
 
 
-def _end_charge(name: str, action_key: str, cycle_active: bool) -> FallDecision:
+def _rest(inp: ZoneInputs, when: bool = True) -> str | None:
+    """Ruhemodus laut Schnappschuss für den Übergang, wenn `when`; sonst None (kein Ruhezustand)."""
+    return rest_mode(inp.cs.rest_in_discharge) if when else None
+
+
+def _end_charge(name: str, action_key: str, inp: ZoneInputs) -> FallDecision:
     """Lade-Session beenden: Integral, Session, Output 0, Rückkehrmodus, ohne Zyklus Ruhezustand, Aktionstext."""
     return FallDecision(name, {
         "reset_integral": True, "flags": FlagUpdate(session=SESSION_NONE), "output": 0,
-        "mode": MODE_DISCHARGE, "rest": not cycle_active,
+        "mode": MODE_DISCHARGE, "rest": _rest(inp, not inp.cycle_active),
     }, action_key)
 
 
@@ -302,7 +307,7 @@ def decide(inp: ZoneInputs) -> FallDecision | None:
             return FallDecision("0B", {
                 "reset_integral": True,
                 "flags": FlagUpdate(surplus_active=False, cycle_active=False),
-                "output": 0, "rest": True,
+                "output": 0, "rest": _rest(inp),
             }, "act_surplus_off")
         return FallDecision("0B", {
             "reset_integral": True,
@@ -339,7 +344,7 @@ def decide(inp: ZoneInputs) -> FallDecision | None:
         return FallDecision("B", {
             "reset_integral": True,
             "flags": FlagUpdate(cycle_active=False, surplus_active=False),
-            "output": 0, "rest": True,
+            "output": 0, "rest": _rest(inp),
         }, "act_fall_b", {"soc": soc})
 
     # ── Fall C: Zone 3 Absicherung ───────────────────────────────────────────
@@ -351,7 +356,7 @@ def decide(inp: ZoneInputs) -> FallDecision | None:
     ):
         return FallDecision("C", {
             "flags": FlagUpdate(surplus_active=False),
-            "output": 0, "rest": True,
+            "output": 0, "rest": _rest(inp),
         }, "act_fall_c")
 
     # ── Fall D: Recovery ─────────────────────────────────────────────────────
@@ -391,7 +396,7 @@ def decide(inp: ZoneInputs) -> FallDecision | None:
     # ── Fall HN: Netz-Laden Ende ─────────────────────────────────────────────
     # Ziel-SOC erreicht, Netz-Laden oder Zielladen ausgeschaltet.
     if inp.session == SESSION_GRID and (not charging or not inp.cs.grid_charge_enabled):
-        return _end_charge("HN", "act_fall_hn", inp.cycle_active)
+        return _end_charge("HN", "act_fall_hn", inp)
 
     # ── Fall GT: Tarif-Laden Start ───────────────────────────────────────────
     # Surplus hat Vorrang — kein Tarif-Laden während Zone 0 aktiv
@@ -419,7 +424,7 @@ def decide(inp: ZoneInputs) -> FallDecision | None:
             or (charging and not inp.cs.source_tariff)
         )
     ):
-        return _end_charge("HT", "act_fall_ht", inp.cycle_active)
+        return _end_charge("HT", "act_fall_ht", inp)
 
     # ── Fall ZB: Batterievorrang ─────────────────────────────────────────────
     # Aufladen mit Batterievorrang: Output 0 W im Ruhemodus, die ganze PV lädt die Batterie.
@@ -430,7 +435,7 @@ def decide(inp: ZoneInputs) -> FallDecision | None:
         and not inp.at_rest
     ):
         return FallDecision("ZB", {
-            "reset_integral": True, "flags": FlagUpdate(cycle_active=False), "output": 0, "rest": True,
+            "reset_integral": True, "flags": FlagUpdate(cycle_active=False), "output": 0, "rest": _rest(inp),
         }, "act_fall_zb", {"soc": soc})
 
     # ── Tarifsperre (Preis < Teuer-Schwelle) ──────────────────────────────
@@ -441,7 +446,7 @@ def decide(inp: ZoneInputs) -> FallDecision | None:
         and not inp.at_rest
     ):
         return FallDecision("TM", {
-            "reset_integral": True, "flags": FlagUpdate(cycle_active=False), "output": 0, "rest": True,
+            "reset_integral": True, "flags": FlagUpdate(cycle_active=False), "output": 0, "rest": _rest(inp),
         }, "act_fall_tm", {"price": inp.tariff.price})
 
     # ── Fall G: AC Laden Start ───────────────────────────────────────────────
@@ -476,7 +481,7 @@ def decide(inp: ZoneInputs) -> FallDecision | None:
             )
         )
     ):
-        return _end_charge("H", "act_fall_h", inp.cycle_active)
+        return _end_charge("H", "act_fall_h", inp)
 
     # ── Fall I: Safety — Modus und Lade-Session widersprechen sich ───────────
     # Zwei Richtungen: Modus '3' ohne Session, und Session ohne Modus '3'.
@@ -489,7 +494,7 @@ def decide(inp: ZoneInputs) -> FallDecision | None:
     if mode == MODE_AC_CHARGE and not session:
         return FallDecision("I", {
             "reset_integral": True, "output": 0,
-            "mode": MODE_DISCHARGE, "rest": not inp.cycle_active,
+            "mode": MODE_DISCHARGE, "rest": _rest(inp, not inp.cycle_active),
         }, "act_fall_i")
 
     # ── Fall E: Zone 2 Start ─────────────────────────────────────────────────
@@ -511,6 +516,6 @@ def decide(inp: ZoneInputs) -> FallDecision | None:
         and not inp.cycle_active
         and not inp.at_rest
     ):
-        return FallDecision("F", {"reset_integral": True, "output": 0, "rest": True}, "act_fall_f")
+        return FallDecision("F", {"reset_integral": True, "output": 0, "rest": _rest(inp)}, "act_fall_f")
 
     return None

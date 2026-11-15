@@ -12,8 +12,7 @@ def test_attribute_aus_dem_sigma_puffer_der_netzgruppe():
     _, coord = _coord("de")
     coord.settings[C.S_STDDEV_WINDOW] = 120
     coord.settings[C.S_STDDEV_TRIM_COUNT] = 0
-    leader_settings = {C.S_STDDEV_WINDOW: 90, C.S_STDDEV_TRIM_COUNT: 2}
-    coord.group.sigma.record(10.0, 1000.0, leader_settings)
+    coord.group.sigma.record(10.0, 1000.0, 90, 2)
     attrs = sensor.GridStdDevSensor(coord).extra_state_attributes
     assert attrs["window_seconds"] == 90
     assert attrs["trim_count"] == 2
