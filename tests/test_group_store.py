@@ -2,10 +2,14 @@
 from __future__ import annotations
 
 import asyncio
+import importlib
+
+import pytest
 
 from tests import harness as h
 
 gs = h.group_store_mod
+InvalidSettings = importlib.import_module(h.PKG + ".schema").InvalidSettings
 DOMAIN = h.const.DOMAIN
 DIST_KEY = f"{DOMAIN}_distribution"
 SWITCH_KEY = f"{DOMAIN}_soc_switch_state"
@@ -79,7 +83,7 @@ def test_speichern_erreicht_gruppe_und_behaelt_gruppe_ohne_instanz():
     h.put_store(hass, DIST_KEY, {"sensor.frei": {"distribution_mode": "soc"}})
     store = _load(hass)
     g = gs.group_for(hass, "sensor.grid")
-    assert asyncio.run(store.save_dist("sensor.grid", {"distribution_mode": "capacity"})) == []
+    asyncio.run(store.save_dist("sensor.grid", {"distribution_mode": "capacity"}))
     assert g.dist_cfg()["distribution_mode"] == "capacity"
     assert h.stored(hass, DIST_KEY) == {
         "sensor.frei": {"distribution_mode": "soc"}, "sensor.grid": {"distribution_mode": "capacity"}}
@@ -90,7 +94,8 @@ def test_speichern_mit_befund_aendert_nichts():
     hass = _hass()
     store = _load(hass)
     g = gs.group_for(hass, "sensor.grid")
-    assert asyncio.run(store.save_dist("sensor.grid", {"distribution_mode": "weighted"}))
+    with pytest.raises(InvalidSettings):
+        asyncio.run(store.save_dist("sensor.grid", {"distribution_mode": "weighted"}))
     assert g.dist_cfg() == store.dist_view("sensor.frei") and g.dist_rev == 0
     assert store.dist == {} and DIST_KEY not in hass.storage
 

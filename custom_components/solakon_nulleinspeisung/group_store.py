@@ -11,7 +11,7 @@ from .const import CAPACITY_KEY, CONF_GRID_SENSOR, DIST_DEFAULTS, DIST_INST_FIEL
 from .grid_group import NetGroup
 from .i18n import translate
 from .migrations import SolakonDistStore, SolakonSocSwitchStore
-from .schema import check, notify_reset, sanitize
+from .schema import InvalidSettings, check, notify_reset, sanitize
 
 STORAGE_VERSION_DIST = 2
 STORAGE_KEY_DIST     = f"{DOMAIN}_distribution"
@@ -121,17 +121,16 @@ class GroupStore:
         """Revision der Verteilung einer Gruppe: Zahl der Speicherungen seit dem Laden."""
         return self._dist_revs.get(grid_sensor, 0)
 
-    async def save_dist(self, grid_sensor: str, changes: dict) -> list[dict]:
-        """Geänderte Verteilungsfelder einer Gruppe prüfen und in ihre Verteilung übernehmen; Befunde statt Speichern.
+    async def save_dist(self, grid_sensor: str, changes: dict) -> None:
+        """Geänderte Verteilungsfelder einer Gruppe prüfen und in ihre Verteilung übernehmen.
 
-        Danach steigt die Revision, die Mitglieder der Netzgruppe melden ihre Trigger neu an
-        und stoßen einen Regelzyklus an, angemeldete Beobachter werden benachrichtigt.
+        Danach steigt die Revision und angemeldete Beobachter werden benachrichtigt.
+        InvalidSettings, wenn eine Änderung das Schema verletzt; dann bleibt alles unverändert.
         """
         if findings := check(changes, DIST_SCHEMA, DIST_INST_FIELDS):
-            return findings
+            raise InvalidSettings(findings)
         self.dist[grid_sensor] = {**self.dist.get(grid_sensor, {}), **changes}
         await self._commit_dist({grid_sensor})
-        return []
 
     async def tidy_capacity(self) -> None:
         """Kapazitätssensoren der Verteilung den Config-Entries nachführen.
@@ -160,13 +159,11 @@ class GroupStore:
             await self._commit_dist(changed)
 
     async def _commit_dist(self, grid_sensors: set[str]) -> None:
-        """Verteilung speichern; je Gruppe Revision erhöhen, Mitglieder und Beobachter benachrichtigen."""
+        """Verteilung speichern; je Gruppe Revision erhöhen und Beobachter benachrichtigen."""
         if self._dist_store is not None:
             await self._dist_store.async_save(self.dist)
         for grid_sensor in sorted(grid_sensors):
             self._dist_revs[grid_sensor] = self.dist_rev(grid_sensor) + 1
-            for coord in group_for(self.hass, grid_sensor).members().values():
-                coord.apply_group_change()
             for listener in list(self._dist_listeners.get(grid_sensor, ())):
                 listener()
 

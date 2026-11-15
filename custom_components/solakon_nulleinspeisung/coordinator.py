@@ -18,7 +18,7 @@ from .paths import FIXED, IDLE, PI_STEP, SETPOINT, STALL_CHECK, STALL_RESET, Pat
 from .pi import PIController
 from .readings import UNIT_SCALE_KWH, UNIT_SCALE_W, read_number, read_scaled, valid_state
 from .grid_group import NetGroup, Shares
-from .group_store import group_for
+from .group_store import group_for, require_store
 from .limits import PowerLimits, power_limits, pv_cap_reason
 from .messages import CycleMessages
 from .migrations import SolakonSettingsStore
@@ -118,6 +118,7 @@ class SolakonCoordinator:
         self.settings: dict[str, Any] = SETTINGS_DEFAULTS.copy()
         self.settings_rev = 0
         self._store = SolakonSettingsStore(hass, entry.entry_id)
+        self._unsub_dist: Callable[[], None] | None = None
 
         # Laufzeit-Zustände
         self.display = Display(hass.config.language)
@@ -583,10 +584,14 @@ class SolakonCoordinator:
             _LOGGER.info("Solakon: Standardwerte geladen")
 
         self.trackers.start()
+        self._unsub_dist = require_store(self.hass).listen_dist(self.grid_sensor, self.apply_group_change)
 
     async def async_shutdown(self) -> None:
         """Listener abräumen, ausstehendes Speichern sofort schreiben."""
         self.trackers.stop()
+        if self._unsub_dist is not None:
+            self._unsub_dist()
+            self._unsub_dist = None
         await self._store.async_write_pending()
 
     async def async_update_settings(self, changes: dict[str, Any]) -> None:

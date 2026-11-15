@@ -13,6 +13,7 @@ from .const import (
     SESSION_AC, SESSION_GRID, SESSION_NONE, SESSION_TARIFF, STORAGE_MINOR_VERSION, STORAGE_VERSION,
     capacity_key,
 )
+from .schema import InvalidSettings
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -80,7 +81,10 @@ async def _capacity_to_dist(hass: HomeAssistant, entry_id: str, data: dict) -> d
     grid_sensor = entry.data.get(CONF_GRID_SENSOR, "")
     key = capacity_key(entry_id)
     if sensor and not store.dist_view(grid_sensor).get(key):
-        await store.save_dist(grid_sensor, {key: sensor})
+        try:
+            await store.save_dist(grid_sensor, {key: sensor})
+        except InvalidSettings:
+            _LOGGER.warning("Solakon: Kapazitätssensor %r nicht übernommen", sensor)
     return migrated
 
 

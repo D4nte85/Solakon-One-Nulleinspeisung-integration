@@ -17,7 +17,6 @@ from .const import (
 )
 from .coordinator import SolakonCoordinator
 from .entity_base import SolakonEntity
-from .schema import InvalidSettings
 
 # `hass.data`-Schlüssel (ohne DOMAIN-Präfix) der Träger-Verwaltung, entfernt mit der letzten Instanz.
 DATA_KEY = "group_limit"
@@ -80,8 +79,7 @@ class GroupLimitNumber(NumberEntity):
 
     async def async_set_native_value(self, value: float) -> None:
         """Gesamtlimit der Netzgruppe speichern; InvalidSettings bei verletztem Schema."""
-        if findings := await self._store.save_dist(self.grid_sensor, {DIST_GLOBAL_MAX: int(value)}):
-            raise InvalidSettings(findings)
+        await self._store.save_dist(self.grid_sensor, {DIST_GLOBAL_MAX: int(value)})
 
     async def async_added_to_hass(self) -> None:
         """Für gespeicherte Verteilungen der Gruppe anmelden."""

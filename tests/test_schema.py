@@ -90,6 +90,9 @@ def test_sanitize_schneidet_kommazahl_in_ganzzahlfeld_ab():
 
 
 def _coord(hass, stored=None):
+    """Coordinator mit Gruppenspeicher ohne HA-Store, falls keiner liegt."""
+    if h.group_store_mod.store_for(hass) is None:
+        h.install_groups(hass)
     return h.make_coord(hass, stored=stored)
 
 

@@ -219,8 +219,10 @@ async def _ws_save_distribution_config(
     )
     if store is None:
         return
-    if findings := await store.save_dist(msg["grid_sensor"], msg["distribution"]):
-        _send_invalid(connection, msg, findings)
+    try:
+        await store.save_dist(msg["grid_sensor"], msg["distribution"])
+    except InvalidSettings as err:
+        _send_invalid(connection, msg, err.findings)
         return
     connection.send_result(msg["id"], {"success": True})
 

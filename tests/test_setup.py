@@ -138,7 +138,7 @@ def test_gesamtlimit_setzen_speichert_nur_das_feld_und_stoesst_regelung_an():
     assert [e for e in hass.events if e[0] == "task"] == [["task", "SolakonCoordinator._async_regulate"]] * 2
     try:
         asyncio.run(entity.async_set_native_value(-10.0))
-    except h.number_mod.InvalidSettings:
+    except h.coordinator_mod.InvalidSettings:
         pass
     else:
         raise AssertionError("Wert unter der harten Grenze angenommen")
