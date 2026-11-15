@@ -493,7 +493,7 @@ def install() -> None:
     _module("homeassistant.components.switch", SwitchEntity=SwitchEntity)
     _module("homeassistant.components.number", NumberEntity=NumberEntity, NumberMode=NumberMode)
     _module("homeassistant.const", EntityCategory=EntityCategory, UnitOfPower=UnitOfPower,
-            PERCENTAGE="%")
+            PERCENTAGE="%", STATE_UNKNOWN="unknown", STATE_UNAVAILABLE="unavailable")
     _module("homeassistant.config_entries", ConfigFlow=ConfigFlow, OptionsFlow=OptionsFlow,
             ConfigEntry=ConfigEntry)
     _module("homeassistant.data_entry_flow", FlowResult=dict)

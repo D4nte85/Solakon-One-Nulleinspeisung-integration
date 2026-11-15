@@ -11,7 +11,7 @@ HOLD = "hold"            # nichts schreiben
 SATURATED = "saturated"  # wie HOLD, Ausgang steht am Limit und könnte höher
 
 
-def clamp(value, lo, hi):
+def clamp(value: float, lo: float, hi: float) -> float:
     """`value` auf [lo, hi] begrenzen."""
     return max(lo, min(hi, value))
 
@@ -25,7 +25,7 @@ def gate_discharge(grid: float, current: float, offset: float, limit: float, tol
     """
     error = grid - offset
     above_limit = current > limit
-    near_limit = current >= limit or 0 < current >= limit - tolerance
+    near_limit = current >= limit or (current > 0 and current >= limit - tolerance)
     saturated_high = near_limit and not above_limit and error > 0
     if ((abs(error) > tolerance or above_limit)
             and not saturated_high and not (current <= 0 and error < 0)):

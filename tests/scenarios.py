@@ -538,7 +538,7 @@ class Lauf:
                 # Wie geladene Settings vor dem Start: Trigger folgen den Settings.
                 with coord.trackers.refreshing():
                     coord.settings.update(inst["settings"])
-            coord.integral = inst["integral"]
+            coord.pi.integral = inst["integral"]
             coord.surplus.prev_actual = inst["prev_actual"]
 
     async def schritte(self):
@@ -659,7 +659,7 @@ async def _run_wiring() -> dict:
     for name, (handler, extra) in handlers.items():
         hass.events = []
         for c in hass.data.get(C.DOMAIN, {}).values():
-            c.integral = 12.5
+            c.pi.integral = 12.5
         sent = await h.ws_call(handler, hass, 3, **extra)
         ws[name] = {"sent": h.jsonable(sent), "events": hass.events,
                     "schema": sorted(str(k) for k in getattr(handler, "ws_schema", {})),
@@ -776,7 +776,7 @@ async def _run_derive() -> dict:
                 rng.choice([-50, 0, 30]), rng.choice([0, 300, 800, 1500]), rng.choice([0.3, 1.3]),
                 rng.choice([0.0, 0.05, 0.3]))
         ac, share, integ = rng.choice([False, True]), rng.choice([1.0, 0.5, 0.0]), rng.choice([0.0, 400.0, -2000.0])
-        coord.integral = integ
+        coord.pi.integral = integ
         if ac:
             # früherer AC-Modus: Fehlerrichtung invertiert, über negiertes Netz und Offset
             grid, cur, off, *rest = args

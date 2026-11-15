@@ -4,7 +4,7 @@ from __future__ import annotations
 from functools import cached_property
 from typing import TYPE_CHECKING, Any, Callable
 
-from .const import S_REGULATION_ENABLED, S_Z1_NIGHT_ENABLED, capacity_key
+from .const import S_Z1_NIGHT_ENABLED, capacity_key
 from .dynamic_offset import offset_params
 
 if TYPE_CHECKING:
@@ -30,7 +30,7 @@ STATUS: dict[str, Callable[["_Reading"], Any]] = {
     "cycle_active": lambda r: r.c.cycle_active,
     "surplus_active": lambda r: r.c.surplus_active,
     "charge_session": lambda r: r.c.charge_session,
-    "regulation_enabled": lambda r: r.c.settings.get(S_REGULATION_ENABLED, False),
+    "regulation_enabled": lambda r: r.c.regulating,
     "settings_rev": lambda r: r.c.settings_rev,
     "dist_rev": lambda r: r.c.group.dist_rev,
     "grid_stddev": lambda r: r.c.dyn.stddev,

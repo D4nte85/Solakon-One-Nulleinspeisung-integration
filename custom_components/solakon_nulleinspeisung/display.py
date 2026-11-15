@@ -5,7 +5,7 @@ import time
 
 from .i18n import translate
 from .const import (
-    CHARGE_SESSIONS, MODE_AC_CHARGE, MODE_DISABLED, MODE_DISCHARGE, SESSION_AC, SESSION_GRID, SESSION_TARIFF,
+    MODE_AC_CHARGE, MODE_DISABLED, MODE_DISCHARGE, SESSION_AC, SESSION_GRID, SESSION_TARIFF,
     STATE_CYCLE, STATE_PV, STATE_SURPLUS,
 )
 
@@ -81,11 +81,11 @@ class Display:
 
     def update_state(
         self, regulation_on: bool, blocked: bool, control: str, discharge_locked: bool, is_night: bool,
-        target_enabled: bool = False, charging_to_target: bool = False,
+        target_enabled: bool, charging_to_target: bool,
     ) -> bool:
         """Betriebszustand aus den Zustandsflags und der Anzeigezone; True bei Wechsel.
 
-        Erster zutreffender Zustand gewinnt, Reihenfolge wie in OPERATING_STATES.
+        Erster zutreffender Zustand gewinnt, in der Reihenfolge der Abfragen.
         Regelung aus mit Zielladen an ist die Entladepause. Anders als `active_fall`,
         das den zuletzt ausgeführten Übergang hält, beschreibt der Zustand, was gerade gilt.
         """
@@ -95,7 +95,7 @@ class Display:
             state = "blocked"
         elif charging_to_target:
             state = "target_charging"
-        elif control == STATE_SURPLUS or control in CHARGE_SESSIONS:
+        elif control in (STATE_SURPLUS, SESSION_TARIFF, SESSION_GRID, SESSION_AC):
             state = OPERATING_BY_STATE[control]
         elif discharge_locked:
             state = "discharge_locked"

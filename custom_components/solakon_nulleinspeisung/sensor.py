@@ -1,4 +1,4 @@
-"""Sensor platform — Betriebszustand, zone, mode label, last action, StdDev."""
+"""Sensor-Plattform: Betriebszustand, Zone, Lade-Session, Modus, letzte Aktion, σ, Fall, Integral, Surplus-Leistung."""
 from __future__ import annotations
 
 from typing import Any, Callable
@@ -165,6 +165,7 @@ async def async_setup_entry(
         ZoneSensor(coord),
         CoordinatorSensor(coord, "charge_session", lambda c: c.charge_session,
                           icon="mdi:battery-charging", **_enum(CHARGE_SESSIONS), **DIAG),
+        # Zustand ist der Modusschlüssel, unique_id-Suffix bleibt "mode_label".
         CoordinatorSensor(coord, "mode_label", lambda c: c.display.mode_key,
                           icon="mdi:information-outline", **_enum(MODE_KEYS), **DIAG),
         LastActionSensor(coord),

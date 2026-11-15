@@ -296,7 +296,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Eintrag neu laden wenn die Entitäten-Zuweisung (entry.data) geändert wurde."""
+    """Eintrag bei jeder Aktualisierung neu laden, etwa nach geänderter Entitäten-Zuweisung im OptionsFlow."""
     await hass.config_entries.async_reload(entry.entry_id)
 
 
@@ -316,7 +316,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
 
-    # Eintrag neu laden wenn die Entitäten-Zuweisung im OptionsFlow geändert wurde
+    # Eintrag bei jeder Aktualisierung neu laden
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
     # Panel nur einmal registrieren — kein entry_id in config

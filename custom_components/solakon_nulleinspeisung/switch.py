@@ -23,7 +23,7 @@ class SettingSwitch(SolakonEntity, SwitchEntity):
     @property
     def is_on(self) -> bool:
         """Wahrheitswert des Settings-Eintrags."""
-        return bool(self._coordinator.settings.get(self._key, False))
+        return bool(self._coordinator.settings[self._key])
 
     async def async_turn_on(self, **kwargs: object) -> None:
         """Settings-Eintrag setzen."""

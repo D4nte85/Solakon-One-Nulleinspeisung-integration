@@ -1,6 +1,7 @@
 """Stellwertrechnung: Sollwert auf Ist-Basis in einem Schritt, für AC-Laden und Entladen."""
 from __future__ import annotations
 
+from .const import WRITE_DEADBAND
 from .pi import clamp
 
 # Die Rampe läuft, solange die eigene Ist-Leistung mehr als diesen Betrag unter der
@@ -22,7 +23,7 @@ def value(
         result = 0.0
     if own < output - RAMP_BAND and result > output:
         return None
-    if abs(result - output) < 0.5:
+    if abs(result - output) < WRITE_DEADBAND:
         return None
     return float(result)
 

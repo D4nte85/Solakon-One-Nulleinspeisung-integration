@@ -235,12 +235,12 @@ class NetGroup:
             shares = self.soc_switch_shares(active, me, own_soc)
             return Shares(shares, effective) if shares is not None else to_equal("soc_switch")
 
-        # Modus "soc" und unbekannte Modi: reine SOC-Prozentpunkt-Gewichtung.
+        # Modus "soc": reine SOC-Prozentpunkt-Gewichtung; "capacity" gewichtet zusätzlich mit der Kapazität.
         caps = {eid: 1.0 for eid in active}
         if mode == "capacity":
             def _cap_kwh(eid: str, m: Member) -> float | None:
                 """Kapazität der Instanz in kWh; None ohne Sensor oder ohne gültigen Wert."""
-                cap_s = str(dist.get(capacity_key(eid), ""))
+                cap_s = dist.get(capacity_key(eid), "")
                 if not cap_s:
                     return None
                 return m.capacity_kwh(cap_s)

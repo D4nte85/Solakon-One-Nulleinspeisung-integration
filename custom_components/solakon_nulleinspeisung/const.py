@@ -49,6 +49,8 @@ PLATFORMS = ["sensor", "switch", "binary_sensor", "number"]
 DEVICE_MAX_POWER = 1200
 # Maximaler Entladestrom in A, Grenze der Geräte-Entity.
 DEVICE_MAX_CURRENT = 40
+# Kleinste Abweichung in W, ab der ein Sollwert neu geschrieben wird.
+WRITE_DEADBAND = 0.5
 
 # -- Ausgangs-Stillstandserkennung --------------------------------------------
 # Greift nur im gesaettigten Standard-PI-Zweig (at_max_limit). Weicht die tatsaechliche
@@ -70,11 +72,10 @@ TARIFF_UNIT_SUSPECT_PRICE = 1.0
 TARIFF_UNIT_SUSPECT_THRESHOLD = 3.0
 TARIFF_UNIT_SUSPECT_SECONDS = 21600
 
-# -- Betriebszustaende --------------------------------------------------------
-# Zusammengefasster Zustand der Instanz, ausgewertet in dieser Reihenfolge: der
-# erste zutreffende gewinnt. Abgeleitet aus den Zustandsflags, nicht aus dem
-# zuletzt ausgefuehrten Fall. Reihenfolge und Schluessel muessen mit den
-# Uebersetzungen (translations, panel.*.json) uebereinstimmen.
+# -- Betriebszustände ---------------------------------------------------------
+# Zusammengefasster Zustand der Instanz, abgeleitet aus den Zustandsflags, nicht aus
+# dem zuletzt ausgeführten Fall. Die Schlüssel müssen mit den Übersetzungen
+# (translations) übereinstimmen; die Auswertungsfolge steht in `display.update_state`.
 OPERATING_STATES = [
     "disabled",
     "discharge_pause",

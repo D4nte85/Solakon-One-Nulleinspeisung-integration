@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from typing import NamedTuple
 
+from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant
 
 # Domains mit Zahlenzustand; nur sie werden als Zahl gelesen.
@@ -31,7 +32,7 @@ class Reading(NamedTuple):
 def valid_state(hass: HomeAssistant, entity_id: str):
     """State der Entity, oder None wenn sie fehlt oder unknown/unavailable ist."""
     state = hass.states.get(entity_id)
-    if state is None or state.state in ("unknown", "unavailable"):
+    if state is None or state.state in (STATE_UNKNOWN, STATE_UNAVAILABLE):
         return None
     return state
 

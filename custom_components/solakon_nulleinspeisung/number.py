@@ -35,7 +35,7 @@ class SettingNumber(SolakonEntity, NumberEntity):
     @property
     def native_value(self) -> int:
         """Wert des Settings-Eintrags."""
-        return int(self._coordinator.settings.get(self._key, SETTINGS_SCHEMA[self._key].default))
+        return int(self._coordinator.settings[self._key])
 
     async def async_set_native_value(self, value: float) -> None:
         """Settings-Eintrag setzen."""

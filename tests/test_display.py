@@ -74,14 +74,16 @@ def test_set_mode_zeitstempel_nur_bei_wechsel():
 def test_update_state_reihenfolge(kw, zone, state):
     d = _display()
     d.zone = zone
-    args = dict(regulation_on=True, blocked=False, control="pv", discharge_locked=False, is_night=False)
+    args = dict(regulation_on=True, blocked=False, control="pv", discharge_locked=False, is_night=False,
+                target_enabled=False, charging_to_target=False)
     assert d.update_state(**{**args, **kw}) is True
     assert d.operating_state == state
 
 
 def test_update_state_ohne_wechsel():
     d = _display()
-    args = dict(regulation_on=True, blocked=False, control="pv", discharge_locked=False, is_night=False)
+    args = dict(regulation_on=True, blocked=False, control="pv", discharge_locked=False, is_night=False,
+                target_enabled=False, charging_to_target=False)
     d.update_state(**args)
     ts = d.operating_state_ts
     h.CLOCK.now += 5

@@ -188,15 +188,8 @@ class Output:
         `RECOVERY`. Mindestabstand zweier Urteile: `OUTPUT_STALL_SECONDS`.
         """
         actual = self._read()
-        if limit < OUTPUT_STALL_MIN_LIMIT or not actual.ok:
-            self.reset_stall()
-            return None
-
-        if abs(actual.power - limit) <= limit * OUTPUT_STALL_DEVIATION:
-            self.reset_stall()
-            return None
-
-        if actual.updated is None:
+        if (limit < OUTPUT_STALL_MIN_LIMIT or not actual.ok or actual.updated is None
+                or abs(actual.power - limit) <= limit * OUTPUT_STALL_DEVIATION):
             self.reset_stall()
             return None
 

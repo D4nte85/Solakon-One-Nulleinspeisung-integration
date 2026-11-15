@@ -39,7 +39,7 @@ from .const import (
     CONF_ACTUAL_SENSOR, CONF_SOLAR_SENSOR, CONF_SOC_SENSOR, CONF_TIMEOUT_COUNTDOWN,
     CONF_ACTIVE_POWER, CONF_DISCHARGE_CURRENT, CONF_TIMEOUT_SET, CONF_MODE_SELECT,
     CONF_EXPORT_LIMIT, MODE_DISABLED, MODE_DISCHARGE, MODE_AC_CHARGE, S_REGULATION_ENABLED,
-    S_ZONE3_LIMIT, DEVICE_MAX_CURRENT,
+    S_ZONE3_LIMIT, DEVICE_MAX_CURRENT, WRITE_DEADBAND,
     S_AC_SOC_TARGET, S_REST_IN_DISCHARGE, S_PI_ENABLED,
     S_TARGET_CHARGE_ENABLED, CHARGE_SESSION_KEY, CHARGE_SESSIONS, SESSION_AC, SESSION_NONE,
 )
@@ -129,7 +129,7 @@ class SolakonCoordinator:
         self.pi = PIController()
         self.active_fall: str = ""
 
-        # Boolsche Status-Flags
+        # Zustandsflags
         self.cycle_active: bool = False
         self.surplus_active: bool = False
         # Art der Lade-Session, SESSION_NONE ohne Lade-Session.
@@ -193,11 +193,6 @@ class SolakonCoordinator:
         """Setting typisiert lesen; `self.settings` ist stets mit SETTINGS_DEFAULTS gefüllt."""
         return cast(self.settings[key])
 
-    @property
-    def _regulation_on(self) -> bool:
-        """Regelung aktiviert; Voraussetzung für jeden Schreibzugriff."""
-        return self._setting(S_REGULATION_ENABLED, bool)
-
     # ── Lesen: Sensoren ──────────────────────────────────────────────────────
 
     def _read_scaled(self, entity_id: str, default: float, scale: dict[str, float]) -> float:
@@ -235,7 +230,7 @@ class SolakonCoordinator:
 
     def _read_actual(self) -> Actual:
         """Schnappschuss des Ist-Sensors für die Ausgangsleistung."""
-        eid = self.entry.data.get(CONF_ACTUAL_SENSOR, "")
+        eid = self.entry.data[CONF_ACTUAL_SENSOR]
         state = self.hass.states.get(eid)
         return Actual(
             self.actual_power(), self._entity_ok(eid),
@@ -263,23 +258,23 @@ class SolakonCoordinator:
     @property
     def grid_sensor(self) -> str:
         """Netzsensor der Instanz; er bestimmt die Netzgruppe."""
-        return self.entry.data.get(CONF_GRID_SENSOR, "")
+        return self.entry.data[CONF_GRID_SENSOR]
 
     @property
     def regulating(self) -> bool:
-        """Regelung aktiviert."""
-        return self._regulation_on
+        """Regelung aktiviert; Voraussetzung für jeden Schreibzugriff."""
+        return self._setting(S_REGULATION_ENABLED, bool)
 
     def in_discharge_pool(self) -> bool:
         """Regelung an, Modus '1' und nicht darin ruhend."""
-        if not self._regulation_on:
+        if not self.regulating:
             return False
-        mode = self._str(self.entry.data.get(CONF_MODE_SELECT, ""))
+        mode = self._str(self.entry.data[CONF_MODE_SELECT])
         return mode == MODE_DISCHARGE and not self._at_rest(MODE_DISCHARGE)
 
     def soc_reading(self) -> float | None:
         """SOC-Sensor dieser Instanz; `None`, wenn er nicht verfügbar ist."""
-        soc_eid = self.entry.data.get(CONF_SOC_SENSOR, "")
+        soc_eid = self.entry.data[CONF_SOC_SENSOR]
         if not self._entity_ok(soc_eid):
             return None
         return self._flt(soc_eid, 0)
@@ -302,20 +297,20 @@ class SolakonCoordinator:
 
     def actual_power(self) -> float:
         """Ist-Leistung in W."""
-        return self._flt_power(self.entry.data.get(CONF_ACTUAL_SENSOR, ""))
+        return self._flt_power(self.entry.data[CONF_ACTUAL_SENSOR])
 
     def output_setpoint(self) -> float:
         """Gesetzte Ausgangsleistung."""
-        return self._flt(self.entry.data.get(CONF_ACTIVE_POWER, ""))
+        return self._flt(self.entry.data[CONF_ACTIVE_POWER])
 
     def live_values(self) -> dict[str, float | None]:
         """Netz, Ist-Leistung und PV in W, SOC in %; ohne Zahl `None`."""
         cfg = self.entry.data
         return {
-            "grid": self._flt_power(cfg.get(CONF_GRID_SENSOR, ""), None),
-            "actual_power": self._flt_power(cfg.get(CONF_ACTUAL_SENSOR, ""), None),
-            "solar": self._flt_power(cfg.get(CONF_SOLAR_SENSOR, ""), None),
-            "soc": self._flt(cfg.get(CONF_SOC_SENSOR, ""), None),
+            "grid": self._flt_power(cfg[CONF_GRID_SENSOR], None),
+            "actual_power": self._flt_power(cfg[CONF_ACTUAL_SENSOR], None),
+            "solar": self._flt_power(cfg[CONF_SOLAR_SENSOR], None),
+            "soc": self._flt(cfg[CONF_SOC_SENSOR], None),
         }
 
     # ── Ableiten: Regelzustand ───────────────────────────────────────────────
@@ -383,14 +378,14 @@ class SolakonCoordinator:
         """Anzeigezone, Modus und Betriebszustand nachziehen; True bei Wechsel des Betriebszustands."""
         self.display.update(
             self.hass.config.language, soc, zone3, mode, self._at_rest(mode),
-            self.surplus_active, self.cycle_active, self._regulation_on,
+            self.surplus_active, self.cycle_active, self.regulating,
         )
         return self._update_operating_state()
 
     def _update_operating_state(self) -> bool:
         """Betriebszustand aus den Zustandsflags nachziehen; True bei Wechsel."""
         return self.display.update_state(
-            self._regulation_on, self._cycle_blocked, self._control_state, self.discharge_locked, self.is_night,
+            self.regulating, self._cycle_blocked, self._control_state, self.discharge_locked, self.is_night,
             self._setting(S_TARGET_CHARGE_ENABLED, bool), self.charging_to_target,
         )
 
@@ -426,15 +421,15 @@ class SolakonCoordinator:
     ) -> bool:
         """number.set_value — nur wenn Regulation aktiviert; True wenn geschrieben.
 
-        `only_if_changed` schreibt nur bei Abweichung über 0,5 vom Ist-Wert. Der Ist-Wert
+        `only_if_changed` schreibt nur bei Abweichung über WRITE_DEADBAND vom Ist-Wert. Der Ist-Wert
         ist `current` oder wird gelesen (fehlend: -1).
         """
-        if not self._regulation_on:
+        if not self.regulating:
             return False
         if only_if_changed:
             if current is None:
                 current = self._flt(entity_id, -1)
-            if abs(current - value) <= 0.5:
+            if abs(current - value) <= WRITE_DEADBAND:
                 return False
         await self.hass.services.async_call(
             "number", "set_value",
@@ -444,7 +439,7 @@ class SolakonCoordinator:
 
     async def _set_mode(self, mode: str) -> None:
         """select.select_option — nur wenn Regulation aktiviert."""
-        if not self._regulation_on:
+        if not self.regulating:
             return
         await self.hass.services.async_call(
             "select", "select_option",
@@ -494,8 +489,8 @@ class SolakonCoordinator:
     async def _set_fixed_output(
         self, target: float, current: float, action_key: str, ac_charge_mode: bool = False,
     ) -> None:
-        """Fester Sollwert: schreibt nur bei Abweichung über 0,5 vom kommandierten Ist-Wert."""
-        if abs(current - target) > 0.5:
+        """Fester Sollwert: schreibt nur bei Abweichung über WRITE_DEADBAND vom kommandierten Ist-Wert."""
+        if abs(current - target) > WRITE_DEADBAND:
             self._set_last_action(action_key, power=target)
             await self.out.set_and_wait(target, ac_charge_mode=ac_charge_mode)
 
@@ -533,11 +528,6 @@ class SolakonCoordinator:
     def integral(self) -> float:
         """Integralanteil des PI-Reglers."""
         return self.pi.integral
-
-    @integral.setter
-    def integral(self, value: float) -> None:
-        """Integralanteil des PI-Reglers setzen."""
-        self.pi.integral = value
 
     async def async_reset_integral(self) -> None:
         """Unter dem Lock: Integral nullen, als letzte Aktion vermerken, Listener benachrichtigen."""
@@ -607,7 +597,7 @@ class SolakonCoordinator:
         async with self._lock:
             changes = couple_target(self.settings, changes)
             turning_off = (
-                self._regulation_on
+                self.regulating
                 and S_REGULATION_ENABLED in changes
                 and not changes[S_REGULATION_ENABLED]
             )
@@ -626,7 +616,7 @@ class SolakonCoordinator:
         self.notify_listeners()
 
         # Neuen Zustand sofort anwenden
-        if self._regulation_on:
+        if self.regulating:
             self.request_regulation()
 
     async def _disable_regulation(self) -> None:
@@ -700,7 +690,7 @@ class SolakonCoordinator:
         self.trackers.refresh_changed()
 
         # ── 0. Regelung aktiv? ───────────────────────────────────────────────
-        if not self._regulation_on:
+        if not self.regulating:
             soc = self.soc_reading()
             mode = self._str(cfg[CONF_MODE_SELECT])
             display = None if soc is None or mode == "unknown" else (soc, self.zone3_limit(), mode)
@@ -806,7 +796,7 @@ class SolakonCoordinator:
         if fall_executed:
             self.active_fall = fall_executed
         # Fall ZE hat die Regelung abgeschaltet: Entladepause.
-        if not self._regulation_on:
+        if not self.regulating:
             self._end_cycle()
             return
 
@@ -930,13 +920,14 @@ class SolakonCoordinator:
         else:
             raise ValueError(f"unbekannte Pfadart {d.kind!r}")
         # Der Hinweis auf den PV-Deckel überschreibt keine Aktion der Stillstandsprüfung.
-        if d.cap_note and not stall_action and self.last_action_key != f"act_zone1_{d.cap_note}":
-            self._set_last_action(f"act_zone1_{d.cap_note}")
+        cap_key = f"act_zone1_{d.cap_note}"
+        if d.cap_note and not stall_action and self.last_action_key != cap_key:
+            self._set_last_action(cap_key)
         return False
 
     def _end_cycle(
         self, *, blocked: bool = False,
-        display: tuple[float, int, str] | None = None, prev_flags: dict[str, bool] | None = None,
+        display: tuple[float, int, str] | None = None, prev_flags: dict[str, Any] | None = None,
         notify_on_change: bool = False,
     ) -> None:
         """Zyklus abschließen: Fehler, Anzeige, Flag-Speicherung, Benachrichtigung.

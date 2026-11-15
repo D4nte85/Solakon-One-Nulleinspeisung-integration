@@ -91,7 +91,7 @@ class GroupStore:
     def __init__(
         self, hass: Any, dist_store: Store | None = None, soc_switch_store: Store | None = None,
         dist: dict[str, dict] | None = None, soc_switch: dict[str, dict] | None = None,
-        numbers_store: Store | None = None, numbers: dict[str, int] | None = None,
+        numbers_store: Store | None = None,
     ) -> None:
         self.hass = hass
         self._dist_store = dist_store
@@ -99,7 +99,7 @@ class GroupStore:
         self._numbers_store = numbers_store
         self.dist: dict[str, dict] = {} if dist is None else dist
         self.soc_switch: dict[str, dict] = {} if soc_switch is None else soc_switch
-        self.numbers: dict[str, int] = {} if numbers is None else numbers
+        self.numbers: dict[str, int] = {}
         self._dist_revs: dict[str, int] = {}
         self._dist_listeners: dict[str, list[Callable[[], None]]] = {}
         self._groups: dict[str, NetGroup] = {}
