@@ -127,34 +127,34 @@ class ForecastFlags:
     zone1_forced: bool
 
 
-def forecast_flags(
-    *, surplus_forecast: float | None, surplus_lock: float | None, zone1_force: float | None,
-    solar: float, soc: float, surplus_forecast_threshold: float, hard_limit_z0: float,
-    zone3_limit: float, surplus_lock_factor: float, zone1_force_threshold: float,
-    pv_reserve: float, zone1_force_min_soc: float,
-) -> ForecastFlags:
-    """Prognoseflags aus den Prognosewerten; ein fehlender Wert (None) setzt sein Flag nicht."""
+def forecast_flags(cs: CycleSettings, feature: dict[str, float | None], solar: float, soc: float) -> ForecastFlags:
+    """Prognoselage aus den Prognosewerten in `feature` und den Schwellen aus `cs`.
+
+    Ein fehlender Wert (None) setzt sein Flag nicht.
+    """
+    surplus_forecast, surplus_lock = feature["surplus_forecast"], feature["surplus_lock"]
+    zone1_force = feature["zone1_force"]
     # Forcierung nur solange die PV das Ausgangslimit übersteigt und der
     # SOC über der Zone-3-Schutzgrenze liegt.
     surplus_forced = surplus_forecast is not None and (
-        surplus_forecast >= surplus_forecast_threshold
-        and solar > hard_limit_z0
-        and soc > zone3_limit
+        surplus_forecast >= cs.surplus_forecast_threshold
+        and solar > cs.hard_limit_z0
+        and soc > cs.zone3_limit
     )
 
     # Sperrt nur den PV-Austritt aus Zone 0, solange die Vorhersage über
     # dem Ausgabelimit liegt. Der SOC-Austritt bleibt ungesperrt.
     exit_lock = surplus_lock is not None and (
-        surplus_lock >= surplus_lock_factor * hard_limit_z0
-        and soc > zone3_limit
+        surplus_lock >= cs.surplus_lock_factor * cs.hard_limit_z0
+        and soc > cs.zone3_limit
     )
 
     # Zone-1-Nacht-Forcierung: erlaubt Entladung unter das normale
     # Zone-1-Limit, wenn der morgige PV-Ertrag die Nacht ohnehin wieder auffüllt.
     zone1_forced = zone1_force is not None and (
-        zone1_force >= zone1_force_threshold
-        and solar < pv_reserve         # "gerade dunkel", ohne Nacht-Hysterese
-        and soc > zone1_force_min_soc  # eigener Floor, unabhängig von zone3_limit (Exit-Schwelle)
+        zone1_force >= cs.zone1_force_threshold
+        and solar < cs.pv_reserve         # "gerade dunkel", ohne Nacht-Hysterese
+        and soc > cs.zone1_force_min_soc  # eigener Floor, unabhängig von zone3_limit (Exit-Schwelle)
     )
     return ForecastFlags(surplus_forced, exit_lock, zone1_forced)
 

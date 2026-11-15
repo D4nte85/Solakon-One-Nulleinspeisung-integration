@@ -27,6 +27,7 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 - **Ruhezustand bei unverändertem Ruhemodus:** Ein Speichern, das „Ruhe in Modus 1“ auf den bisherigen Wert setzt, beendet den Ruhezustand nicht mehr (`coordinator.py`).
 - **Ungültige Werte an Zahlen-Entitäten:** Die Prüfung meldet sich in HA als Fehler der Integration statt als unbehandelte Ausnahme (`schema.py`).
 - **Tariflage aus einem Aufruf:** `Tariff.assess` liest Freigabe und Schwellen aus dem Schnappschuss und liefert die Meldungen des Preissensors mit; die Prognose-Unterdrückung hält das `Tariff`-Objekt. Die doppelte Freigabeprüfung über den gesetzten Preissensor entfällt. Keine Verhaltensänderung (`tariff.py`, `coordinator.py`, `binary_sensor.py`, `status_view.py`).
+- **Prognoselage als ein Wert:** `forecast_flags` bekommt Schnappschuss und Prognosewerte statt zwölf einzelner Parameter; der Coordinator hält die drei Prognose-Flags als einen Wert, Entitäten und Status lesen daraus. Keine Verhaltensänderung (`zones.py`, `coordinator.py`, `binary_sensor.py`, `status_view.py`).
 - **Zonen des Dynamic Offset aus einer Liste:** Settings-Schema, Offsetrechnung, Status und Sensor-Attribute lesen die vier Offsetzonen aus `DYN_ZONES`. Der Status führt dadurch auch `dyn_z1_night_enabled`, das bisher fehlte. Sonst keine Verhaltensänderung (`const.py`, `dynamic_offset.py`, `status_view.py`, `sensor.py`, `__init__.py`).
 
 ## [3.8.1] – 2026-11-11

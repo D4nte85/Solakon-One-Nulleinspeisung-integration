@@ -174,15 +174,15 @@ def test_i_loescht_flags_und_laesst_modus_stehen():
 
 # ── Vorstufe: Prognoseflags ──────────────────────────────────────────────────
 
-FC = dict(
-    surplus_forecast=None, surplus_lock=None, zone1_force=None, solar=0, soc=50,
+FC_CS = schema.cycle_settings(h.const.SETTINGS_DEFAULTS)._replace(
     surplus_forecast_threshold=15, hard_limit_z0=800, zone3_limit=20, surplus_lock_factor=1.5,
     zone1_force_threshold=10, pv_reserve=50, zone1_force_min_soc=30,
 )
 
 
-def _flags(**kw):
-    return zones.forecast_flags(**{**FC, **kw})
+def _flags(surplus_forecast=None, surplus_lock=None, zone1_force=None, solar=0, soc=50):
+    feature = {"surplus_forecast": surplus_forecast, "surplus_lock": surplus_lock, "zone1_force": zone1_force}
+    return zones.forecast_flags(FC_CS, feature, solar, soc)
 
 
 def test_prognoseflags_ohne_werte_aus():

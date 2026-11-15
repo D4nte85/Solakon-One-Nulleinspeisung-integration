@@ -32,7 +32,7 @@ from .tariff import Tariff, TariffState
 from .timeout import Timeout
 from .trackers import Trackers
 from .zones import (
-    FlagUpdate, Night, Surplus, ZoneInputs, at_rest, charging_to_target, control_state, decide,
+    FlagUpdate, ForecastFlags, Night, Surplus, ZoneInputs, at_rest, charging_to_target, control_state, decide,
     forecast_flags, night_active, required_discharge, rest_mode,
 )
 from .const import (
@@ -143,9 +143,8 @@ class SolakonCoordinator:
         self.trackers = Trackers(
             hass, lambda: self.settings, self._effective, self._on_state_change, self._on_periodic,
         )
-        self.forecast_surplus_forced: bool = False
-        self.forecast_exit_lock: bool = False
-        self.zone1_forced: bool = False
+        # Prognoselage des letzten Regelzyklus.
+        self.forecast = ForecastFlags(False, False, False)
 
     # ── Lesen: Settings ──────────────────────────────────────────────────────
 
@@ -748,17 +747,7 @@ class SolakonCoordinator:
         self.surplus_power = limits.surplus_power(self.surplus_active, solar, actual)
 
         # ── 5. Prognoseflags und Prognose-Unterdrückung ──────────────────────
-        forecast = forecast_flags(
-            surplus_forecast=feature["surplus_forecast"], surplus_lock=feature["surplus_lock"],
-            zone1_force=feature["zone1_force"], solar=solar, soc=soc,
-            surplus_forecast_threshold=cs.surplus_forecast_threshold, hard_limit_z0=cs.hard_limit_z0,
-            zone3_limit=cs.zone3_limit, surplus_lock_factor=cs.surplus_lock_factor,
-            zone1_force_threshold=cs.zone1_force_threshold, pv_reserve=cs.pv_reserve,
-            zone1_force_min_soc=cs.zone1_force_min_soc,
-        )
-        self.forecast_surplus_forced = forecast.surplus_forced
-        self.forecast_exit_lock = forecast.exit_lock
-        self.zone1_forced = forecast.zone1_forced
+        self.forecast = forecast_flags(cs, feature, solar, soc)
 
         self.tariff.forecast(feature["pv_forecast"], cs)
 
@@ -786,7 +775,7 @@ class SolakonCoordinator:
 
         new_surplus = self.surplus.step(
             surplus_enabled=cs.surplus_enabled, surplus_active=self.surplus_active,
-            forced=self.forecast_surplus_forced, exit_lock=self.forecast_exit_lock,
+            forced=self.forecast.surplus_forced, exit_lock=self.forecast.exit_lock,
             solar=solar, soc=soc, actual=actual, total_actual=total_actual,
             total_output=total_output,
             grid=grid, error_share=error_share,
@@ -843,7 +832,7 @@ class SolakonCoordinator:
         d = decide(ZoneInputs(
             cs=cs, soc=soc, grid=grid, actual=actual, total_output=total_output, mode=mode,
             new_surplus=new_surplus, ac_offset=ac_offset, tariff=tariff, is_night=is_night,
-            zone1_forced=self.zone1_forced,
+            zone1_forced=self.forecast.zone1_forced,
             surplus_active=self.surplus_active,
             session=self.charge_session,
             cycle_active=self.cycle_active,
