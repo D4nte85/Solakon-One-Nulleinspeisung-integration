@@ -21,6 +21,10 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 - **Titel nach geändertem Instanznamen:** „Entitäten anpassen“ speicherte einen neuen Instanznamen nur in den Eintragsdaten; unter Geräte & Dienste blieb der alte Titel stehen. Jetzt wird ein geänderter Instanzname auch Titel des Eintrags, ein unveränderter lässt einen von Hand vergebenen Titel stehen (`config_flow.py`).
 - **σ-Attribute bei mehreren Instanzen:** Die Netz-Standardabweichung rechnet der Gruppen-Leader mit seinem Fenster und seiner Trimmung; die Attribute `window_seconds` und `trim_count` am Sensor zeigten aber die Settings der jeweiligen Instanz. Jetzt zeigen sie die Parameter, mit denen σ gerechnet wurde. Sichtbar nur bei unterschiedlichen Settings in einer Netzgruppe (`dynamic_offset.py`, `sensor.py`).
 
+### Geändert
+
+- **Zonen des Dynamic Offset aus einer Liste:** Settings-Schema, Offsetrechnung, Status und Sensor-Attribute lesen die vier Offsetzonen aus `DYN_ZONES`. Der Status führt dadurch auch `dyn_z1_night_enabled`, das bisher fehlte. Sonst keine Verhaltensänderung (`const.py`, `dynamic_offset.py`, `status_view.py`, `sensor.py`, `__init__.py`).
+
 ## [3.8.1] – 2026-11-11
 
 ### Behoben

@@ -151,10 +151,7 @@ class GridStdDevSensor(CoordinatorSensor):
             "dynamic_offset_active": dyn,
         }
         if dyn:
-            attrs["dyn_offset_z1"] = self._coordinator.dyn.z1
-            attrs["dyn_offset_z1_night"] = self._coordinator.dyn.z1_night
-            attrs["dyn_offset_z2"] = self._coordinator.dyn.z2
-            attrs["dyn_offset_ac"] = self._coordinator.dyn.ac
+            attrs.update({f"dyn_offset_{zone}": value for zone, value in self._coordinator.dyn.offsets.items()})
         return attrs
 
 

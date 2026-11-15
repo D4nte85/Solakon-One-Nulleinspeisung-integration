@@ -30,28 +30,28 @@ def test_value_nacht_offset_statisch_und_dynamisch():
     settings = {**const.SETTINGS_DEFAULTS, const.S_OFFSET_1_NIGHT: 40}
     dyn = DynamicOffset()
     assert dyn.value("z1_night", settings) == 40.0
-    settings[const.S_DYN_Z1_NIGHT_ENABLED] = True
-    dyn.z1_night = 75
+    settings[const.dyn_key("z1_night", "enabled")] = True
+    dyn.offsets["z1_night"] = 75
     assert dyn.value("z1_night", settings) == 75.0
 
 
 def test_update_rechnet_nacht_offset():
-    settings = {**const.SETTINGS_DEFAULTS, const.S_DYN_Z1_NIGHT_ENABLED: True,
-                const.S_DYN_Z1_NIGHT_MIN: 20, const.S_DYN_Z1_NIGHT_NEGATIVE: True}
+    settings = {**const.SETTINGS_DEFAULTS, const.dyn_key("z1_night", "enabled"): True,
+                const.dyn_key("z1_night", "min"): 20, const.dyn_key("z1_night", "negative"): True}
     dyn = DynamicOffset()
     dyn.update(dyn_mod.Sigma(), settings)
-    assert dyn.z1_night == -20.0
+    assert dyn.offsets["z1_night"] == -20.0
 
 
 def test_value_statisch_als_float():
-    settings = {**const.SETTINGS_DEFAULTS, const.S_DYN_Z1_ENABLED: False, const.S_OFFSET_1: 30}
+    settings = {**const.SETTINGS_DEFAULTS, const.dyn_key("z1", "enabled"): False, const.S_OFFSET_1: 30}
     value = DynamicOffset().value("z1", settings)
     assert value == 30.0
     assert isinstance(value, float)
 
 
 def test_value_dynamisch():
-    settings = {**const.SETTINGS_DEFAULTS, const.S_DYN_AC_ENABLED: True}
+    settings = {**const.SETTINGS_DEFAULTS, const.dyn_key("ac", "enabled"): True}
     dyn = DynamicOffset()
-    dyn.ac = -42
+    dyn.offsets["ac"] = -42
     assert dyn.value("ac", settings) == -42.0

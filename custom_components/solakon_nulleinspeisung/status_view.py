@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from .const import S_DYN_AC_ENABLED, S_DYN_Z1_ENABLED, S_DYN_Z2_ENABLED, S_REGULATION_ENABLED
+from .const import DYN_ZONES, S_REGULATION_ENABLED, dyn_key
 
 if TYPE_CHECKING:
     from .coordinator import SolakonCoordinator
@@ -42,13 +42,8 @@ def snapshot(coord: SolakonCoordinator) -> dict[str, Any]:
         "dist_rev": coord.group.dist_rev,
         "grid_stddev": coord.dyn.stddev,
         "grid_stddev_raw": coord.dyn.stddev_raw,
-        "dyn_z1_enabled": coord.settings.get(S_DYN_Z1_ENABLED, False),
-        "dyn_z2_enabled": coord.settings.get(S_DYN_Z2_ENABLED, False),
-        "dyn_ac_enabled": coord.settings.get(S_DYN_AC_ENABLED, False),
-        "dyn_offset_z1": coord.dyn.z1,
-        "dyn_offset_z1_night": coord.dyn.z1_night,
-        "dyn_offset_z2": coord.dyn.z2,
-        "dyn_offset_ac": coord.dyn.ac,
+        **{dyn_key(zone, "enabled"): coord.settings[dyn_key(zone, "enabled")] for zone in DYN_ZONES},
+        **{f"dyn_offset_{zone}": coord.dyn.offsets[zone] for zone in DYN_ZONES},
         "active_fall": coord.active_fall,
         "operating_state": coord.display.operating_state,
         "operating_state_ts": coord.display.operating_state_ts,

@@ -213,33 +213,8 @@ S_TARGET_GRID_POWER       = "target_grid_power"
 S_SELF_ADJUST     = "self_adjust_enabled"
 S_SELF_ADJUST_TOL = "self_adjust_tolerance"
 
-S_DYN_Z1_ENABLED  = "dyn_z1_enabled"
-S_DYN_Z1_MIN      = "dyn_z1_min"
-S_DYN_Z1_MAX      = "dyn_z1_max"
-S_DYN_Z1_NOISE    = "dyn_z1_noise"
-S_DYN_Z1_FACTOR   = "dyn_z1_factor"
-S_DYN_Z1_NEGATIVE = "dyn_z1_negative"
-
-S_DYN_Z1_NIGHT_ENABLED  = "dyn_z1_night_enabled"
-S_DYN_Z1_NIGHT_MIN      = "dyn_z1_night_min"
-S_DYN_Z1_NIGHT_MAX      = "dyn_z1_night_max"
-S_DYN_Z1_NIGHT_NOISE    = "dyn_z1_night_noise"
-S_DYN_Z1_NIGHT_FACTOR   = "dyn_z1_night_factor"
-S_DYN_Z1_NIGHT_NEGATIVE = "dyn_z1_night_negative"
-
-S_DYN_Z2_ENABLED  = "dyn_z2_enabled"
-S_DYN_Z2_MIN      = "dyn_z2_min"
-S_DYN_Z2_MAX      = "dyn_z2_max"
-S_DYN_Z2_NOISE    = "dyn_z2_noise"
-S_DYN_Z2_FACTOR   = "dyn_z2_factor"
-S_DYN_Z2_NEGATIVE = "dyn_z2_negative"
-
-S_DYN_AC_ENABLED  = "dyn_ac_enabled"
-S_DYN_AC_MIN      = "dyn_ac_min"
-S_DYN_AC_MAX      = "dyn_ac_max"
-S_DYN_AC_NOISE    = "dyn_ac_noise"
-S_DYN_AC_FACTOR   = "dyn_ac_factor"
-S_DYN_AC_NEGATIVE = "dyn_ac_negative"
+# Zonen des Dynamic Offset; ihre Settings heißen `dyn_<zone>_<teil>`.
+DYN_ZONES = ("z1", "z1_night", "z2", "ac")
 
 # Harte Grenzen (min, max) je Gruppe; None heißt offen.
 POWER = (0, DEVICE_MAX_POWER)
@@ -288,15 +263,20 @@ def _str() -> Field:
     return Field("", "str")
 
 
-def _dyn_offset(prefix: str) -> dict[str, Field]:
-    """Felder eines dynamischen Offsets `dyn_<prefix>_*`."""
+def dyn_key(zone: str, part: str) -> str:
+    """Settings-Schlüssel `dyn_<zone>_<part>` des Dynamic Offset."""
+    return f"dyn_{zone}_{part}"
+
+
+def _dyn_offset(zone: str) -> dict[str, Field]:
+    """Felder eines dynamischen Offsets `dyn_<zone>_*`."""
     return {
-        f"dyn_{prefix}_enabled":  _bool(),
-        f"dyn_{prefix}_min":      _int(30, AMOUNT, 0, 500, 1),
-        f"dyn_{prefix}_max":      _int(250, AMOUNT, 50, 1000, 10),
-        f"dyn_{prefix}_noise":    _int(15, AMOUNT, 0, 100, 1),
-        f"dyn_{prefix}_factor":   _float(1.5, AMOUNT, 0.5, 5, 0.1),
-        f"dyn_{prefix}_negative": _bool(),
+        dyn_key(zone, "enabled"):  _bool(),
+        dyn_key(zone, "min"):      _int(30, AMOUNT, 0, 500, 1),
+        dyn_key(zone, "max"):      _int(250, AMOUNT, 50, 1000, 10),
+        dyn_key(zone, "noise"):    _int(15, AMOUNT, 0, 100, 1),
+        dyn_key(zone, "factor"):   _float(1.5, AMOUNT, 0.5, 5, 0.1),
+        dyn_key(zone, "negative"): _bool(),
     }
 
 
@@ -376,10 +356,7 @@ SETTINGS_SCHEMA: dict[str, Field] = {
     S_SELF_ADJUST:     _bool(),
     S_SELF_ADJUST_TOL: _int(2, AMOUNT, 1, 50, 1),
 
-    **_dyn_offset("z1"),
-    **_dyn_offset("z1_night"),
-    **_dyn_offset("z2"),
-    **_dyn_offset("ac"),
+    **{key: field for zone in DYN_ZONES for key, field in _dyn_offset(zone).items()},
 }
 SETTINGS_DEFAULTS: dict = {key: field.default for key, field in SETTINGS_SCHEMA.items()}
 

@@ -5,37 +5,21 @@ from collections import deque
 from typing import Any
 
 from .const import (
-    S_STDDEV_WINDOW, S_STDDEV_TRIM_COUNT, S_OFFSET_1, S_OFFSET_2, S_AC_OFFSET, S_OFFSET_1_NIGHT,
-    S_DYN_Z1_ENABLED, S_DYN_Z1_MIN, S_DYN_Z1_MAX, S_DYN_Z1_NOISE, S_DYN_Z1_FACTOR, S_DYN_Z1_NEGATIVE,
-    S_DYN_Z1_NIGHT_ENABLED, S_DYN_Z1_NIGHT_MIN, S_DYN_Z1_NIGHT_MAX, S_DYN_Z1_NIGHT_NOISE, S_DYN_Z1_NIGHT_FACTOR,
-    S_DYN_Z1_NIGHT_NEGATIVE,
-    S_DYN_Z2_ENABLED, S_DYN_Z2_MIN, S_DYN_Z2_MAX, S_DYN_Z2_NOISE, S_DYN_Z2_FACTOR, S_DYN_Z2_NEGATIVE,
-    S_DYN_AC_ENABLED, S_DYN_AC_MIN, S_DYN_AC_MAX, S_DYN_AC_NOISE, S_DYN_AC_FACTOR, S_DYN_AC_NEGATIVE,
+    DYN_ZONES, S_STDDEV_WINDOW, S_STDDEV_TRIM_COUNT, S_OFFSET_1, S_OFFSET_2, S_AC_OFFSET, S_OFFSET_1_NIGHT,
+    dyn_key,
 )
 from .pi import clamp as _clamp
 
-# Offset-Parameter je Zone: (Min, Max, Rauschen, Faktor, Negativ) und ihre Casts.
-DYN_OFFSETS = {
-    "z1": (S_DYN_Z1_MIN, S_DYN_Z1_MAX, S_DYN_Z1_NOISE, S_DYN_Z1_FACTOR, S_DYN_Z1_NEGATIVE),
-    "z1_night": (S_DYN_Z1_NIGHT_MIN, S_DYN_Z1_NIGHT_MAX, S_DYN_Z1_NIGHT_NOISE, S_DYN_Z1_NIGHT_FACTOR,
-                 S_DYN_Z1_NIGHT_NEGATIVE),
-    "z2": (S_DYN_Z2_MIN, S_DYN_Z2_MAX, S_DYN_Z2_NOISE, S_DYN_Z2_FACTOR, S_DYN_Z2_NEGATIVE),
-    "ac": (S_DYN_AC_MIN, S_DYN_AC_MAX, S_DYN_AC_NOISE, S_DYN_AC_FACTOR, S_DYN_AC_NEGATIVE),
-}
-DYN_CASTS = (int, int, float, float, bool)
+# Parameter der Offset-Formel in der Reihenfolge von `dynamic_offset`, mit Cast.
+DYN_PARAMS = (("min", int), ("max", int), ("noise", float), ("factor", float), ("negative", bool))
 
-# Offset je Anzeigezone: (Enable-Setting, statisches Setting).
-OFFSET_SOURCES = {
-    "ac": (S_DYN_AC_ENABLED, S_AC_OFFSET),
-    "z1": (S_DYN_Z1_ENABLED, S_OFFSET_1),
-    "z1_night": (S_DYN_Z1_NIGHT_ENABLED, S_OFFSET_1_NIGHT),
-    "z2": (S_DYN_Z2_ENABLED, S_OFFSET_2),
-}
+# Statisches Offset-Setting je Zone aus DYN_ZONES.
+STATIC_OFFSETS = {"z1": S_OFFSET_1, "z1_night": S_OFFSET_1_NIGHT, "z2": S_OFFSET_2, "ac": S_AC_OFFSET}
 
 
 def any_dynamic(settings: dict) -> bool:
-    """True, wenn der Offset mindestens einer Zone aus OFFSET_SOURCES dynamisch ist."""
-    return any(settings[enabled_key] for enabled_key, _ in OFFSET_SOURCES.values())
+    """True, wenn der Offset mindestens einer Zone aus DYN_ZONES dynamisch ist."""
+    return any(settings[dyn_key(zone, "enabled")] for zone in DYN_ZONES)
 
 
 def _stddev_of(values: list[float]) -> float:
@@ -51,11 +35,9 @@ def dynamic_offset(
 ) -> float:
     """Offset = clamp(min + max(0, (StdDev − Rausch) × Faktor), min, max), mit `negative` negiert.
 
-    Bei `min_off >= max_off` oder negativer StdDev gilt `min_off`.
+    Bei `min_off >= max_off` gilt `min_off`.
     """
     if min_off >= max_off:
-        result = min_off
-    elif stddev < 0:
         result = min_off
     else:
         buf = max(0.0, (stddev - noise) * factor)
@@ -107,15 +89,12 @@ class Sigma:
 
 
 class DynamicOffset:
-    """Dynamic Offset einer Instanz: Kopie von σ aus der Netzgruppe und berechnete Offsets je Zone."""
+    """Dynamic Offset einer Instanz: Kopie von σ aus der Netzgruppe und berechnete Offsets je Zone aus DYN_ZONES."""
 
     def __init__(self) -> None:
         self.stddev: float = 0.0
         self.stddev_raw: float = 0.0
-        self.z1: float = 0.0
-        self.z1_night: float = 0.0
-        self.z2: float = 0.0
-        self.ac: float = 0.0
+        self.offsets: dict[str, float] = {zone: 0.0 for zone in DYN_ZONES}
 
     def update(self, sigma: Sigma, settings: dict) -> None:
         """σ aus der Netzgruppe übernehmen; Offsets aller Zonen neu berechnen, wenn eine Zone dynamisch ist."""
@@ -123,16 +102,15 @@ class DynamicOffset:
         self.stddev_raw = sigma.stddev_raw
         if not any_dynamic(settings):
             return
-        for zone, keys in DYN_OFFSETS.items():
-            args = (cast(settings[key]) for key, cast in zip(keys, DYN_CASTS))
-            setattr(self, zone, dynamic_offset(self.stddev, *args))
+        for zone in DYN_ZONES:
+            args = (cast(settings[dyn_key(zone, part)]) for part, cast in DYN_PARAMS)
+            self.offsets[zone] = dynamic_offset(self.stddev, *args)
 
     def offset(self, zone: str, settings: dict) -> tuple[bool, Any, float]:
-        """(dynamisch, statischer Settings-Wert, wirksamer Offset) der Zone aus OFFSET_SOURCES."""
-        enabled_key, static_key = OFFSET_SOURCES[zone]
-        dynamic = bool(settings.get(enabled_key, False))
-        static = settings.get(static_key)
-        return dynamic, static, getattr(self, zone) if dynamic else static
+        """(dynamisch, statischer Settings-Wert, wirksamer Offset) der Zone aus DYN_ZONES."""
+        dynamic = bool(settings[dyn_key(zone, "enabled")])
+        static = settings[STATIC_OFFSETS[zone]]
+        return dynamic, static, self.offsets[zone] if dynamic else static
 
     def value(self, zone: str, settings: dict) -> float:
         """Wirksamer Offset der Zone in W."""

@@ -19,7 +19,7 @@ from .const import (
     DOMAIN, PLATFORMS,
     CONF_INSTANCE_NAME,
     CONF_GRID_SENSOR,
-    DIST_DEFAULTS, DIST_SCHEMA, SETTINGS_SCHEMA, VERSION,
+    DIST_DEFAULTS, DIST_SCHEMA, DYN_ZONES, SETTINGS_SCHEMA, VERSION, dyn_key,
 )
 from . import group_store, number
 from .migrations import SolakonSettingsStore, async_migrate_entry as async_migrate_entry
@@ -42,9 +42,8 @@ WS_STATUS_KEYS = (
     "last_output_ts", "mode_label_ts", "last_error", "integral",
     "cycle_active", "surplus_active", "charge_session", "regulation_enabled",
     ("stddev", "grid_stddev"), ("stddev_raw", "grid_stddev_raw"),
-    "dyn_z1_enabled", "dyn_z2_enabled", "dyn_ac_enabled",
-    ("dyn_z1", "dyn_offset_z1"), ("dyn_z1_night", "dyn_offset_z1_night"),
-    ("dyn_z2", "dyn_offset_z2"), ("dyn_ac", "dyn_offset_ac"),
+    *(dyn_key(zone, "enabled") for zone in DYN_ZONES),
+    *((f"dyn_{zone}", f"dyn_offset_{zone}") for zone in DYN_ZONES),
     "active_fall", "operating_state", "discharge_locked", "dist_mode_effective", "is_night",
     "forecast_tariff_suppressed", "forecast_surplus_forced", "forecast_exit_lock", "allocated_power",
     "offset_zone", "offset_dynamic", "offset_static", "offset_value", "capacity_kwh",

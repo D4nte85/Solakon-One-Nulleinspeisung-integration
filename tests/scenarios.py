@@ -50,7 +50,7 @@ def _sensor(rng, value, units, p_unavailable=0.04):
 # (Kommazahl im Ganzzahlfeld: abgeschnitten).
 INVALID_SETTINGS = [
     (C.S_SURPLUS_PV_HYST, -10), (C.S_AC_POWER_LIMIT, 1500), (C.S_TARIFF_POWER, 2000),
-    (C.S_DYN_Z1_MAX, -20), (C.S_ZONE1_LIMIT, 150), (C.S_ZONE1_LIMIT, 50.5), (C.S_P_FACTOR, None),
+    (C.dyn_key("z1", "max"), -20), (C.S_ZONE1_LIMIT, 150), (C.S_ZONE1_LIMIT, 50.5), (C.S_P_FACTOR, None),
     (C.S_TOLERANCE, "15"), (C.S_SURPLUS_ENABLED, 1), (C.S_PERIODIC_INTERVAL, 0),
 ]
 
@@ -105,11 +105,11 @@ def gen_settings(rng) -> dict:
     s[C.S_ZONE1_FORCE_THRESHOLD] = _pick(rng, [15.0, 2.0])
     s[C.S_ZONE1_FORCE_MIN_SOC] = _pick(rng, [35, 35, 35, 25, 45, 10])
 
-    for z in ("Z1", "Z2", "AC"):
-        s[getattr(C, f"S_DYN_{z}_ENABLED")] = _chance(rng, 0.25)
-        s[getattr(C, f"S_DYN_{z}_NEGATIVE")] = _chance(rng, 0.2)
-        s[getattr(C, f"S_DYN_{z}_MIN")] = _pick(rng, [30, 0, 100])
-        s[getattr(C, f"S_DYN_{z}_MAX")] = _pick(rng, [250, 20, 400])
+    for z in ("z1", "z2", "ac"):
+        s[C.dyn_key(z, "enabled")] = _chance(rng, 0.25)
+        s[C.dyn_key(z, "negative")] = _chance(rng, 0.2)
+        s[C.dyn_key(z, "min")] = _pick(rng, [30, 0, 100])
+        s[C.dyn_key(z, "max")] = _pick(rng, [250, 20, 400])
 
     # Sensorzuordnung lokal, global oder gar nicht
     for key, local in (

@@ -333,7 +333,7 @@ COORD_PATHS = {"_tariff_unit_suspect_since": "tariff.unit_suspect_since",
                "_prev_actual": "surplus.prev_actual", "_solar_zero_entry_armed": "surplus.armed",
                "_output_warning": "_messages.hardware_msg",
                "grid_stddev": "dyn.stddev", "grid_stddev_raw": "dyn.stddev_raw",
-               "dyn_offset_z1": "dyn.z1", "dyn_offset_z2": "dyn.z2", "dyn_offset_ac": "dyn.ac",
+               "dyn_offset_z1": "dyn.offsets.z1", "dyn_offset_z2": "dyn.offsets.z2", "dyn_offset_ac": "dyn.offsets.ac",
                "last_output_ts": "out.last_ts", "_output_stall_actions": "out.stall_actions",
                "_output_stall_last_ts": "out.stall_last_ts",
                "current_zone": "display.zone", "zone_label": "display.zone_label",
@@ -346,7 +346,7 @@ COORD_PATHS = {"_tariff_unit_suspect_since": "tariff.unit_suspect_since",
 def _coord_attr(coord, name):
     obj = coord
     for part in COORD_PATHS.get(name, name).split("."):
-        obj = getattr(obj, part, _MISSING)
+        obj = obj.get(part, _MISSING) if isinstance(obj, dict) else getattr(obj, part, _MISSING)
     return obj
 
 
