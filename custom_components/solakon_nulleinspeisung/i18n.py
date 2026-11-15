@@ -147,16 +147,16 @@ _TEXTS: dict[str, dict[str, str]] = {
         "en": "Case I: safety correction (charging session without mode 3)",
     },
     "act_fall_gt": {
-        "de": "Fall GT: Tarif-Laden (Preis {price:.1f})",
-        "en": "Case GT: tariff charging (price {price:.1f})",
+        "de": "Fall GT: Tarif-Laden (Preis {price:.4g})",
+        "en": "Case GT: tariff charging (price {price:.4g})",
     },
     "act_fall_ht": {
         "de": "Fall HT: Tarif-Laden beendet",
         "en": "Case HT: tariff charging ended",
     },
     "act_fall_tm": {
-        "de": "Tarifsperre (Preis {price:.1f})",
-        "en": "Tariff Lock (price {price:.1f})",
+        "de": "Tarifsperre (Preis {price:.4g})",
+        "en": "Tariff Lock (price {price:.4g})",
     },
     "act_fall_ze": {
         "de": "Fall ZE: Ziel-SOC erreicht (SOC {soc:.0f}%) — Entladepause",

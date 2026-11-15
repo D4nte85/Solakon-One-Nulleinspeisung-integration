@@ -791,7 +791,9 @@ class SolakonCoordinator:
             forced=self.forecast_surplus_forced, exit_lock=self.forecast_exit_lock,
             solar=solar, soc=soc, actual=actual, total_actual=total_actual,
             total_output=total_output,
-            grid=grid, error_share=error_share, surplus_threshold=cs.surplus_threshold,
+            grid=grid, error_share=error_share,
+            in_pool=self.in_discharge_pool(),
+            surplus_threshold=cs.surplus_threshold,
             surplus_soc_hyst=cs.surplus_soc_hyst, surplus_pv_hyst=cs.surplus_pv_hyst,
         )
         is_night = self.night.step(

@@ -1,0 +1,51 @@
+titel: Austritt aus Zone 0 in der Tarifsperre — PI-Schritt mit vollem Entladestrom, danach Wiedereintritt über den PV-0-Zweig
+bezug: issue-57-zone0-schleife-tarifsperre
+# Einzelbetrieb, Tarifsperre (Preis 23,3 < Teuer-Schwelle 27), Überschuss an, Schwelle 95 %, SOC 96 %.
+# Start in Zone 0 (Sollwert 1200 W, 2 A); in der Dämmerung fließen nur 46 W Modul-PV, das Haus bezieht 300 W.
+# 1: 0B (PV deckt den Lastanteil nicht). In der Tarifsperre kein Zyklus, kein PI-Schritt > 0 W,
+#    Ruhezustand in Modus '0'. Austritt über den Verbrauch entschärft den PV-0-Eintritt.
+# 2: erst jetzt TM (Modus '0', 0 W).
+# 3/4: Gerät drosselt die Module (PV 0, Ist 0) → nach zwei Zyklen mit Ist 0 erneut 0A über den PV-0-Zweig.
+stunde: 6
+netz: 300
+sensoren:
+  sensor.preis: {wert: 23.3, einheit: ct/kWh}
+instanzen:
+  - prefix: a
+    settings:
+      regulation_enabled: true
+      surplus_enabled: true
+      surplus_soc_threshold: 95
+      surplus_soc_hyst: 5
+      surplus_pv_hyst: 50
+      hard_limit_z0: 1200
+      hard_limit_z1: 1200
+      discharge_max: 40
+      zone1_limit: 50
+      tariff_enabled: true
+      tariff_price_sensor: sensor.preis
+      tariff_cheap_threshold: 20.0
+      tariff_exp_threshold: 27.0
+    flags: {cycle_active: true, surplus_active: true, solar_zero_entry_armed: true}
+    sensoren: {soc: 96, solar: 46, ist: 30, modus: "1", leistung: 1200, entladestrom: 2}
+    vorheriger_ist: 30
+    folgt_ist: 0
+schritte:
+  - nach: 0
+  - nach: 5
+    setzen: {a.solar: 46, a.ist: 160, netz: 140}
+  - nach: 5
+    setzen: {a.solar: 0, a.ist: 0, netz: 330}
+  - nach: 1
+    setzen: {netz: 331}
+erwartet:
+  - schritt: 1
+    kein_aufruf: {entity: a.leistung, wert_min: 1}
+  - schritt: 1
+    instanz: a
+    zustand: {cycle_active: false}
+  - schritt: 1
+    aufruf: {entity: a.modus, wert: "0"}
+  - schritt: 4
+    instanz: a
+    zustand: {surplus_active: false}

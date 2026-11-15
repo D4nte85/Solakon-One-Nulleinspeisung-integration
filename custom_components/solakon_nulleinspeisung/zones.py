@@ -157,26 +157,38 @@ def forecast_flags(
 def surplus_step(
     *, armed: bool, surplus_enabled: bool, surplus_active: bool, forced: bool, exit_lock: bool,
     solar: float, soc: float, actual: float, prev_actual: float, total_actual: float,
-    total_output: float, grid: float, error_share: float, surplus_threshold: float, surplus_soc_hyst: float, surplus_pv_hyst: float,
+    total_output: float, grid: float, error_share: float, in_pool: bool,
+    surplus_threshold: float, surplus_soc_hyst: float, surplus_pv_hyst: float,
 ) -> tuple[bool, bool]:
-    """Surplus-Ein- und -Austritt mit PV-0-Entprellung; liefert (new_surplus, armed)."""
+    """Surplus-Ein- und -Austritt mit PV-0-Entprellung; liefert (new_surplus, armed).
+
+    Im Entlade-Pool rechnen Ein- und Austritt mit `error_share`; außerhalb rechnet der
+    Eintritt ungeteilt, mit einem Lastbezug von mindestens 0.
+    Scharf wird die Entprellung bei PV über 0, während die Instanz ruhend nichts abgibt;
+    entschärft bei jedem Austritt über den Verbrauch und bei jedem Austritt mit PV = 0.
+    """
     if not surplus_enabled:
         return False, armed
-    if solar > 0:
+    if solar > 0 and actual == 0 and not surplus_active:
         armed = True
 
     # Lastanteil dieser Instanz: (Σ + grid) × error_share. Der Eintritt summiert
     # max(Ist-Leistung, Sollwert), weil die Ist-Leistung nach einer Erhöhung noch den
     # alten Stand zeigen kann. Der Austritt summiert die Ist-Leistung: In
     # Zone 0 steht der Sollwert fest, das Gerät gibt nur ab, was PV und Entladestrom hergeben.
-    entry_share = (total_output + grid) * error_share
+    if in_pool:
+        entry_share = (total_output + grid) * error_share
+        entry_hyst_share = surplus_pv_hyst * error_share
+    else:
+        entry_share = max(0.0, total_output + grid)
+        entry_hyst_share = surplus_pv_hyst
     consumption_share = (total_actual + grid) * error_share
     pv_hyst_share = surplus_pv_hyst * error_share
 
     normal_entry = (
         soc >= surplus_threshold
         and (
-            solar > (entry_share + pv_hyst_share)
+            solar > (entry_share + entry_hyst_share)
             or (
                 solar == 0
                 and actual == 0
@@ -195,7 +207,7 @@ def surplus_step(
     power_exit = solar <= (consumption_share - pv_hyst_share) and not exit_lock
     surplus_exit = not forced and (soc_exit or power_exit)
     if surplus_active:
-        if surplus_exit and solar == 0:
+        if surplus_exit and (solar == 0 or power_exit):
             armed = False
         return not surplus_exit, armed
     return surplus_entry, armed
@@ -285,7 +297,13 @@ def decide(inp: ZoneInputs) -> FallDecision | None:
     # ── Fall 0B: Surplus Exit ────────────────────────────────────────────────
     # Austritt bei erfüllter Austritts-Bedingung, deaktivierter Überschuss-Option oder Aufladen.
     if inp.surplus_active and (not inp.cs.surplus_enabled or not inp.new_surplus or charging):
-        # Zone nach Overlay-Ende aus dem SOC ableiten
+        # In der Tarifsperre in den Ruhezustand, sonst Zone nach Overlay-Ende aus dem SOC ableiten
+        if inp.tariff.discharge_locked(session, False):
+            return FallDecision("0B", {
+                "reset_integral": True,
+                "flags": FlagUpdate(surplus_active=False, cycle_active=False),
+                "output": 0, "rest": True,
+            }, "act_surplus_off")
         return FallDecision("0B", {
             "reset_integral": True,
             "flags": FlagUpdate(surplus_active=False, cycle_active=soc > zone1),

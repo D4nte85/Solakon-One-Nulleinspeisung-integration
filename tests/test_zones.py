@@ -74,6 +74,15 @@ def test_je_fall_ein_treffer(kw, name):
     assert _decide(**kw).name == name
 
 
+@pytest.mark.parametrize("below_exp, cycle, rest", [(False, True, None), (True, False, True)])
+def test_0b_in_tarifsperre_ruht(below_exp, cycle, rest):
+    """Issue #57: 0B startet in der Tarifsperre keinen Zyklus und führt in den Ruhezustand."""
+    d = _decide(surplus_active=True, cycle_active=True, mode="1", at_rest=False, soc=96, below_exp=below_exp)
+    assert d.name == "0B"
+    assert d.transition["flags"].cycle_active is cycle
+    assert d.transition.get("rest") is rest
+
+
 @pytest.mark.parametrize("kw, name", [
     # 0A vor A: Überschuss-Eintritt und Zone-1-SOC zugleich
     (dict(surplus_enabled=True, new_surplus=True, soc=70), "0A"),
@@ -215,7 +224,7 @@ def test_zone1_forcierung_grenzen(kw, erwartet):
 SN = dict(
     armed=True, surplus_enabled=True, surplus_active=False, forced=False, exit_lock=False,
     solar=0, soc=95, actual=0, prev_actual=0, total_actual=0, total_output=0, grid=0,
-    error_share=1.0, surplus_threshold=90, surplus_soc_hyst=2, surplus_pv_hyst=50,
+    error_share=1.0, in_pool=True, surplus_threshold=90, surplus_soc_hyst=2, surplus_pv_hyst=50,
 )
 
 
@@ -231,6 +240,11 @@ def _sn(**kw):
     # Der Eintritt rechnet mit der Ausgangsleistung, nicht mit der Ist-Leistung (Issue #50)
     (dict(solar=351, total_actual=0, total_output=200, grid=100), True),
     (dict(solar=200, total_actual=0, total_output=200, grid=100), False),
+    # Außerhalb des Pools rechnet der Eintritt ungeteilt, Lastbezug mindestens 0 (Issue #57)
+    (dict(solar=22, total_output=20, grid=257, error_share=0.0, in_pool=False), False),
+    (dict(solar=351, total_output=200, grid=100, error_share=0.0, in_pool=False), True),
+    (dict(solar=50, grid=-400, error_share=0.0, in_pool=False), False),
+    (dict(solar=51, grid=-400, error_share=0.0, in_pool=False), True),
     # Eintritt bei PV 0 nur scharf und ohne Ausgang in diesem und dem vorigen Zyklus
     (dict(), True),
     (dict(armed=False), False),
@@ -276,6 +290,21 @@ def test_pv0_eintritt_erst_nach_pv_wieder_scharf():
 
 def test_austritt_mit_pv_laesst_eintritt_scharf():
     assert _sn(surplus_active=True, soc=87, solar=10) == (False, True)
+
+
+def test_verbrauchsaustritt_mit_pv_entschaerft():
+    """Issue #57: Austritt über den Verbrauch bei PV > 0 entschärft den PV-0-Eintritt."""
+    assert _sn(surplus_active=True, solar=46, total_actual=30, grid=300) == (False, False)
+
+
+@pytest.mark.parametrize("kw, scharf", [
+    (dict(solar=46, actual=0), True),
+    (dict(solar=46, actual=30), False),
+    (dict(solar=500, actual=0, surplus_active=True), False),
+])
+def test_scharf_nur_bei_pv_ohne_eigene_abgabe(kw, scharf):
+    """Issue #57: Scharf nur bei PV > 0, während die Instanz ruhend nichts abgibt."""
+    assert _sn(armed=False, **kw)[1] is scharf
 
 
 def test_ohne_ueberschuss_bleibt_scharf_unveraendert():

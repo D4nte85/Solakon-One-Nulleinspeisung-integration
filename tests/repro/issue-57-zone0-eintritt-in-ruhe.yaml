@@ -1,0 +1,36 @@
+titel: Zone 0 tritt aus der Ruhe (Tarifsperre) bei jeder PV über 0 ein, auch bei Netzbezug
+bezug: issue-57-zone0-schleife-tarifsperre
+# Einzelbetrieb, Tarifsperre (Preis 23,3 < Teuer-Schwelle 27), Überschuss an, Schwelle 95 %, PV-Hysterese 50 W.
+# Die Instanz ruht nach TM in Modus '0' und gehört damit nicht zum Entlade-Pool: Fehler-Anteil 0,
+# Eintrittsbezug (ΣOutput + Netz) × 0 + 50 × 0 = 0 W. PV 22 W genügt für 0A, obwohl das Haus 257 W bezieht.
+# Im Pool (Anteil 1,0) läge der Bezug bei 257 + 50 = 307 W; der Austritt im nächsten Zyklus rechnet so.
+# Latch absichtlich nicht scharf: der Eintritt läuft über den normalen PV-Zweig.
+stunde: 6
+netz: 257
+sensoren:
+  sensor.preis: {wert: 23.3, einheit: ct/kWh}
+instanzen:
+  - prefix: a
+    settings:
+      regulation_enabled: true
+      surplus_enabled: true
+      surplus_soc_threshold: 95
+      surplus_soc_hyst: 5
+      surplus_pv_hyst: 50
+      hard_limit_z0: 1200
+      zone1_limit: 50
+      tariff_enabled: true
+      tariff_price_sensor: sensor.preis
+      tariff_cheap_threshold: 20.0
+      tariff_exp_threshold: 27.0
+    flags: {cycle_active: false, surplus_active: false, solar_zero_entry_armed: false}
+    sensoren: {soc: 96, solar: 22, ist: 20, modus: "0", leistung: 0}
+    folgt_ist: 0
+schritte:
+  - nach: 0
+erwartet:
+  - schritt: 1
+    instanz: a
+    zustand: {surplus_active: false}
+  - schritt: 1
+    kein_aufruf: {entity: a.modus, wert: "1"}
