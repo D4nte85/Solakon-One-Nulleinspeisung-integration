@@ -621,7 +621,8 @@ class SolakonCoordinator:
             self.request_regulation()
 
     async def _switch_off_sequence(self) -> None:
-        """Abschaltpfad bei noch aktiver Regelung: Output 0, Entladestrom auf Gerätemaximum, Modus '0'."""
+        """Abschaltpfad bei noch aktiver Regelung: neue Fehlerkette, Output 0, Entladestrom auf Gerätemaximum, Modus '0'."""
+        self._messages = CycleMessages()
         _LOGGER.info("Solakon: Regelung wird deaktiviert — setze Output 0, Modus Disabled")
         await self._transition(output=0, wait=False, timer=False)
         await self._set_discharge(DEVICE_MAX_CURRENT)
@@ -696,7 +697,7 @@ class SolakonCoordinator:
         if missing is not None:
             _LOGGER.debug("Solakon: Kernsensor %s ohne Zahlenwert, Zyklus übersprungen", missing)
             self._messages.fail(("err_core_sensor", {"sensor": missing}))
-            self._end_cycle(blocked=True, notify_on_change=self._messages.msgs == self.last_error_msgs)
+            self._end_cycle(blocked=True, notify_on_change=True)
             return
 
         soc = self._flt(cfg[CONF_SOC_SENSOR])
@@ -947,8 +948,10 @@ class SolakonCoordinator:
         Übernimmt die Meldungen des Zyklus nach `last_error_msgs`.
         `display` (soc, zone3, mode) zieht Zonen- und Modusanzeige nach, sonst nur
         den Betriebszustand. Mit `prev_flags` wird bei geänderten Flags verzögert gespeichert.
-        `notify_on_change` benachrichtigt nur, wenn der Betriebszustand gewechselt hat.
+        `notify_on_change` benachrichtigt nur, wenn Meldungen, Anzeigezone, Modus oder
+        Betriebszustand gewechselt haben.
         """
+        shown = (self.last_error_msgs, self.display.zone, self.display.mode_key)
         self.last_error_msgs = self._messages.msgs
         if blocked:
             self._cycle_blocked = True
@@ -957,6 +960,7 @@ class SolakonCoordinator:
             changed = True
         else:
             changed = self._update_operating_state()
+        changed = changed or shown != (self.last_error_msgs, self.display.zone, self.display.mode_key)
         if prev_flags is not None and self._persisted_flags() != prev_flags:
             self.schedule_save()
         if changed or not notify_on_change:

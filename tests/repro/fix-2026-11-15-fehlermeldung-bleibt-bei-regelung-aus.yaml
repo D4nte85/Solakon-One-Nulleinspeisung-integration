@@ -1,0 +1,18 @@
+titel: Fehlermeldung bleibt nach dem Ausschalten der Regelung stehen
+bezug: fix-2026-11-15-fehlermeldung-bleibt-bei-regelung-aus
+# Kernsensor ohne Zahl setzt err_core_sensor; nach dem Ausschalten der Regelung muss die Meldung verschwinden.
+netz: unavailable
+instanzen:
+  - prefix: a
+    settings: {regulation_enabled: true}
+    sensoren: {soc: 60, modus: "1", leistung: 300}
+schritte:
+  - nach: 0
+  - nach: 5
+    settings: {regulation_enabled: false}
+  - nach: 5
+    setzen: {netz: 100}
+erwartet:
+  - schritt: 1
+    zustand_nicht: {last_error: ""}
+  - zustand: {last_error: "", last_error_msgs: []}
