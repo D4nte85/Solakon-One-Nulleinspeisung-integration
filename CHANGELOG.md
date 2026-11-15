@@ -5,6 +5,8 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+## [3.9.0] – 2026-11-15
+
 ### Behoben
 
 - **Leeres Zahlenfeld im Panel:** Ein geleertes Zahlenfeld schickte beim Speichern keinen Wert, und das Backend lehnte das mit einem Typfehler ab. Jetzt verwirft das Leeren die Änderung, und das Feld zeigt wieder den gespeicherten Wert (`solakon-panel.js`).

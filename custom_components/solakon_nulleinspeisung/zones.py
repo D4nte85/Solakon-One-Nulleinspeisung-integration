@@ -1,4 +1,4 @@
-"""Zonenentscheidung: welcher Fall in diesem Zyklus greift, ohne ihn auszuführen."""
+"""Zonenentscheidung: Regelzustand, Ruhezustand, Prognoselage, Surplus und Nachtabschaltung als Eingaben, dann welcher Fall in diesem Regelzyklus greift, ohne ihn auszuführen."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
