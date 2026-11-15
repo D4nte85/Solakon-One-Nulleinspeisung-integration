@@ -24,7 +24,7 @@ BASE = zones.ZoneInputs(
     ),
     soc=40, grid=0, actual=0, total_output=0, mode="0",
     new_surplus=False, ac_offset=-50,
-    tariff=tariff.TariffState(price=0.30, cheap=0.20, exp=0.40, below_exp=False,
+    tariff=tariff.TariffState(price=0.45, cheap=0.20, exp=0.40, below_exp=False,
                               below_cheap=False),
     is_night=True, zone1_forced=False,
     surplus_active=False, session="none",

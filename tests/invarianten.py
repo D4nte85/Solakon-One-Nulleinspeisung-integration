@@ -27,7 +27,7 @@ def _session(flags: dict) -> bool:
     return flags.get("charge_session", C.SESSION_NONE) != C.SESSION_NONE
 
 
-KINDS = ("cycle", "multi", "stall", "tariff", "domain", "rest", "gridcharge")
+KINDS = scenarios.CYCLE_KINDS
 NICHT_ZAHL = ("unavailable", "unknown", "None", "abc", "nan", "on", "off")
 
 

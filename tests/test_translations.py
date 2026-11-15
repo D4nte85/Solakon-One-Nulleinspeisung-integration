@@ -45,7 +45,13 @@ def test_schluesselform(datei):
     assert not falsch, f"{datei}: {sorted(falsch)}"
 
 
-def test_fall_optionen_uebersetzt():
+@pytest.mark.parametrize("sensor, optionen", [
+    ("active_fall", "FALL_KEYS"),
+    ("operating_state", "OPERATING_STATES"),
+    ("mode_label", "MODE_KEYS"),
+    ("charge_session", "CHARGE_SESSIONS"),
+])
+def test_enum_optionen_uebersetzt(sensor, optionen):
     zustaende = json.loads((KOMPONENTE / "strings.json").read_text(encoding="utf-8"))
-    zustaende = zustaende["entity"]["sensor"]["active_fall"]["state"]
-    assert set(h.const.FALL_KEYS) == set(zustaende)
+    zustaende = zustaende["entity"]["sensor"][sensor]["state"]
+    assert set(getattr(h.const, optionen)) == set(zustaende)

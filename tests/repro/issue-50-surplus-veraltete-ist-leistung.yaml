@@ -1,6 +1,5 @@
 titel: Surplus tritt nach Lastabwurf aus frischem Netzwert und veralteter Ist-Leistung ein
 bezug: issue-50-fall-g-veraltete-ist-leistung
-offen: false
 # Surplus an, SOC 96 % über der Schwelle 95 %, PV-Hysterese 50 W.
 # Eintritt bei PV > (ΣIst + Netz) + 50. Sollwert 800 W, Ist-Sensor meldet noch 200 W.
 # Netz −700 W nach Lastabwurf: 200 − 700 = −500 W Verbrauch, PV 150 W > −450 → Eintritt.

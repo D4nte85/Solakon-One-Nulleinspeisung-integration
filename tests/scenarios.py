@@ -802,8 +802,12 @@ def _schema_repr(form) -> list:
     return [form.get("type"), form.get("step_id"), form.get("description_placeholders"), out]
 
 
+# Szenarioarten, die einen Regelzyklus laufen lassen.
+CYCLE_KINDS = ("cycle", "multi", "stall", "tariff", "domain", "rest", "gridcharge")
+
+
 def run(kind: str, spec: dict) -> dict:
-    if kind in ("cycle", "multi", "stall", "tariff", "domain", "rest", "gridcharge"):
+    if kind in CYCLE_KINDS:
         coro = _run_cycle_spec(spec)
     elif kind == "settings":
         coro = _run_settings_spec(spec)

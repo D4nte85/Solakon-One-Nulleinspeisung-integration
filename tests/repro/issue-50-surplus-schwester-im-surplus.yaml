@@ -1,6 +1,5 @@
 titel: Schwester im Surplus blockiert den Surplus-Eintritt nicht
 bezug: issue-50-fall-g-veraltete-ist-leistung
-offen: false
 # b im Surplus: fester Zone-0-Sollwert 800 W, gibt aber nur 300 W ab (PV-begrenzt).
 # a entlädt 100 W, Last 100 W → Netz 100 − 400 = −300 W. a hat 250 W PV und gehört in den Surplus.
 netz: -300

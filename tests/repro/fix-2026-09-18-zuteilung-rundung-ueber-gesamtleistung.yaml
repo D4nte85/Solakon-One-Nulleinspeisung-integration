@@ -1,6 +1,5 @@
 titel: Drei Drittel von 800 W werden je auf 267 W gerundet, zusammen 801 W
 bezug: fix-2026-09-18-zuteilung-rundung-ueber-gesamtleistung
-offen: false
 netz: 300
 verteilung: {distribution_mode: equal, global_max_power: 800}
 instanzen:

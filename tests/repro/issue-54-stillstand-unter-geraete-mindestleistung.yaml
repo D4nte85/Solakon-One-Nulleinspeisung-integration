@@ -4,7 +4,6 @@ bezug: issue-54-stillstand-unter-geraete-mindestleistung
 # Die Ausgangsleistung steht am Limit, das Haus bezieht Strom. Unter etwa 12 W gibt das
 # Gerät nichts ab; die Ist-Leistung bleibt 0 W und meldet keinen neuen Wert.
 # Erwartet: keine Recovery (kein Modus '0').
-offen: false
 netz: 200
 instanzen:
   - prefix: a

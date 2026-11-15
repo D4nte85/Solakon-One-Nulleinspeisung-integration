@@ -1,6 +1,5 @@
 titel: Die letzte Zuteilung einer abgeschalteten Instanz kappt die übrigen Mitglieder der Netzgruppe
 bezug: fix-2026-11-14-zuteilung-veraltet-abgeschaltete-instanz
-offen: false
 netz: 300
 verteilung: {distribution_mode: equal, global_max_power: 800}
 instanzen:

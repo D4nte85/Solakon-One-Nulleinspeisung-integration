@@ -1,6 +1,5 @@
 titel: Die Verteilungswarnung steht doppelt in der Fehlerkette, wenn die Instanz AC-lädt
 bezug: fix-2026-09-19-verteilungswarnung-doppelt-ac-laden
-offen: false
 netz: -300
 verteilung:
   distribution_mode: capacity

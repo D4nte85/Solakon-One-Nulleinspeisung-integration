@@ -1,6 +1,5 @@
 titel: Eine Entität mit falscher Domain für zwei Features meldet zweimal denselben Text ohne Feature
 bezug: fix-2026-09-19-falsche-domain-meldung-ohne-feature
-offen: false
 # PV-Vorhersage-Sensor aus input_boolean, gelesen von Surplus-Forecast und PV-Vorhersage.
 netz: 300
 sensoren:

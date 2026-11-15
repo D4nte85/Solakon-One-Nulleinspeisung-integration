@@ -1,6 +1,5 @@
 titel: Zwei Netzgruppen im soc_switch setzen den gemeinsamen Zustand gegenseitig zurück, die Rotation greift nie
 bezug: fix-2026-09-18-soc-switch-zustand-global
-offen: false
 netz: 300
 verteilung: {distribution_mode: soc_switch, soc_switch_divergence: 5, global_max_power: 800}
 verteilung_netz:

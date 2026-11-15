@@ -75,7 +75,7 @@ Stand vor dem Fix rot sehen, Fix, grün — danach bleibt es als Regressionstest
 ```yaml
 titel: Kurzbeschreibung
 bezug: fix-2026-09-12-sollwert-ueber-entity-max   # Bugfix-Seite
-offen: false          # true: Fehler noch nicht behoben, Szenario muss rot sein
+offen: true           # optional: Fehler noch nicht behoben, Szenario muss rot sein
 sprache: de           # de | en
 stunde: 3             # Uhrzeit (UTC) für Nachtlogik
 netz: 50              # sensor.grid; Zahl in W oder {wert, einheit, alter}
@@ -133,7 +133,7 @@ festes Raster in Sekunden (`--takt 5`). Einheiten, die der Export nicht enthält
 ## Invarianten
 
 `invarianten.py` hält die Regeln für gewolltes Verhalten als Funktionen `(ctx) -> str | None`,
-eine je Regel mit der Nummer aus der Regelbeschreibung (`a1` … `k5`). Jede prüft einen
+eine je Regel mit der Nummer aus der Regelbeschreibung (`a1` … `k6`; `d2` ist entfallen). Jede prüft einen
 Regellauf einer Instanz: Eingänge davor, Schreibbefehle, Zustand danach.
 
 - Gezählt werden nur Läufe mit konsistentem Startzustand; Treffer aus widersprüchlichen
