@@ -516,36 +516,66 @@ def _setup_env(spec, dist_store: bool = False):
     return hass, logs, coords
 
 
+class Lauf:
+    """Ein Regelszenario: Aufbau, Setup der Instanzen, dann Schritt für Schritt.
+
+    Gemeinsamer Ablauf für Charakterisierung (`_run_cycle_spec`) und Invarianten
+    (`invarianten._lauf`). `schritte()` stellt je Schritt Uhr, Zustände und `on_call`
+    bereit; Änderungen und Regelzyklen löst der Verbraucher selbst aus, weil beide
+    dazwischen Verschiedenes aufzeichnen.
+    """
+
+    def __init__(self, spec):
+        self.spec = spec
+        self.hass, self.logs, self.coords = _setup_env(spec)
+
+    async def start(self) -> None:
+        """Instanzen einrichten; ohne Speicherstand die Settings wie geladen übernehmen."""
+        for inst in self.spec["instances"]:
+            coord = self.coords[inst["prefix"]]
+            await coord.async_setup()
+            if not inst["stored"]:
+                # Wie geladene Settings vor dem Start: Trigger folgen den Settings.
+                with coord.trackers.refreshing():
+                    coord.settings.update(inst["settings"])
+            coord.integral = inst["integral"]
+            coord.surplus.prev_actual = inst["prev_actual"]
+
+    async def schritte(self):
+        """Je Schritt: Uhr vor, Protokoll leer, Zustände und `on_call` setzen; liefert (Index, Schritt)."""
+        hass = self.hass
+        for idx, step in enumerate(self.spec["steps"]):
+            h.CLOCK.now += step["advance"]
+            hass.events = []
+            _apply_states(hass, step["set"])
+            hass.on_call = {eid: dict(states) for eid, states in step.get("on_call", {}).items()}
+            yield idx, step
+            hass.on_call = {}
+
+    @staticmethod
+    def aenderungen(step) -> list[tuple[str, dict]]:
+        """Settings-Änderungen des Schritts je Instanz, `changes` gilt für `a`."""
+        out = [("a", step["changes"])] if "changes" in step else []
+        return out + list(step.get("changes_for", {}).items())
+
+    def ziele(self, step) -> list[str]:
+        """Instanzen, deren Regelzyklus der Schritt auslöst."""
+        return list(self.coords) if step["who"] == "all" else ["a"]
+
+
 async def _run_cycle_spec(spec) -> dict:
-    hass, logs, coords = _setup_env(spec)
-    rec: dict = {"setup": []}
-    for inst in spec["instances"]:
-        coord = coords[inst["prefix"]]
-        await coord.async_setup()
-        if not inst["stored"]:
-            # Wie geladene Settings vor dem Start: Trigger folgen den Settings.
-            with coord.trackers.refreshing():
-                coord.settings.update(inst["settings"])
-        coord.integral = inst["integral"]
-        coord.surplus.prev_actual = inst["prev_actual"]
-    rec["setup"] = hass.events
-    rec["steps"] = []
-    for step in spec["steps"]:
-        h.CLOCK.now += step["advance"]
-        hass.events = []
-        _apply_states(hass, step["set"])
-        hass.on_call = {eid: dict(states) for eid, states in step.get("on_call", {}).items()}
-        if "changes" in step:
-            await coords["a"].async_update_settings(dict(step["changes"]))
-        for p, changes in step.get("changes_for", {}).items():
+    lauf = Lauf(spec)
+    hass, coords = lauf.hass, lauf.coords
+    await lauf.start()
+    rec: dict = {"setup": hass.events, "steps": []}
+    async for _idx, step in lauf.schritte():
+        for p, changes in lauf.aenderungen(step):
             await coords[p].async_update_settings(dict(changes))
         notify = {p: 0 for p in coords}
         for p, c in coords.items():
             c._listeners = [lambda p=p: notify.__setitem__(p, notify[p] + 1)]
-        targets = list(coords) if step["who"] == "all" else ["a"]
-        for p in targets:
+        for p in lauf.ziele(step):
             await coords[p]._async_regulate()
-        hass.on_call = {}
         rec["steps"].append({
             "events": hass.events,
             "notify": notify,
@@ -555,7 +585,7 @@ async def _run_cycle_spec(spec) -> dict:
     primary = coords["a"]
     rec["ws_status"] = await h.ws_status(hass, primary.entry.entry_id)
     rec["entities"] = [h.entity_state(e) for e in h.build_entities(hass, primary)]
-    rec["logs"] = logs.records
+    rec["logs"] = lauf.logs.records
     return rec
 
 

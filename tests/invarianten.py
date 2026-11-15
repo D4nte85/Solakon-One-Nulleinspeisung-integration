@@ -710,26 +710,15 @@ REGELN = {n: f for n, f in globals().items() if len(n) == 2 and n[0] in "abcdefh
 # ── Ablauf ───────────────────────────────────────────────────────────────────
 
 async def _lauf(kind: str, spec: dict) -> list[Ctx]:
-    hass, _logs, coords = scenarios._setup_env(spec)
-    for inst in spec["instances"]:
-        coord = coords[inst["prefix"]]
-        await coord.async_setup()
-        if not inst["stored"]:
-            with coord.trackers.refreshing():
-                coord.settings.update(inst["settings"])
-        coord.integral = inst["integral"]
-        coord.surplus.prev_actual = inst["prev_actual"]
+    lauf = scenarios.Lauf(spec)
+    hass, coords = lauf.hass, lauf.coords
+    await lauf.start()
     flags = {p: h.coord_state(c) for p, c in coords.items()}
     aus_seit = {p: None for p in coords}
     out = []
-    for idx, step in enumerate(spec["steps"]):
-        h.CLOCK.now += step["advance"]
-        scenarios._apply_states(hass, step["set"])
-        hass.events = []
+    async for idx, step in lauf.schritte():
         abgeschaltet = set()
-        aenderungen = [("a", step["changes"])] if "changes" in step else []
-        aenderungen += list(step.get("changes_for", {}).items())
-        for p, changes in aenderungen:
+        for p, changes in lauf.aenderungen(step):
             war_an = coords[p].settings[C.S_REGULATION_ENABLED]
             await coords[p].async_update_settings(dict(changes))
             if war_an and not coords[p].settings[C.S_REGULATION_ENABLED]:
@@ -738,9 +727,8 @@ async def _lauf(kind: str, spec: dict) -> list[Ctx]:
             elif not war_an and coords[p].settings[C.S_REGULATION_ENABLED]:
                 aus_seit[p] = None
         ereignisse_aenderung = [e for e in hass.events if e[0] == "call"]
-        targets = list(coords) if step["who"] == "all" else ["a"]
         runde = []
-        for p in targets:
+        for p in lauf.ziele(step):
             coord = coords[p]
             vorher = schnappschuss(hass)
             hass.events = []
