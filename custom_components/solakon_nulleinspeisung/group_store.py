@@ -35,6 +35,31 @@ def _soc_switch_group_state(stored: dict) -> dict:
     }
 
 
+class StoredGroup:
+    """Zustand der Netzgruppe `grid_sensor` im Gruppenspeicher, gelesen bei jedem Aufruf (`GroupState`)."""
+
+    def __init__(self, store: GroupStore, grid_sensor: str) -> None:
+        self._store = store
+        self._grid_sensor = grid_sensor
+        self._fresh = _soc_switch_group_state({})
+
+    def dist(self) -> dict:
+        """Verteilung der Gruppe mit Defaults."""
+        return self._store.dist_view(self._grid_sensor)
+
+    def dist_rev(self) -> int:
+        """Revision der Verteilung der Gruppe."""
+        return self._store.dist_rev(self._grid_sensor)
+
+    def soc_switch(self) -> dict:
+        """Gespeicherter `soc_switch`-Zustand; ohne Stand ein neuer, den erst `soc_switch_changed` übernimmt."""
+        return self._store.soc_switch.get(self._grid_sensor, self._fresh)
+
+    def soc_switch_changed(self, state: dict) -> None:
+        """Geänderten `soc_switch`-Zustand in den Gruppenspeicher übernehmen."""
+        self._store.soc_switch_changed(self._grid_sensor, state)
+
+
 def configured_members(hass: Any, grid_sensor: str) -> int:
     """Anzahl der Config-Entries am Netzsensor, geladen oder nicht."""
     return sum(1 for e in hass.config_entries.async_entries(DOMAIN) if e.data.get(CONF_GRID_SENSOR, "") == grid_sensor)
@@ -62,21 +87,14 @@ def group_for(hass: Any, grid_sensor: str) -> NetGroup:
     groups = hass.data.setdefault(f"{DOMAIN}_groups", {})
     group = groups.get(grid_sensor)
     if group is None:
-        store = require_store(hass)
-        group = groups[grid_sensor] = NetGroup(
-            hass, grid_sensor,
-            dist=lambda: store.dist_view(grid_sensor),
-            soc_switch=store.soc_switch.get(grid_sensor),
-            on_soc_switch_change=lambda state: store.soc_switch_changed(grid_sensor, state),
-            dist_rev=lambda: store.dist_rev(grid_sensor),
-        )
+        group = groups[grid_sensor] = NetGroup(hass, grid_sensor, StoredGroup(require_store(hass), grid_sensor))
     return group
 
 
 class GroupStore:
     """Verteilung, `soc_switch`-Zustand und Gruppennummer je Netzsensor, auch für Gruppen ohne laufende Instanz.
 
-    Führende Stelle der Verteilung: Netzgruppen lesen sie hier über `dist_view` und `dist_rev`.
+    Führende Stelle der Verteilung: Netzgruppen lesen sie und den `soc_switch`-Zustand über `StoredGroup`.
     Ohne HA-Store (`None`) wird nur gehalten, nicht gespeichert.
     """
 

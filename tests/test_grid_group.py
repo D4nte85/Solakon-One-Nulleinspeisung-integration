@@ -15,11 +15,17 @@ DOMAIN = h.const.DOMAIN
 M = h.FakeMember
 
 
-def _group(*members, dist=None, soc_switch=None, on_change=None):
+def _group(*members, dist=None, soc_switch=None):
+    """Netzgruppe `sensor.grid` mit Gruppenspeicher ohne HA-Store; `soc_switch` als gespeicherter Zustand."""
     hass = h.hass_with_members(*members)
-    read = None if dist is None else (lambda: {**group.DIST_DEFAULTS, **dist})
-    return hass, group.NetGroup(hass, "sensor.grid", dist=read, soc_switch=soc_switch,
-                                on_soc_switch_change=on_change)
+    store = h.install_groups(hass, {"sensor.grid": dict(dist or {})},
+                             None if soc_switch is None else {"sensor.grid": soc_switch})
+    return hass, group.NetGroup(hass, "sensor.grid", h.group_store_mod.StoredGroup(store, "sensor.grid"))
+
+
+def _stored_switch(hass):
+    """Im Gruppenspeicher übernommener `soc_switch`-Zustand von `sensor.grid`, sonst None."""
+    return h.group_store_mod.require_store(hass).soc_switch.get("sensor.grid")
 
 
 def test_kein_modul_group_im_paket():
@@ -183,11 +189,11 @@ def test_ac_pool_kapazitaet_gewichtet_fehlende_kwh():
 
 def test_ac_pool_soc_switch_wirkt_wie_soc_ohne_rotationszustand():
     a, b = M("a"), M("b", soc=30.0)
-    _, g = _group(a, b, dist=SWITCH)
+    hass, g = _group(a, b, dist=SWITCH)
     s = g.all_shares({"a": a, "b": b}, a, 80, ac=True)
     assert s.mode == "soc"
     assert s.values == pytest.approx({"a": 10 / 70, "b": 60 / 70})
-    assert g._soc_switch is None
+    assert _stored_switch(hass) is None
 
 
 def test_ac_pool_ueber_ladeziel_ohne_gewicht():
@@ -208,12 +214,12 @@ SWITCH = {"distribution_mode": "soc_switch", "soc_switch_divergence": 5}
 
 
 def test_soc_switch_start_beim_hoechsten_soc_und_speichert():
-    changes = []
     a, b = M("a"), M("b", soc=70.0)
-    _, g = _group(a, b, dist=SWITCH, on_change=lambda st: changes.append(dict(st)))
+    hass, g = _group(a, b, dist=SWITCH)
+    assert _stored_switch(hass) is None
     assert g.all_shares({"a": a, "b": b}, a, 50).values == {"a": 0.0, "b": 1.0}
     assert g.soc_switch_state() == {"active_id": "b", "start_soc": 70.0, "was_zone0": False}
-    assert changes == [{"active_id": "b", "start_soc": 70.0, "was_zone0": False}]
+    assert _stored_switch(hass) is g.soc_switch_state()
 
 
 def _switch_state(**state):

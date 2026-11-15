@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Protocol
 
 from .const import (
-    DIST_DEFAULTS, DIST_GLOBAL_MAX, DIST_MODE, DIST_SOC_SWITCH_DIVERGENCE, DOMAIN, SESSION_AC, SESSION_NONE,
+    DIST_GLOBAL_MAX, DIST_MODE, DIST_SOC_SWITCH_DIVERGENCE, DOMAIN, SESSION_AC, SESSION_NONE,
     capacity_key,
 )
 from .dynamic_offset import Sigma
@@ -41,6 +41,15 @@ class Member(Protocol):
     def capacity_kwh(self, entity_id: str) -> float | None: ...
     def actual_power(self) -> float: ...
     def output_setpoint(self) -> float: ...
+
+
+class GroupState(Protocol):
+    """Gespeicherter Zustand einer Netzgruppe: Verteilung, ihre Revision und `soc_switch`-Zustand."""
+
+    def dist(self) -> dict: ...
+    def dist_rev(self) -> int: ...
+    def soc_switch(self) -> dict: ...
+    def soc_switch_changed(self, state: dict) -> None: ...
 
 
 @dataclass(frozen=True)
@@ -120,24 +129,14 @@ def waterfill(active: dict[str, Member], shares: dict[str, float], global_max: f
 
 class NetGroup:
     """Alle Instanzen an einem Netzsensor. Mitglieder werden bei jedem Aufruf neu bestimmt,
-    Anteile je Aufruf neu gerechnet; gehalten werden σ-Puffer und `soc_switch`-Zustand.
-    Die Verteilung liest sie über `dist` (Verteilung mit Defaults) und `dist_rev` (ihre Revision);
-    ohne diese Leser gelten die Defaults und Revision 0.
-    Änderungen am `soc_switch`-Zustand gehen an `on_soc_switch_change`."""
+    Anteile je Aufruf neu gerechnet; gehalten wird der σ-Puffer.
+    Verteilung, Revision und `soc_switch`-Zustand liest sie über `state`."""
 
-    def __init__(
-        self, hass: Any, grid_sensor: str, dist: Callable[[], dict] | None = None,
-        soc_switch: dict | None = None,
-        on_soc_switch_change: Callable[[dict], None] | None = None,
-        dist_rev: Callable[[], int] | None = None,
-    ) -> None:
+    def __init__(self, hass: Any, grid_sensor: str, state: GroupState) -> None:
         self.hass = hass
         self.grid_sensor = grid_sensor
         self.sigma = Sigma()
-        self._dist = dist
-        self._dist_rev = dist_rev
-        self._soc_switch = soc_switch
-        self._on_soc_switch_change = on_soc_switch_change
+        self._state = state
 
     # ── Lesen: Mitglieder, Pools, Verteilungs-Config ─────────────────────────
 
@@ -193,12 +192,12 @@ class NetGroup:
 
     def dist_cfg(self) -> dict:
         """Verteilungs-Config dieser Gruppe, mit Defaults aufgefüllt."""
-        return dict(DIST_DEFAULTS) if self._dist is None else self._dist()
+        return self._state.dist()
 
     @property
     def dist_rev(self) -> int:
         """Revision der Verteilung, erhöht mit jedem Speichern."""
-        return 0 if self._dist_rev is None else self._dist_rev()
+        return self._state.dist_rev()
 
     # ── Ableiten: Verteilung ─────────────────────────────────────────────────
 
@@ -274,10 +273,8 @@ class NetGroup:
         return Shares({eid: w / total_soc for eid, w in soc_weights.items()}, effective, warning)
 
     def soc_switch_state(self) -> dict:
-        """Laufzeitzustand des Modus `soc_switch` dieser Gruppe, bei Bedarf angelegt."""
-        if self._soc_switch is None:
-            self._soc_switch = {"active_id": None, "start_soc": None, "was_zone0": False}
-        return self._soc_switch
+        """Laufzeitzustand des Modus `soc_switch` dieser Gruppe."""
+        return self._state.soc_switch()
 
     def soc_switch_shares(self, active: dict[str, Member], me: Member, own_soc: float) -> dict[str, float] | None:
         """Anteile für Modus `soc_switch`; `None`, wenn ein Fremd-SOC unsicher ist.
@@ -334,8 +331,7 @@ class NetGroup:
 
         if changed:
             state["active_id"] = active_id
-            if self._on_soc_switch_change is not None:
-                self._on_soc_switch_change(state)
+            self._state.soc_switch_changed(state)
 
         return result
 
