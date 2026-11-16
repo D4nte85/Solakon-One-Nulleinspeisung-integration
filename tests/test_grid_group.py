@@ -276,10 +276,17 @@ def test_wasserfuellung_ohne_anteile_null():
     assert group.waterfill({"a": a, "b": b}, {"a": 0.0, "b": 0.0}, 800) == {"a": 0.0, "b": 0.0}
 
 
-def test_zuteilung_einzeln_und_ausserhalb():
-    a, b = M("a"), M("b", discharge=False)
-    _, g = _group(a, b)
+def test_zuteilung_einzelbetrieb_ohne_gesamtlimit():
+    a = M("a")
+    _, g = _group(a, dist={"global_max_power": 500})
     assert g.distribution(a, 50) == (1.0, None, None)
+
+
+@pytest.mark.parametrize("limit, erwartet", [(1200, 800), (600, 600)])
+def test_zuteilung_allein_im_pool_einer_netzgruppe(limit, erwartet):
+    a, b = M("a", limit=limit), M("b", discharge=False)
+    _, g = _group(a, b, dist={"global_max_power": 800})
+    assert g.distribution(a, 50) == (1.0, erwartet, None)
     assert g.distribution(b, 50) == (0.0, None, None)
 
 

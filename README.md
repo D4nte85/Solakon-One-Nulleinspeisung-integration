@@ -188,7 +188,7 @@ Im Panel wird bei mehreren Instanzen ein zusätzlicher **Verteilungs-Tab** einge
 
 | Parameter | Beschreibung |
 |-----------|-------------|
-| Gesamte Max. Ausgangsleistung (W) | Absolute Obergrenze aller Instanzen zusammen — nur bei mindestens zwei Instanzen am selben Netz-Leistungssensor; auch als Entität `number.solakon_netzgruppe_1_gesamte_max_ausgangsleistung` am Gerät „Solakon Netzgruppe N“ (siehe [Erzeugte Entitäten](#erzeugte-entitäten)) |
+| Gesamte Max. Ausgangsleistung (W) | Absolute Obergrenze aller Instanzen zusammen, auch wenn gerade nur eine entlädt (auch im Surplus) — nur bei mindestens zwei Instanzen am selben Netz-Leistungssensor; auch als Entität `number.solakon_netzgruppe_1_gesamte_max_ausgangsleistung` am Gerät „Solakon Netzgruppe N“ (siehe [Erzeugte Entitäten](#erzeugte-entitäten)) |
 | Verteilungs-Modus | Gleichverteilung / SOC-gewichtet / Kapazitätsgewichtet / SOC-Umschaltung — vier sich gegenseitig ausschließende Optionen, siehe Formeln oben |
 | Kapazitätssensor (pro Instanz) | Nur bei Modus „Kapazitätsgewichtet" wirksam (Feld sonst ausgegraut). `sensor.solakon_one_batteriekapazitat`. Der Validierungspunkt neben dem Feld zeigt live, ob die Entity existiert und eine Zahl liefert (grün/gelb/rot). Wechselt die Instanz den Netzsensor, nimmt sie den Eintrag in ihre neue Netzgruppe mit, sofern dort keiner gesetzt ist; beim Löschen der Instanz entfällt er |
 | Divergenz-Schwelle (Prozentpunkte) | Nur bei Modus „SOC-Umschaltung" wirksam. Die aktive Instanz entlädt exklusiv, bis ihr SOC um diesen Wert gefallen ist, dann Übergabe an die Instanz mit dem höchsten verbleibenden SOC. Standard 5 |
@@ -714,7 +714,7 @@ Alle Entitätsnamen kommen aus den Übersetzungen und erscheinen in der Sprache 
 | `number.solakon_one_netz_ladeleistung` | Number | Netz-Ladeleistung (100–1200 W) — derselbe Wert wie im **Zielladen**-Tab |
 | `number.solakon_one_zone_0_limit` | Number | Hard Limit Z0 (100–1200 W) — derselbe Wert wie im **Zonen**-Tab |
 | `number.solakon_one_zone_1_2_limit` | Number | Hard Limit Z1 für Zone 1 und 2 (100–1200 W) — derselbe Wert wie im **Zonen**-Tab |
-| `number.solakon_netzgruppe_1_gesamte_max_ausgangsleistung` | Number | Gesamte Max. Ausgangsleistung der Netzgruppe (0–9600 W) — derselbe Wert wie im **Verteilungs**-Tab; nur bei mindestens zwei Instanzen am selben Netz-Leistungssensor, wirkt, sobald mindestens zwei davon entladen |
+| `number.solakon_netzgruppe_1_gesamte_max_ausgangsleistung` | Number | Gesamte Max. Ausgangsleistung der Netzgruppe (0–9600 W) — derselbe Wert wie im **Verteilungs**-Tab; nur bei mindestens zwei Instanzen am selben Netz-Leistungssensor, wirkt, sobald mindestens zwei davon geladen sind, auch wenn gerade nur eine entlädt |
 | `binary_sensor.solakon_one_zyklus_aktiv` | Binary Sensor | Internes Flag Zyklus |
 | `binary_sensor.solakon_one_uberschuss_modus` | Binary Sensor | Flag Überschuss-Modus aktiv |
 | `binary_sensor.solakon_one_nachtabschaltung` | Binary Sensor | Flag Nachtabschaltung aktiv |

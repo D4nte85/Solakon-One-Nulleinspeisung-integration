@@ -499,7 +499,7 @@
     "load_error":         "Could not load the distribution — reopen the page.",
     "global_hdr":         "🌐 Global Settings",
     "global_max_lbl":     "Total Max. Output Power (W)",
-    "global_max_desc":    "Absolute ceiling for all instances combined — split according to weights. If an instance is capped by its own hard limit (Zones tab), the unused remainder is automatically passed on to instances with headroom (water-filling) — otherwise the pool would never reach this value with unevenly sized instances. Default: 800 W (legal feed-in maximum). Can also be set via the entity “Total max. output power” on the device “Solakon grid group N”; N is shown at the top of this page.",
+    "global_max_desc":    "Absolute ceiling for all instances combined — split according to weights, and it also applies while only one instance is discharging. If an instance is capped by its own hard limit (Zones tab), the unused remainder is automatically passed on to instances with headroom (water-filling) — otherwise the pool would never reach this value with unevenly sized instances. Default: 800 W (legal feed-in maximum). Can also be set via the entity “Total max. output power” on the device “Solakon grid group N”; N is shown at the top of this page.",
     "group_number":       "Grid group {n}",
     "global_max_inactive": "The total limit only takes effect once a second instance of this grid group is running. The value is saved.",
     "cap_hdr":                 "🔋 Capacity Sensors",

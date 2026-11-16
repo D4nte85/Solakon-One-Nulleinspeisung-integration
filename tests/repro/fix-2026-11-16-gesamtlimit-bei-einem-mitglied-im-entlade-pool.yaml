@@ -1,0 +1,26 @@
+titel: Gesamtlimit greift nicht, wenn nur ein Mitglied der Netzgruppe entlädt
+bezug: fix-2026-11-16-gesamtlimit-bei-einem-mitglied-im-entlade-pool
+# Zwei Instanzen an sensor.grid, Gesamtlimit 800 W, Zone-1/2-Limit je 1200 W.
+# a entlädt in Zone 1 bei 1500 W Netzbezug, b ruht in Modus 0 (SOC unter Zone 1, kein Zyklus).
+# Erwartet: a schreibt nie mehr als das Gesamtlimit.
+stunde: 12
+netz: 1500
+verteilung: {global_max_power: 800}
+instanzen:
+  - prefix: a
+    settings: {regulation_enabled: true, hard_limit_z1: 1200}
+    flags: {cycle_active: true}
+    sensoren: {soc: 80, solar: 0, ist: 600, modus: "1", leistung: 600}
+  - prefix: b
+    settings: {regulation_enabled: true, hard_limit_z1: 1200}
+    sensoren: {soc: 40, solar: 0, ist: 0, modus: "0", leistung: 0}
+schritte:
+  - nach: 0
+  - nach: 5
+  - nach: 5
+erwartet:
+  - schritt: alle
+    kein_aufruf: {entity: a.leistung, wert_min: 801}
+  - schritt: 1
+    instanz: a
+    zustand: {allocated_power: 800}

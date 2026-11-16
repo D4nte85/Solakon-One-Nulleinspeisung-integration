@@ -363,17 +363,22 @@ class NetGroup:
     def distribution(self, me: Member, own_soc: float) -> tuple[float, float | None, Shares | None]:
         """Fehler-Anteil, zugeteilte Leistung und Anteile von `me` im Entlade-Pool (Modus '1').
 
-        Einzelbetrieb oder `me` nicht im Pool: (1.0 bzw. 0.0, None, None). Angehoben wird
+        Einzelbetrieb oder `me` nicht im Pool: (1.0 bzw. 0.0, None, None). Allein im Pool einer
+        Netzgruppe: (1.0, `global_max_power` gekappt am Hard-Limit, None). Angehoben wird
         höchstens bis zu dem, was die veröffentlichten Limits der übrigen Mitglieder im
         Entlade-Pool von `global_max_power` freilassen; Senken wirkt sofort. Mitglieder
         außerhalb des Pools zählen nicht, auch wenn ihr letztes Limit noch steht.
         """
         active = self.discharge_pool()
-        if me.member_id not in active or len(active) <= 1:
-            return (1.0 if me.member_id in active else 0.0), None, None
+        if me.member_id not in active:
+            return 0.0, None, None
+        if len(self.members()) <= 1:
+            return 1.0, None, None
+        global_max = float(self.dist_cfg()[DIST_GLOBAL_MAX])
+        if len(active) == 1:
+            return 1.0, waterfill(active, {me.member_id: 1.0}, global_max)[me.member_id], None
 
         shares = self.all_shares(active, me, own_soc)
-        global_max = float(self.dist_cfg()[DIST_GLOBAL_MAX])
         allocations = waterfill(active, shares.values, global_max)
         others = sum(m.allocated_power or 0 for m in active.values() if m is not me)
         own = allocations.get(me.member_id)
