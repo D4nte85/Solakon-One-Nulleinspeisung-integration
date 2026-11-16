@@ -615,10 +615,9 @@ def k3(c: Ctx):
     modus = c.dist.get("distribution_mode")
     if modus not in ("soc", "capacity", "soc_switch"):
         return None
-    eigener = (c.vorher.get(c.e(C.CONF_MODE_SELECT)) or {}).get("state")
-    fv = c.flags_vorher
-    if eigener != C.MODE_DISCHARGE or fv.get("resting") or _art(fv, C.SESSION_AC) or _art(fv, C.SESSION_TARIFF):
-        return None  # nur Instanzen, die zu Zyklusbeginn im Entlade-Pool stehen
+    f = c.flags
+    if c.modus() != C.MODE_DISCHARGE or f.get("resting") or _art(f, C.SESSION_AC) or _art(f, C.SESSION_TARIFF):
+        return None  # nur Instanzen, die nach den Falls im Entlade-Pool stehen
     for p, (cfg, _fl, _nach) in c.alle.items():
         if p == c.prefix or cfg[C.CONF_GRID_SENSOR] != c.e(C.CONF_GRID_SENSOR):
             continue  # andere Netzgruppe, eigener Pool
@@ -692,9 +691,20 @@ def k6(c: Ctx):
         return f"Zone 1 bei ladender Schwester: Output {c.leistung()} W > PV {pv} − Reserve {c.settings[C.S_PV_RESERVE]}"
 
 
+def k7(c: Ctx):
+    """Verteilungswarnung im Regelzyklus ⇒ angewandter Verteilungsmodus gesetzt und ungleich dem konfigurierten."""
+    warnungen = [m[0] for m in c.flags["last_error_msgs"] if m[0].startswith(("warn_dist_", "warn_ac_dist_"))]
+    if not warnungen:
+        return None
+    angewandt = c.flags["dist_mode_effective"]
+    konfiguriert = (c.dist or {}).get("distribution_mode")
+    if not angewandt or angewandt == konfiguriert:
+        return f"{warnungen[0]} gemeldet, angewandter Verteilungsmodus {angewandt!r} (konfiguriert {konfiguriert!r})"
+
+
 # Regeln, die erst nach dem Übergang gelten: der erste zutreffende Fall gewinnt, der
 # gewollte Zustand stellt sich ein bis zwei Läufe später ein.
-VERZOEGERT = {"b1", "d3", "d6", "e1", "h2"}
+VERZOEGERT = {"b1", "d3", "d6", "e1", "e2", "h2"}
 
 
 def verstoss(name: str, c: Ctx) -> str | None:

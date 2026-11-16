@@ -17,7 +17,7 @@ from .i18n import Msg, translate, translate_msgs
 from .paths import FIXED, IDLE, PI_STEP, SETPOINT, STALL_CHECK, STALL_RESET, PathInputs, decide as decide_path
 from .pi import PIController
 from .readings import UNIT_SCALE_KWH, UNIT_SCALE_W, read_number, read_scaled, valid_state
-from .grid_group import NetGroup, Shares
+from .grid_group import NetGroup, PoolPosition
 from .group_store import require_store
 from .limits import PowerLimits, power_limits, pv_cap_reason
 from .messages import CycleMessages
@@ -163,7 +163,7 @@ class SolakonCoordinator:
         self._messages = CycleMessages()
         # Tariflage je Zyklus; hält den Verdacht auf eine EUR/kWh-Preiseinheit über Zyklen.
         self.tariff = Tariff()
-        # Angewandter Verteilungsmodus aus _apply_shares(), leer außerhalb jedes Pools;
+        # Angewandter Verteilungsmodus aus der Verteilungslage, leer ohne Anteile;
         # weicht bei Degradation vom konfigurierten distribution_mode ab.
         self.dist_mode_effective: str = ""
 
@@ -324,14 +324,13 @@ class SolakonCoordinator:
 
     # ── Ableiten: Verteilung ─────────────────────────────────────────────────
 
-    def _apply_shares(self, shares: Shares | None) -> Msg | None:
-        """Angewandten Verteilungsmodus übernehmen, leer ohne Anteile; liefert die Degradierungswarnung dieser Rechnung."""
-        if shares is None:
-            self.dist_mode_effective = ""
-            return None
-        if shares.mode is not None:
-            self.dist_mode_effective = shares.mode
-        return (shares.warning, {}) if shares.warning else None
+    def _adopt_position(self, pos: PoolPosition, replaced: PoolPosition | None = None) -> None:
+        """Angewandten Verteilungsmodus und Verteilungswarnung aus `pos` übernehmen; die Warnung von `replaced` entfällt."""
+        if replaced is not None and replaced.warning:
+            self._messages.retract((replaced.warning, {}))
+        self.dist_mode_effective = pos.mode
+        if pos.warning:
+            self._messages.warn((pos.warning, {}))
 
     # ── Darstellen: Texte ────────────────────────────────────────────────────
 
@@ -725,11 +724,10 @@ class SolakonCoordinator:
             self._messages.warn(warning)
 
         # ── 4. Verteilung und Leistungsgrenzen ───────────────────────────────
-        error_share, allocated_power, shares = self.group.distribution(self, soc)
-        self.allocated_power = allocated_power
-        if dist_warning := self._apply_shares(shares):
-            self._messages.warn(dist_warning)
-        limits = power_limits(cs, allocated_power)
+        pos = self.group.position(self, soc)
+        self.allocated_power = pos.allocated
+        self._adopt_position(pos)
+        limits = power_limits(cs, pos.allocated)
 
         # Nutzt die Zone des vorherigen Zyklus — self.surplus_active ist hier noch
         # nicht aktualisiert.
@@ -767,7 +765,7 @@ class SolakonCoordinator:
             forced=self.forecast.surplus_forced, exit_lock=self.forecast.exit_lock,
             solar=solar, soc=soc, actual=actual, total_actual=total_actual,
             total_output=total_output,
-            grid=grid, error_share=error_share,
+            grid=grid, error_share=pos.share,
             in_pool=self.in_discharge_pool(),
             surplus_threshold=cs.surplus_threshold,
             surplus_soc_hyst=cs.surplus_soc_hyst, surplus_pv_hyst=cs.surplus_pv_hyst,
@@ -791,6 +789,11 @@ class SolakonCoordinator:
             self._end_cycle()
             return
 
+        # Verteilungslage neu, wenn ein Fall die Pool-Zugehörigkeit geändert hat.
+        if self.group.pools(self) != pos.pools:
+            before, pos = pos, self.group.position(self, soc)
+            self._adopt_position(pos, before)
+
         # Zustand hinter Fall TM: die Sperre selbst mit den Flags nach den Falls,
         # nicht ihr Auslöser. Ebenso die Nachtabschaltung mit dem Zyklus nach den Falls.
         self.discharge_locked = tariff.discharge_locked(self.charge_session != SESSION_NONE, self.surplus_active)
@@ -804,7 +807,7 @@ class SolakonCoordinator:
         # ── 11. PI-Phase (Modus '1' und '3') ─────────────────────────────────
         blocked = False
         if mode in (MODE_DISCHARGE, MODE_AC_CHARGE):
-            blocked = await self._run_pi_phase(cs, soc, mode, core.timer, error_share, limits, ac_offset)
+            blocked = await self._run_pi_phase(cs, soc, mode, core.timer, pos, limits, ac_offset)
 
         # ── 12. Anzeige und Flag-Speicherung ─────────────────────────────────
         self._end_cycle(blocked=blocked, display=(soc, cs.zone3_limit, mode),
@@ -837,7 +840,7 @@ class SolakonCoordinator:
         return d.name
 
     async def _run_pi_phase(
-        self, cs: CycleSettings, soc: float, mode: str, timer_val: float | None, error_share: float,
+        self, cs: CycleSettings, soc: float, mode: str, timer_val: float | None, pos: PoolPosition,
         limits: PowerLimits, ac_offset: float,
     ) -> bool:
         """PI-Phase in Modus '1' oder '3': Timeout-Reset, dann ein Pfad je Regelzustand.
@@ -876,20 +879,16 @@ class SolakonCoordinator:
         # Ist-Leistung als Basis der Stellwertrechnung, im AC-Laden negativ.
         actual = self.actual_power()
 
-        # Eigener Pool für AC-Laden, nach den Falls berechnet.
-        ac_error_share, shares = self.group.ac_share(self, soc)
-        if dist_warning := self._apply_shares(shares):
-            self._messages.warn(dist_warning)
 
         # ── 11c. PI-Pfade ────────────────────────────────────────────────────
         d = decide_path(PathInputs(
             cs=cs, limits=limits, mode=mode, cycle_active=self.cycle_active,
             surplus_active=self.surplus_active, session=self.charge_session, cap_reason=cap_reason,
             grid=grid, solar=solar, current_power=current_power,
-            ac_offset=ac_offset, target_offset=target_offset, ac_share=ac_error_share, share=error_share,
+            ac_offset=ac_offset, target_offset=target_offset, ac_share=pos.ac_share, share=pos.share,
             ac_charge=-actual, ac_pool_charge=-self.group.ac_actual(self, actual),
             discharge=actual, discharge_pool=self.group.discharge_actual(self, actual),
-            discharge_base=self.group.pi_base(self, current_power, error_share),
+            discharge_base=self.group.pi_base(self, current_power, pos.share),
         ))
         if d.decay:
             self.pi.decay()

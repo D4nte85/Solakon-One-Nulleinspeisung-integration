@@ -8,6 +8,7 @@ from tests import harness as h
 
 integration = h.integration
 i18n = importlib.import_module(h.PKG + ".i18n")
+group = importlib.import_module(h.PKG + ".grid_group")
 
 
 def _coord(language: str):
@@ -54,8 +55,11 @@ def test_nicht_formatierbarer_text_warnt_einmal(monkeypatch):
     assert "x_test" in logs.records[0][1]
 
 
-def test_verteilungsmodus_ohne_pool_ist_leer():
+def test_verteilungslage_ersetzt_modus_und_warnung():
     _, coord = _coord("de")
-    coord.dist_mode_effective = "soc"
-    assert coord._apply_shares(None) is None
-    assert coord.dist_mode_effective == ""
+    vorher = group.PoolPosition((True, False), 0.5, 400, 0.0, group.Shares({}, "equal", "warn_dist_soc_sensor"))
+    coord._adopt_position(vorher)
+    assert (coord.dist_mode_effective, coord._messages.msgs) == ("equal", [("warn_dist_soc_sensor", {})])
+    nachher = group.PoolPosition((False, False), 0.0, None, 0.0, None)
+    coord._adopt_position(nachher, vorher)
+    assert (coord.dist_mode_effective, coord._messages.msgs) == ("", [])

@@ -310,6 +310,22 @@ def test_ac_anteil():
     assert g.ac_share(a, 50) == (0.0, None)
 
 
+def test_verteilungslage_aus_dem_pool_der_instanz():
+    a, b = M("a"), M("b")
+    _, g = _group(a, b, dist={"distribution_mode": "equal"})
+    pos = g.position(a, 50)
+    assert (pos.pools, pos.share, pos.ac_share, pos.mode, pos.warning) == ((True, False), 0.5, 0.0, "equal", "")
+    a.charge_session = b.charge_session = "ac_charge"
+    pos = g.position(a, 50)
+    assert (pos.pools, pos.share, pos.ac_share, pos.mode) == ((True, True), 0.5, 0.5, "equal")
+    a.charge_session = "none"
+    a_aus = M("a", discharge=False)
+    _, g = _group(a_aus, b, dist={"distribution_mode": "equal"})
+    pos = g.position(a_aus, 50)
+    assert (pos.pools, pos.share, pos.ac_share, pos.mode, pos.warning) == ((False, False), 0.0, 0.0, "", "")
+    assert g.pools(a_aus) == (False, False)
+
+
 def test_schwester_laedt_bei_jeder_art_der_lade_session():
     for kind in ("ac_charge", "tariff_charge", "grid_charge"):
         a, b = M("a"), M("b", charge_session=kind)

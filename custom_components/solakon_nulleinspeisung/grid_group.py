@@ -61,6 +61,32 @@ class Shares:
     warning: str = ""
 
 
+@dataclass(frozen=True)
+class PoolPosition:
+    """Verteilungslage einer Instanz: Pool-Zugehörigkeit, Fehler-Anteile, Zuteilung und Anteile.
+
+    `share` gilt im Entlade-Pool, `ac_share` im AC-Pool, außerhalb ist der Anteil null. `shares` sind
+    die Anteile des AC-Pools, sonst die des Entlade-Pools; None im Einzelbetrieb und außerhalb.
+    Modus und Warnung kommen aus `shares`.
+    """
+
+    pools: tuple[bool, bool]
+    share: float
+    allocated: float | None
+    ac_share: float
+    shares: Shares | None
+
+    @property
+    def mode(self) -> str:
+        """Angewandter Verteilungsmodus; leer ohne Anteile."""
+        return (self.shares.mode or "") if self.shares else ""
+
+    @property
+    def warning(self) -> str:
+        """Warnschlüssel des Ausweichens; leer ohne Anteile oder ohne Ausweichen."""
+        return self.shares.warning if self.shares else ""
+
+
 def pool_sum(
     pool: dict[str, Member], me: Member, own_value: float, reader: Callable[[Member], float],
 ) -> float:
@@ -363,3 +389,13 @@ class NetGroup:
             return 0.0, None
         shares = self.all_shares(active, me, own_soc, ac=True)
         return shares.values.get(me.member_id, 0.0), shares
+
+    def pools(self, me: Member) -> tuple[bool, bool]:
+        """Steht `me` im Entlade-Pool, steht es im AC-Pool."""
+        return me.member_id in self.discharge_pool(), me.member_id in self.ac_pool()
+
+    def position(self, me: Member, own_soc: float) -> PoolPosition:
+        """Verteilungslage von `me` aus Entlade-Pool und AC-Pool."""
+        share, allocated, discharge_shares = self.distribution(me, own_soc)
+        ac_share, ac_shares = self.ac_share(me, own_soc)
+        return PoolPosition(self.pools(me), share, allocated, ac_share, ac_shares or discharge_shares)

@@ -1,0 +1,22 @@
+titel: Die erste PI-Phase nach dem Zurückholen aus der Ruhe in Modus 1 schreibt 0 W
+bezug: fix-2026-11-16-verteilungsmodus-warnung-ohne-ausweichen
+# Ruhe in Modus 1 (rest_in_discharge): Fall C legt die Instanz bei SOC unter Zone 3 in den
+# Ruhezustand. Steigt der SOC über Zone 3, holt Fall E sie zurück. Die PI-Phase desselben
+# Regelzyklus soll mit vollem Fehler-Anteil rechnen und Leistung über 0 W schreiben.
+stunde: 12
+netz: 300
+instanzen:
+  - prefix: a
+    settings: {regulation_enabled: true, rest_in_discharge: true}
+    sensoren: {soc: 15, solar: 800, modus: "1"}
+schritte:
+  - nach: 0
+  - nach: 5
+    setzen: {a.soc: 40}
+erwartet:
+  - schritt: 1
+    zustand: {resting: true}
+  - schritt: 2
+    zustand: {active_fall: E}
+  - schritt: 2
+    aufruf: {entity: a.leistung, wert_min: 1}

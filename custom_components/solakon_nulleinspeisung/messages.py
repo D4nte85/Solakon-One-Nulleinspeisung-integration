@@ -21,6 +21,11 @@ class CycleMessages:
         """Weichen Fehler anhängen."""
         self._soft.append(msg)
 
+    def retract(self, msg: Msg) -> None:
+        """Weichen Fehler `msg` entfernen, falls vorhanden."""
+        if msg in self._soft:
+            self._soft.remove(msg)
+
     def fail(self, msg: Msg) -> None:
         """Harten Fehler setzen."""
         self._fail = msg

@@ -25,8 +25,8 @@ schritte:
   - nach: 0
     wer: a
 erwartet:
-  # Je eine Warnung aus der Entlade-Verteilung und aus dem AC-Anteil, unterscheidbar.
+  # Die Warnung kommt aus der Verteilungslage nach den Falls: nur die des AC-Pools.
   - instanz: a
     zustand:
       active_fall: G
-      last_error_msgs: [[warn_dist_capacity_sensor, {}], [warn_ac_dist_capacity_sensor, {}]]
+      last_error_msgs: [[warn_ac_dist_capacity_sensor, {}]]
