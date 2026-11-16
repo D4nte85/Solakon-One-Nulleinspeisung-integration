@@ -272,7 +272,7 @@ async def _teardown(hass: HomeAssistant, entry: ConfigEntry) -> None:
     if (rt := runtime.peek(hass)) is None:
         return
     if rt.carriers is not None:
-        await rt.carriers.release(entry.entry_id, entry.data.get(CONF_GRID_SENSOR, ""))
+        await rt.carriers.release(entry.entry_id)
     if not hass.data.get(DOMAIN):
         if rt.panel_registered:
             async_remove_panel(hass, DOMAIN)

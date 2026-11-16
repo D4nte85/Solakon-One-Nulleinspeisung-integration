@@ -109,7 +109,7 @@ def _drop_group_limit(hass: Any, grid_sensor: str) -> None:
 
 
 class Carriers:
-    """Träger der Gesamtlimit-Entitäten: Hinzufüge-Funktion je geladenem Eintrag, Entität je Netzsensor.
+    """Träger der Gesamtlimit-Entitäten: Hinzufüge-Funktion und Netzsensor je geladenem Eintrag, Entität je Netzsensor.
 
     Kandidaten sind die Mitglieder der Netzgruppe, deren number-Plattform geladen ist.
     """
@@ -117,11 +117,13 @@ class Carriers:
     def __init__(self, hass: Any) -> None:
         self.hass = hass
         self._adders: dict[str, AddEntitiesCallback] = {}
+        self._grid_sensors: dict[str, str] = {}
         self._entities: dict[str, GroupLimitNumber] = {}
 
     async def add(self, entry_id: str, add: AddEntitiesCallback, grid_sensor: str) -> None:
-        """Geladenen Eintrag als möglichen Träger eintragen und den Träger seiner Gruppe bestimmen."""
+        """Geladenen Eintrag mit dem Netzsensor, mit dem er geladen wurde, als möglichen Träger eintragen und den Träger seiner Gruppe bestimmen."""
         self._adders[entry_id] = add
+        self._grid_sensors[entry_id] = grid_sensor
         await self.assign(grid_sensor)
 
     async def assign(self, grid_sensor: str) -> None:
@@ -149,15 +151,17 @@ class Carriers:
         self._entities[grid_sensor] = entity
         self._adders[carrier]([entity])
 
-    async def release(self, entry_id: str, grid_sensor: str) -> None:
-        """Entladenen Eintrag austragen; trug er ein Gesamtlimit, übernimmt die nächste Mitgliedsinstanz.
+    async def release(self, entry_id: str) -> None:
+        """Entladenen Eintrag austragen und die Netzgruppe, mit der er geladen wurde, neu bewerten.
 
-        Seine Entität entfernt HA mit der Plattform; sie wird nur ausgetragen. Beim Löschen der
-        vorletzten Instanz zieht die Entität dabei kurz zur Schwester um, bis `async_remove_entry`
-        sie entfernt; das Entladen unterscheidet Löschen nicht von Neuladen.
+        Trug er ein Gesamtlimit, übernimmt die nächste Mitgliedsinstanz. Seine Entität entfernt HA
+        mit der Plattform; sie wird nur ausgetragen. Beim Löschen der vorletzten Instanz zieht die
+        Entität kurz zur Schwester um, bis `async_remove_entry` sie entfernt; das Entladen
+        unterscheidet Löschen nicht von Neuladen.
         """
         if self._adders.pop(entry_id, None) is None:
             return
+        grid_sensor = self._grid_sensors.pop(entry_id)
         current = self._entities.get(grid_sensor)
         if current is not None and current.carrier == entry_id:
             self._entities.pop(grid_sensor)

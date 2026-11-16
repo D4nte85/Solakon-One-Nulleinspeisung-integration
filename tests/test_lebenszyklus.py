@@ -46,8 +46,12 @@ class Umgebung:
             await h.number_mod.async_setup_entry(self.hass, entry, self.added.setdefault(entry.entry_id, []).extend)
 
     async def unload(self, *prefixes):
+        """Entladen wie in HA: mit der Plattform verschwinden auch die Entitäten des Eintrags."""
         for p in prefixes:
-            assert await h.integration.async_unload_entry(self.hass, self.entries[p])
+            entry = self.entries[p]
+            assert await h.integration.async_unload_entry(self.hass, entry)
+            for entity in self.added.get(entry.entry_id, []):
+                entity.__dict__["removed"] = True
 
     async def remove(self, *prefixes):
         """Löschen wie in HA: entladen, aus der Registrierung austragen, dann `async_remove_entry`."""
@@ -308,12 +312,55 @@ def test_setup_entfernt_kapazitaetssensor_ohne_eintrag():
 
 
 def _wechsel(u, p, grid):
-    """Netzsensor im Options-Flow ändern: Eintrag mit neuer Zuweisung neu laden."""
+    """Netzsensor im Options-Flow ändern wie in HA: erst `entry.data`, dann über den Update-Listener neu laden."""
     async def lauf():
-        await u.unload(p)
         u.entries[p].data = {**u.entries[p].data, C.CONF_GRID_SENSOR: grid}
+        await u.unload(p)
         await u.setup(p)
     _run(lauf())
+
+
+def _gesamtlimits(u) -> dict[str, list[str]]:
+    """Lebende Gesamtlimit-Entitäten je Netzsensor mit ihrem Träger."""
+    limits: dict[str, list[str]] = {}
+    for entities in u.added.values():
+        for e in entities:
+            if isinstance(e, h.number_mod.GroupLimitNumber) and not e.__dict__.get("removed"):
+                limits.setdefault(e.grid_sensor, []).append(e.carrier)
+    return limits
+
+
+def _registriertes_gesamtlimit(u, number: int) -> tuple:
+    """Gesamtlimit-Entität und Gerät der Netzgruppe `number` in den Registrierungen, wie HA sie anlegt."""
+    ents, devs = h.ha_stubs.entity_registry_get(u.hass), h.ha_stubs.device_registry_get(u.hass)
+    ents.entities[f"number.netzgruppe_{number}"] = ("number", DOMAIN, f"group_{number}_global_max_power")
+    devs.devices[f"dev_{number}"] = h.ha_stubs.DeviceEntry(f"dev_{number}", {(DOMAIN, f"group_{number}")})
+    return ents, devs
+
+
+def test_netzsensor_wechsel_der_traegerin_gibt_das_gesamtlimit_der_alten_netzgruppe_weiter():
+    u = Umgebung("abc")
+    _run(u.setup("a", "b", "c"))
+    _wechsel(u, "a", "sensor.other")
+    assert _gesamtlimits(u) == {"sensor.grid": ["entry_b"]}
+
+
+def test_netzsensor_rueckwechsel_der_traegerin_legt_das_gesamtlimit_neu_an():
+    u = Umgebung("abc")
+    _run(u.setup("a", "b", "c"))
+    _wechsel(u, "a", "sensor.other")
+    _wechsel(u, "a", "sensor.grid")
+    assert _gesamtlimits(u) == {"sensor.grid": ["entry_a"]}
+
+
+def test_netzsensor_wechsel_raeumt_gesamtlimit_der_einzeln_gewordenen_netzgruppe_ab():
+    for wechselt in "ab":
+        u = Umgebung("ab")
+        _run(u.setup("a", "b"))
+        ents, devs = _registriertes_gesamtlimit(u, 1)
+        _wechsel(u, wechselt, "sensor.other")
+        assert _gesamtlimits(u) == {}, wechselt
+        assert ents.entities == {} and devs.devices == {}, wechselt
 
 
 def test_netzsensor_wechsel_nimmt_den_kapazitaetssensor_mit():
