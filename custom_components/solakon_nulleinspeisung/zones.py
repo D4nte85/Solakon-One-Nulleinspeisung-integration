@@ -473,7 +473,7 @@ def decide(inp: ZoneInputs) -> FallDecision | None:
 
     # ── Fall G: AC Laden Start ───────────────────────────────────────────────
     # Surplus hat Vorrang — kein AC Laden während Zone 0 aktiv
-    # total_output summiert max(Ist-Leistung, Sollwert) über alle entladenden Instanzen (Einzelbetrieb: eigener Wert)
+    # total_output summiert die Abgabe aller entladenden Instanzen: max(Ist-Leistung, Sollwert), im Surplus die Ist-Leistung (Einzelbetrieb: eigener Wert)
     # Schwelle symmetrisch zu Fall H um den Offset, bei positivem Offset Bezug 0
     if (
         inp.cs.ac_enabled

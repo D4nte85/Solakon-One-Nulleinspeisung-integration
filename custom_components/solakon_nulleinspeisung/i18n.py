@@ -48,8 +48,8 @@ _TEXTS: dict[str, dict[str, str]] = {
         "en": "Output {actual:.0f} W instead of {limit:.0f} W — rewritten",
     },
     "act_output_recovery": {
-        "de": "Ausgang {actual:.0f} W statt {limit:.0f} W — Recovery über Modus 0",
-        "en": "Output {actual:.0f} W instead of {limit:.0f} W — recovery via mode 0",
+        "de": "Ausgang {actual:.0f} W statt {limit:.0f} W — zurück in den Ruhezustand",
+        "en": "Output {actual:.0f} W instead of {limit:.0f} W — back to rest",
     },
     "act_zone0_output": {
         "de": "Zone 0: Output → {power:.0f} W",

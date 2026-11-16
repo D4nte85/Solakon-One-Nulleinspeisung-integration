@@ -53,11 +53,11 @@ DEVICE_MAX_CURRENT = 40
 WRITE_DEADBAND = 0.5
 
 # -- Ausgangs-Stillstandserkennung --------------------------------------------
-# Greift nur im gesaettigten Standard-PI-Zweig (at_max_limit). Weicht die tatsaechliche
-# Wechselrichter-Ausgabe um mehr als OUTPUT_STALL_DEVIATION vom Limit ab und steht der
-# Messwert dabei laenger als OUTPUT_STALL_SECONDS unveraendert, wird der Sollwert neu
-# geschrieben und bei Fortbestand die Recovery aus Fall D gefahren. Unter
-# OUTPUT_STALL_MIN_LIMIT findet keine Pruefung statt.
+# Greift nur in der gesättigten Entladeregelung (`paths.py`, Gate SATURATED). Weicht die
+# Ist-Leistung um mehr als OUTPUT_STALL_DEVIATION vom Limit ab und steht der Messwert
+# dabei länger als OUTPUT_STALL_SECONDS unverändert, wird der Sollwert neu geschrieben,
+# bei Fortbestand führt `coordinator.py::_handle_output_stall` in den Ruhezustand.
+# Unter OUTPUT_STALL_MIN_LIMIT findet keine Prüfung statt.
 OUTPUT_STALL_SECONDS = 300
 OUTPUT_STALL_DEVIATION = 0.05
 OUTPUT_STALL_MIN_LIMIT = 15
