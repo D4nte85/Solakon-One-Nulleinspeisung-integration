@@ -49,6 +49,7 @@ _LOGGER = logging.getLogger(__name__)
 
 # Über Neustarts gespeicherte Zustandsflags: (Speicherschlüssel, Attributpfad, Default, erlaubte Werte).
 # Ohne erlaubte Werte ist das Flag ein Bool; sonst gilt für jeden anderen gespeicherten Wert der Default.
+# `resting` wird nicht gespeichert: Nach einem Neustart bewerten die Falls den Ruhezustand in Modus 1 neu.
 PERSISTED_FLAGS = (
     ("cycle_active", "cycle_active", False, None),
     ("surplus_active", "surplus_active", False, None),
@@ -73,7 +74,7 @@ class CoreValues(NamedTuple):
     """Kernsensoren zu Beginn eines Regelzyklus.
 
     `mode` ist 'unknown' und `mode_ok` False, wenn der Modus-Select keinen gültigen Zustand hat;
-    `timer` ist None ohne Zahl.
+    `timer` ist None ohne Zahl. `grid_reported` ist der Meldezeitpunkt des Netzsensors (Unix-Sekunden).
     """
 
     soc: float
@@ -83,6 +84,7 @@ class CoreValues(NamedTuple):
     mode: str
     timer: float | None
     mode_ok: bool
+    grid_reported: float
 
 
 def read_required(hass: HomeAssistant, cfg: Any, keys: Iterable[str]) -> dict[str, float] | str:
@@ -103,9 +105,10 @@ def read_core(hass: HomeAssistant, cfg: Any) -> CoreValues | str:
         return values
     mode = valid_state(hass, cfg[CONF_MODE_SELECT])
     timer = read_number(hass, cfg[CONF_TIMEOUT_COUNTDOWN]).value
+    grid_state = valid_state(hass, cfg[CONF_GRID_SENSOR])
     return CoreValues(
         values[CONF_SOC_SENSOR], values[CONF_GRID_SENSOR], values[CONF_SOLAR_SENSOR], values[CONF_ACTUAL_SENSOR],
-        mode.state if mode else "unknown", timer, mode is not None,
+        mode.state if mode else "unknown", timer, mode is not None, grid_state.last_reported.timestamp(),
     )
 
 
@@ -715,11 +718,11 @@ class SolakonCoordinator:
 
         # ── 2. StdDev und dynamische Offsets ─────────────────────────────────
         # StdDev ist eine Eigenschaft der Netzgruppe, nicht der einzelnen Instanz:
-        # nur der Gruppen-Leader nimmt in den σ-Puffer auf, alle Instanzen übernehmen
-        # σ aus der Netzgruppe.
+        # nur der Gruppen-Leader nimmt in den σ-Puffer auf, jeden Netzwert einmal,
+        # alle Instanzen übernehmen σ aus der Netzgruppe.
         cs = cycle_settings(self.settings)
         if self.group.leader() is self:
-            self.group.sigma.record(grid, time.monotonic(), cs.stddev_window, cs.stddev_trim)
+            self.group.sigma.record(grid, time.monotonic(), cs.stddev_window, cs.stddev_trim, core.grid_reported)
         self.dyn.update(self.group.sigma, cs.offsets)
 
         # ── 3. Settings und Feature-Sensoren ─────────────────────────────────

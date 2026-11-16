@@ -297,7 +297,7 @@
     },
     "stddev_window": {
       "l": "Stabw.-Fenster (s)",
-      "d": "Zeitfenster für die Standardabweichungs-Berechnung. Gilt für alle Zonen."
+      "d": "Zeitfenster für die Standardabweichungs-Berechnung. Jede Meldung des Netzsensors zählt einmal, Regelzyklen ohne neue Meldung nehmen nichts auf. Gilt für alle Zonen."
     },
     "stddev_trim_count": {
       "l": "Trim (Anzahl Werte pro Seite)",

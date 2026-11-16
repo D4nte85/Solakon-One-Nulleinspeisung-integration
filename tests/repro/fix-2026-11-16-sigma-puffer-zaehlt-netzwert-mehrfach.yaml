@@ -1,0 +1,22 @@
+titel: σ-Puffer nimmt denselben Netzwert bei jedem Regelzyklus erneut auf
+bezug: fix-2026-11-16-sigma-puffer-zaehlt-netzwert-mehrfach
+netz: 100
+instanzen:
+  - prefix: a
+    settings: {regulation_enabled: true}
+    sensoren: {soc: 60, modus: "1"}
+schritte:
+  - nach: 0
+  - nach: 5
+    setzen: {netz: 300}
+  - nach: 5
+    setzen: {a.soc: 59}
+  - nach: 5
+    setzen: {a.soc: 58}
+erwartet:
+  - schritt: 2
+    zustand: {dyn.stddev_raw: 100.0}
+  - schritt: 3
+    zustand: {dyn.stddev_raw: 100.0}
+  - schritt: 4
+    zustand: {dyn.stddev_raw: 100.0}

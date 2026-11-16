@@ -297,7 +297,7 @@
     },
     "stddev_window": {
       "l": "StdDev Window (s)",
-      "d": "Time window for the standard deviation calculation. Applies to all zones."
+      "d": "Time window for the standard deviation calculation. Each grid sensor report counts once; control cycles without a new report add nothing. Applies to all zones."
     },
     "stddev_trim_count": {
       "l": "Trim (sample count per side)",

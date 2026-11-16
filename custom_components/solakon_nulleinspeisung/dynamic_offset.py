@@ -69,6 +69,7 @@ class Sigma:
     """σ-Puffer einer Netzgruppe: Netzwerte (timestamp, value) im Fenster, σ roh und getrimmt.
 
     `window` und `trim` sind die Parameter der letzten Aufnahme, `None` bis dahin.
+    `reported` ist der Meldezeitpunkt des zuletzt aufgenommenen Netzwerts.
     """
 
     def __init__(self) -> None:
@@ -77,14 +78,20 @@ class Sigma:
         self.stddev_raw: float = 0.0
         self.window: int | None = None
         self.trim: int | None = None
+        self.reported: float | None = None
 
-    def record(self, grid_value: float, now: float, window: int, trim: int) -> None:
-        """Netzwert aufnehmen, Werte außerhalb des Fensters `window` (s) verwerfen, σ roh und um `trim` getrimmt neu berechnen."""
+    def record(self, grid_value: float, now: float, window: int, trim: int, reported: float | None = None) -> None:
+        """Netzwert aufnehmen, Werte außerhalb des Fensters `window` (s) verwerfen, σ roh und um `trim` getrimmt neu berechnen.
+
+        Ein Netzwert mit demselben Meldezeitpunkt `reported` wie der zuletzt aufgenommene wird nicht erneut aufgenommen.
+        """
         self.window = window
         self.trim = trim
         cutoff = now - self.window
 
-        self.samples.append((now, grid_value))
+        if reported is None or reported != self.reported:
+            self.samples.append((now, grid_value))
+            self.reported = reported
 
         while self.samples and self.samples[0][0] < cutoff:
             self.samples.popleft()

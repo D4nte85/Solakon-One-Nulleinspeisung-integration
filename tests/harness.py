@@ -9,12 +9,13 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import importlib
+import itertools
 import json
 import logging
 import sys
 import weakref
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -102,6 +103,9 @@ _patch_modules()
 
 # ── Zustände und Services ────────────────────────────────────────────────────
 
+_REPORT_SEQ = itertools.count()
+
+
 class FakeState:
     def __init__(self, entity_id, state, attributes=None, last_updated=None):
         self.entity_id = entity_id
@@ -109,6 +113,8 @@ class FakeState:
         self.attributes = dict(attributes or {})
         ts = CLOCK.now if last_updated is None else last_updated
         self.last_updated = datetime.fromtimestamp(ts, tz=timezone.utc)
+        # Eigener Meldezeitpunkt je Setzen, auch bei gleicher Uhrzeit.
+        self.last_reported = self.last_updated + timedelta(microseconds=next(_REPORT_SEQ))
 
 
 class FakeStates:
