@@ -31,7 +31,7 @@
         },
         "data_description": {
           "grid_power_sensor": "Sensor measuring current grid power. Positive = consumption, negative = feed-in.",
-          "actual_power_sensor": "Actual inverter output power — required for Self-Adjusting Wait.",
+          "actual_power_sensor": "Actual inverter power (positive when delivering, negative when charging) — core sensor for setpoint calculation, surplus, AC charging, self-adjusting wait and stall detection.",
           "solar_power_sensor": "PV generation power — used for surplus detection and Zone 2 output limit.",
           "soc_sensor": "Battery state of charge in percent — controls zone transitions.",
           "remote_timeout_countdown_sensor": "Remaining time until the remote control mode resets automatically.",
@@ -39,13 +39,13 @@
           "max_discharge_current_number": "Maximum discharge current in amperes — set zone-dependently.",
           "remote_timeout_set_number": "Timer value for mode reset (3598/3599 toggle mechanism).",
           "mode_select": "Inverter operating mode: Disabled / Discharge / AC Charge.",
-          "export_power_limit_number": "Solakon entity for the hardware grid export limit. Automatically set to the Hard Limit value on each regulation cycle — ensures the cap stays correct even after external changes.",
+          "export_power_limit_number": "Solakon entity for the hardware grid export limit. If it deviates, each regulation cycle sets it to max(Hard Limit Z0, Hard Limit Z1) — keeping the cap correct even after external changes. Optional; clearing the field removes the assignment.",
           "enable_disabled": "Disabled in the Solakon ONE integration: {disabled}. Without enabling they provide no value. The Solakon ONE integration is reloaded afterwards."
         }
       }
     },
     "abort": {
-      "already_configured": "This entity combination is already configured."
+      "already_configured": "This mode select is already used by another instance."
     }
   },
   "options": {
@@ -79,7 +79,7 @@
         },
         "data_description": {
           "grid_power_sensor": "Sensor measuring current grid power. Positive = consumption, negative = feed-in.",
-          "actual_power_sensor": "Actual inverter output power — required for Self-Adjusting Wait.",
+          "actual_power_sensor": "Actual inverter power (positive when delivering, negative when charging) — core sensor for setpoint calculation, surplus, AC charging, self-adjusting wait and stall detection.",
           "solar_power_sensor": "PV generation power — used for surplus detection and Zone 2 output limit.",
           "soc_sensor": "Battery state of charge in percent — controls zone transitions.",
           "remote_timeout_countdown_sensor": "Remaining time until the remote control mode resets automatically.",
@@ -87,13 +87,13 @@
           "max_discharge_current_number": "Maximum discharge current in amperes — set zone-dependently.",
           "remote_timeout_set_number": "Timer value for mode reset (3598/3599 toggle mechanism).",
           "mode_select": "Inverter operating mode: Disabled / Discharge / AC Charge.",
-          "export_power_limit_number": "Solakon entity for the hardware grid export limit. Automatically set to the Hard Limit value on each regulation cycle — ensures the cap stays correct even after external changes.",
+          "export_power_limit_number": "Solakon entity for the hardware grid export limit. If it deviates, each regulation cycle sets it to max(Hard Limit Z0, Hard Limit Z1) — keeping the cap correct even after external changes. Optional; clearing the field removes the assignment.",
           "enable_disabled": "Disabled in the Solakon ONE integration: {disabled}. Without enabling they provide no value. The Solakon ONE integration is reloaded afterwards."
         }
       }
     },
     "abort": {
-      "already_configured": "This entity combination is already used by another instance."
+      "already_configured": "This mode select is already used by another instance."
     }
   },
   "entity": {
@@ -156,7 +156,7 @@
           "waiting": "Waiting for data",
           "disabled": "Disabled (remote control released)",
           "discharge": "INV Discharge PV Priority (PV-first discharge)",
-          "ac_charge": "AC Charge (grid charging)",
+          "ac_charge": "AC Charge",
           "disabled_regulation_off": "Disabled (control inactive)",
           "rest_discharge": "Idle in INV Discharge (0 W, remote control stays active)",
           "unknown": "Unknown mode"

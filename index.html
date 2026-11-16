@@ -76,21 +76,21 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
 
   // Deckt sich mit SETTINGS_DEFAULTS in const.py.
   const DEFAULT_SETTINGS = {
-    regulation_enabled: true,
+    regulation_enabled: false,
     pi_enabled: true, p_factor: 1.3, i_factor: 0.05, tolerance: 15, wait_time: 3, stddev_window: 60, stddev_trim_count: 0,
     zone1_limit: 50, zone3_limit: 20, discharge_max: 40,
     hard_limit_z0: 800, hard_limit_z1: 800,
     offset_1: 30, offset_2: 10, pv_reserve: 50,
     z1_night_enabled: false, offset_1_night: 30,
     surplus_enabled: false, surplus_soc_threshold: 95, surplus_soc_hyst: 5, surplus_pv_hyst: 50,
-    surplus_forecast_enabled: false, surplus_forecast_threshold: 5000,
+    surplus_forecast_enabled: false, surplus_forecast_threshold: 15.0,
     surplus_lock_enabled: false, surplus_lock_sensor: "", surplus_lock_factor: 1.5,
     ac_enabled: false, ac_soc_target: 90, ac_power_limit: 800, ac_hysteresis: 50, ac_min_power: 50,
     ac_offset: -50,
     tariff_enabled: false, tariff_price_sensor: "", tariff_cheap_threshold: 10, tariff_exp_threshold: 25,
     tariff_soc_target: 90, tariff_soc_hyst: 3, tariff_power: 800, tariff_cheap_entity: "", tariff_exp_entity: "",
-    pv_forecast_enabled: false, pv_forecast_sensor: "", pv_forecast_threshold: 5000,
-    zone1_force_enabled: false, zone1_force_sensor: "", zone1_force_threshold: 5000, zone1_force_min_soc: 20,
+    pv_forecast_enabled: false, pv_forecast_sensor: "", pv_forecast_threshold: 15.0,
+    zone1_force_enabled: false, zone1_force_sensor: "", zone1_force_threshold: 15.0, zone1_force_min_soc: 20,
     night_enabled: false, night_hysteresis: 0, rest_in_discharge: false,
     periodic_enabled: false, periodic_interval: 10,
     target_charge_enabled: false, target_soc: 70, target_battery_priority: false,
@@ -102,6 +102,8 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
     dyn_z2_enabled: false, dyn_z2_min: 30, dyn_z2_max: 250, dyn_z2_noise: 15, dyn_z2_factor: 1.5, dyn_z2_negative: false,
     dyn_ac_enabled: false, dyn_ac_min: 30, dyn_ac_max: 250, dyn_ac_noise: 15, dyn_ac_factor: 1.5, dyn_ac_negative: false,
   };
+  // Demo-Instanzen regeln.
+  const DEMO_SETTINGS = { ...DEFAULT_SETTINGS, regulation_enabled: true };
 
   // Szenario-Auswahl für die Live-Vorschau — deckt die drei strukturell
   // unterschiedlichen Panel-Zustände ab: "single" (1 Instanz, keine Instanz-
@@ -125,7 +127,7 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
     demo_a: {
       name: "Solakon A",
       grid_sensor: "sensor.shelly_3em_leistung",
-      settings: { ...DEFAULT_SETTINGS, tariff_enabled: true, tariff_price_sensor: "sensor.tibber_price_current" },
+      settings: { ...DEMO_SETTINGS, tariff_enabled: true, tariff_price_sensor: "sensor.tibber_price_current" },
       // Lädt per Tarif, damit der Lade-Chip im Status-Tab eingeschaltet zu sehen ist.
       status: mkStatus({ zone: 1, soc: 58, actual_power: -800, grid: 795, active_fall: "GT", cycle_active: true,
                          charge_session: "tariff_charge", mode_key: "ac_charge", mode_label: "INV Charge" }),
@@ -134,8 +136,10 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
       demo_b: {
         name: "Solakon B",
         grid_sensor: "sensor.shelly_3em_leistung",
-        settings: { ...DEFAULT_SETTINGS, surplus_enabled: true, surplus_forecast_enabled: true, pv_forecast_sensor: "sensor.solcast_prognose", surplus_lock_enabled: true, surplus_lock_sensor: "sensor.solcast_leistung_jetzt" },
+        settings: { ...DEMO_SETTINGS, surplus_enabled: true, surplus_forecast_enabled: true, pv_forecast_sensor: "sensor.solcast_prognose", surplus_lock_enabled: true, surplus_lock_sensor: "sensor.solcast_leistung_jetzt" },
+        // Kapazitätssensor vertippt: Verteilung weicht von „Kapazitätsgewichtet“ auf „SOC-gewichtet“ aus.
         status: mkStatus({ zone: 1, soc: 81, actual_power: 140, grid: 8, active_fall: "A", cycle_active: true,
+                           dist_mode_effective: "soc",
                            last_error: SCENARIO === "multi-group" ? "Kapazitätssensor nicht verfügbar" : null }),
       },
     } : {}),
@@ -143,22 +147,22 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
       demo_c: {
         name: "Solakon C (Netz West)",
         grid_sensor: "sensor.shelly_west_leistung",
-        settings: { ...DEFAULT_SETTINGS },
-        status: mkStatus({ zone: 0, soc: 97, actual_power: 300, grid: -3, active_fall: "0A", cycle_active: false,
-                           regulation_enabled: false }),
+        settings: { ...DEMO_SETTINGS },
+        status: mkStatus({ zone: 0, soc: 97, actual_power: 300, grid: -3, active_fall: "0A", cycle_active: true,
+                           surplus_active: true, regulation_enabled: false }),
       },
     } : {}),
   };
 
-  // Bildet die Zustandsableitung aus coordinator.py::_update_operating_state()
+  // Bildet die Zustandsableitung aus display.py::Display.update_state()
   // nach, statt operating_state statisch zu hinterlegen — sonst zeigt die
   // Vorschau Zustände, die nicht zu den übrigen Flags der Karte passen.
   function mkOperatingState(o) {
     if (o.regulation_enabled === false) return o.target_charge_enabled ? "discharge_pause" : "disabled";
     if (o.blocked)                      return "blocked";
     if (o.target_charge_enabled && o.soc < (o.target_soc ?? 70)) return "target_charging";
-    if (o.charge_session === "grid_charge") return "target_charging";
     if (o.surplus_active)               return "exporting";
+    if (o.charge_session === "grid_charge") return "target_charging";
     if (o.charge_session === "tariff_charge") return "tariff_charging";
     if (o.charge_session === "ac_charge")     return "ac_charging";
     if (o.discharge_locked)             return "discharge_locked";
@@ -171,48 +175,20 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
   function mkStatus(o) {
     return {
       zone: o.zone, mode_key: o.mode_key ?? "discharge", mode_label: o.mode_label ?? "INV Discharge PV Priority",
-      last_action: "Output → " + o.actual_power + " W",
+      last_action: "PI: 0 → " + Math.max(0, o.actual_power) + " W",
       last_output_ts: now() - 12, mode_label_ts: now() - 340,
       last_error: o.last_error ?? null, integral: 4.2, grid: o.grid, actual_power: o.actual_power,
-      solar: 850, soc: o.soc, cycle_active: o.cycle_active, surplus_active: false,
+      solar: 850, soc: o.soc, cycle_active: o.cycle_active, surplus_active: o.surplus_active ?? false,
       charge_session: o.charge_session ?? "none", regulation_enabled: o.regulation_enabled ?? true, stddev: 8.4, stddev_raw: 8.4,
       active_fall: o.active_fall, is_night: false,
       operating_state: mkOperatingState(o),
       forecast_tariff_suppressed: false, forecast_surplus_forced: false, forecast_exit_lock: false, forecast_zone1_forced: false, allocated_power: 400,
+      dist_mode_effective: o.dist_mode_effective ?? "",
       settings_rev: 0, dist_rev: 0,
     };
   }
 
-  // Bildet die Degradationslogik aus coordinator.py::_all_shares() nach, statt
-  // dist_mode_effective statisch zu hinterlegen — sonst zeigt die Vorschau nach
-  // einem Moduswechsel im Dropdown unmögliche Kombinationen (z. B. "equal"
-  // "degradiert", was es im echten Backend gar nicht gibt). Wird bei jedem
-  // get_status-Aufruf frisch aus dem aktuellen distConfig berechnet. Leer ohne
-  // Netzgruppe und für Instanzen, die laden oder nicht regeln (außerhalb jedes Pools).
-  function computeDistModeEffective(entryId) {
-    const inst = INSTANCES[entryId];
-    const gk = inst.grid_sensor;
-    const groupIds = Object.entries(INSTANCES)
-      .filter(([, v]) => v.grid_sensor === gk).map(([eid]) => eid);
-    if (groupIds.length <= 1) return "";
-    if (inst.status.charge_session !== "none" || inst.status.regulation_enabled === false) return "";
-    const cfg  = distConfig[gk] || {};
-    const mode = cfg.distribution_mode || "equal";
-    if (mode === "equal") return "equal"; // kein Degradationspfad im Backend
-    if (mode === "capacity") {
-      const allValid = groupIds.every(eid => {
-        const capSensor = cfg[`inst_${eid}_capacity_sensor`];
-        const st = capSensor ? STATES[capSensor] : null;
-        return st && st.state !== "unknown" && st.state !== "unavailable" && !isNaN(parseFloat(st.state));
-      });
-      return allValid ? "capacity" : "soc";
-    }
-    // "soc"/"soc_switch": hängen im echten Backend zusätzlich von SOC-Sensor-
-    // Verfügbarkeit ab — in der Vorschau immer gültig, da rein statische Werte.
-    return mode;
-  }
-
-  // Bildet Offset- und Kapazitätsfelder aus coordinator.py::snapshot() nach —
+  // Bildet Offset- und Kapazitätsfelder aus status_view.py nach —
   // bei jedem get_status frisch, damit Zyklus-Schalter, gespeicherte Offsets und
   // geänderte Kapazitätssensoren sofort in der Vorschau wirken.
   const OFFSET_SOURCES = {
@@ -317,10 +293,7 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
           Object.assign(inst.settings, msg.changes);
           return Promise.resolve({ success: true, settings: { ...inst.settings } });
         case "get_status":
-          return Promise.resolve({
-            ...inst.status, ...computeSnapshotExtras(msg.entry_id),
-            dist_mode_effective: computeDistModeEffective(msg.entry_id),
-          });
+          return Promise.resolve({ ...inst.status, ...computeSnapshotExtras(msg.entry_id) });
         case "reset_integral":
           inst.status.integral = 0;
           return Promise.resolve({ success: true });

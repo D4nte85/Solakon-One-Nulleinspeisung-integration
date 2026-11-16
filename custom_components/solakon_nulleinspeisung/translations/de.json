@@ -31,7 +31,7 @@
         },
         "data_description": {
           "grid_power_sensor": "Sensor der die aktuelle Netzleistung misst. Positiv = Bezug, negativ = Einspeisung.",
-          "actual_power_sensor": "Ist-Leistung des Wechselrichters — wird für die adaptive Wartezeit benötigt.",
+          "actual_power_sensor": "Ist-Leistung des Wechselrichters (beim Abgeben positiv, beim Laden negativ) — Kernsensor für Stellwertrechnung, Surplus, AC-Laden, adaptive Wartezeit und Stillstandserkennung.",
           "solar_power_sensor": "PV-Erzeugungsleistung — wird für Surplus-Erkennung und Zone-2-Limit verwendet.",
           "soc_sensor": "Batterieladestand in Prozent — steuert den Zonenwechsel.",
           "remote_timeout_countdown_sensor": "Verbleibende Zeit bis der Fernsteuerungs-Modus automatisch zurückgesetzt wird.",
@@ -39,13 +39,13 @@
           "max_discharge_current_number": "Maximaler Entladestrom in Ampere — zonenabhängig gesetzt.",
           "remote_timeout_set_number": "Timer-Wert für den Modus-Reset (3598/3599 Toggle-Mechanismus).",
           "mode_select": "Betriebsmodus des Wechselrichters: Disabled / Discharge / AC Charge.",
-          "export_power_limit_number": "Solakon-Entität für das Hardware-Limit der Netzeinspeisung. Wird bei jedem Regelzyklus automatisch auf den Hard-Limit-Wert gesetzt — stellt sicher dass die Grenze auch nach externen Änderungen korrekt bleibt.",
+          "export_power_limit_number": "Solakon-Entität für das Hardware-Limit der Netzeinspeisung. Weicht sie ab, setzt jeder Regelzyklus sie auf max(Hard Limit Z0, Hard Limit Z1) — so bleibt die Grenze auch nach externen Änderungen korrekt. Optional, leeren entfernt die Zuweisung.",
           "enable_disabled": "In der Solakon-ONE-Integration deaktiviert: {disabled}. Ohne Aktivierung liefern sie keinen Wert. Die Solakon-ONE-Integration wird danach neu geladen."
         }
       }
     },
     "abort": {
-      "already_configured": "Diese Entitätenkombination ist bereits konfiguriert."
+      "already_configured": "Dieser Modus-Select wird bereits von einer anderen Instanz verwendet."
     }
   },
   "options": {
@@ -79,7 +79,7 @@
         },
         "data_description": {
           "grid_power_sensor": "Sensor der die aktuelle Netzleistung misst. Positiv = Bezug, negativ = Einspeisung.",
-          "actual_power_sensor": "Ist-Leistung des Wechselrichters — wird für die adaptive Wartezeit benötigt.",
+          "actual_power_sensor": "Ist-Leistung des Wechselrichters (beim Abgeben positiv, beim Laden negativ) — Kernsensor für Stellwertrechnung, Surplus, AC-Laden, adaptive Wartezeit und Stillstandserkennung.",
           "solar_power_sensor": "PV-Erzeugungsleistung — wird für Surplus-Erkennung und Zone-2-Limit verwendet.",
           "soc_sensor": "Batterieladestand in Prozent — steuert den Zonenwechsel.",
           "remote_timeout_countdown_sensor": "Verbleibende Zeit bis der Fernsteuerungs-Modus automatisch zurückgesetzt wird.",
@@ -87,13 +87,13 @@
           "max_discharge_current_number": "Maximaler Entladestrom in Ampere — zonenabhängig gesetzt.",
           "remote_timeout_set_number": "Timer-Wert für den Modus-Reset (3598/3599 Toggle-Mechanismus).",
           "mode_select": "Betriebsmodus des Wechselrichters: Disabled / Discharge / AC Charge.",
-          "export_power_limit_number": "Solakon-Entität für das Hardware-Limit der Netzeinspeisung. Wird bei jedem Regelzyklus automatisch auf den Hard-Limit-Wert gesetzt — stellt sicher dass die Grenze auch nach externen Änderungen korrekt bleibt.",
+          "export_power_limit_number": "Solakon-Entität für das Hardware-Limit der Netzeinspeisung. Weicht sie ab, setzt jeder Regelzyklus sie auf max(Hard Limit Z0, Hard Limit Z1) — so bleibt die Grenze auch nach externen Änderungen korrekt. Optional, leeren entfernt die Zuweisung.",
           "enable_disabled": "In der Solakon-ONE-Integration deaktiviert: {disabled}. Ohne Aktivierung liefern sie keinen Wert. Die Solakon-ONE-Integration wird danach neu geladen."
         }
       }
     },
     "abort": {
-      "already_configured": "Diese Entitätenkombination wird bereits von einer anderen Instanz verwendet."
+      "already_configured": "Dieser Modus-Select wird bereits von einer anderen Instanz verwendet."
     }
   },
   "entity": {
@@ -156,7 +156,7 @@
           "waiting": "Warten auf Daten",
           "disabled": "Disabled (Fernsteuerung abgegeben)",
           "discharge": "INV Discharge PV Priority (Entladen mit PV-Vorrang)",
-          "ac_charge": "AC Charge (Netzladung)",
+          "ac_charge": "AC Charge",
           "disabled_regulation_off": "Disabled (Regelung inaktiv)",
           "rest_discharge": "Ruhe in INV Discharge (0 W, Fernsteuerung bleibt aktiv)",
           "unknown": "Unbekannter Modus"

@@ -191,7 +191,7 @@ def surplus_step(
 
     Im Entlade-Pool rechnen Ein- und Austritt mit `error_share`; außerhalb rechnet der
     Eintritt ungeteilt, mit einem Lastbezug von mindestens 0.
-    Scharf wird die Entprellung bei PV über 0, während die Instanz ruhend nichts abgibt;
+    Scharf wird die Entprellung bei PV über 0, während die Instanz nichts abgibt und Zone 0 nicht aktiv ist;
     entschärft bei jedem Austritt über den Verbrauch und bei jedem Austritt mit PV = 0.
     """
     if not surplus_enabled:

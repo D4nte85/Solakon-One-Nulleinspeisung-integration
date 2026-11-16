@@ -52,7 +52,7 @@ _TEXTS: dict[str, dict[str, str]] = {
         "en": "Output {actual:.0f} W instead of {limit:.0f} W — back to rest",
     },
     "act_zone0_output": {
-        "de": "Zone 0: Output → {power:.0f} W",
+        "de": "Zone 0: Ausgangsleistung → {power:.0f} W",
         "en": "Zone 0: output → {power:.0f} W",
     },
     "act_ac_setpoint": {
@@ -310,7 +310,7 @@ _TEXTS: dict[str, dict[str, str]] = {
 
     # ── Warnungen aus Ausgangs-, Verteilungs- und Tarifprüfung ───────────────
     "warn_output_zero_unconfirmed": {
-        "de": "Output-Nullung nach {attempts} Versuchen nicht bestätigt (Ist: {actual:.0f} W)",
+        "de": "Nullung der Ausgangsleistung nach {attempts} Versuchen nicht bestätigt (Ist: {actual:.0f} W)",
         "en": "Output zeroing not confirmed after {attempts} attempts (actual: {actual:.0f} W)",
     },
     "warn_output_stuck": {
