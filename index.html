@@ -187,13 +187,15 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
   // dist_mode_effective statisch zu hinterlegen — sonst zeigt die Vorschau nach
   // einem Moduswechsel im Dropdown unmögliche Kombinationen (z. B. "equal"
   // "degradiert", was es im echten Backend gar nicht gibt). Wird bei jedem
-  // get_status-Aufruf frisch aus dem aktuellen distConfig berechnet.
+  // get_status-Aufruf frisch aus dem aktuellen distConfig berechnet. Leer ohne
+  // Netzgruppe und für Instanzen, die laden oder nicht regeln (außerhalb jedes Pools).
   function computeDistModeEffective(entryId) {
     const inst = INSTANCES[entryId];
     const gk = inst.grid_sensor;
     const groupIds = Object.entries(INSTANCES)
       .filter(([, v]) => v.grid_sensor === gk).map(([eid]) => eid);
-    if (groupIds.length <= 1) return "equal";
+    if (groupIds.length <= 1) return "";
+    if (inst.status.charge_session !== "none" || inst.status.regulation_enabled === false) return "";
     const cfg  = distConfig[gk] || {};
     const mode = cfg.distribution_mode || "equal";
     if (mode === "equal") return "equal"; // kein Degradationspfad im Backend

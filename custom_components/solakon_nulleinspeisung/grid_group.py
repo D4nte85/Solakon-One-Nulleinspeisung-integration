@@ -205,7 +205,7 @@ class NetGroup:
         """Anteile aller Mitglieder in `active` nach Verteilungsmodus.
 
         Gewicht im Entlade-Pool ist der SOC über der Zone-3-Grenze, mit `ac` der Platz bis
-        zum Ladeziel; `soc_switch` wirkt im AC-Pool wie `soc`. Fehlt ein Fremdsensor (SOC
+        zum Ladeziel; `soc_switch` wirkt im AC-Pool wie `soc`, `Shares.mode` bleibt `soc_switch`. Fehlt ein Fremdsensor (SOC
         oder Kapazität), weicht der Modus aus: capacity → soc, soc/soc_switch → equal;
         `Shares.mode` und `Shares.warning` tragen das. Der Warnschlüssel kommt aus
         DIST_WARNINGS, mit `ac` der des AC-Pools.
@@ -216,7 +216,7 @@ class NetGroup:
         dist = self.dist_cfg()
         mode = effective = dist[DIST_MODE]
         if ac and mode == "soc_switch":
-            mode = effective = "soc"
+            mode = "soc"
         warning = ""
 
         if n <= 1:

@@ -191,7 +191,7 @@ def test_ac_pool_soc_switch_wirkt_wie_soc_ohne_rotationszustand():
     a, b = M("a"), M("b", soc=30.0)
     hass, g = _group(a, b, dist=SWITCH)
     s = g.all_shares({"a": a, "b": b}, a, 80, ac=True)
-    assert s.mode == "soc"
+    assert s.mode == "soc_switch" and s.warning == ""
     assert s.values == pytest.approx({"a": 10 / 70, "b": 60 / 70})
     assert _stored_switch(hass) is None
 

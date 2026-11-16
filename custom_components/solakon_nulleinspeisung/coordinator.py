@@ -165,8 +165,8 @@ class SolakonCoordinator:
         self._messages = CycleMessages()
         # Tariflage je Zyklus; hält den Verdacht auf eine EUR/kWh-Preiseinheit über Zyklen.
         self.tariff = Tariff()
-        # Zuletzt angewandter Verteilungsmodus aus _apply_shares(); weicht bei
-        # Degradation vom konfigurierten distribution_mode ab.
+        # Angewandter Verteilungsmodus aus _apply_shares(), leer außerhalb jedes Pools;
+        # weicht bei Degradation vom konfigurierten distribution_mode ab.
         self.dist_mode_effective: str = ""
 
         # Surplus-Vorstufe mit PV-0-Entprellung und voriger Ist-Leistung.
@@ -340,8 +340,9 @@ class SolakonCoordinator:
     # ── Ableiten: Verteilung ─────────────────────────────────────────────────
 
     def _apply_shares(self, shares: Shares | None) -> Msg | None:
-        """Angewandten Verteilungsmodus übernehmen; liefert die Degradierungswarnung dieser Rechnung."""
+        """Angewandten Verteilungsmodus übernehmen, leer ohne Anteile; liefert die Degradierungswarnung dieser Rechnung."""
         if shares is None:
+            self.dist_mode_effective = ""
             return None
         if shares.mode is not None:
             self.dist_mode_effective = shares.mode

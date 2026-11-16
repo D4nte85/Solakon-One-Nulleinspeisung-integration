@@ -52,3 +52,10 @@ def test_nicht_formatierbarer_text_warnt_einmal(monkeypatch):
     assert i18n.translate("de", "x_test") == "Wert {fehlt}"
     assert [r[0] for r in logs.records] == ["WARNING"]
     assert "x_test" in logs.records[0][1]
+
+
+def test_verteilungsmodus_ohne_pool_ist_leer():
+    _, coord = _coord("de")
+    coord.dist_mode_effective = "soc"
+    assert coord._apply_shares(None) is None
+    assert coord.dist_mode_effective == ""
