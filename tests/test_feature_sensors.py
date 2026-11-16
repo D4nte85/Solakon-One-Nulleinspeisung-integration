@@ -42,6 +42,9 @@ def test_feature_reading_aus_liest_nicht():
     ("switch.x", "1", ("err_pv_forecast_sensor_wrong_domain", {"sensor": "switch.x"})),
     ("sensor.x", None, ("err_pv_forecast_sensor_unavailable", {"sensor": "sensor.x"})),
     ("sensor.x", "abc", ("err_pv_forecast_sensor_not_numeric", {"sensor": "sensor.x"})),
+    ("sensor.x", "nan", ("err_pv_forecast_sensor_not_numeric", {"sensor": "sensor.x"})),
+    ("sensor.x", "inf", ("err_pv_forecast_sensor_not_numeric", {"sensor": "sensor.x"})),
+    ("sensor.x", "-inf", ("err_pv_forecast_sensor_not_numeric", {"sensor": "sensor.x"})),
 ])
 def test_feature_reading_meldet_grund(sensor, state, erwartet):
     hass = h.FakeHass()

@@ -16,6 +16,7 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 - **Nicht verfügbare Export-Limit- oder Entladestrom-Entität:** Der Abgleich las dann −1, schrieb in jedem Regelzyklus und meldete beim Export-Limit „Export-Limit korrigiert −1 → … W“. Jetzt schreibt der Abgleich nur auf eine verfügbare Entität (`coordinator.py`).
 - **Verdacht auf €/kWh über Unterbrechungen:** Zeiten ohne gültigen Preis oder mit ausgeschaltetem Tarif setzten den Verdacht nicht zurück; die Warnung kam danach sofort statt nach sechs Stunden ununterbrochenem Verdacht. Jetzt beginnt die Frist nach jeder Unterbrechung neu (`tariff.py`).
 - **Erster Regelzyklus nach Eintritt in den Entlade-Pool:** Holte ein Fall (A, D, E) die Instanz aus Modus 0 oder aus der Ruhe in Modus 1 zurück, rechnete die PI-Phase desselben Regelzyklus mit dem Fehler-Anteil von vor dem Fall, also 0, und schrieb 0 W mit Wartezeit; mit `rest_in_discharge` ging so jeder Rückhol-Regelzyklus verloren. Jetzt bewertet der Coordinator die Verteilung nach den Falls neu, wenn ein Fall die Pool-Zugehörigkeit geändert hat (`coordinator.py`, `grid_group.py`).
+- **Sensorwerte „nan“ und „inf“:** Sie galten als Zahl. Ein Netzwert „inf“ setzte die Ausgangsleistung ohne Meldung auf das Hard Limit, „nan“ legte Regelung oder Tarif still, ebenfalls ohne Meldung. Jetzt gelten nicht endliche Werte wie ein Zustand ohne Zahl, mit der Meldung des jeweiligen Sensors (`readings.py`).
 
 ### Geändert
 

@@ -1,6 +1,7 @@
 """Sensorwerte als Zahl lesen: Wert in der Zieleinheit oder Grund, warum es keinen gibt."""
 from __future__ import annotations
 
+import math
 from typing import NamedTuple
 
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
@@ -51,7 +52,7 @@ def read_number(hass: HomeAssistant, entity_id: str) -> Reading:
     """Zahl mit Einheit lesen, ohne Umrechnung.
 
     Prüft in dieser Reihenfolge: Entity gesetzt, Domain aus NUMERIC_DOMAINS, verfügbar,
-    Zustand per float() lesbar. `on`/`off` und andere Texte sind keine Zahl.
+    Zustand per float() lesbar und endlich. `on`/`off`, andere Texte, „nan“ und „inf“ sind keine Zahl.
     """
     if not entity_id:
         return Reading(None, reason=NO_SENSOR)
@@ -61,9 +62,12 @@ def read_number(hass: HomeAssistant, entity_id: str) -> Reading:
     if state is None:
         return Reading(None, reason=UNAVAILABLE)
     try:
-        return Reading(float(state.state), unit_of(state))
+        value = float(state.state)
     except (ValueError, TypeError):
         return Reading(None, reason=NOT_NUMERIC)
+    if not math.isfinite(value):
+        return Reading(None, reason=NOT_NUMERIC)
+    return Reading(value, unit_of(state))
 
 
 def read_scaled(hass: HomeAssistant, entity_id: str, scale: dict[str, float]) -> Reading:

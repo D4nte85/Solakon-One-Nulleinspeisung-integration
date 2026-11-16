@@ -1,0 +1,13 @@
+titel: Netzwert „inf“ setzt die Ausgangsleistung ohne Meldung auf das Hard Limit
+bezug: fix-2026-11-16-nicht-endliche-sensorwerte-als-zahl
+netz: "inf"
+instanzen:
+  - prefix: a
+    settings: {regulation_enabled: true}
+    sensoren: {soc: 60, modus: "1"}
+schritte:
+  - nach: 0
+erwartet:
+  - schritt: alle
+    kein_aufruf: {entity: a.leistung, wert_min: 1}
+  - zustand_nicht: {last_error: ""}
