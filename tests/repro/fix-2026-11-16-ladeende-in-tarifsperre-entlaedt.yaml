@@ -1,0 +1,32 @@
+titel: Ende des AC-Ladens in der Tarifsperre — PI-Phase entlädt im Übergangszyklus
+bezug: fix-2026-11-16-ladeende-in-tarifsperre-entlaedt
+# Einzelbetrieb, Tarifsperre (Preis 23,3 zwischen Günstig 20 und Teuer 27), Zyklus aktiv.
+# AC-Laden läuft (Modus '3'), SOC erreicht das AC-Ziel 90 % → Fall H.
+# 1: H beendet die Session und schreibt Modus '1'; erwartet kein Schreibbefehl > 0 W.
+# 2: spätestens jetzt TM.
+stunde: 12
+netz: 300
+sensoren:
+  sensor.preis: {wert: 23.3, einheit: ct/kWh}
+instanzen:
+  - prefix: a
+    settings:
+      regulation_enabled: true
+      ac_enabled: true
+      ac_soc_target: 90
+      zone1_limit: 50
+      tariff_enabled: true
+      tariff_price_sensor: sensor.preis
+      tariff_cheap_threshold: 20.0
+      tariff_exp_threshold: 27.0
+    flags: {cycle_active: true, charge_session: ac_charge}
+    sensoren: {soc: 90, solar: 0, ist: -200, modus: "3", leistung: 200}
+schritte:
+  - nach: 0
+  - nach: 5
+erwartet:
+  - schritt: alle
+    kein_aufruf: {entity: a.leistung, wert_min: 1}
+  - schritt: 1
+    instanz: a
+    zustand: {active_fall: H}

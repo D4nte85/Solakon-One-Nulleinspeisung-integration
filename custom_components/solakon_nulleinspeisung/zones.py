@@ -133,10 +133,21 @@ def _rest(inp: ZoneInputs, otherwise: str | None = None, when: bool = True) -> d
 
 
 def _end_charge(name: str, action_key: str, inp: ZoneInputs) -> FallDecision:
-    """Lade-Session beenden: Integral, Session, Output 0, Rückkehrmodus, ohne Zyklus Ruhezustand, Aktionstext."""
+    """Lade-Session beenden: Integral, Session, Output 0, Rückkehrmodus, Aktionstext.
+
+    Ruhezustand ohne Zyklus, wenn kein Zyklus läuft oder nach dem Sessionende
+    Tarifsperre oder Batterievorrang gilt.
+    """
+    locked = (
+        inp.tariff.discharge_locked(False, inp.surplus_active)
+        or (inp.charging_to_target and inp.cs.battery_priority)
+    )
+    rest = locked or not inp.cycle_active
     return FallDecision(name, Transition(
-        reset_integral=True, flags=FlagUpdate(session=SESSION_NONE), output=0,
-        **_rest(inp, MODE_DISCHARGE, not inp.cycle_active),
+        reset_integral=True,
+        flags=FlagUpdate(session=SESSION_NONE, cycle_active=False if locked else None),
+        output=0,
+        **_rest(inp, MODE_DISCHARGE, rest),
     ), action_key)
 
 

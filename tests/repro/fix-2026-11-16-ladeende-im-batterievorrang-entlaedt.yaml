@@ -1,0 +1,28 @@
+titel: Ende des AC-Ladens im Batterievorrang — PI-Phase entlädt im Übergangszyklus
+bezug: fix-2026-11-16-ladeende-in-tarifsperre-entlaedt
+# Einzelbetrieb, Zielladen mit Batterievorrang (Ziel-SOC 95 %), Zyklus aktiv.
+# AC-Laden läuft (Modus '3'), SOC erreicht das AC-Ziel 85 % → Fall H.
+# 1: H beendet die Session und schreibt Modus '1'; erwartet kein Schreibbefehl > 0 W.
+stunde: 12
+netz: 300
+instanzen:
+  - prefix: a
+    settings:
+      regulation_enabled: true
+      ac_enabled: true
+      ac_soc_target: 85
+      target_charge_enabled: true
+      target_soc: 95
+      target_battery_priority: true
+      target_grid_charge: false
+    flags: {cycle_active: true, charge_session: ac_charge}
+    sensoren: {soc: 85, solar: 0, ist: -200, modus: "3", leistung: 200}
+schritte:
+  - nach: 0
+  - nach: 5
+erwartet:
+  - schritt: alle
+    kein_aufruf: {entity: a.leistung, wert_min: 1}
+  - schritt: 1
+    instanz: a
+    zustand: {active_fall: H}

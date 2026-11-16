@@ -541,12 +541,18 @@ def j1(c: Ctx):
         return f"Zyklusstart trotz Tarif-Sperre (Preis {_preis_gueltig(c)[0]})"
 
 
+def _batterievorrang(c: Ctx) -> bool:
+    s = c.settings
+    return bool(s[C.S_TARGET_CHARGE_ENABLED] and s[C.S_TARGET_BATTERY_PRIORITY] and c.soc() < s[C.S_TARGET_SOC])
+
+
 def j2(c: Ctx):
     if not c.normal() or not c.flags_vorher.get("cycle_active") or c.flags["cycle_active"]:
         return None
     if c.soc() <= c.settings[C.S_ZONE3_LIMIT] or c.flags_vorher.get("surplus_active"):
         return None
-    if _tarif_sperre(c) or _fall_neu(c, "TM"):
+    # Tarifsperre mit Schwellen-Entitäten rechnet `_tarif_sperre` nicht nach; dafür gilt die gemeldete Sperre.
+    if _tarif_sperre(c) or c.flags["discharge_locked"] or _batterievorrang(c) or _fall_neu(c, "TM"):
         return None
     return f"Zyklus endet bei SOC {c.soc()} über Zone 3 ohne Sperre oder Zone-0-Austritt (Fall {c.flags['active_fall']!r})"
 
@@ -704,7 +710,7 @@ def k7(c: Ctx):
 
 # Regeln, die erst nach dem Übergang gelten: der erste zutreffende Fall gewinnt, der
 # gewollte Zustand stellt sich ein bis zwei Läufe später ein.
-VERZOEGERT = {"b1", "d3", "d6", "e1", "e2", "h2"}
+VERZOEGERT = {"b1", "d3", "d6", "e1", "h2"}
 
 
 def verstoss(name: str, c: Ctx) -> str | None:
