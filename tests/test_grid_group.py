@@ -279,26 +279,26 @@ def test_wasserfuellung_ohne_anteile_null():
 def test_zuteilung_einzelbetrieb_ohne_gesamtlimit():
     a = M("a")
     _, g = _group(a, dist={"global_max_power": 500})
-    assert g.distribution(a, 50) == (1.0, None, None)
+    assert g.distribution(a, 50, g.discharge_pool()) == (1.0, None, None)
 
 
 @pytest.mark.parametrize("limit, erwartet", [(1200, 800), (600, 600)])
 def test_zuteilung_allein_im_pool_einer_netzgruppe(limit, erwartet):
     a, b = M("a", limit=limit), M("b", discharge=False)
     _, g = _group(a, b, dist={"global_max_power": 800})
-    assert g.distribution(a, 50) == (1.0, erwartet, None)
-    assert g.distribution(b, 50) == (0.0, None, None)
+    assert g.distribution(a, 50, g.discharge_pool()) == (1.0, erwartet, None)
+    assert g.distribution(b, 50, g.discharge_pool()) == (0.0, None, None)
 
 
 def test_zuteilung_steigt_nur_bis_zur_freien_leistung():
     a, b = M("a"), M("b", allocated_power=700)
     _, g = _group(a, b, dist={"distribution_mode": "equal", "global_max_power": 800})
-    share, alloc, shares = g.distribution(a, 50)
+    share, alloc, shares = g.distribution(a, 50, g.discharge_pool())
     assert (share, alloc) == (0.5, 100) and shares.mode == "equal"
     b.allocated_power = 900
-    assert g.distribution(a, 50)[1] == 0
+    assert g.distribution(a, 50, g.discharge_pool())[1] == 0
     b.allocated_power = None
-    assert g.distribution(a, 50)[1] == 400
+    assert g.distribution(a, 50, g.discharge_pool())[1] == 400
 
 
 def test_zuteilung_ohne_limit_von_mitgliedern_ausserhalb_des_pools():
@@ -306,15 +306,15 @@ def test_zuteilung_ohne_limit_von_mitgliedern_ausserhalb_des_pools():
     a, b = M("a"), M("b", allocated_power=400)
     c = M("c", regulating=False, allocated_power=266)
     _, g = _group(a, b, c, dist={"distribution_mode": "equal", "global_max_power": 800})
-    assert g.distribution(a, 50)[1] == 400
+    assert g.distribution(a, 50, g.discharge_pool())[1] == 400
 
 
 def test_ac_anteil():
     a, b = M("a", charge_session="ac_charge"), M("b", charge_session="ac_charge")
     _, g = _group(a, b, dist={"distribution_mode": "equal"})
-    assert g.ac_share(a, 50) == (0.5, group.Shares({"a": 0.5, "b": 0.5}, "equal"))
+    assert g.ac_share(a, 50, g.ac_pool()) == (0.5, group.Shares({"a": 0.5, "b": 0.5}, "equal"))
     a.charge_session = "none"
-    assert g.ac_share(a, 50) == (0.0, None)
+    assert g.ac_share(a, 50, g.ac_pool()) == (0.0, None)
 
 
 def test_verteilungslage_aus_dem_pool_der_instanz():

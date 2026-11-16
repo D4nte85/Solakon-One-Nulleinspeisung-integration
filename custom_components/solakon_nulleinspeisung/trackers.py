@@ -43,7 +43,7 @@ class Trackers:
         self._core = core
         # Abmeldefunktionen nach Name
         self._unsubs: dict[str, Callable] = {}
-        # Eingaben je Trigger beim letzten Anmelden oder Prüfen
+        # Eingaben je Trigger beim letzten Anmelden
         self._inputs: dict[str, tuple] = {}
 
     def _input(self, name: str) -> tuple:

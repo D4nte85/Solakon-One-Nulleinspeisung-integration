@@ -54,10 +54,10 @@ class GroupState(Protocol):
 
 @dataclass(frozen=True)
 class Shares:
-    """Anteile je Instanz, dazu der angewandte Verteilungsmodus (None: keiner) und ein Warnschlüssel."""
+    """Anteile je Instanz, dazu der angewandte Verteilungsmodus (leer: keiner) und ein Warnschlüssel."""
 
     values: dict[str, float]
-    mode: str | None = None
+    mode: str = ""
     warning: str = ""
 
 
@@ -79,7 +79,7 @@ class PoolPosition:
     @property
     def mode(self) -> str:
         """Angewandter Verteilungsmodus; leer ohne Anteile."""
-        return (self.shares.mode or "") if self.shares else ""
+        return self.shares.mode if self.shares else ""
 
     @property
     def warning(self) -> str:
@@ -360,8 +360,10 @@ class NetGroup:
 
         return result
 
-    def distribution(self, me: Member, own_soc: float) -> tuple[float, float | None, Shares | None]:
-        """Fehler-Anteil, zugeteilte Leistung und Anteile von `me` im Entlade-Pool (Modus '1').
+    def distribution(
+        self, me: Member, own_soc: float, active: dict[str, Member],
+    ) -> tuple[float, float | None, Shares | None]:
+        """Fehler-Anteil, zugeteilte Leistung und Anteile von `me` im Entlade-Pool `active` (Modus '1').
 
         Einzelbetrieb oder `me` nicht im Pool: (1.0 bzw. 0.0, None, None). Allein im Pool einer
         Netzgruppe: (1.0, `global_max_power` gekappt am Hard-Limit, None). Angehoben wird
@@ -369,7 +371,6 @@ class NetGroup:
         Entlade-Pool von `global_max_power` freilassen; Senken wirkt sofort. Mitglieder
         außerhalb des Pools zählen nicht, auch wenn ihr letztes Limit noch steht.
         """
-        active = self.discharge_pool()
         if me.member_id not in active:
             return 0.0, None, None
         if len(self.members()) <= 1:
@@ -386,9 +387,8 @@ class NetGroup:
             own = min(own, max(0, math.floor(global_max - others)))
         return shares.values.get(me.member_id, 0.0), own, shares
 
-    def ac_share(self, me: Member, own_soc: float) -> tuple[float, Shares | None]:
-        """Fehler-Anteil von `me` unter den AC-ladenden Mitgliedern; 0.0 ohne Anteile, wenn nicht im Pool."""
-        active = self.ac_pool()
+    def ac_share(self, me: Member, own_soc: float, active: dict[str, Member]) -> tuple[float, Shares | None]:
+        """Fehler-Anteil von `me` im AC-Pool `active`; 0.0 ohne Anteile, wenn nicht im Pool."""
         if me.member_id not in active:
             return 0.0, None
         shares = self.all_shares(active, me, own_soc, ac=True)
@@ -400,6 +400,8 @@ class NetGroup:
 
     def position(self, me: Member, own_soc: float) -> PoolPosition:
         """Verteilungslage von `me` aus Entlade-Pool und AC-Pool."""
-        share, allocated, discharge_shares = self.distribution(me, own_soc)
-        ac_share, ac_shares = self.ac_share(me, own_soc)
-        return PoolPosition(self.pools(me), share, allocated, ac_share, ac_shares or discharge_shares)
+        discharge, ac = self.discharge_pool(), self.ac_pool()
+        share, allocated, discharge_shares = self.distribution(me, own_soc, discharge)
+        ac_share, ac_shares = self.ac_share(me, own_soc, ac)
+        pools = (me.member_id in discharge, me.member_id in ac)
+        return PoolPosition(pools, share, allocated, ac_share, ac_shares or discharge_shares)

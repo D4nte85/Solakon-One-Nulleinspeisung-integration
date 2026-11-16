@@ -78,13 +78,15 @@ class Tariff:
         valid = price is not None
         value = price if price is not None else 0.0
         usable = cs.tariff_enabled and not suppressed and valid
+        if not valid:
+            self._clear_suspect()
         return TariffState(
             price=value, cheap=cheap, exp=exp,
             below_exp=usable and value < exp,
             below_cheap=usable and value < cheap,
             suppressed=suppressed,
             price_warning=price_warning,
-            unit_warning=self._unit_warning(unit, value, cheap, now) if valid else self._clear_suspect(),
+            unit_warning=self._unit_warning(unit, value, cheap, now) if valid else None,
         )
 
     def _clear_suspect(self) -> None:

@@ -99,13 +99,16 @@ def read_required(hass: HomeAssistant, cfg: Any, keys: Iterable[str]) -> dict[st
 
 
 def read_core(hass: HomeAssistant, cfg: Any) -> CoreValues | str:
-    """Kernsensoren eines Regelzyklus; die Entity-ID des ersten Pflichtsensors ohne Zahl statt der Werte."""
+    """Kernsensoren eines Regelzyklus; die Entity-ID des ersten Pflichtsensors ohne Zahl statt der Werte.
+
+    Der Meldezeitpunkt des Netzsensors stammt aus dem State, den `read_required` als Zahl gelesen hat.
+    """
     values = read_required(hass, cfg, [key for key, _, _, required in CORE_SENSORS if required])
     if isinstance(values, str):
         return values
     mode = valid_state(hass, cfg[CONF_MODE_SELECT])
     timer = read_number(hass, cfg[CONF_TIMEOUT_COUNTDOWN]).value
-    grid_state = valid_state(hass, cfg[CONF_GRID_SENSOR])
+    grid_state = hass.states.get(cfg[CONF_GRID_SENSOR])
     return CoreValues(
         values[CONF_SOC_SENSOR], values[CONF_GRID_SENSOR], values[CONF_SOLAR_SENSOR], values[CONF_ACTUAL_SENSOR],
         mode.state if mode else "unknown", timer, mode is not None, grid_state.last_reported.timestamp(),
@@ -266,8 +269,6 @@ class SolakonCoordinator:
 
     def soc_reading(self) -> float | None:
         """SOC-Sensor dieser Instanz; `None`, wenn er nicht verfügbar ist oder keine Zahl liefert."""
-        if not self._entity_ok(self.entry.data[CONF_SOC_SENSOR]):
-            return None
         return self._core(CONF_SOC_SENSOR, None)
 
     def hard_limit(self) -> float:
@@ -896,7 +897,6 @@ class SolakonCoordinator:
         current_power = self.output_setpoint()
         # Ist-Leistung als Basis der Stellwertrechnung, im AC-Laden negativ.
         actual = self.actual_power()
-
 
         # ── 11c. PI-Pfade ────────────────────────────────────────────────────
         d = decide_path(PathInputs(

@@ -11,6 +11,10 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 - **Zuteilung nach Rückkehr in den Entlade-Pool:** Holte ein Fall (A, D, E, 0A) eine Instanz in den Entlade-Pool zurück, regelte ihre PI-Phase im selben Regelzyklus mit dem Limit von vor den Falls, also ohne Zuteilung bis zum Hard-Limit, und die Schwestern zählten sie mit 0 W. Die Summe der Netzgruppe konnte so einen Regelzyklus lang über dem Gesamtlimit liegen. Ebenso behielt eine Instanz, die ein Fall in den Ruhezustand legte, ihre Zuteilung bis zum nächsten Regelzyklus. Jetzt übernimmt der Coordinator nach einem Poolwechsel die ganze Verteilungslage neu, samt Zuteilung und Limit (`coordinator.py`).
 - **Gesamtlimit bei nur einer entladenden Instanz:** Entlud nur eine Instanz einer Netzgruppe, weil die übrigen ruhten oder luden, galt das Gesamtlimit nicht, und sie durfte bis zu ihrem Zone-1/2- bzw. Zone-0-Limit. Lag das über dem Gesamtlimit, überschritt die Netzgruppe es. Jetzt bekommt auch ein einzelnes Mitglied im Entlade-Pool das Gesamtlimit zugeteilt, gekappt am Hard-Limit, sobald mindestens zwei Instanzen am Netzsensor geladen sind. Wer ein Hard-Limit über dem Gesamtlimit nutzt, entlädt allein jetzt höchstens mit dem Gesamtlimit, auch im Surplus (`grid_group.py`).
 
+### Geändert
+
+- **Umbau ohne Verhaltensänderung:** Die Verteilungslage bildet Entlade- und AC-Pool je einmal, `Shares.mode` ist ohne Modus leer statt `None`, `soc_reading` und `read_core` lesen ohne doppelte Prüfung, das Zurücksetzen des €-Verdachts steht als eigene Anweisung (`grid_group.py`, `coordinator.py`, `tariff.py`).
+
 ## [3.9.1] – 2026-11-16
 
 ### Behoben
