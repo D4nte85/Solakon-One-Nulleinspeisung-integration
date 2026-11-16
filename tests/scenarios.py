@@ -734,7 +734,7 @@ async def _run_wiring() -> dict:
     opt.config_entry = fh.config_entries.entries[0]
     flows["init_form"] = _schema_repr(await opt.async_step_init(None))
     flows["init_entities"] = _schema_repr(await opt.async_step_init({"device": "dev_z"}))
-    flows["init_same"] = h.jsonable(await opt.async_step_entities({"mode_select": "select.a_mode"}))
+    flows["init_same"] = h.jsonable(await opt.async_step_entities(dict(fh.config_entries.entries[0].data)))
     flows["init_dup"] = h.jsonable(await opt.async_step_entities({"mode_select": "select.b_mode"}))
     flows["init_events"] = fh.events
     partial = h.entry_data("q")
@@ -798,7 +798,8 @@ def _schema_repr(form) -> list:
     out = []
     for key, sel in schema.schema.items():
         default = key.default() if callable(getattr(key, "default", None)) else None
-        out.append([type(key).__name__, str(key), default, repr(sel)])
+        suggested = key.description.get("suggested_value") if isinstance(key.description, dict) else None
+        out.append([type(key).__name__, str(key), default, suggested, repr(sel)])
     return [form.get("type"), form.get("step_id"), form.get("description_placeholders"), out]
 
 

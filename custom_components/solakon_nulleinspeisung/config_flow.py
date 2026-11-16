@@ -48,6 +48,9 @@ ENTITY_FIELDS = (
 )
 
 
+_FORM_KEYS = {CONF_INSTANCE_NAME, *(key for key, *_ in ENTITY_FIELDS)}
+
+
 def _mode_select_taken(hass: HomeAssistant, value: str, exclude_entry_id: str | None = None) -> bool:
     """True, wenn eine andere Instanz den Modus-Select `value` bereits nutzt."""
     return any(
@@ -111,7 +114,10 @@ def _device_schema(devices: list, current: str | None) -> vol.Schema:
 
 
 def _schema(values: dict, disabled: list) -> vol.Schema:
-    """Formular: Instanzname, ENTITY_FIELDS mit Vorbelegung `values`, bei deaktivierten Zuweisungen das Ankreuzfeld."""
+    """Formular: Instanzname, ENTITY_FIELDS mit Vorbelegung `values`, bei deaktivierten Zuweisungen das Ankreuzfeld.
+
+    Die Entitätsfelder tragen die Vorbelegung als `suggested_value`; ein geleertes optionales Feld fehlt in der Eingabe.
+    """
     fields = {
         vol.Required(CONF_INSTANCE_NAME, default=values.get(CONF_INSTANCE_NAME, DEFAULT_INSTANCE_NAME)): TextSelector(),
     }
@@ -119,7 +125,8 @@ def _schema(values: dict, disabled: list) -> vol.Schema:
         marker = vol.Required if required else vol.Optional
         config = EntitySelectorConfig(domain=domain, device_class=device_class) if device_class \
             else EntitySelectorConfig(domain=domain)
-        fields[marker(key, default=values[key]) if values.get(key) else marker(key)] = EntitySelector(config)
+        fields[marker(key, description={"suggested_value": values[key]}) if values.get(key) else marker(key)] = \
+            EntitySelector(config)
     if disabled:
         fields[vol.Required(CONF_ENABLE_DISABLED, default=True)] = BooleanSelector()
     return vol.Schema(fields)
@@ -188,6 +195,7 @@ class SolakonOptionsFlow(_EntityFlow, config_entries.OptionsFlow):
     def _finish(self, data: dict) -> FlowResult:
         """Entitäten-Zuweisung in `entry.data` speichern; ein geänderter Instanzname wird Titel.
 
+        Formularfelder kommen aus `data`, ein fehlendes optionales Feld entfällt; übrige Schlüssel bleiben.
         Der Reload läuft über den Update-Listener.
         """
         entry = self.config_entry
@@ -195,7 +203,7 @@ class SolakonOptionsFlow(_EntityFlow, config_entries.OptionsFlow):
         renamed = name is not None and name != entry.data.get(CONF_INSTANCE_NAME)
         self.hass.config_entries.async_update_entry(
             entry,
-            data={**entry.data, **data},
+            data={**{k: v for k, v in entry.data.items() if k not in _FORM_KEYS}, **data},
             title=name if renamed else entry.title,
         )
         return self.async_create_entry(title="", data={})

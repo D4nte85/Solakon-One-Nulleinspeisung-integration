@@ -34,7 +34,14 @@ def _hass(entries=()):
 
 
 def _defaults(form) -> dict:
-    return {str(k): k.default() for k in form["data_schema"].schema if callable(getattr(k, "default", None))}
+    """Vorbelegung je Feld: `suggested_value` der Entitätsfelder, sonst `default`."""
+    out = {}
+    for k in form["data_schema"].schema:
+        if isinstance(k.description, dict) and "suggested_value" in k.description:
+            out[str(k)] = k.description["suggested_value"]
+        elif callable(getattr(k, "default", None)):
+            out[str(k)] = k.default()
+    return out
 
 
 def _options(form) -> list:
@@ -165,14 +172,34 @@ def test_anpassen_uebernimmt_instanznamen_als_titel():
     entry = h.FakeEntry("entry_a", {**h.entry_data("a"), C.CONF_INSTANCE_NAME: "Alt"}, title="Alt")
     fh.config_entries.entries = [entry]
     opt = _options_flow(fh, entry)
-    opt._finish({C.CONF_INSTANCE_NAME: "Neu"})
+    opt._finish({**entry.data, C.CONF_INSTANCE_NAME: "Neu"})
     assert entry.data[C.CONF_INSTANCE_NAME] == "Neu"
     assert entry.title == "Neu"
+
+
+def test_anpassen_export_limit_abwaehlen_behaelt_altschluessel():
+    fh = _hass()
+    ids = _device(fh, "d1", "keller_solakon_one")
+    alt = {**ids, C.CONF_GRID_SENSOR: "sensor.grid", C.CONF_INSTANCE_NAME: "Alt",
+           C.CONF_EXPORT_LIMIT: "number.export", "alt_schluessel": 7}
+    fh.states.set("number.export", "800")
+    entry = h.FakeEntry("entry_a", alt)
+    fh.config_entries.entries = [entry]
+    opt = _options_flow(fh, entry)
+    _run(opt.async_step_init(None))
+    form = _run(opt.async_step_init({"device": "d1"}))
+    assert _defaults(form)[C.CONF_EXPORT_LIMIT] == "number.export"
+    # Das HA-Formular schickt ein geleertes Feld nicht mit.
+    eingabe = {k: v for k, v in _defaults(form).items() if k != C.CONF_EXPORT_LIMIT}
+    _run(opt.async_step_entities(form["data_schema"](eingabe)))
+    assert C.CONF_EXPORT_LIMIT not in entry.data
+    assert entry.data["alt_schluessel"] == 7
+    assert entry.data[C.CONF_GRID_SENSOR] == "sensor.grid"
 
 
 def test_unveraenderter_instanzname_laesst_titel_stehen():
     fh = _hass()
     entry = h.FakeEntry("entry_a", {**h.entry_data("a"), C.CONF_INSTANCE_NAME: "Alt"}, title="Von Hand")
     fh.config_entries.entries = [entry]
-    _options_flow(fh, entry)._finish({C.CONF_INSTANCE_NAME: "Alt"})
+    _options_flow(fh, entry)._finish({**entry.data, C.CONF_INSTANCE_NAME: "Alt"})
     assert entry.title == "Von Hand"
