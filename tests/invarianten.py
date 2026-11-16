@@ -74,6 +74,7 @@ class Ctx:
     runde_vollstaendig: bool = True                # alle Instanzen haben in dieser Runde geregelt
     geregelt: dict = field(default_factory=dict)   # prefix -> Regelung an, vor diesem Zyklus
     laedt: dict = field(default_factory=dict)      # prefix -> AC- oder Tarif-Laden aktiv, vor diesem Zyklus
+    im_pool: dict = field(default_factory=dict)    # prefix -> im Entlade-Pool, vor diesem Zyklus
 
     def e(self, key: str) -> str:
         return self.cfg[key]
@@ -608,9 +609,10 @@ def k1(c: Ctx):
     zug = c.flags["allocated_power"]
     if zug is None or not c.normal():
         return None
-    # Zugeteilt wird zu Zyklusbeginn, also nach der Lage vor den Falls.
-    schluessel = C.S_HARD_LIMIT_Z0 if c.flags_vorher.get("surplus_active") else C.S_HARD_LIMIT_Z1
-    grenze = min(c.settings[schluessel], C.DEVICE_MAX_POWER)
+    # Zugeteilt wird nach der Lage vor den Falls, nach einem Poolwechsel nach der Lage danach.
+    schluessel = {C.S_HARD_LIMIT_Z0 if f.get("surplus_active") else C.S_HARD_LIMIT_Z1
+                  for f in (c.flags_vorher, c.flags)}
+    grenze = min(max(c.settings[k] for k in schluessel), C.DEVICE_MAX_POWER)
     if zug > grenze + 1e-6:
         return f"zugeteilt {zug} W > Hard Limit {grenze} W"
 
@@ -618,8 +620,11 @@ def k1(c: Ctx):
 def k2(c: Ctx):
     if not c.normal() or c.flags["allocated_power"] is None:
         return None
-    modus = (c.vorher.get(c.e(C.CONF_MODE_SELECT)) or {}).get("state")
-    if (modus == C.MODE_DISABLED or c.flags_vorher.get("resting")) and c.flags["allocated_power"] > 0:
+    # Außerhalb des Pools vor und nach dem Regelzyklus; nach einem Poolwechsel zählt die Lage danach.
+    modus = c.modus()
+    vorher = (c.vorher.get(c.e(C.CONF_MODE_SELECT)) or {}).get("state")
+    draussen = (vorher == C.MODE_DISABLED or c.flags_vorher.get("resting")) and (modus == C.MODE_DISABLED or c.flags["resting"])
+    if draussen and c.flags["allocated_power"] > 0:
         return f"Instanz in Modus {modus!r}/Ruhe mit zugeteilter Leistung {c.flags['allocated_power']}"
 
 
@@ -722,6 +727,34 @@ def k7(c: Ctx):
 VERZOEGERT = {"b1", "d3", "d6", "e1", "h2"}
 
 
+def _im_entlade_pool(c: Ctx, p: str) -> bool:
+    """Mitglied `p` am eigenen Netzsensor steht im Entlade-Pool.
+
+    Für die eigene Instanz gilt der Stand nach dem Regelzyklus, für die übrigen der Stand
+    davor und danach: Sie haben in dieser Runde vielleicht noch nicht geregelt.
+    """
+    cfg, fl, nach = c.alle[p]
+    if cfg[C.CONF_GRID_SENSOR] != c.e(C.CONF_GRID_SENSOR) or not c.geregelt.get(p, False):
+        return False
+    danach = (nach.get(cfg[C.CONF_MODE_SELECT]) or {}).get("state") == C.MODE_DISCHARGE and not fl.get("resting")
+    return danach if p == c.prefix else danach and c.im_pool.get(p, False)
+
+
+def k8(c: Ctx):
+    if not c.normal() or c.aus_seit is not None or len(c.alle) < 2 or not c.runde_vollstaendig:
+        return None
+    if c.prefix not in c.alle or not _im_entlade_pool(c, c.prefix):
+        return None
+    andere = [p for p in c.alle if p != c.prefix and _im_entlade_pool(c, p)]
+    if not andere:
+        return None
+    zug = c.flags["allocated_power"]
+    if zug is None:
+        return f"im Entlade-Pool mit {andere} ohne Zuteilung"
+    if (c.leistung() or 0) > zug + 1:
+        return f"Ausgangsleistung {c.leistung()} W > Zuteilung {zug} W"
+
+
 def verstoss(name: str, c: Ctx) -> str | None:
     """Verstoß gegen eine Regel; verzögerte Regeln nur in Läufen ohne Übergang."""
     if name in VERZOEGERT and c.uebergang():
@@ -767,7 +800,8 @@ async def _lauf(kind: str, spec: dict) -> list[Ctx]:
                              dist=spec["dist"] if spec.get("has_dist_config") else None,
                              aus_seit=aus_seit[p], abgeschaltet_jetzt=p in abgeschaltet,
                              geregelt={q: bool(c.settings[C.S_REGULATION_ENABLED]) for q, c in coords.items()},
-                             laedt={q: c.charge_session != "none" for q, c in coords.items()}))
+                             laedt={q: c.charge_session != "none" for q, c in coords.items()},
+                             im_pool={q: c.in_discharge_pool() for q, c in coords.items()}))
             flags[p] = neu
         nach = schnappschuss(hass)
         alle = {p: (coords[p].entry.data, flags[p], nach) for p in coords}

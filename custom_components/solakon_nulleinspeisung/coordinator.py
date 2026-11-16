@@ -334,13 +334,20 @@ class SolakonCoordinator:
         self.forecast = ForecastFlags(False, False, False)
         self.dist_mode_effective = ""
 
-    def _adopt_position(self, pos: PoolPosition, replaced: PoolPosition | None = None) -> None:
-        """Angewandten Verteilungsmodus und Verteilungswarnung aus `pos` übernehmen; die Warnung von `replaced` entfällt."""
+    def _adopt_position(
+        self, pos: PoolPosition, cs: CycleSettings, replaced: PoolPosition | None = None,
+    ) -> PowerLimits:
+        """Verteilungslage `pos` übernehmen: Zuteilung, angewandter Verteilungsmodus, Verteilungswarnung.
+
+        Liefert die Leistungsgrenzen aus `cs` und der Zuteilung; die Warnung von `replaced` entfällt.
+        """
         if replaced is not None and replaced.warning:
             self._messages.retract((replaced.warning, {}))
+        self.allocated_power = pos.allocated
         self.dist_mode_effective = pos.mode
         if pos.warning:
             self._messages.warn((pos.warning, {}))
+        return power_limits(cs, pos.allocated)
 
     # ── Darstellen: Texte ────────────────────────────────────────────────────
 
@@ -738,9 +745,7 @@ class SolakonCoordinator:
 
         # ── 4. Verteilung und Leistungsgrenzen ───────────────────────────────
         pos = self.group.position(self, soc)
-        self.allocated_power = pos.allocated
-        self._adopt_position(pos)
-        limits = power_limits(cs, pos.allocated)
+        limits = self._adopt_position(pos, cs)
 
         # Nutzt die Zone des vorherigen Zyklus — self.surplus_active ist hier noch
         # nicht aktualisiert.
@@ -805,7 +810,7 @@ class SolakonCoordinator:
         # Verteilungslage neu, wenn ein Fall die Pool-Zugehörigkeit geändert hat.
         if self.group.pools(self) != pos.pools:
             before, pos = pos, self.group.position(self, soc)
-            self._adopt_position(pos, before)
+            limits = self._adopt_position(pos, cs, before)
 
         # Zustand hinter Fall TM: die Sperre selbst mit den Flags nach den Falls,
         # nicht ihr Auslöser. Ebenso die Nachtabschaltung mit dem Zyklus nach den Falls.

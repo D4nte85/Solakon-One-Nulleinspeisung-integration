@@ -1,0 +1,34 @@
+titel: Rückkehr in den Entlade-Pool regelt im ersten Regelzyklus ohne Zuteilung
+bezug: fix-2026-11-16-zuteilung-nach-rueckkehr-in-den-entlade-pool
+# Zwei Instanzen an sensor.grid, Gesamtlimit 800 W gleich verteilt, Zone-1/2-Limit je 600 W,
+# Ruhe in Modus 1. a entlädt in Zone 1. b ruht nach Fall C (SOC 15 unter Zone 3).
+# Steigt der SOC von b, holt Fall E sie zurück. Erwartet: b schreibt in diesem Regelzyklus
+# höchstens ihre Zuteilung (Gesamtlimit 800 − veröffentlichte Zuteilung von a).
+stunde: 12
+netz: 1500
+verteilung: {global_max_power: 800, distribution_mode: equal}
+instanzen:
+  - prefix: a
+    settings: {regulation_enabled: true, rest_in_discharge: true, hard_limit_z1: 600}
+    flags: {cycle_active: true}
+    sensoren: {soc: 80, solar: 0, ist: 400, modus: "1", leistung: 400}
+  - prefix: b
+    settings: {regulation_enabled: true, rest_in_discharge: true, hard_limit_z1: 600}
+    sensoren: {soc: 15, solar: 800, ist: 0, modus: "1", leistung: 0}
+schritte:
+  - nach: 0
+    wer: all
+  - nach: 5
+    wer: all
+  - nach: 5
+    setzen: {b.soc: 40}
+    wer: all
+erwartet:
+  - schritt: 2
+    instanz: b
+    zustand: {resting: true}
+  - schritt: 3
+    instanz: b
+    zustand: {active_fall: E, allocated_power: 400}
+  - schritt: 3
+    kein_aufruf: {entity: b.leistung, wert_min: 401}
