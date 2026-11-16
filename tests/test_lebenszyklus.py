@@ -108,6 +108,20 @@ def test_setup_migriert_settings_aus_version_2_2():
     assert "ac_charge_active" not in env["data"] and env["data"]["charge_session"] == C.SESSION_AC
 
 
+def test_unbekannter_settings_schluessel_bleibt_beim_laden_und_speichern():
+    u = Umgebung("a")
+    key = _key(u.entries["a"])
+    h.put_store(u.hass, key, {C.S_ZONE1_LIMIT: 42, "aus_neuerer_version": 7})
+
+    async def lauf():
+        await u.setup("a")
+        await u.coord("a").async_update_settings({C.S_ZONE1_LIMIT: 33})
+
+    _run(lauf())
+    assert u.coord("a").settings["aus_neuerer_version"] == 7
+    assert u.hass.storage[key]["data"]["aus_neuerer_version"] == 7
+
+
 async def _setup_coord(u):
     await u.setup("a")
     return u.coord("a")
