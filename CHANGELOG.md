@@ -5,6 +5,8 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+## [3.9.2] – 2026-11-16
+
 ### Behoben
 
 - **Surplus-Ende und Fall I in Tarifsperre oder Batterievorrang:** Endete Surplus beim Aufladen mit Batterievorrang (0B), oder räumte Fall I einen Widerspruch zwischen Modus und Lade-Session bei Tarifsperre oder Batterievorrang auf, blieb die Instanz mit aktivem Zyklus in Modus 1. Die PI-Phase desselben Regelzyklus entlud dann bis zum Limit; erst TM oder ZB sperrten im Folgezyklus. Jetzt entscheidet eine gemeinsame Rückkehr in Modus 1 für 0B, Fall I und das Lade-Ende: Gilt eine der Sperren, geht es direkt in den Ruhezustand. Fall I schreibt dabei auch dann den Ruhemodus, wenn er bisher den Modus stehen ließ (`zones.py`).
