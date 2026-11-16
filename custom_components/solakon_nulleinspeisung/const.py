@@ -43,7 +43,7 @@ DEVICE_KEYS = {
 
 PLATFORMS = ["sensor", "switch", "binary_sensor", "number"]
 
-# -- Geraetegrenze ------------------------------------------------------------
+# -- Gerätegrenze -------------------------------------------------------------
 # Maximale Ein- und Ausgangsleistung des Solakon ONE laut Datenblatt. Deckelt jeden
 # Sollwert.
 DEVICE_MAX_POWER = 1200
@@ -62,10 +62,10 @@ OUTPUT_STALL_SECONDS = 300
 OUTPUT_STALL_DEVIATION = 0.05
 OUTPUT_STALL_MIN_LIMIT = 15
 
-# -- Tarif-Einheitenplausibilitaet --------------------------------------------
+# -- Tarif-Einheitenplausibilität ---------------------------------------------
 # Die Preisschwellen sind ct/kWh. Liegt der Preis im Fenster
-# [0, TARIFF_UNIT_SUSPECT_PRICE) bei einer Guenstig-Schwelle ab
-# TARIFF_UNIT_SUSPECT_THRESHOLD und haelt das laenger als
+# [0, TARIFF_UNIT_SUSPECT_PRICE) bei einer Günstig-Schwelle ab
+# TARIFF_UNIT_SUSPECT_THRESHOLD und hält das länger als
 # TARIFF_UNIT_SUSPECT_SECONDS an, liefert der Sensor vermutlich EUR/kWh.
 # Gemeldet wird nur, umgerechnet nichts.
 TARIFF_UNIT_SUSPECT_PRICE = 1.0
@@ -228,7 +228,6 @@ POWER = (0, DEVICE_MAX_POWER)
 CURRENT = (0, DEVICE_MAX_CURRENT)
 PERCENT = (0, 100)
 AMOUNT = (0, None)
-POSITIVE = (1, None)
 SIGNED = (None, None)
 
 DIST_MODES = ("equal", "soc", "capacity", "soc_switch")

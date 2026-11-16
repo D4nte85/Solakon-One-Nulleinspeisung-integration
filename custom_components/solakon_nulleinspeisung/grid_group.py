@@ -87,6 +87,12 @@ class PoolPosition:
         return self.shares.warning if self.shares else ""
 
 
+def instance_capacity_kwh(dist: dict, entry_id: str, member: Member) -> float | None:
+    """Kapazität der Instanz `entry_id` in kWh aus ihrem Kapazitätssensor in `dist`; None ohne Sensor oder Zahl."""
+    sensor = str(dist.get(capacity_key(entry_id)) or "")
+    return member.capacity_kwh(sensor) if sensor else None
+
+
 def pool_sum(
     pool: dict[str, Member], me: Member, own_value: float, reader: Callable[[Member], float],
 ) -> float:
@@ -264,15 +270,8 @@ class NetGroup:
         # Modus "soc": reine SOC-Prozentpunkt-Gewichtung; "capacity" gewichtet zusätzlich mit der Kapazität.
         caps = {eid: 1.0 for eid in active}
         if mode == "capacity":
-            def _cap_kwh(eid: str, m: Member) -> float | None:
-                """Kapazität der Instanz in kWh; None ohne Sensor oder ohne gültigen Wert."""
-                cap_s = dist.get(capacity_key(eid), "")
-                if not cap_s:
-                    return None
-                return m.capacity_kwh(cap_s)
-
             # Sobald eine Kapazität fehlt, zählen alle neutral 1.0 (reine SOC-Gewichtung).
-            measured = {eid: _cap_kwh(eid, m) for eid, m in active.items()}
+            measured = {eid: instance_capacity_kwh(dist, eid, m) for eid, m in active.items()}
             if any(cap is None for cap in measured.values()):
                 effective, warning = "soc", DIST_WARNINGS["capacity"][ac]
             else:

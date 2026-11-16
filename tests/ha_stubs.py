@@ -30,11 +30,6 @@ class HomeAssistant:  # nur Typangabe
     pass
 
 
-class Event:
-    def __init__(self, data=None):
-        self.data = data or {}
-
-
 def callback(func):
     return func
 
@@ -47,21 +42,6 @@ def async_track_state_change_event(hass, entity_ids, action):
 
 def async_track_time_interval(hass, action, interval):
     return hass.log_tracker("interval", interval.total_seconds())
-
-
-# ── helpers.state ────────────────────────────────────────────────────────────
-
-_ONE = ("on", "locked", "above_horizon", "open", "home")
-_ZERO = ("off", "unlocked", "unknown", "below_horizon", "closed", "not_home")
-
-
-def state_as_number(state) -> float:
-    """Nachbau von homeassistant.helpers.state.state_as_number."""
-    if state.state in _ONE:
-        return 1
-    if state.state in _ZERO:
-        return 0
-    return float(state.state)
 
 
 # ── helpers.storage ──────────────────────────────────────────────────────────
@@ -238,21 +218,6 @@ class EntityCategory(str, Enum):
 
 class UnitOfPower(str, Enum):
     WATT = "W"
-
-
-class _Description:
-    def __init__(self, key, **kwargs):
-        self.key = key
-        for k, v in kwargs.items():
-            setattr(self, k, v)
-
-
-class SensorEntityDescription(_Description):
-    pass
-
-
-class BinarySensorEntityDescription(_Description):
-    pass
 
 
 # ── Config-Flow ──────────────────────────────────────────────────────────────
@@ -471,11 +436,10 @@ def persistent_notification_create(hass, message, title=None, notification_id=No
 
 
 def install() -> None:
-    _module("homeassistant.core", HomeAssistant=HomeAssistant, Event=Event, callback=callback)
+    _module("homeassistant.core", HomeAssistant=HomeAssistant, callback=callback)
     _module("homeassistant.helpers.event",
             async_track_state_change_event=async_track_state_change_event,
             async_track_time_interval=async_track_time_interval)
-    _module("homeassistant.helpers.state", state_as_number=state_as_number)
     _module("homeassistant.helpers.storage", Store=Store)
     _module("homeassistant.helpers.entity_registry", async_get=entity_registry_get,
             async_entries_for_device=entities_for_device)
@@ -486,10 +450,8 @@ def install() -> None:
     _module("homeassistant.helpers.entity", Entity=Entity)
     _module("homeassistant.helpers.entity_platform", AddEntitiesCallback=object)
     _module("homeassistant.components.sensor", SensorEntity=SensorEntity,
-            SensorDeviceClass=SensorDeviceClass, SensorStateClass=SensorStateClass,
-            SensorEntityDescription=SensorEntityDescription)
-    _module("homeassistant.components.binary_sensor", BinarySensorEntity=BinarySensorEntity,
-            BinarySensorEntityDescription=BinarySensorEntityDescription)
+            SensorDeviceClass=SensorDeviceClass, SensorStateClass=SensorStateClass)
+    _module("homeassistant.components.binary_sensor", BinarySensorEntity=BinarySensorEntity)
     _module("homeassistant.components.switch", SwitchEntity=SwitchEntity)
     _module("homeassistant.components.number", NumberEntity=NumberEntity, NumberMode=NumberMode)
     _module("homeassistant.const", EntityCategory=EntityCategory, UnitOfPower=UnitOfPower,

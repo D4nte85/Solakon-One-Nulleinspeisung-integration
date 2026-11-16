@@ -314,8 +314,8 @@ _TEXTS: dict[str, dict[str, str]] = {
         "en": "Output zeroing not confirmed after {attempts} attempts (actual: {actual:.0f} W)",
     },
     "warn_output_stuck": {
-        "de": "Ausgang bleibt bei {actual:.0f} W statt {limit:.0f} W — Recovery ausgelöst",
-        "en": "Output stays at {actual:.0f} W instead of {limit:.0f} W — recovery triggered",
+        "de": "Ausgang bleibt bei {actual:.0f} W statt {limit:.0f} W — zurück in den Ruhezustand",
+        "en": "Output stays at {actual:.0f} W instead of {limit:.0f} W — back to rest",
     },
     "warn_dist_soc_switch_sensor": {
         "de": "Verteilung (SOC-Switch): SOC-Sensor einer Instanz nicht verfügbar — auf Gleichverteilung zurückgefallen",

@@ -22,6 +22,9 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 - **Countdown ohne Zahl:** Lieferte der Timeout-Countdown einen Zustand ohne Zahl, rechnete die Regelung mit 0 und wechselte in jedem Regelzyklus den Timer samt 1 s Warten. Jetzt entfällt der Timer-Wechsel, bis der Countdown wieder eine Zahl liefert (`coordinator.py`).
 - **Aktionstext nach Stillstand:** Hält der Ausgang trotz Neuschreiben nicht nach, heißt die letzte Aktion jetzt „… — zurück in den Ruhezustand“ statt „Recovery über Modus 0“; mit `rest_in_discharge` geht es nach Modus 1 (`i18n.py`).
 - **Umbau ohne Verhaltensänderung:** Einheiten der Kernsensoren nur noch in `CORE_SENSORS`, Hinweis auf den PV-Deckel aus der Pfadwahl, einheitliche Quellen für Netzsensor, Kapazitätsfeld und Trigger (`coordinator.py`, `paths.py`, `trackers.py`, `__init__.py`, `const.py`).
+- **Warnung bei Ausgangsstillstand:** Die Fehlermeldung der zweiten Stufe heißt jetzt „… — zurück in den Ruhezustand“ statt „Recovery ausgelöst“, wie die letzte Aktion; „Recovery“ bezeichnet Fall D (`i18n.py`).
+- **Fehlende Werte im Panel:** Ohne Wert zeigt das Panel überall „—“ ohne Einheit (`solakon-panel.js`).
+- **Umbau ohne Verhaltensänderung:** Die Kapazität einer Instanz liest eine gemeinsame Funktion für Verteilung und Status; unbenutzte Konstante entfernt (`grid_group.py`, `status_view.py`, `const.py`).
 - **Neuanmelden der Trigger:** Nach Settings-Änderung, geänderter Verteilung und zu Beginn jedes Regelzyklus gilt eine Regel: Neu angemeldet wird nur ein Trigger, dessen Eingaben sich geändert haben. Nach dem Speichern der Verteilung entfällt das Ab- und Anmelden von Triggern mit gleichem Sensor (`trackers.py`, `coordinator.py`).
 
 ## [3.9.0] – 2026-11-15

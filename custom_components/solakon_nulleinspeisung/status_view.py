@@ -4,7 +4,8 @@ from __future__ import annotations
 from functools import cached_property
 from typing import TYPE_CHECKING, Any, Callable
 
-from .const import S_Z1_NIGHT_ENABLED, capacity_key
+from .const import S_Z1_NIGHT_ENABLED
+from .grid_group import instance_capacity_kwh
 from .dynamic_offset import offset_params
 
 if TYPE_CHECKING:
@@ -78,8 +79,7 @@ class _Reading:
 
     def capacity_kwh(self) -> float | None:
         """Kapazität in kWh aus dem Verteilungs-Sensor der Instanz, None ohne gültigen Wert."""
-        sensor = str(self.c.group.dist_cfg().get(capacity_key(self.c.entry.entry_id), ""))
-        return self.c.capacity_kwh(sensor) if sensor else None
+        return instance_capacity_kwh(self.c.group.dist_cfg(), self.c.entry.entry_id, self.c)
 
 
 def status_value(coord: SolakonCoordinator, name: str) -> Any:

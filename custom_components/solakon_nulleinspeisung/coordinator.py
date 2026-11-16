@@ -927,7 +927,7 @@ class SolakonCoordinator:
 
     def _end_cycle(
         self, *, blocked: bool = False,
-        display: tuple[float, int, str] | None = None, prev_flags: dict[str, Any] | None = None,
+        display: tuple[float, float, str] | None = None, prev_flags: dict[str, Any] | None = None,
         notify_on_change: bool = False,
     ) -> None:
         """Zyklus abschließen: Fehler, Anzeige, Flag-Speicherung, Benachrichtigung.

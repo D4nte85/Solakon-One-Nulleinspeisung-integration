@@ -76,8 +76,8 @@ class CoordinatorSensor(SolakonEntity, SensorEntity):
 class OperatingStateSensor(CoordinatorSensor):
     """Was die Instanz gerade tut — ein Zustand aus OPERATING_STATES.
 
-    Abgegrenzt zu `active_fall`: der haelt den zuletzt ausgefuehrten
-    Uebergang, dieser den aktuell geltenden Zustand.
+    Abgegrenzt zu `active_fall`: der hält den zuletzt ausgeführten
+    Fall, dieser den aktuell geltenden Zustand.
     """
 
     def __init__(self, coord: SolakonCoordinator) -> None:

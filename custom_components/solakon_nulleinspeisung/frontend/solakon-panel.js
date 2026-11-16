@@ -7,6 +7,9 @@ const DOMAIN = "solakon_nulleinspeisung";
 // Text für den Einsatz in HTML maskieren.
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 
+// Wert mit Einheit, ohne Wert der Platzhalter „—“.
+const withUnit = (v, unit) => v != null ? `${v} ${unit}` : "—";
+
 // Zone colors and icons — not translated
 const ZONE_STYLE = {
   0: { color: "#f59e0b", icon: "☀️" },
@@ -756,8 +759,8 @@ class SolakonPanel extends HTMLElement {
       Object.assign(texts, {
         [`ov-icon-${id}`]:   (ZONE_STYLE[st.zone] ?? ZONE_STYLE[2]).icon,
         [`ov-err-${id}`]:    st.last_error ? " ⚠️" : "",
-        [`ov-soc-${id}`]:    `${st.soc ?? "—"} %`,
-        [`ov-output-${id}`]: st.actual_power != null ? `${st.actual_power} W` : "—",
+        [`ov-soc-${id}`]:    withUnit(st.soc, "%"),
+        [`ov-output-${id}`]: withUnit(st.actual_power, "W"),
         [`ov-grid-${id}`]:   st.grid != null ? `${st.grid.toFixed(0)} W` : "—",
         [`ov-state-${id}`]:  this._es("operating_state", st.operating_state),
       });
@@ -1332,7 +1335,7 @@ ${this._textsMissing ? `
   // Entity-Eingabe mit Status-Dot; `attrs` sind zusätzliche Attribute des Eingabefelds.
   _entityRowHtml(value, attrs = "") {
     return `<div class="entity-row">
-      <input type="text" ${attrs} value="${value}" style="width:100%;box-sizing:border-box"/>
+      <input type="text" ${attrs} value="${esc(value)}" style="width:100%;box-sizing:border-box"/>
       <span class="entity-dot ${this._entityDotClass(value)}"></span>
     </div>`;
   }
@@ -1422,12 +1425,12 @@ ${this._textsMissing ? `
     const phase = this._es("operating_state", st.operating_state);
     return {
       "st-target":       st.operating_state === "target_charging"
-                           ? `${phase} (${st.soc ?? "—"} % / ${this._cfg.saved.target_soc ?? "—"} %)` : phase,
+                           ? `${phase} (${withUnit(st.soc, "%")} / ${withUnit(this._cfg.saved.target_soc, "%")})` : phase,
       "st-active-fall":  this._es("active_fall", st.active_fall?.toLowerCase()),
       "st-grid":         st.grid != null ? `${st.grid.toFixed(0)} W` : "—",
-      "st-actual":       `${st.actual_power ?? "—"} W`,
-      "st-solar":        `${st.solar ?? "—"} W`,
-      "st-soc":          `${st.soc ?? "—"} %`,
+      "st-actual":       withUnit(st.actual_power, "W"),
+      "st-solar":        withUnit(st.solar, "W"),
+      "st-soc":          withUnit(st.soc, "%"),
       "st-int":          this._cfg.saved.pi_enabled !== false ? `${(st.integral ?? 0).toFixed(2)}` : "—",
       "st-stddev":       `${(st.stddev ?? 0).toFixed(1)} W`,
       "st-stddev-raw":   `${(st.stddev_raw ?? 0).toFixed(1)} W`,
