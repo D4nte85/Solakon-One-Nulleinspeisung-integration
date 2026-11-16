@@ -23,3 +23,10 @@ def test_repro(pfad):
         assert fehlend, "als offen markiert, aber alle Erwartungen erfüllt — `offen` entfernen"
         pytest.xfail("offener Fehler: " + "; ".join(fehlend))
     assert not fehlend, "\n".join(fehlend)
+
+
+def test_unbekanntes_flag_ist_ein_szenariofehler():
+    szenario = {"titel": "x", "bezug": "x", "instanzen": [{"prefix": "a", "flags": {"cycle_activ": True}}],
+                "schritte": [{"nach": 0}], "erwartet": []}
+    with pytest.raises(repro.SzenarioFehler, match="cycle_activ"):
+        repro.spec_aus(szenario)

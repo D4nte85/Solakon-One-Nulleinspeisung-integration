@@ -100,12 +100,13 @@ def test_speichern_mit_befund_aendert_nichts():
     assert store.dist == {} and DIST_KEY not in hass.storage
 
 
-def test_entfernen_loescht_beide_stores():
+def test_entfernen_loescht_alle_drei_stores():
     hass = _hass()
     h.put_store(hass, DIST_KEY, {"sensor.grid": SWITCH})
     h.put_store(hass, SWITCH_KEY, {"sensor.grid": {"active_id": "a"}})
+    h.put_store(hass, gs.STORAGE_KEY_NUMBERS, {"sensor.grid": 1})
     asyncio.run(gs.async_remove(hass))
-    assert DIST_KEY not in hass.storage and SWITCH_KEY not in hass.storage
+    assert not {DIST_KEY, SWITCH_KEY, gs.STORAGE_KEY_NUMBERS} & set(hass.storage)
 
 
 def test_netzgruppe_ohne_gruppenspeicher_ist_ein_fehler():

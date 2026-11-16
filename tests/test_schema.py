@@ -214,7 +214,7 @@ def test_get_schema_liefert_jeden_schluessel():
     result = sent[0][2]
     assert set(result["settings"]) == set(C.SETTINGS_DEFAULTS)
     assert set(result["distribution"]) == set(C.DIST_DEFAULTS)
-    assert result["distribution_instance"] == {C.CAPACITY_FIELD: C.DIST_INST_FIELDS[1]._asdict()}
+    assert result["distribution_instance"] == {C.CAPACITY_FIELD: C.CAPACITY_SCHEMA._asdict()}
     assert result["settings"][C.S_HARD_LIMIT_Z0]["max"] == 1200
     assert list(result["settings"][C.S_HARD_LIMIT_Z0]["ui"]) == [100, 1200, 50]
     readings = importlib.import_module(h.PKG + ".readings")

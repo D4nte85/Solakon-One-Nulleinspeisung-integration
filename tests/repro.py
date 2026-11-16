@@ -112,6 +112,9 @@ def spec_aus(szenario: dict) -> dict:
         gespeichert = inst.get("gespeichert", True)
         if not gespeichert and inst.get("flags"):
             raise SzenarioFehler(f"Instanz {p}: flags wirken nur mit gespeichert: true")
+        unbekannt = set(inst.get("flags") or {}) - {*FLAGS, "charge_session"}
+        if unbekannt:
+            raise SzenarioFehler(f"Instanz {p}: unbekannte Flags {sorted(unbekannt)}")
         flags = {f: False for f in FLAGS}
         flags["charge_session"] = "none"
         flags.update(inst.get("flags") or {})

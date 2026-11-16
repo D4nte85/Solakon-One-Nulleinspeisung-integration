@@ -1,7 +1,7 @@
 // Rendert das Panel mit den Mock-Daten aus index.html über eine feste Aktionsfolge und
 // schreibt je Schritt das normalisierte Shadow-DOM:  node render.cjs <panel.js> <out.json> [textwurzel]
 // Textwurzel: Verzeichnis, aus dem fetch Panel- und Entity-Texte lädt (Standard: Repo).
-// Abgedeckt: 3 Szenarien × 2 Sprachen, alle Tabs, Eingaben, Speichern, Debug-Schalter,
+// Abgedeckt: 4 Szenarien × 2 Sprachen, alle Tabs, Eingaben, Speichern, Debug-Schalter,
 // Verteilung, Wettläufe mit Instanzwechsel, Fehlerpfade. Poll-Timer und Toast-Timer sind
 // abgeschaltet, WS-Antworten im Wettlauf laufen über eine Warteschlange — deterministisch.
 const fs = require("fs"), path = require("path");

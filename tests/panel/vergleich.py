@@ -28,6 +28,21 @@ def render(panel: Path, ziel: Path, texte: Path = REPO) -> list:
     return json.loads(ziel.read_text(encoding="utf-8"))
 
 
+def beide(rev: str) -> tuple[list, list]:
+    """Schnappschüsse am Stand `rev` und im Arbeitsstand."""
+    with tempfile.TemporaryDirectory() as tmp:
+        alt_js = Path(tmp) / "alt.js"
+        alt_js.write_text(subprocess.run(["git", "-C", str(REPO), "show", f"{rev}:{PANEL}"],
+                                         check=True, capture_output=True, text=True).stdout, encoding="utf-8")
+        alt_texte = Path(tmp) / "rev"
+        alt_texte.mkdir()
+        archiv = subprocess.run(["git", "-C", str(REPO), "archive", rev, *TEXTE], check=True, capture_output=True).stdout
+        subprocess.run(["tar", "-x", "-C", str(alt_texte)], input=archiv, check=True)
+        alt = render(alt_js, Path(tmp) / "alt.json", alt_texte)
+        neu = render(REPO / PANEL, Path(tmp) / "neu.json")
+    return alt, neu
+
+
 def main(argv: list[str]) -> int:
     if not (HIER / "node_modules" / "jsdom").exists():
         print("jsdom fehlt: npm install --prefix tests/panel")
@@ -41,16 +56,12 @@ def main(argv: list[str]) -> int:
             muster.append(re.compile(argv[i + 1])); i += 2
         else:
             rev, i = argv[i], i + 1
-    with tempfile.TemporaryDirectory() as tmp:
-        alt_js = Path(tmp) / "alt.js"
-        alt_js.write_text(subprocess.run(["git", "-C", str(REPO), "show", f"{rev}:{PANEL}"],
-                                         check=True, capture_output=True, text=True).stdout, encoding="utf-8")
-        alt_texte = Path(tmp) / "rev"
-        alt_texte.mkdir()
-        archiv = subprocess.run(["git", "-C", str(REPO), "archive", rev, *TEXTE], check=True, capture_output=True).stdout
-        subprocess.run(["tar", "-x", "-C", str(alt_texte)], input=archiv, check=True)
-        alt = render(alt_js, Path(tmp) / "alt.json", alt_texte)
-        neu = render(REPO / PANEL, Path(tmp) / "neu.json")
+    try:
+        alt, neu = beide(rev)
+    except subprocess.CalledProcessError as e:
+        fehler = e.stderr.decode(errors="replace") if isinstance(e.stderr, bytes) else (e.stderr or "")
+        print(f"Render oder git fehlgeschlagen: {' '.join(map(str, e.cmd))}\n{fehler[-2000:]}")
+        return 2
 
     def norm(v):
         for r in muster:

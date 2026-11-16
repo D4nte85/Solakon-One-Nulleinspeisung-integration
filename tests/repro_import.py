@@ -70,6 +70,8 @@ def baue(zeilen, von: float | None, bis: float | None, takt: str, einheiten: dic
             if groesse == "netz":
                 gruppen.append((t, offen))
                 offen = {}
+        if offen:
+            gruppen.append((danach[-1][0], offen))
         for t, setzen in gruppen:
             schritte.append({"nach": round(t - t_letzt, 1),
                              "setzen": {g: angabe(g, w) for g, w in setzen.items()}})

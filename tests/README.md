@@ -87,7 +87,7 @@ instanzen:
   - prefix: a         # erste Instanz immer a; weitere b, c …
     netzsensor: sensor.grid   # optional; sensor.grid_other bildet eine zweite Netzgruppe (Wert wie netz)
     settings: {regulation_enabled: true, tariff_power: 1000}   # über SETTINGS_DEFAULTS
-    flags: {cycle_active: false, charge_session: tariff_charge}   # gespeicherte Zustandsflags; charge_session none|ac_charge|tariff_charge|grid_charge
+    flags: {cycle_active: false, charge_session: tariff_charge}   # gespeicherte Zustandsflags; charge_session none|ac_charge|tariff_charge|grid_charge; unbekannte Flags sind ein Szenariofehler
     gespeichert: false   # optional: Settings am Laden vorbei, ohne Rücksetzen auf den Standard; ohne flags
     sensoren: {soc: 40, modus: "1"}   # soc solar ist countdown leistung entladestrom timeout modus export kapazitaet
     integral: 0.0
