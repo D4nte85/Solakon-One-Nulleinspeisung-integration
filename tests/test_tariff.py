@@ -118,8 +118,9 @@ def test_einheitenwarnung_nicht_bei_negativem_preis_oder_kleiner_schwelle():
     assert _assess(price=0.25, cheap_setting=small, exp_setting=small * 2, unit="€/kwh").unit_warning is None
 
 
-def test_ungueltiger_preis_laesst_verdacht_stehen():
+@pytest.mark.parametrize("unterbrechung", [dict(price=None), dict(enabled=False, price=None)])
+def test_unterbrechung_setzt_verdacht_zurueck(unterbrechung):
     t = tariff.Tariff()
     _assess(t, price=0.25, unit="")
-    _assess(t, price=None, now=T0 + 5)
-    assert t.unit_suspect_since == T0
+    _assess(t, now=T0 + 5, **unterbrechung)
+    assert t.unit_suspect_since == 0.0

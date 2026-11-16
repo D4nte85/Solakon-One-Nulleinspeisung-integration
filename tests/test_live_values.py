@@ -14,3 +14,9 @@ def test_fehlender_wert_ist_none():
     assert st["actual_power"] == 250.0
     assert st["solar"] is None
     assert st["soc"] is None
+
+
+def test_soc_ohne_zahl_ist_none():
+    hass, coord = _coord("de")
+    hass.states.set("sensor.a_soc", "abc")
+    assert coord.soc_reading() is None

@@ -84,8 +84,12 @@ class Tariff:
             below_cheap=usable and value < cheap,
             suppressed=suppressed,
             price_warning=price_warning,
-            unit_warning=self._unit_warning(unit, value, cheap, now) if valid else None,
+            unit_warning=self._unit_warning(unit, value, cheap, now) if valid else self._clear_suspect(),
         )
+
+    def _clear_suspect(self) -> None:
+        """Verdacht auf €-Einheit beenden."""
+        self.unit_suspect_since = 0.0
 
     def _unit_warning(self, unit: str, price: float, cheap: float, now: float) -> Msg | None:
         """Meldung, wenn der Preis-Sensor vermutlich €/kWh statt ct/kWh liefert, sonst None.

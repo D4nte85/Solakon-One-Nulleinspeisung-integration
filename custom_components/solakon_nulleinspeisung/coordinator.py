@@ -158,7 +158,7 @@ class SolakonCoordinator:
         self.allocated_power: float | None = None
         # Verwertbarer PV-Überschuss: Luft zwischen aktuellem Output und dem
         # Minimum aus Hard-Limit und aktueller PV-Leistung.
-        self.surplus_power: float = 0.0
+        self.surplus_power: float | None = 0.0
         # Meldungen des laufenden Zyklus, von _end_cycle nach last_error_msgs übernommen.
         self._messages = CycleMessages()
         # Tariflage je Zyklus; hält den Verdacht auf eine EUR/kWh-Preiseinheit über Zyklen.
@@ -262,10 +262,10 @@ class SolakonCoordinator:
         return mode == MODE_DISCHARGE and not self._at_rest(MODE_DISCHARGE)
 
     def soc_reading(self) -> float | None:
-        """SOC-Sensor dieser Instanz; `None`, wenn er nicht verfügbar ist."""
+        """SOC-Sensor dieser Instanz; `None`, wenn er nicht verfügbar ist oder keine Zahl liefert."""
         if not self._entity_ok(self.entry.data[CONF_SOC_SENSOR]):
             return None
-        return self._core(CONF_SOC_SENSOR, 0)
+        return self._core(CONF_SOC_SENSOR, None)
 
     def hard_limit(self) -> float:
         """Hard-Limit der aktuellen Zone (Zone 0 bei Überschuss, sonst Zone 1/2), gedeckelt auf die Gerätegrenze."""
@@ -323,6 +323,13 @@ class SolakonCoordinator:
         return {**self.settings, **self._persisted_flags()}
 
     # ── Ableiten: Verteilung ─────────────────────────────────────────────────
+
+    def _clear_cycle_values(self) -> None:
+        """Überschussleistung, Zuteilung, Prognoseflags und angewandten Verteilungsmodus leeren."""
+        self.surplus_power = None
+        self.allocated_power = None
+        self.forecast = ForecastFlags(False, False, False)
+        self.dist_mode_effective = ""
 
     def _adopt_position(self, pos: PoolPosition, replaced: PoolPosition | None = None) -> None:
         """Angewandten Verteilungsmodus und Verteilungswarnung aus `pos` übernehmen; die Warnung von `replaced` entfällt."""
@@ -410,12 +417,14 @@ class SolakonCoordinator:
     ) -> bool:
         """number.set_value — nur wenn Regulation aktiviert; True wenn geschrieben.
 
-        `only_if_changed` schreibt nur bei Abweichung über WRITE_DEADBAND vom Ist-Wert. Der Ist-Wert
-        ist `current` oder wird gelesen (fehlend: -1).
+        `only_if_changed` schreibt nur bei verfügbarer Entität und Abweichung über WRITE_DEADBAND vom
+        Ist-Wert. Der Ist-Wert ist `current` oder wird gelesen.
         """
         if not self.regulating:
             return False
         if only_if_changed:
+            if not self._entity_ok(entity_id):
+                return False
             if current is None:
                 current = self._flt(entity_id, -1)
             if abs(current - value) <= WRITE_DEADBAND:
@@ -681,6 +690,7 @@ class SolakonCoordinator:
 
         # ── 0. Regelung aktiv? ───────────────────────────────────────────────
         if not self.regulating:
+            self._clear_cycle_values()
             soc = self.soc_reading()
             mode = self._str(cfg[CONF_MODE_SELECT])
             display = None if soc is None or mode == "unknown" else (soc, self.zone3_limit(), mode)

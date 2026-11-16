@@ -1,0 +1,13 @@
+titel: Nicht verfügbare Export-Limit-Entität wird in jedem Regelzyklus beschrieben
+bezug: review-2026-11-16-lauf-12-kleinbefunde
+netz: 100
+instanzen:
+  - prefix: a
+    settings: {regulation_enabled: true}
+    sensoren: {soc: 60, modus: "1", export: unavailable}
+schritte:
+  - nach: 0
+  - nach: 5
+erwartet:
+  - schritt: alle
+    kein_aufruf: {entity: a.export}

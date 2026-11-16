@@ -175,6 +175,6 @@ async def async_setup_entry(
         CoordinatorSensor(coord, "integral", lambda c: round(c.integral, 1),
                           icon="mdi:chart-bell-curve", suggested_display_precision=1, **POWER, **DIAG),
         # Für Automationen gedacht (z. B. Zusatzverbraucher schalten), daher keine Diagnose-Entität.
-        CoordinatorSensor(coord, "surplus_power", lambda c: round(c.surplus_power, 0),
+        CoordinatorSensor(coord, "surplus_power", lambda c: None if c.surplus_power is None else round(c.surplus_power, 0),
                           icon="mdi:transmission-tower-export", suggested_display_precision=0, **POWER),
     ])

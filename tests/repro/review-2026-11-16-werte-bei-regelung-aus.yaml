@@ -1,0 +1,25 @@
+titel: Überschussleistung, Zuteilung, Prognose und Verteilungsmodus bleiben bei ausgeschalteter Regelung stehen
+bezug: review-2026-11-16-lauf-12-kleinbefunde
+# Zwei Instanzen im Entlade-Pool: a hat Zuteilung, Überschussleistung und Verteilungsmodus.
+# Nach dem Ausschalten der Regelung sind diese Werte leer.
+netz: 200
+verteilung: {distribution_mode: equal, global_max_power: 800}
+instanzen:
+  - prefix: a
+    settings: {regulation_enabled: true}
+    sensoren: {soc: 60, solar: 900, modus: "1"}
+  - prefix: b
+    settings: {regulation_enabled: true}
+    sensoren: {soc: 60, modus: "1"}
+schritte:
+  - nach: 0
+    wer: all
+  - nach: 5
+    settings: {regulation_enabled: false}
+erwartet:
+  - schritt: 1
+    instanz: a
+    zustand_nicht: {dist_mode_effective: "", allocated_power: null, surplus_power: null}
+  - schritt: 2
+    instanz: a
+    zustand: {dist_mode_effective: "", allocated_power: null, surplus_power: null}
