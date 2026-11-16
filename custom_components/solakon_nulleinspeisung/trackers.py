@@ -68,19 +68,16 @@ class Trackers:
         """
         self._untrack(name)
         self._inputs[name] = self._input(name)
-        settings = self._settings()
-        if not any(settings[k] for k in TRACKERS[name]):
+        target = self._inputs[name][1]
+        if not target:
             return
         if name == "periodic":
-            interval = int(settings[S_PERIODIC_INTERVAL])
             self._unsubs[name] = async_track_time_interval(
-                self._hass, self._on_trigger, timedelta(seconds=interval)
+                self._hass, self._on_trigger, timedelta(seconds=int(target))
             )
-            return
-        sensor = self._effective(name)
-        if sensor:
+        else:
             self._unsubs[name] = async_track_state_change_event(
-                self._hass, [sensor], self._on_trigger
+                self._hass, [target], self._on_trigger
             )
 
     def start(self) -> None:

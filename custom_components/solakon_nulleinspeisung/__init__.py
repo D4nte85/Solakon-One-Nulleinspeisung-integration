@@ -18,7 +18,7 @@ import homeassistant.helpers.config_validation as cv
 from .const import (
     DOMAIN, PLATFORMS,
     CONF_GRID_SENSOR,
-    CAPACITY_FIELD, DIST_DEFAULTS, DIST_INST_FIELDS, DIST_SCHEMA, SETTINGS_SCHEMA, VERSION,
+    CAPACITY_FIELD, CAPACITY_SCHEMA, DIST_DEFAULTS, DIST_SCHEMA, SETTINGS_SCHEMA, VERSION,
 )
 from . import group_store, number, runtime
 from .migrations import SolakonSettingsStore, async_migrate_entry as async_migrate_entry
@@ -68,7 +68,7 @@ async def _ws_get_all_instances(
         instances.append({
             "entry_id":      entry_id,
             "instance_name": coord.instance_name,
-            "grid_sensor":   coord.entry.data.get(CONF_GRID_SENSOR, ""),
+            "grid_sensor":   coord.grid_sensor,
         })
     instances.sort(key=lambda x: x["instance_name"].lower())
     connection.send_result(msg["id"], {"instances": instances})
@@ -240,7 +240,7 @@ async def _ws_get_schema(
     connection.send_result(msg["id"], {
         "settings":        {key: field._asdict() for key, field in SETTINGS_SCHEMA.items()},
         "distribution":    {key: field._asdict() for key, field in DIST_SCHEMA.items()},
-        "distribution_instance": {CAPACITY_FIELD: DIST_INST_FIELDS[1]._asdict()},
+        "distribution_instance": {CAPACITY_FIELD: CAPACITY_SCHEMA._asdict()},
         "numeric_domains": list(NUMERIC_DOMAINS),
     })
 

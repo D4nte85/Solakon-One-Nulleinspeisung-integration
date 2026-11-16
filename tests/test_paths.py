@@ -74,7 +74,7 @@ def test_ac_stellwert_aus_ist_leistung():
 ])
 def test_entladen_schritt(capped, action):
     d = _decide(grid=200.0, capped=capped)
-    assert d.kind == paths.PI_STEP and not d.decay and not d.cap_note
+    assert d.kind == paths.PI_STEP and not d.decay and not d.cap_action
     assert d.step == paths.PiStep(400.0, 30.0, 800.0, 1.3, 0.05, 1.0, action)
 
 
@@ -85,7 +85,7 @@ def test_entladen_schritt(capped, action):
 ])
 def test_entladen_ohne_schritt_klingt_ab(over, kind):
     d = _decide(**over, capped="sister_charging")
-    assert (d.kind, d.limit, d.decay, d.cap_note) == (kind, over["current_power"], True, "sister_charging")
+    assert (d.kind, d.limit, d.decay, d.cap_action) == (kind, over["current_power"], True, "act_zone1_sister_charging")
 
 
 @pytest.mark.parametrize("capped, action", [

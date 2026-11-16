@@ -10,6 +10,11 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 - **Gesamtlimit nach einem Wechsel des Netzsensors:** Änderte eine Instanz im Options-Flow ihren Netzsensor, wurde ihre alte Netzgruppe beim Neuladen nicht neu bewertet, weil HA die neue Zuweisung schon vorher speichert. Trug sie das Gesamtlimit, hatten die übrigen Mitglieder danach keins; blieb nur eine Instanz zurück, blieben Entität und Gerät der Netzgruppe stehen, jeweils bis zum nächsten Neuladen einer Schwester oder Neustart. Jetzt merkt sich die Träger-Verwaltung den Netzsensor, mit dem eine Instanz geladen wurde, und bewertet beim Entladen dessen Netzgruppe neu (`number.py`, `__init__.py`).
 - **Verteilungsmodus mit ⚠️ ohne Ausweichen:** Eine Instanz außerhalb des Entlade- und AC-Pools behielt den zuletzt angewandten Verteilungsmodus, nach einer Moduswahl zeigte die Übersicht deshalb „konfiguriert → alt ⚠️“. Im AC-Pool meldete SOC-Umschaltung den Modus SOC, obwohl dort gewollt nach SOC gewichtet wird. Jetzt ist der angewandte Modus außerhalb jedes Pools leer, und im AC-Pool bleibt SOC-Umschaltung stehen; ⚠️ erscheint nur, wenn ein Sensor fehlt (`coordinator.py`, `grid_group.py`).
 
+### Geändert
+
+- **Countdown ohne Zahl:** Lieferte der Timeout-Countdown einen Zustand ohne Zahl, rechnete die Regelung mit 0 und wechselte in jedem Regelzyklus den Timer samt 1 s Warten. Jetzt entfällt der Timer-Wechsel, bis der Countdown wieder eine Zahl liefert (`coordinator.py`).
+- **Umbau ohne Verhaltensänderung:** Einheiten der Kernsensoren nur noch in `CORE_SENSORS`, Hinweis auf den PV-Deckel aus der Pfadwahl, einheitliche Quellen für Netzsensor, Kapazitätsfeld und Trigger (`coordinator.py`, `paths.py`, `trackers.py`, `__init__.py`, `const.py`).
+
 ## [3.9.0] – 2026-11-15
 
 ### Behoben

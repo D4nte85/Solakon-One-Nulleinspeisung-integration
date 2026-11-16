@@ -73,7 +73,7 @@ class CoreValues(NamedTuple):
     """Kernsensoren zu Beginn eines Regelzyklus.
 
     `mode` ist 'unknown' und `mode_ok` False, wenn der Modus-Select keinen gültigen Zustand hat;
-    `timer` ist 0 ohne Zahl.
+    `timer` ist None ohne Zahl.
     """
 
     soc: float
@@ -81,7 +81,7 @@ class CoreValues(NamedTuple):
     solar: float
     actual: float
     mode: str
-    timer: float
+    timer: float | None
     mode_ok: bool
 
 
@@ -105,7 +105,7 @@ def read_core(hass: HomeAssistant, cfg: Any) -> CoreValues | str:
     timer = read_number(hass, cfg[CONF_TIMEOUT_COUNTDOWN]).value
     return CoreValues(
         values[CONF_SOC_SENSOR], values[CONF_GRID_SENSOR], values[CONF_SOLAR_SENSOR], values[CONF_ACTUAL_SENSOR],
-        mode.state if mode else "unknown", 0.0 if timer is None else timer, mode is not None,
+        mode.state if mode else "unknown", timer, mode is not None,
     )
 
 
@@ -147,8 +147,6 @@ class SolakonCoordinator:
         # Zyklus an einem Guard abgebrochen (Kernsensor fehlt, SOC-Limits ungültig)
         self._cycle_blocked: bool = False
 
-        # Zeitstempel
-        self.last_action_ts: float = time.time()
         self.out = Output(
             lambda value: self._set_number(self.entry.data[CONF_ACTIVE_POWER], value),
             self._read_actual, self._warn_hardware,
@@ -195,29 +193,15 @@ class SolakonCoordinator:
 
     # ── Lesen: Sensoren ──────────────────────────────────────────────────────
 
-    def _read_scaled(self, entity_id: str, default: float, scale: dict[str, float]) -> float:
-        """Zahl lesen und mit dem Faktor ihrer Einheit aus `scale` multiplizieren.
-
-        Einheiten ohne Eintrag bleiben unverändert; ohne Zahl `default`.
-        """
-        value = read_scaled(self.hass, entity_id, scale).value
+    def _flt(self, entity_id: str, default: float = 0.0) -> float:
+        """Zahl ohne Einheitenumrechnung lesen; ohne Zahl `default`."""
+        value = read_number(self.hass, entity_id).value
         return default if value is None else value
 
-    def _flt(self, entity_id: str, default: float = 0.0) -> float:
-        """Zahl ohne Einheitenumrechnung lesen."""
-        return self._read_scaled(entity_id, default, {})
-
-    def _flt_power(self, entity_id: str, default: float = 0.0) -> float:
-        """Leistung in W lesen (kW ×1000)."""
-        return self._read_scaled(entity_id, default, UNIT_SCALE_W)
-
-    def _flt_kwh_normalized(self, entity_id: str, default: float | None = 0.0) -> float | None:
-        """Energie in kWh lesen (Wh ÷1000, MWh ×1000).
-
-        Ohne erkannte Energie-Einheit (z. B. input_number ohne Einheit) bleibt der
-        Rohwert unverändert, wie es der kWh-Vertrag der Schwellenfelder vorsieht.
-        """
-        return self._read_scaled(entity_id, default, UNIT_SCALE_KWH)
+    def _core(self, key: str, default: float | None = 0.0) -> float | None:
+        """Kernsensor `key` in seiner Einheit laut `CORE_SENSORS`; ohne Zahl `default`."""
+        value = read_scaled(self.hass, self.entry.data[key], _CORE_SCALE[key]).value
+        return default if value is None else value
 
     def _str(self, entity_id: str) -> str:
         """State als String lesen, 'unknown' bei Fehler."""
@@ -279,10 +263,9 @@ class SolakonCoordinator:
 
     def soc_reading(self) -> float | None:
         """SOC-Sensor dieser Instanz; `None`, wenn er nicht verfügbar ist."""
-        soc_eid = self.entry.data[CONF_SOC_SENSOR]
-        if not self._entity_ok(soc_eid):
+        if not self._entity_ok(self.entry.data[CONF_SOC_SENSOR]):
             return None
-        return self._flt(soc_eid, 0)
+        return self._core(CONF_SOC_SENSOR, 0)
 
     def hard_limit(self) -> float:
         """Hard-Limit der aktuellen Zone (Zone 0 bei Überschuss, sonst Zone 1/2), gedeckelt auf die Gerätegrenze."""
@@ -297,25 +280,27 @@ class SolakonCoordinator:
         return self._setting(S_AC_SOC_TARGET, float)
 
     def capacity_kwh(self, entity_id: str) -> float | None:
-        """Kapazität aus `entity_id` in kWh; None ohne Zahl."""
-        return self._flt_kwh_normalized(entity_id, None)
+        """Kapazität aus `entity_id` in kWh (Wh ÷1000, MWh ×1000); None ohne Zahl.
+
+        Ohne erkannte Energie-Einheit (z. B. input_number ohne Einheit) bleibt der Rohwert unverändert.
+        """
+        return read_scaled(self.hass, entity_id, UNIT_SCALE_KWH).value
 
     def actual_power(self) -> float:
         """Ist-Leistung in W."""
-        return self._flt_power(self.entry.data[CONF_ACTUAL_SENSOR])
+        return self._core(CONF_ACTUAL_SENSOR)
 
     def output_setpoint(self) -> float:
         """Gesetzte Ausgangsleistung."""
-        return self._flt(self.entry.data[CONF_ACTIVE_POWER])
+        return self._core(CONF_ACTIVE_POWER)
 
     def live_values(self) -> dict[str, float | None]:
         """Netz, Ist-Leistung und PV in W, SOC in %; ohne Zahl `None`."""
-        cfg = self.entry.data
         return {
-            "grid": self._flt_power(cfg[CONF_GRID_SENSOR], None),
-            "actual_power": self._flt_power(cfg[CONF_ACTUAL_SENSOR], None),
-            "solar": self._flt_power(cfg[CONF_SOLAR_SENSOR], None),
-            "soc": self._flt(cfg[CONF_SOC_SENSOR], None),
+            "grid": self._core(CONF_GRID_SENSOR, None),
+            "actual_power": self._core(CONF_ACTUAL_SENSOR, None),
+            "solar": self._core(CONF_SOLAR_SENSOR, None),
+            "soc": self._core(CONF_SOC_SENSOR, None),
         }
 
     # ── Ableiten: Regelzustand ───────────────────────────────────────────────
@@ -355,10 +340,9 @@ class SolakonCoordinator:
         return translate(self.hass.config.language, key, **params)
 
     def _set_last_action(self, key: str, **params: object) -> None:
-        """Setzt Schlüssel, Parameter und Zeitstempel der letzten Aktion."""
+        """Setzt Schlüssel und Parameter der letzten Aktion."""
         self.last_action_key = key
         self.last_action_params = params
-        self.last_action_ts = time.time()
 
     @property
     def last_action(self) -> str:
@@ -718,7 +702,7 @@ class SolakonCoordinator:
             self._messages.fail(("err_core_sensor", {"sensor": core}))
             self._end_cycle(blocked=True, notify_on_change=True)
             return
-        soc, grid, solar, actual, mode, timer_val = core[:6]
+        soc, grid, solar, actual, mode = core.soc, core.grid, core.solar, core.actual, core.mode
 
         # ── 2. StdDev und dynamische Offsets ─────────────────────────────────
         # StdDev ist eine Eigenschaft der Netzgruppe, nicht der einzelnen Instanz:
@@ -820,7 +804,7 @@ class SolakonCoordinator:
         # ── 11. PI-Phase (Modus '1' und '3') ─────────────────────────────────
         blocked = False
         if mode in (MODE_DISCHARGE, MODE_AC_CHARGE):
-            blocked = await self._run_pi_phase(cs, soc, mode, timer_val, error_share, limits, ac_offset)
+            blocked = await self._run_pi_phase(cs, soc, mode, core.timer, error_share, limits, ac_offset)
 
         # ── 12. Anzeige und Flag-Speicherung ─────────────────────────────────
         self._end_cycle(blocked=blocked, display=(soc, cs.zone3_limit, mode),
@@ -853,7 +837,7 @@ class SolakonCoordinator:
         return d.name
 
     async def _run_pi_phase(
-        self, cs: CycleSettings, soc: float, mode: str, timer_val: float, error_share: float,
+        self, cs: CycleSettings, soc: float, mode: str, timer_val: float | None, error_share: float,
         limits: PowerLimits, ac_offset: float,
     ) -> bool:
         """PI-Phase in Modus '1' oder '3': Timeout-Reset, dann ein Pfad je Regelzustand.
@@ -867,8 +851,9 @@ class SolakonCoordinator:
         cfg = self.entry.data
 
         # ── 11a. Timeout-Reset ───────────────────────────────────────────────
-        # Entfällt wenn ein Fall in diesem Zyklus bereits getoggelt hat
-        await self.timeout.reset_if_due(timer_val)
+        # Entfällt, wenn ein Fall in diesem Zyklus bereits getoggelt hat oder der Countdown keine Zahl liefert
+        if timer_val is not None:
+            await self.timeout.reset_if_due(timer_val)
 
         if at_rest(mode, cs.rest_in_discharge, self.resting):
             return False
@@ -887,7 +872,7 @@ class SolakonCoordinator:
 
         # Ausgangsleistung nach dem letzten Await vor der Pfadwahl; Basis für Gate,
         # PI-Basis und Aktionstext.
-        current_power = self._flt(cfg[CONF_ACTIVE_POWER])
+        current_power = self.output_setpoint()
         # Ist-Leistung als Basis der Stellwertrechnung, im AC-Laden negativ.
         actual = self.actual_power()
 
@@ -927,9 +912,8 @@ class SolakonCoordinator:
         else:
             raise ValueError(f"unbekannte Pfadart {d.kind!r}")
         # Der Hinweis auf den PV-Deckel überschreibt keine Aktion der Stillstandsprüfung.
-        cap_key = f"act_zone1_{d.cap_note}"
-        if d.cap_note and not stall_action and self.last_action_key != cap_key:
-            self._set_last_action(cap_key)
+        if d.cap_action and not stall_action and self.last_action_key != d.cap_action:
+            self._set_last_action(d.cap_action)
         return False
 
     def _end_cycle(

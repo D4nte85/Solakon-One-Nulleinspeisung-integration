@@ -50,7 +50,7 @@ class PathInputs:
 @dataclass(frozen=True)
 class PathDecision:
     """Gewählter Pfad: Art, Festwert oder Stellwert, PI-Schritt, Grenze der Stillstandsprüfung,
-    Abklingen des Integrals, Grund des PV-Deckels für den Hinweis."""
+    Abklingen des Integrals, Aktionsschlüssel des Hinweises auf den PV-Deckel."""
 
     kind: str
     value: float = 0.0
@@ -58,7 +58,7 @@ class PathDecision:
     ac_charge_mode: bool = False
     step: PiStep | None = None
     decay: bool = False
-    cap_note: str = ""
+    cap_action: str = ""
     limit: float = 0.0
 
 
@@ -104,4 +104,5 @@ def decide(inp: PathInputs) -> PathDecision:
             inp.share, f"act_pi_{capped}" if capped else "act_pi",
         ))
     kind = STALL_CHECK if gate == SATURATED else STALL_RESET
-    return PathDecision(kind, limit=inp.current_power, decay=True, cap_note=capped)
+    return PathDecision(kind, limit=inp.current_power, decay=True,
+                        cap_action=f"act_zone1_{capped}" if capped else "")

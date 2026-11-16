@@ -55,3 +55,7 @@ def test_enum_optionen_uebersetzt(sensor, optionen):
     zustaende = json.loads((KOMPONENTE / "strings.json").read_text(encoding="utf-8"))
     zustaende = zustaende["entity"]["sensor"][sensor]["state"]
     assert set(getattr(h.const, optionen)) == set(zustaende)
+
+
+def test_icon_je_betriebszustand():
+    assert set(h.sensor_mod._STATE_ICONS) == set(h.const.OPERATING_STATES)

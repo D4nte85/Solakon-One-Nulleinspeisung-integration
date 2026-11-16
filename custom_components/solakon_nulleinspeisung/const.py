@@ -401,4 +401,5 @@ DIST_SCHEMA: dict[str, Field] = {
 }
 DIST_DEFAULTS: dict = {key: field.default for key, field in DIST_SCHEMA.items()}
 # Werte je Instanz in der Verteilung: Muster der Schlüssel und ihr Feld.
-DIST_INST_FIELDS = (CAPACITY_KEY, _str())
+CAPACITY_SCHEMA = _str()
+DIST_INST_FIELDS = (CAPACITY_KEY, CAPACITY_SCHEMA)

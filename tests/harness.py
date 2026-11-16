@@ -329,7 +329,7 @@ def entry_data(prefix: str, grid_sensor: str = "sensor.grid", export_limit: bool
 # Zustand am Coordinator für Aufzeichnungen; Schlüssel ist der Pfad (Teilobjekt.Attribut).
 COORD_ATTRS = (
     "display.zone", "display.zone_label", "display.mode_key", "display.mode_label", "last_action",
-    "last_action_key", "last_action_params", "last_action_ts", "last_error", "last_error_msgs",
+    "last_action_key", "last_action_params", "last_error", "last_error_msgs",
     "integral", "active_fall", "cycle_active", "surplus_active", "charge_session", "resting",
     "is_night", "discharge_locked", "display.operating_state", "display.operating_state_ts",
     "_cycle_blocked", "out.last_ts", "display.mode_ts", "dyn.stddev", "dyn.stddev_raw",
