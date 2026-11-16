@@ -164,7 +164,7 @@ class SolakonCoordinator:
         self.allocated_power: float | None = None
         # Verwertbarer PV-Überschuss: Luft zwischen aktuellem Output und dem
         # Minimum aus Hard-Limit und aktueller PV-Leistung.
-        self.surplus_power: float | None = 0.0
+        self.surplus_power: float | None = None
         # Meldungen des laufenden Zyklus, von _end_cycle nach last_error_msgs übernommen.
         self._messages = CycleMessages()
         # Tariflage je Zyklus; hält den Verdacht auf eine EUR/kWh-Preiseinheit über Zyklen.

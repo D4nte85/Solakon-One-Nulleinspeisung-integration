@@ -20,3 +20,8 @@ def test_soc_ohne_zahl_ist_none():
     hass, coord = _coord("de")
     hass.states.set("sensor.a_soc", "abc")
     assert coord.soc_reading() is None
+
+
+def test_ueberschussleistung_vor_dem_ersten_regelzyklus_leer():
+    hass, coord = _coord("de")
+    assert coord.surplus_power is None
