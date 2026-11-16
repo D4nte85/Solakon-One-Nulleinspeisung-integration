@@ -536,8 +536,8 @@ class Lauf:
             await coord.async_setup()
             if not inst["stored"]:
                 # Wie geladene Settings vor dem Start: Trigger folgen den Settings.
-                with coord.trackers.refreshing():
-                    coord.settings.update(inst["settings"])
+                coord.settings.update(inst["settings"])
+                coord.trackers.refresh_changed()
             coord.pi.integral = inst["integral"]
             coord.surplus.prev_actual = inst["prev_actual"]
 
@@ -594,8 +594,8 @@ async def _run_settings_spec(spec) -> dict:
     coord = coords["a"]
     await coord.async_setup()
     if not spec["instances"][0]["stored"]:
-        with coord.trackers.refreshing():
-            coord.settings.update(spec["instances"][0]["settings"])
+        coord.settings.update(spec["instances"][0]["settings"])
+        coord.trackers.refresh_changed()
     hass.events = []
     try:
         await coord.async_update_settings(dict(spec["changes"]))

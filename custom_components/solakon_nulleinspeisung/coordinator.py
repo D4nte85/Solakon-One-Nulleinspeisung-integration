@@ -603,14 +603,14 @@ class SolakonCoordinator:
             if turning_off:
                 await self._disable_regulation()
 
-            with self.trackers.refreshing():
-                if S_REST_IN_DISCHARGE in changes and changes[S_REST_IN_DISCHARGE] != self._setting(S_REST_IN_DISCHARGE, bool):
-                    self.resting = False
-                if S_PI_ENABLED in changes and changes[S_PI_ENABLED] != self._setting(S_PI_ENABLED, bool):
-                    self.pi.reset()
-                self.settings.update(changes)
-                await self._save_settings()
-                _LOGGER.info("Solakon: Einstellungen gespeichert")
+            if S_REST_IN_DISCHARGE in changes and changes[S_REST_IN_DISCHARGE] != self._setting(S_REST_IN_DISCHARGE, bool):
+                self.resting = False
+            if S_PI_ENABLED in changes and changes[S_PI_ENABLED] != self._setting(S_PI_ENABLED, bool):
+                self.pi.reset()
+            self.settings.update(changes)
+            await self._save_settings()
+            _LOGGER.info("Solakon: Einstellungen gespeichert")
+            self.trackers.refresh_changed()
 
         self.notify_listeners()
 
@@ -649,7 +649,7 @@ class SolakonCoordinator:
 
     def apply_group_change(self) -> None:
         """Nach geänderter Verteilung der Netzgruppe: Trigger neu anmelden, Regelzyklus anstoßen."""
-        self.trackers.refresh_sensors()
+        self.trackers.refresh_changed()
         self.request_regulation()
 
     def request_regulation(self) -> None:

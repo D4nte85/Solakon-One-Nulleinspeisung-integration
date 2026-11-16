@@ -1,9 +1,8 @@
 """Zusätzliche Regel-Trigger einer Instanz: an- und abmelden nach Settings und wirksamem Sensor."""
 from __future__ import annotations
 
-from contextlib import contextmanager
 from datetime import timedelta
-from typing import Any, Callable, Iterator
+from typing import Any, Callable
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.event import async_track_state_change_event, async_track_time_interval
@@ -95,29 +94,15 @@ class Trackers:
             self._untrack(name)
         self._inputs.clear()
 
-    @contextmanager
-    def refreshing(self) -> Iterator[None]:
-        """Rahmen um eine Settings-Änderung: danach die Trigger neu anmelden, deren Eingaben sich darin geändert haben."""
-        before = {name: self._input(name) for name in TRACKERS}
-        yield
-        for name in TRACKERS:
-            if self._input(name) != before[name]:
-                self._retrack(name)
-
     def refresh_changed(self) -> None:
         """Angemeldete Trigger neu anmelden, deren Eingaben sich seit dem Anmelden geändert haben.
 
-        Fängt den Wechsel des wirksamen Sensors ohne Settings-Änderung, etwa der
-        Nacht-Forcierung um TOMORROW_FROM_HOUR.
+        Läuft nach Settings-Änderung, nach geänderter Verteilung der Netzgruppe und zu Beginn
+        jedes Regelzyklus; dort fängt sie den Wechsel des wirksamen Sensors ohne Settings-Änderung,
+        etwa der Nacht-Forcierung um TOMORROW_FROM_HOUR.
         """
         for name, before in list(self._inputs.items()):
             if self._input(name) != before:
-                self._retrack(name)
-
-    def refresh_sensors(self) -> None:
-        """Sensorgebundene TRACKERS neu registrieren, etwa nach geänderten globalen Vorgaben; CORE bleibt."""
-        for name in TRACKERS:
-            if name != "periodic":
                 self._retrack(name)
 
     def active(self) -> list[str]:

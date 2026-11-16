@@ -57,7 +57,7 @@ def test_geaenderte_globale_vorgabe_meldet_den_trigger_neu_an():
     coord.trackers.start()
     assert ["sensor.preis_alt"] in _state_targets(hass)
     store.dist["sensor.grid"]["global_tariff_price_sensor"] = "sensor.preis_neu"
-    coord.trackers.refresh_sensors()
+    coord.trackers.refresh_changed()
     targets = _state_targets(hass)
     assert ["sensor.preis_neu"] in targets and ["sensor.preis_alt"] not in targets
 
