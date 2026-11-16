@@ -70,10 +70,14 @@ def test_back_calculation_bei_begrenzung():
     assert c.integral == pytest.approx((800 - 700 - 100 * 1.0) / 0.1)
 
 
-def test_ohne_i_faktor_keine_back_calculation():
-    c = _ctrl(50.0)
-    c.calculate(pi.PiStep(700, 0, 800, 1.0, 0.0), 1000)
-    assert c.integral == pytest.approx(150.0)
+def test_ohne_i_faktor_bleibt_integral_null():
+    c = _ctrl(0.0)
+    for _ in range(5):
+        c.calculate(pi.PiStep(400, 0, 800, 0.5, 0.0), 100)
+    assert c.integral == 0.0
+    # Erhöhen des I-Faktors: nur der Fehler dieses Schritts zählt, kein Sprung.
+    out = c.calculate(pi.PiStep(400, 0, 800, 0.5, 0.5), 100)
+    assert out == pytest.approx(400 + 100 * 0.5 + 100 * 0.5)
 
 
 def test_limit_auf_geraetemaximum_gedeckelt():

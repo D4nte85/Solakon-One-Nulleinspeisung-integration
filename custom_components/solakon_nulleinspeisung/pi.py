@@ -70,6 +70,7 @@ class PIController:
 
         Die Grenze wird auf DEVICE_MAX_POWER gedeckelt, damit Klemmung und
         Back-Calculation gegen die real erreichbare Grenze rechnen.
+        Mit I-Faktor 0 bleibt das Integral 0.
         """
         max_power = min(step.limit, DEVICE_MAX_POWER)
         base, p_factor, i_factor = step.base, step.p_factor, step.i_factor
@@ -88,6 +89,8 @@ class PIController:
 
         if i_factor != 0:
             integral_candidate = (final - base - error * p_factor) / i_factor
+        else:
+            integral_candidate = 0.0
         self.integral = clamp(integral_candidate, -max_power, max_power)
 
         return round(final, 1)
