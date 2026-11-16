@@ -557,6 +557,15 @@ def j2(c: Ctx):
     return f"Zyklus endet bei SOC {c.soc()} über Zone 3 ohne Sperre oder Zone-0-Austritt (Fall {c.flags['active_fall']!r})"
 
 
+def j6(c: Ctx):
+    if not c.normal() or c.aus_seit is not None or not _batterievorrang(c):
+        return None
+    if c.flags["surplus_active"] or c.lade_session():
+        return None
+    if c.modus() == C.MODE_DISCHARGE and (c.leistung() or 0) > 0:
+        return f"Batterievorrang bei SOC {c.soc()}: Modus 1 mit {c.leistung()} W (Fall {c.flags['active_fall']!r})"
+
+
 def j3(c: Ctx):
     if not c.normal() or not c.flags["forecast.zone1_forced"]:
         return None

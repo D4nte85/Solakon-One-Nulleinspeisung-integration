@@ -1,0 +1,29 @@
+titel: Fall I in der Tarifsperre — PI-Phase entlädt im Regelzyklus von Fall I
+bezug: fix-2026-11-16-ladeende-in-tarifsperre-entlaedt
+# Einzelbetrieb, Tarifsperre (Preis 23,3 zwischen Günstig 20 und Teuer 27), Zyklus aktiv.
+# Modus '3' ohne Lade-Session (von außen gesetzt) → Fall I; Netzbezug 300 W.
+# 1: Fall I schreibt Modus '1'; erwartet kein Schreibbefehl > 0 W.
+stunde: 12
+netz: 300
+sensoren:
+  sensor.preis: {wert: 23.3, einheit: ct/kWh}
+instanzen:
+  - prefix: a
+    settings:
+      regulation_enabled: true
+      zone1_limit: 50
+      tariff_enabled: true
+      tariff_price_sensor: sensor.preis
+      tariff_cheap_threshold: 20.0
+      tariff_exp_threshold: 27.0
+    flags: {cycle_active: true}
+    sensoren: {soc: 80, solar: 0, ist: 0, modus: "3", leistung: 0}
+schritte:
+  - nach: 0
+  - nach: 5
+erwartet:
+  - schritt: alle
+    kein_aufruf: {entity: a.leistung, wert_min: 1}
+  - schritt: 1
+    instanz: a
+    zustand: {active_fall: I}

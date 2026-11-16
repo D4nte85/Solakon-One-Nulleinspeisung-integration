@@ -132,22 +132,35 @@ def _rest(inp: ZoneInputs, otherwise: str | None = None, when: bool = True) -> d
     return {"mode": otherwise}
 
 
+def _return_to_discharge(
+    inp: ZoneInputs, cycle: bool, surplus: bool, otherwise: str | None = MODE_DISCHARGE,
+    session: bool = False,
+) -> tuple[bool, dict]:
+    """Rückkehr in Modus 1 nach einem Fall: (gesperrt, Ziel für `Transition`).
+
+    Gesperrt bei Tarifsperre oder Batterievorrang nach dem Fall; dann Ruhezustand.
+    Sonst Ruhezustand, wenn `cycle` False ist, und `otherwise` mit laufendem Zyklus.
+    `surplus` und `session` sind Surplus und Lade-Session nach dem Fall; eine laufende
+    Lade-Session sperrt nicht.
+    """
+    locked = not session and (
+        inp.tariff.discharge_locked(False, surplus)
+        or (inp.charging_to_target and inp.cs.battery_priority)
+    )
+    return locked, _rest(inp, otherwise, locked or not cycle)
+
+
 def _end_charge(name: str, action_key: str, inp: ZoneInputs) -> FallDecision:
     """Lade-Session beenden: Integral, Session, Output 0, Rückkehrmodus, Aktionstext.
 
-    Ruhezustand ohne Zyklus, wenn kein Zyklus läuft oder nach dem Sessionende
-    Tarifsperre oder Batterievorrang gilt.
+    Ziel aus `_return_to_discharge`; gesperrt endet auch der Zyklus.
     """
-    locked = (
-        inp.tariff.discharge_locked(False, inp.surplus_active)
-        or (inp.charging_to_target and inp.cs.battery_priority)
-    )
-    rest = locked or not inp.cycle_active
+    locked, target = _return_to_discharge(inp, inp.cycle_active, inp.surplus_active)
     return FallDecision(name, Transition(
         reset_integral=True,
         flags=FlagUpdate(session=SESSION_NONE, cycle_active=False if locked else None),
         output=0,
-        **_rest(inp, MODE_DISCHARGE, rest),
+        **target,
     ), action_key)
 
 
@@ -335,17 +348,12 @@ def decide(inp: ZoneInputs) -> FallDecision | None:
     # ── Fall 0B: Surplus Exit ────────────────────────────────────────────────
     # Austritt bei erfüllter Austritts-Bedingung, deaktivierter Überschuss-Option oder Aufladen.
     if inp.surplus_active and (not inp.cs.surplus_enabled or not inp.new_surplus or charging):
-        # In der Tarifsperre in den Ruhezustand, sonst Zone nach Overlay-Ende aus dem SOC ableiten
-        if inp.tariff.discharge_locked(session, False):
-            return FallDecision("0B", Transition(
-                reset_integral=True,
-                flags=FlagUpdate(surplus_active=False, cycle_active=False),
-                output=0, **_rest(inp),
-            ), "act_surplus_off")
+        # Gesperrt in den Ruhezustand, sonst Zone nach Overlay-Ende aus dem SOC ableiten
+        locked, target = _return_to_discharge(inp, True, False, otherwise=None, session=session)
         return FallDecision("0B", Transition(
             reset_integral=True,
-            flags=FlagUpdate(surplus_active=False, cycle_active=soc > zone1),
-            output=0, timer=False,
+            flags=FlagUpdate(surplus_active=False, cycle_active=False if locked else soc > zone1),
+            output=0, timer=locked, **target,
         ), "act_surplus_off")
 
     # ── Fall A: Zone 1 Start ─────────────────────────────────────────────────
@@ -518,16 +526,19 @@ def decide(inp: ZoneInputs) -> FallDecision | None:
 
     # ── Fall I: Safety — Modus und Lade-Session widersprechen sich ───────────
     # Zwei Richtungen: Modus '3' ohne Session, und Session ohne Modus '3'.
-    # Im zweiten Zweig endet die Session, der Modus bleibt.
+    # Im ersten Zweig endet die Session; der Modus bleibt, außer gesperrt (Ruhezustand).
     if session and mode != MODE_AC_CHARGE:
+        locked, target = _return_to_discharge(inp, True, inp.surplus_active, otherwise=None)
         return FallDecision("I", Transition(
             reset_integral=True,
-            flags=FlagUpdate(session=SESSION_NONE),
+            flags=FlagUpdate(session=SESSION_NONE, cycle_active=False if locked else None),
+            output=0 if locked else None, **target,
         ), "act_fall_i_session")
     if mode == MODE_AC_CHARGE and not session:
+        locked, target = _return_to_discharge(inp, inp.cycle_active, inp.surplus_active)
         return FallDecision("I", Transition(
             reset_integral=True, output=0,
-            **_rest(inp, MODE_DISCHARGE, not inp.cycle_active),
+            flags=FlagUpdate(cycle_active=False) if locked else None, **target,
         ), "act_fall_i")
 
     # ── Fall E: Zone 2 Start ─────────────────────────────────────────────────

@@ -1,0 +1,27 @@
+titel: Surplus-Austritt beim Aufladen mit Batterievorrang — PI-Phase entlädt im Regelzyklus von 0B
+bezug: fix-2026-11-16-ladeende-in-tarifsperre-entlaedt
+# Einzelbetrieb, Zielladen mit Batterievorrang (Ziel-SOC 95 %), Surplus und Zyklus aktiv.
+# Aufladen beginnt (SOC 90 < 95) → Fall 0B; Netzbezug 300 W.
+# 1: 0B beendet Surplus; erwartet kein Schreibbefehl > 0 W, auch nicht aus der PI-Phase.
+stunde: 12
+netz: 300
+instanzen:
+  - prefix: a
+    settings:
+      regulation_enabled: true
+      surplus_enabled: true
+      target_charge_enabled: true
+      target_soc: 95
+      target_battery_priority: true
+      target_grid_charge: false
+    flags: {cycle_active: true, surplus_active: true}
+    sensoren: {soc: 90, solar: 800, ist: 400, modus: "1", leistung: 400}
+schritte:
+  - nach: 0
+  - nach: 5
+erwartet:
+  - schritt: alle
+    kein_aufruf: {entity: a.leistung, wert_min: 1}
+  - schritt: 1
+    instanz: a
+    zustand: {active_fall: 0B}

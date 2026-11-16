@@ -487,3 +487,43 @@ def test_i_faengt_netz_laden_ohne_modus_3():
 def test_d_folgt_netz_laden_auch_unter_zone3():
     d = _decide(**TARGET, session="grid_charge", grid_charge_enabled=True, soc=15)
     assert (d.name, d.transition) == ("D", zones.Transition(mode="3"))
+
+
+# ── Rückkehr in Modus 1 bei Tarifsperre oder Batterievorrang ────────────────
+
+LOCKS = [
+    pytest.param(dict(**TARGET, battery_priority=True), id="batterievorrang"),
+    pytest.param(dict(below_exp=True), id="tarifsperre"),
+]
+
+
+@pytest.mark.parametrize("lock", LOCKS)
+def test_0b_gesperrt_ruht_ohne_zyklus(lock):
+    d = _decide(**lock, surplus_active=True, cycle_active=True, mode="1", at_rest=False, soc=65)
+    assert d.name == "0B"
+    assert d.transition == zones.Transition(
+        reset_integral=True, flags=zones.FlagUpdate(surplus_active=False, cycle_active=False),
+        output=0, mode="0", rest=True)
+
+
+@pytest.mark.parametrize("lock", LOCKS)
+def test_i_modus_3_ohne_session_gesperrt_ruht_ohne_zyklus(lock):
+    d = _decide(**lock, mode="3", at_rest=False, cycle_active=True, soc=65)
+    assert (d.name, d.action) == ("I", "act_fall_i")
+    assert d.transition == zones.Transition(
+        reset_integral=True, output=0, flags=zones.FlagUpdate(cycle_active=False), mode="0", rest=True)
+
+
+@pytest.mark.parametrize("lock", LOCKS)
+def test_i_session_ohne_modus_3_gesperrt_ruht_ohne_zyklus(lock):
+    d = _decide(**lock, ac_enabled=True, session="ac_charge", mode="1", at_rest=False,
+                cycle_active=True, soc=65)
+    assert (d.name, d.action) == ("I", "act_fall_i_session")
+    assert d.transition == zones.Transition(
+        reset_integral=True, flags=zones.FlagUpdate(session="none", cycle_active=False),
+        output=0, mode="0", rest=True)
+
+
+def test_i_modus_3_ohne_session_ungesperrt_kehrt_in_modus_1_zurueck():
+    d = _decide(mode="3", at_rest=False, cycle_active=True, soc=65)
+    assert d.transition == zones.Transition(reset_integral=True, output=0, mode="1")
