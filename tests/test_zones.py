@@ -103,7 +103,7 @@ def test_reihenfolge(kw, name):
 def test_0a_ohne_moduswechsel_in_laufendem_modus_1():
     d = _decide(surplus_enabled=True, new_surplus=True, mode="1", at_rest=False)
     assert d.transition == zones.Transition(flags=zones.FlagUpdate(surplus_active=True, cycle_active=True),
-                                            timer=False, mode=None)
+                                            mode=None)
 
 
 def test_0b_leitet_zyklus_aus_soc_ab():
@@ -170,8 +170,7 @@ def test_gt_startet_nicht_neben_laufender_ac_session():
 
 def test_i_loescht_flags_und_laesst_modus_stehen():
     d = _decide(ac_enabled=True, session="ac_charge", mode="1", at_rest=False)
-    assert d.transition == zones.Transition(reset_integral=True, flags=zones.FlagUpdate(session="none"),
-                                            timer=False)
+    assert d.transition == zones.Transition(reset_integral=True, flags=zones.FlagUpdate(session="none"), mode=None)
     assert d.action == "act_fall_i_session"
 
 
@@ -427,7 +426,7 @@ def test_ze_vor_allem_setzt_flags_zurueck_und_schaltet_regelung_ab():
     d = _decide(**TARGET, soc=80, surplus_enabled=True, new_surplus=True, surplus_active=True,
                 cycle_active=True, session="tariff_charge", mode="3", at_rest=False)
     assert (d.name, d.regulation_off, d.action, d.params) == ("ZE", True, "act_fall_ze", {"soc": 80})
-    assert d.transition == zones.Transition(reset_integral=True, timer=False, flags=zones.FlagUpdate(
+    assert d.transition == zones.Transition(reset_integral=True, mode=None, flags=zones.FlagUpdate(
         cycle_active=False, surplus_active=False, session="none"))
 
 
@@ -560,4 +559,4 @@ def test_0b_ungesperrt_behaelt_modus_ohne_timer():
     d = _decide(surplus_active=True, cycle_active=True, mode="1", at_rest=False, soc=70)
     assert d.transition == zones.Transition(
         reset_integral=True, flags=zones.FlagUpdate(surplus_active=False, cycle_active=True),
-        output=0, timer=False)
+        output=0, mode=None)

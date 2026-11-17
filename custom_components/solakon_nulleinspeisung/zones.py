@@ -93,12 +93,12 @@ class FlagUpdate:
 
 @dataclass(frozen=True)
 class Transition:
-    """Zustandsübergang eines Falls für `_transition`: Integral, Flags, Output, Timer, Ziel.
+    """Zustandsübergang eines Falls für `_transition`: Integral, Flags, Output, Ziel.
 
     `flags` None lässt die Zustandsflags unverändert, `output` None die Ausgangsleistung;
-    `wait=False` schreibt sie ohne Konvergenzwarten. `timer_first` schaltet den Timer vor
-    den Output. `mode` ist das Ziel, None schreibt keinen Modus; mit `rest` ist es der
-    Ruhemodus und setzt `resting`.
+    `wait=False` schreibt sie ohne Konvergenzwarten. `mode` ist das Ziel, None schreibt
+    keinen Modus; mit `rest` ist es der Ruhemodus und setzt `resting`. Der Timer schaltet
+    genau mit einem geschriebenen Modus, mit `timer_first` vor dem Output.
     """
 
     reset_integral: bool = False
@@ -106,7 +106,6 @@ class Transition:
     output: float | None = None
     wait: bool = True
     ac_charge_mode: bool = False
-    timer: bool = True
     timer_first: bool = False
     mode: str | None = None
     rest: bool = False
@@ -137,12 +136,12 @@ def _return_to_discharge(
     inp: ZoneInputs, flags: FlagUpdate | None = None, *, surplus: bool, session: bool = False,
     output: float | None = 0, keep_mode: bool = False,
 ) -> Transition:
-    """Rückkehr in Modus 1 nach einem Fall: Übergang mit Integral-Reset, Ziel, Timer und Folgen der Sperre.
+    """Rückkehr in Modus 1 nach einem Fall: Übergang mit Integral-Reset, Ziel und Folgen der Sperre.
 
     Gesperrt bei Tarifsperre oder Batterievorrang nach dem Fall: Ruhezustand, Zyklus aus,
     Ausgangsleistung 0. Sonst mit `keep_mode` der bisherige Modus, außer Modus '3' ohne
     Lade-Session, der in Modus 1 zurückführt; ohne `keep_mode` Ruhezustand ohne Zyklus,
-    mit Zyklus Modus 1. Der Timer schaltet nur mit einem geschriebenen Modus.
+    mit Zyklus Modus 1.
     `flags`, `surplus` und `session` sind die Flags, Surplus und Lade-Session nach dem Fall;
     eine laufende Lade-Session sperrt nicht.
     """
@@ -159,8 +158,7 @@ def _return_to_discharge(
         target = {"mode": MODE_DISCHARGE if stray_ac else None}
     else:
         target = _rest(inp, MODE_DISCHARGE, not inp.cycle_active)
-    return Transition(reset_integral=True, flags=flags, output=output,
-                      timer=target["mode"] is not None, **target)
+    return Transition(reset_integral=True, flags=flags, output=output, **target)
 
 
 def _end_charge(name: str, action_key: str, inp: ZoneInputs) -> FallDecision:
@@ -335,7 +333,6 @@ def decide(inp: ZoneInputs) -> FallDecision | None:
         return FallDecision("ZE", Transition(
             reset_integral=True,
             flags=FlagUpdate(cycle_active=False, surplus_active=False, session=SESSION_NONE),
-            timer=False,
         ), "act_fall_ze", {"soc": soc}, regulation_off=True)
 
     # ── Fall 0A: Surplus Entry ───────────────────────────────────────────────
@@ -350,7 +347,7 @@ def decide(inp: ZoneInputs) -> FallDecision | None:
         switch = mode != MODE_DISCHARGE or inp.at_rest
         return FallDecision("0A", Transition(
             flags=FlagUpdate(surplus_active=True, cycle_active=True),
-            timer=switch, mode=MODE_DISCHARGE if switch else None,
+            mode=MODE_DISCHARGE if switch else None,
         ), "act_surplus_on")
 
     # ── Fall 0B: Surplus Exit ────────────────────────────────────────────────

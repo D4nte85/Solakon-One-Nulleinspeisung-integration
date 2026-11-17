@@ -524,8 +524,8 @@ class SolakonCoordinator:
     async def _transition(self, t: Transition) -> None:
         """Zustandsübergang in fester Folge: Integral, Flags, Output, Timer, Modus (siehe `zones.Transition`).
 
-        `flags` setzt nur die Zustandsflags, die nicht None sind. Jeder geschriebene Modus
-        setzt `resting` auf `t.rest`.
+        `flags` setzt nur die Zustandsflags, die nicht None sind. Der Timer schaltet nur mit
+        einem geschriebenen Modus; jeder geschriebene Modus setzt `resting` auf `t.rest`.
         """
         if t.reset_integral:
             self.pi.reset()
@@ -536,14 +536,14 @@ class SolakonCoordinator:
                 self.surplus_active = t.flags.surplus_active
             if t.flags.session is not None:
                 self.charge_session = t.flags.session
-        if t.timer and t.timer_first:
+        if t.mode is not None and t.timer_first:
             await self.timeout.toggle()
         if t.output is not None:
             if t.wait:
                 await self.out.set_and_wait(t.output, ac_charge_mode=t.ac_charge_mode)
             else:
                 await self.out.set(t.output)
-        if t.timer and not t.timer_first:
+        if t.mode is not None and not t.timer_first:
             await self.timeout.toggle()
         if t.mode is not None:
             self.resting = t.rest
@@ -562,7 +562,7 @@ class SolakonCoordinator:
             self.notify_listeners()
 
     async def async_set_cycle(self, active: bool) -> None:
-        """Unter dem Lock: Zyklus über `_transition` setzen (Integral nullen, Timer-Toggle), speichern, benachrichtigen; danach Regelzyklus anstoßen."""
+        """Unter dem Lock: Zyklus über `_transition` setzen und Integral nullen, speichern, benachrichtigen; danach Regelzyklus anstoßen."""
         async with self._lock:
             await self._transition(Transition(reset_integral=True, flags=FlagUpdate(cycle_active=active)))
             self.schedule_save()
@@ -665,7 +665,7 @@ class SolakonCoordinator:
         """Abschaltpfad bei noch aktiver Regelung: neue Fehlerkette, Output 0, Entladestrom auf Gerätemaximum, Modus '0'."""
         self._messages = CycleMessages()
         _LOGGER.info("Solakon: Regelung wird deaktiviert — setze Output 0, Modus Disabled")
-        await self._transition(Transition(output=0, wait=False, timer=False))
+        await self._transition(Transition(output=0, wait=False))
         await self._set_discharge(DEVICE_MAX_CURRENT)
         await self._transition(Transition(mode=MODE_DISABLED))
         self.display.set_mode("disabled_regulation_off", self.hass.config.language)
