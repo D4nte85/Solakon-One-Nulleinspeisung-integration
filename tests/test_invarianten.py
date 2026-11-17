@@ -12,10 +12,7 @@ import pytest
 
 from tests import invarianten as inv
 
-OFFEN = {
-    # F1: Im Regelzyklus von 0A/0B gilt die Zuteilung der alten Zone; Behebung in V3 der Design-Seite.
-    "k9": "2026-11-16-integration-architektur-review-14 (F1)",
-}
+OFFEN: dict[str, str] = {}
 
 
 @pytest.fixture(scope="module")

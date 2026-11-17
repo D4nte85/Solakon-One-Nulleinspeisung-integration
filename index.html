@@ -138,8 +138,9 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
         grid_sensor: "sensor.shelly_3em_leistung",
         settings: { ...DEMO_SETTINGS, surplus_enabled: true, surplus_forecast_enabled: true, pv_forecast_sensor: "sensor.solcast_prognose", surplus_lock_enabled: true, surplus_lock_sensor: "sensor.solcast_leistung_jetzt" },
         // Kapazitätssensor vertippt: Verteilung weicht von „Kapazitätsgewichtet“ auf „SOC-gewichtet“ aus.
+        // Allein im Entlade-Pool (A lädt): Gesamtlimit, gekappt am Hard-Limit.
         status: mkStatus({ zone: 1, soc: 81, actual_power: 140, grid: 8, active_fall: "A", cycle_active: true,
-                           dist_mode_effective: "soc",
+                           dist_mode_effective: "soc", allocated_power: 800,
                            last_error: SCENARIO === "multi-group" ? "Kapazitätssensor nicht verfügbar" : null }),
       },
     } : {}),
@@ -182,7 +183,7 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
       charge_session: o.charge_session ?? "none", regulation_enabled: o.regulation_enabled ?? true, stddev: 8.4, stddev_raw: 8.4,
       active_fall: o.active_fall, is_night: false,
       operating_state: mkOperatingState(o),
-      forecast_tariff_suppressed: false, forecast_surplus_forced: false, forecast_exit_lock: false, forecast_zone1_forced: false, allocated_power: 400,
+      forecast_tariff_suppressed: false, forecast_surplus_forced: false, forecast_exit_lock: false, forecast_zone1_forced: false, allocated_power: o.allocated_power ?? null,
       dist_mode_effective: o.dist_mode_effective ?? "",
       settings_rev: 0, dist_rev: 0,
     };

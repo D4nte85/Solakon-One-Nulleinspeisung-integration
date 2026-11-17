@@ -218,8 +218,7 @@ def test_soc_switch_start_beim_hoechsten_soc_und_speichert():
     hass, g = _group(a, b, dist=SWITCH)
     assert _stored_switch(hass) is None
     assert g.all_shares({"a": a, "b": b}, a, 50).values == {"a": 0.0, "b": 1.0}
-    assert g.soc_switch_state() == {"active_id": "b", "start_soc": 70.0, "was_zone0": False}
-    assert _stored_switch(hass) is g.soc_switch_state()
+    assert _stored_switch(hass) == {"active_id": "b", "start_soc": 70.0, "was_zone0": False}
 
 
 def _switch_state(**state):
@@ -242,9 +241,9 @@ def test_soc_switch_mehrere_zone0_gleichmaessig():
 
 def test_soc_switch_zone0_uebernimmt_und_verlassen_verankert_neu():
     a, b = M("a"), M("b", soc=90.0, surplus_active=True)
-    _, g = _group(a, b, dist=SWITCH, soc_switch=_switch_state(active_id="a", start_soc=80.0))
+    hass, g = _group(a, b, dist=SWITCH, soc_switch=_switch_state(active_id="a", start_soc=80.0))
     assert g.soc_switch_shares({"a": a, "b": b}, a, 50) == {"a": 0.0, "b": 1.0}
-    state = g.soc_switch_state()
+    state = _stored_switch(hass)
     assert state == {"active_id": "b", "start_soc": 90.0, "was_zone0": True}
     b.surplus_active, b.soc = False, 88.0
     assert g.soc_switch_shares({"a": a, "b": b}, a, 50) == {"a": 0.0, "b": 1.0}
@@ -330,7 +329,31 @@ def test_verteilungslage_aus_dem_pool_der_instanz():
     _, g = _group(a_aus, b, dist={"distribution_mode": "equal"})
     pos = g.position(a_aus, 50)
     assert (pos.pools, pos.share, pos.ac_share, pos.mode, pos.warning) == ((False, False), 0.0, 0.0, "", "")
-    assert g.pools(a_aus) == (False, False)
+
+
+def test_verteilungslage_veraltet_bei_poolwechsel_oder_surplus_flag():
+    """Die Zuteilung hängt an Pool-Zugehörigkeit und Surplus-Flag (über das Hard-Limit der Zone)."""
+    a, b = M("a"), M("b")
+    _, g = _group(a, b)
+    pos = g.position(a, 50)
+    assert (pos.pools, pos.surplus, pos.stale(a)) == ((True, False), False, False)
+    a.surplus_active = True
+    assert pos.stale(a)
+    a.surplus_active, a.discharge = False, False
+    assert pos.stale(a)
+    a.discharge, a.charge_session = True, "ac_charge"
+    assert pos.stale(a)
+    a.charge_session = "none"
+    assert not pos.stale(a)
+
+
+def test_zuteilung_allein_im_pool_folgt_dem_hard_limit_der_zone():
+    a = M("a", limit=300.0)
+    b = M("b", discharge=False)
+    _, g = _group(a, b, dist={"global_max_power": 800})
+    assert g.position(a, 50).allocated == 300
+    a.limit = 800.0
+    assert g.position(a, 50).allocated == 800
 
 
 def test_schwester_laedt_bei_jeder_art_der_lade_session():

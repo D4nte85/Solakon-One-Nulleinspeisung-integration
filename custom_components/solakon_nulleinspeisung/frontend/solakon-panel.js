@@ -1434,7 +1434,10 @@ ${this._textsMissing ? `
       "st-int":          this._cfg.saved.pi_enabled !== false ? `${(st.integral ?? 0).toFixed(2)}` : "—",
       "st-stddev":       `${(st.stddev ?? 0).toFixed(1)} W`,
       "st-stddev-raw":   `${(st.stddev_raw ?? 0).toFixed(1)} W`,
-      "st-alloc":        st.allocated_power != null ? `${st.allocated_power} W` : (s.alloc_single || "—"),
+      // Ohne Zuteilung: „Einzel“ nur, wenn die Netzgruppe höchstens eine geladene Instanz hat;
+      // sonst steht die Instanz außerhalb des Entlade-Pools.
+      "st-alloc":        st.allocated_power != null ? `${st.allocated_power} W`
+                           : (this._groupOf(this._activeInstance)?.instances.length ?? 1) <= 1 ? (s.alloc_single || "—") : "—",
       "st-elapsed":      this._fmt_elapsed(st.last_output_ts),
       "st-mode-elapsed": this._fmt_elapsed(st.mode_label_ts),
       // In Panelsprache aus dem Schlüssel; der unbekannte Modus trägt den Rohwert nur im Backend-Text.

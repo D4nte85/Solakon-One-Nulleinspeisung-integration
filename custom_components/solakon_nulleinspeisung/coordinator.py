@@ -160,7 +160,8 @@ class SolakonCoordinator:
 
         self.dyn = DynamicOffset()
 
-        # Multi-Instancing: zugeteiltes Leistungslimit (None = Einzelbetrieb)
+        # Multi-Instancing: zugeteiltes Leistungslimit im Entlade-Pool, auch im Surplus
+        # (None = Einzelbetrieb oder außerhalb des Entlade-Pools)
         self.allocated_power: float | None = None
         # Verwertbarer PV-Überschuss: Luft zwischen aktuellem Output und dem
         # Minimum aus Hard-Limit und aktueller PV-Leistung.
@@ -343,13 +344,22 @@ class SolakonCoordinator:
 
         Liefert die Leistungsgrenzen aus `cs` und der Zuteilung; die Warnung von `replaced` entfällt.
         """
-        if replaced is not None and replaced.warning:
+        if replaced is not None and replaced.warning and replaced.warning != pos.warning:
             self._messages.retract((replaced.warning, {}))
         self.allocated_power = pos.allocated
         self.dist_mode_effective = pos.mode
-        if pos.warning:
+        if pos.warning and (replaced is None or replaced.warning != pos.warning):
             self._messages.warn((pos.warning, {}))
         return power_limits(cs, pos.allocated)
+
+    def _refresh_position(
+        self, pos: PoolPosition, limits: PowerLimits, cs: CycleSettings, soc: float,
+    ) -> tuple[PoolPosition, PowerLimits]:
+        """Verteilungslage neu übernehmen, wenn `pos` veraltet ist; sonst `pos` und `limits` unverändert."""
+        if not pos.stale(self):
+            return pos, limits
+        fresh = self.group.position(self, soc)
+        return fresh, self._adopt_position(fresh, cs, pos)
 
     # ── Darstellen: Texte ────────────────────────────────────────────────────
 
@@ -786,7 +796,7 @@ class SolakonCoordinator:
             solar=solar, soc=soc, actual=actual, total_actual=total_actual,
             total_output=total_output,
             grid=grid, error_share=pos.share,
-            in_pool=self.in_discharge_pool(),
+            in_pool=pos.pools[0],
             surplus_threshold=cs.surplus_threshold,
             surplus_soc_hyst=cs.surplus_soc_hyst, surplus_pv_hyst=cs.surplus_pv_hyst,
         )
@@ -809,10 +819,8 @@ class SolakonCoordinator:
             self._end_cycle()
             return
 
-        # Verteilungslage neu, wenn ein Fall die Pool-Zugehörigkeit geändert hat.
-        if self.group.pools(self) != pos.pools:
-            before, pos = pos, self.group.position(self, soc)
-            limits = self._adopt_position(pos, cs, before)
+        # Verteilungslage neu, wenn ein Fall Pool-Zugehörigkeit oder Surplus-Flag geändert hat.
+        pos, limits = self._refresh_position(pos, limits, cs, soc)
 
         # Zustand hinter Fall TM: die Sperre selbst mit den Flags nach den Falls,
         # nicht ihr Auslöser. Ebenso die Nachtabschaltung mit dem Zyklus nach den Falls.
@@ -828,6 +836,8 @@ class SolakonCoordinator:
         blocked = False
         if mode in (MODE_DISCHARGE, MODE_AC_CHARGE):
             blocked = await self._run_pi_phase(cs, soc, mode, core.timer, pos, limits, ac_offset)
+            # Die Rücknahme bei Stillstand nimmt die Instanz aus dem Entlade-Pool.
+            self._refresh_position(pos, limits, cs, soc)
 
         # ── 12. Anzeige und Flag-Speicherung ─────────────────────────────────
         self._end_cycle(blocked=blocked, display=(soc, cs.zone3_limit, mode),

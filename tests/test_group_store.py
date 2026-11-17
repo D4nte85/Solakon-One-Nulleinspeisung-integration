@@ -38,7 +38,8 @@ def test_gruppe_bekommt_gespeicherten_zustand():
     _load(hass)
     g = gs.require_store(hass).group("sensor.grid")
     assert g.dist_cfg()["distribution_mode"] == "soc_switch"
-    assert g.soc_switch_state() == {"active_id": "a", "start_soc": 60, "was_zone0": False}
+    assert gs.StoredGroup(gs.require_store(hass), "sensor.grid").soc_switch() == {
+        "active_id": "a", "start_soc": 60, "was_zone0": False}
 
 
 def test_paralleles_laden_einmal_und_alle_warten():

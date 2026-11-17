@@ -414,7 +414,7 @@
     "soc_lbl":           "SOC",
     "output_lbl":        "Output Power",
     "solar_lbl":         "Solar Power",
-    "alloc_lbl":        "Zone-1 Limit (alloc.)",
+    "alloc_lbl":        "Allocated limit",
     "alloc_single":     "Single",
     "stddev_lbl":        "StdDev (trimmed)",
     "stddev_raw_lbl":    "StdDev (raw)",

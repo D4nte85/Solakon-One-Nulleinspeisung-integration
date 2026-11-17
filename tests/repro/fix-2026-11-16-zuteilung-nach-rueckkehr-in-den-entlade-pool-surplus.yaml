@@ -1,0 +1,25 @@
+titel: Surplus-Eintritt über 0A schreibt im selben Regelzyklus die Zuteilung der alten Zone
+bezug: fix-2026-11-16-zuteilung-nach-rueckkehr-in-den-entlade-pool
+# Zwei Instanzen an sensor.grid, Gesamtlimit 800 W. a entlädt allein im Entlade-Pool in Zone 1
+# (Zone-1/2-Limit 300 W, Zone-0-Limit 800 W), b ruht in Modus 0. a hat 96 % SOC und PV
+# über dem Bedarf: 0A setzt Surplus. Erwartet: Im Eintrittszyklus gilt die Zuteilung der Zone 0,
+# a schreibt den Zone-0-Festwert 800 W statt 300 W.
+stunde: 12
+netz: -300
+verteilung: {global_max_power: 800, distribution_mode: equal}
+instanzen:
+  - prefix: a
+    settings: {regulation_enabled: true, surplus_enabled: true, hard_limit_z1: 300, hard_limit_z0: 800}
+    flags: {cycle_active: true}
+    sensoren: {soc: 96, solar: 600, modus: "1", ist: 300, leistung: 300}
+    folgt_ist: 0
+  - prefix: b
+    settings: {regulation_enabled: true}
+    sensoren: {soc: 15, solar: 600, ist: 0, modus: "0", leistung: 0}
+schritte:
+  - nach: 0
+    wer: a
+erwartet:
+  - instanz: a
+    zustand: {active_fall: 0A, surplus_active: true, allocated_power: 800}
+  - aufruf: {entity: a.leistung, wert: 800}

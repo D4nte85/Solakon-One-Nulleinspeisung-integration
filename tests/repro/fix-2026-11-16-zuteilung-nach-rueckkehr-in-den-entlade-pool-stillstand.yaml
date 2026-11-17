@@ -1,0 +1,30 @@
+titel: Rücknahme bei Stillstand lässt die Zuteilung einen Regelzyklus stehen
+bezug: fix-2026-11-16-zuteilung-nach-rueckkehr-in-den-entlade-pool
+# Zwei Instanzen an sensor.grid, Gesamtlimit 800 W. a entlädt allein im Entlade-Pool gesättigt
+# am Zone-1/2-Limit 600 W, b ruht in Modus 0. Die Ist-Leistung von a steht seit 400 s auf 0 W:
+# Schritt 1 schreibt neu, Schritt 2 nimmt a in den Ruhezustand zurück.
+# Erwartet: Im Regelzyklus der Rücknahme gilt a als außerhalb des Entlade-Pools, ohne Zuteilung.
+stunde: 12
+netz: 900
+verteilung: {global_max_power: 800, distribution_mode: equal}
+instanzen:
+  - prefix: a
+    settings: {regulation_enabled: true, hard_limit_z1: 600}
+    flags: {cycle_active: true}
+    sensoren: {soc: 80, solar: 0, modus: "1", ist: {wert: 0, alter: 400}, leistung: 600}
+    folgt_ist: null
+  - prefix: b
+    settings: {regulation_enabled: true}
+    sensoren: {soc: 15, solar: 0, ist: 0, modus: "0", leistung: 0}
+schritte:
+  - nach: 0
+    wer: a
+  - nach: 310
+    wer: a
+erwartet:
+  - schritt: 1
+    instanz: a
+    zustand: {last_action_key: act_output_rewritten, allocated_power: 600}
+  - schritt: 2
+    instanz: a
+    zustand: {last_action_key: act_output_recovery, resting: true, allocated_power: null}

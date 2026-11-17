@@ -414,7 +414,7 @@
     "soc_lbl":           "SOC",
     "output_lbl":        "Ausgangsleistung",
     "solar_lbl":         "Solarleistung",
-    "alloc_lbl":        "Zone-1-Limit (zugeteilt)",
+    "alloc_lbl":        "Zugeteiltes Limit",
     "alloc_single":     "Einzel",
     "stddev_lbl":        "StdDev (getrimmt)",
     "stddev_raw_lbl":    "StdDev (roh)",

@@ -59,11 +59,22 @@ def test_nicht_formatierbarer_text_warnt_einmal(monkeypatch):
 def test_verteilungslage_ersetzt_modus_und_warnung():
     _, coord = _coord("de")
     cs = schema.cycle_settings(h.const.SETTINGS_DEFAULTS)._replace(hard_limit_z1=800)
-    vorher = group.PoolPosition((True, False), 0.5, 400, 0.0, group.Shares({}, "equal", "warn_dist_soc_sensor"))
+    vorher = group.PoolPosition((True, False), False, 0.5, 400, 0.0, group.Shares({}, "equal", "warn_dist_soc_sensor"))
     limits = coord._adopt_position(vorher, cs)
     assert (coord.dist_mode_effective, coord._messages.msgs) == ("equal", [("warn_dist_soc_sensor", {})])
     assert (coord.allocated_power, limits.zone12) == (400, 400)
-    nachher = group.PoolPosition((False, False), 0.0, None, 0.0, None)
+    nachher = group.PoolPosition((False, False), False, 0.0, None, 0.0, None)
     limits = coord._adopt_position(nachher, cs, vorher)
     assert (coord.dist_mode_effective, coord._messages.msgs) == ("", [])
     assert (coord.allocated_power, limits.zone12) == (None, 800)
+
+
+def test_verteilungslage_gleiche_warnung_bleibt_an_ihrem_platz():
+    _, coord = _coord("de")
+    cs = schema.cycle_settings(h.const.SETTINGS_DEFAULTS)
+    vorher = group.PoolPosition((True, False), False, 0.5, 400, 0.0, group.Shares({}, "equal", "warn_dist_soc_sensor"))
+    coord._adopt_position(vorher, cs)
+    coord._messages.warn(("warn_test_danach", {}))
+    nachher = group.PoolPosition((True, False), True, 0.5, 800, 0.0, group.Shares({}, "equal", "warn_dist_soc_sensor"))
+    coord._adopt_position(nachher, cs, vorher)
+    assert coord._messages.msgs == [("warn_dist_soc_sensor", {}), ("warn_test_danach", {})]

@@ -52,6 +52,11 @@ class GroupState(Protocol):
     def soc_switch_changed(self, state: dict) -> None: ...
 
 
+def in_ac_pool(m: Member) -> bool:
+    """Regelt und lädt per AC-Laden."""
+    return m.regulating and m.charge_session == SESSION_AC
+
+
 @dataclass(frozen=True)
 class Shares:
     """Anteile je Instanz, dazu der angewandte Verteilungsmodus (leer: keiner) und ein Warnschlüssel."""
@@ -63,18 +68,24 @@ class Shares:
 
 @dataclass(frozen=True)
 class PoolPosition:
-    """Verteilungslage einer Instanz: Pool-Zugehörigkeit, Fehler-Anteile, Zuteilung und Anteile.
+    """Verteilungslage einer Instanz: Pool-Zugehörigkeit, Surplus-Flag, Fehler-Anteile, Zuteilung und Anteile.
 
-    `share` gilt im Entlade-Pool, `ac_share` im AC-Pool, außerhalb ist der Anteil null. `shares` sind
-    die Anteile des AC-Pools, sonst die des Entlade-Pools; None im Einzelbetrieb und außerhalb.
-    Modus und Warnung kommen aus `shares`.
+    `share` gilt im Entlade-Pool, `ac_share` im AC-Pool, außerhalb ist der Anteil null. `allocated`
+    ist die Zuteilung im Entlade-Pool, auch im Surplus; None im Einzelbetrieb und außerhalb.
+    `shares` sind die Anteile des AC-Pools, sonst die des Entlade-Pools; None ohne Anteile
+    (Einzelbetrieb, außerhalb, allein im Pool). Modus und Warnung kommen aus `shares`.
     """
 
     pools: tuple[bool, bool]
+    surplus: bool
     share: float
     allocated: float | None
     ac_share: float
     shares: Shares | None
+
+    def stale(self, me: Member) -> bool:
+        """Hat sich seit der Lage geändert, wovon die Zuteilung abhängt: Pool-Zugehörigkeit oder Surplus-Flag."""
+        return (me.in_discharge_pool(), in_ac_pool(me)) != self.pools or me.surplus_active != self.surplus
 
     @property
     def mode(self) -> str:
@@ -194,7 +205,7 @@ class NetGroup:
 
     def ac_pool(self) -> dict[str, Member]:
         """Regelnde Mitglieder mit aktivem AC-Laden."""
-        return self.pool(lambda m: m.regulating and m.charge_session == SESSION_AC)
+        return self.pool(in_ac_pool)
 
     def discharge_actual(self, me: Member, own_actual: float) -> float:
         """Summe der Ist-Leistung im Entlade-Pool; der eigene Wert zählt immer."""
@@ -297,10 +308,6 @@ class NetGroup:
             return Shares(equal, "equal", warning)
         return Shares({eid: w / total_soc for eid, w in soc_weights.items()}, effective, warning)
 
-    def soc_switch_state(self) -> dict:
-        """Laufzeitzustand des Modus `soc_switch` dieser Gruppe."""
-        return self._state.soc_switch()
-
     def soc_switch_shares(self, active: dict[str, Member], me: Member, own_soc: float) -> dict[str, float] | None:
         """Anteile für Modus `soc_switch`; `None`, wenn ein Fremd-SOC unsicher ist.
 
@@ -315,7 +322,7 @@ class NetGroup:
 
         zone0 = {eid for eid, m in active.items() if m.surplus_active}
 
-        state = self.soc_switch_state()
+        state = self._state.soc_switch()
 
         was_zone0 = bool(state.get("was_zone0", False))
         active_id = state.get("active_id")
@@ -394,14 +401,10 @@ class NetGroup:
         shares = self.all_shares(active, me, own_soc, ac=True)
         return shares.values.get(me.member_id, 0.0), shares
 
-    def pools(self, me: Member) -> tuple[bool, bool]:
-        """Steht `me` im Entlade-Pool, steht es im AC-Pool."""
-        return me.member_id in self.discharge_pool(), me.member_id in self.ac_pool()
-
     def position(self, me: Member, own_soc: float) -> PoolPosition:
         """Verteilungslage von `me` aus Entlade-Pool und AC-Pool."""
         discharge, ac = self.discharge_pool(), self.ac_pool()
         share, allocated, discharge_shares = self.distribution(me, own_soc, discharge)
         ac_share, ac_shares = self.ac_share(me, own_soc, ac)
         pools = (me.member_id in discharge, me.member_id in ac)
-        return PoolPosition(pools, share, allocated, ac_share, ac_shares or discharge_shares)
+        return PoolPosition(pools, me.surplus_active, share, allocated, ac_share, ac_shares or discharge_shares)

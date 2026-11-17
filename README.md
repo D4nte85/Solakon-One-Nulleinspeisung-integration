@@ -138,7 +138,7 @@ Bei nur einer Gruppe (Normalfall) ist diese Zuordnung unsichtbar — es gibt gen
 
 ### Automatische Fehleraufteilung und Leistungsverteilung
 
-Laufen mehrere Instanzen gleichzeitig, berechnet jeder Coordinator seinen **Gewichts-Anteil** `w_i` und verwendet ihn sowohl für den PI-Regelungsfehler als auch für das zugeteilte Leistungslimit in Zone 1. Das läuft in **zwei vollständig getrennten Pools**, je nachdem welche Rolle eine Instanz gerade einnimmt:
+Laufen mehrere Instanzen gleichzeitig, berechnet jeder Coordinator seinen **Gewichts-Anteil** `w_i` und verwendet ihn sowohl für den PI-Regelungsfehler als auch für das zugeteilte Leistungslimit in Zone 0–2. Das läuft in **zwei vollständig getrennten Pools**, je nachdem welche Rolle eine Instanz gerade einnimmt:
 
 ```
 # Gewicht w_i je Instanz — abhängig vom Verteilungs-Modus:
@@ -298,7 +298,7 @@ Alle Eingabefelder für Entity-IDs (z. B. Kapazitäts-, Vorhersage- und Preis-Se
 
 ### 📊 Status
 
-Echtzeit-Übersicht aller Regelzustände: aktive Zone mit farblichem Banner (Zone 0–3), Netzleistung, Solarleistung, Ausgangsleistung, SOC, Standardabweichung der Netzleistung roh und getrimmt (Stabilitätsindikator, getrimmt ausgegraut bei Trim 0), zugeteiltes Zone-1-Limit, PI-Integral-Wert (ausgegraut bei ausgeschaltetem Entlade-PI), aktiver Offset (Zone 1 / Zone 1 Nacht / Zone 2 / Zone AC) mit Quelle (dynamisch / statisch), Zeitabstand seit letzter Regelaktion und seit letztem Moduswechsel, letzte Aktion und etwaige Fehlermeldungen, Status-Flags: PI-Regler (grün bei eingeschaltetem Entlade-PI), Zyklus, Surplus, Lade-Session (zeigt die Art — AC Laden, Tarif-Laden oder Netz-Laden —, ohne Lade-Session grau „Laden“), Nacht, PV→Tarif, PV→Surplus, Austritts-Sperre, Nacht-Forcierung. Bei eingeschaltetem Zielladen zusätzlich dessen Phase: Aufladen mit SOC und Ziel-SOC oder Entladepause. Rein lesend — manuelle Eingriffe liegen im **Debug**-Tab.
+Echtzeit-Übersicht aller Regelzustände: aktive Zone mit farblichem Banner (Zone 0–3), Netzleistung, Solarleistung, Ausgangsleistung, SOC, Standardabweichung der Netzleistung roh und getrimmt (Stabilitätsindikator, getrimmt ausgegraut bei Trim 0), zugeteiltes Limit (Zone 0–2; „Einzel“ nur ohne weitere geladene Instanz am Netzsensor), PI-Integral-Wert (ausgegraut bei ausgeschaltetem Entlade-PI), aktiver Offset (Zone 1 / Zone 1 Nacht / Zone 2 / Zone AC) mit Quelle (dynamisch / statisch), Zeitabstand seit letzter Regelaktion und seit letztem Moduswechsel, letzte Aktion und etwaige Fehlermeldungen, Status-Flags: PI-Regler (grün bei eingeschaltetem Entlade-PI), Zyklus, Surplus, Lade-Session (zeigt die Art — AC Laden, Tarif-Laden oder Netz-Laden —, ohne Lade-Session grau „Laden“), Nacht, PV→Tarif, PV→Surplus, Austritts-Sperre, Nacht-Forcierung. Bei eingeschaltetem Zielladen zusätzlich dessen Phase: Aufladen mit SOC und Ziel-SOC oder Entladepause. Rein lesend — manuelle Eingriffe liegen im **Debug**-Tab.
 
 ---
 
