@@ -16,10 +16,15 @@ def _settings(**kw):
     return {**C.SETTINGS_DEFAULTS, **kw}
 
 
+def _dist(**kw):
+    """Verteilung wie `NetGroup.dist_cfg`: immer mit Standardwerten gefüllt."""
+    return {**C.DIST_DEFAULTS, **kw}
+
+
 @pytest.mark.parametrize("name, local, dist, hour, erwartet", [
-    ("tariff", "sensor.lokal", {"global_tariff_price_sensor": "sensor.global"}, 8, "sensor.lokal"),
-    ("tariff", "", {"global_tariff_price_sensor": "sensor.global"}, 8, "sensor.global"),
-    ("tariff", "", {}, 8, ""),
+    ("tariff", "sensor.lokal", _dist(global_tariff_price_sensor="sensor.global"), 8, "sensor.lokal"),
+    ("tariff", "", _dist(global_tariff_price_sensor="sensor.global"), 8, "sensor.global"),
+    ("tariff", "", _dist(), 8, ""),
 ])
 def test_effective_sensor_lokal_vor_global(name, local, dist, hour, erwartet):
     settings = _settings(**{C.S_TARIFF_PRICE_SENSOR: local})
@@ -29,7 +34,7 @@ def test_effective_sensor_lokal_vor_global(name, local, dist, hour, erwartet):
 @pytest.mark.parametrize("hour, erwartet", [(11, "sensor.heute"), (12, "sensor.morgen")])
 def test_effective_sensor_zone1_force_wechselt_um_12(hour, erwartet):
     settings = _settings(**{C.S_PV_FORECAST_SENSOR: "sensor.heute", C.S_ZONE1_FORCE_SENSOR: "sensor.morgen"})
-    assert fs.effective_sensor("zone1_force", settings, {}, hour) == erwartet
+    assert fs.effective_sensor("zone1_force", settings, _dist(), hour) == erwartet
 
 
 def test_feature_reading_aus_liest_nicht():
@@ -62,7 +67,7 @@ def test_feature_values_skaliert_und_meldet_in_tabellenreihenfolge():
         C.S_SURPLUS_LOCK_ENABLED: True, C.S_TARIFF_ENABLED: True,
     })
     cs = schema.cycle_settings(settings)
-    values, warnings = fs.feature_values(hass, cs, settings, {}, 8)
+    values, warnings = fs.feature_values(hass, cs, settings, _dist(), 8)
     assert values["pv_forecast"] == pytest.approx(5.0)
     assert values["cheap"] is None and values["exp"] is None
     assert warnings == [("err_exit_lock_no_sensor", {})]

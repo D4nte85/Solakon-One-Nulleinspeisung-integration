@@ -54,7 +54,7 @@ class Display:
 
     def update(
         self, language: str, soc: float, zone3_limit: float, mode: str, at_rest: bool,
-        surplus_active: bool, cycle_active: bool, regulation_on: bool = True,
+        surplus_active: bool, cycle_active: bool, regulation_on: bool,
     ) -> None:
         """Anzeigezone und Modus aus SOC, Flags und Modus des Wechselrichters.
 

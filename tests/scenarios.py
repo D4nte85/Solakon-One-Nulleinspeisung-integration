@@ -728,7 +728,6 @@ async def _run_wiring() -> dict:
     flows["entities_dup"] = h.jsonable(await flow.async_step_entities({"mode_select": "select.a_mode"}))
     flows["entities_new"] = h.jsonable(await flow.async_step_entities(
         {"mode_select": "select.balkon_remote_control_mode", "instance_name": "Neu", "enable_disabled": True}))
-    flows["entities_new_noname"] = h.jsonable(await flow.async_step_entities({"mode_select": "select.z"}))
     opt = cf.SolakonConfigFlow.async_get_options_flow(fh.config_entries.entries[0])
     opt.hass = fh
     opt.config_entry = fh.config_entries.entries[0]

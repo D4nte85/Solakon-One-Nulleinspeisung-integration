@@ -13,8 +13,6 @@ VERSION = json.loads((Path(__file__).parent / "manifest.json").read_text())["ver
 
 # -- Config-Entry Keys --------------------------------------------------------
 CONF_INSTANCE_NAME    = "instance_name"
-# Titel des Eintrags, wenn die Entitäten-Zuweisung keinen Instanznamen trägt.
-FALLBACK_INSTANCE_NAME = "Solakon ONE"
 CONF_GRID_SENSOR      = "grid_power_sensor"
 CONF_ACTUAL_SENSOR    = "actual_power_sensor"
 CONF_SOLAR_SENSOR     = "solar_power_sensor"

@@ -852,6 +852,7 @@ class SolakonPanel extends HTMLElement {
     }
   }
 
+  // Eine Statusabfrage für Übersicht, Verteilung oder die aktive Instanz.
   async _loadStatusOnce() {
     if (this._activeInstance === "__overview__") {
       for (const inst of this._instances) {
@@ -1267,7 +1268,7 @@ ${this._textsMissing ? `
     div.className = "field";
     const label = src.label(f);
     const desc  = src.desc(f);
-    const field = src.schema?.[f.k] ?? src.schema?.[f.field];
+    const field = src.schema?.[f.k];
 
     if (f.t === "bool") {
       div.innerHTML = `<label class="toggle"><input type="checkbox" ${src.attr(f)} ${cur ? "checked" : ""}/> ${label}</label><div class="desc">${desc}</div>`;

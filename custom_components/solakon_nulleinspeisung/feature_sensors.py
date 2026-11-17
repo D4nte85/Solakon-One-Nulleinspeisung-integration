@@ -43,7 +43,7 @@ class Feature(NamedTuple):
     """Sensorgebundener Wert des Regelzyklus.
 
     `source` ist die Sensorvorgabe in SENSOR_SOURCES, `enabled` das Feld in CycleSettings,
-    das den Wert einschaltet. Ohne `optional` Entität wird nicht gelesen und nichts
+    das den Wert einschaltet. Ein `optional` Wert ohne Entität wird nicht gelesen und nicht
     gemeldet; nur Werte mit Pflicht-Entität stoßen bei Änderung den Regelzyklus an.
     """
 
@@ -87,7 +87,7 @@ def effective_sensor(name: str, settings: dict[str, Any], dist_cfg: dict[str, An
     if name == "zone1_force" and hour < TOMORROW_FROM_HOUR:
         name = "pv_forecast"
     local, global_key = SENSOR_SOURCES[name]
-    return str(settings[local]) or str(dist_cfg.get(global_key, ""))
+    return str(settings[local]) or str(dist_cfg[global_key])
 
 
 def feature_reading(

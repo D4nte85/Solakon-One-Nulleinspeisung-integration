@@ -204,7 +204,6 @@ class GroupStore:
         return groups
 
 
-
 async def _load_stores(hass: HomeAssistant) -> GroupStore:
     """Speicher mit den drei HA-Stores anlegen und laden; die Verteilung gegen DIST_SCHEMA bereinigt."""
     dist_store = SolakonDistStore(hass, STORAGE_VERSION_DIST, STORAGE_KEY_DIST)

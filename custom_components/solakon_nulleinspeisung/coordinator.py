@@ -707,8 +707,9 @@ class SolakonCoordinator:
 
         Liest die Sensoren, rechnet Verteilung, Grenzen, Prognoseflags und Tariflage, führt
         den fälligen Fall aus, gleicht den Entladestrom ab und regelt in Modus '1' oder '3'
-        die Ausgangsleistung. Regelung aus, ein Kernsensor ohne Zahl oder ungültige
-        Settings beenden den Zyklus vorzeitig über `_end_cycle`.
+        die Ausgangsleistung. Vorzeitig über `_end_cycle` enden: Regelung aus, ein Kernsensor
+        ohne Zahl, ungültige Settings, ein Modus-Select ohne gültigen Zustand und ein Fall,
+        der die Regelung abschaltet (ZE).
         """
         cfg = self.entry.data
         # Wirksamer Sensor kann ohne Settings-Änderung wechseln (Stunde, Verteilung).

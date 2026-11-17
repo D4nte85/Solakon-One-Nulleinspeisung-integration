@@ -22,6 +22,7 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ### Geändert
 
+- **Umbau ohne Verhaltensänderung:** `get_schema` liefert kein `distribution_instance` mehr, das das Panel nie gelesen hat. Der Titel eines neuen Eintrags kommt immer aus dem Instanznamen, den das Formular vorbelegt; der Rückfall „Solakon ONE“ entfällt. Globale Sensorvorgaben werden ohne stillen Rückfall aus der Verteilung gelesen. Docstrings zum vorzeitigen Ende des Regelzyklus und zum Surplus-Austritt außerhalb des Entlade-Pools (`__init__.py`, `config_flow.py`, `feature_sensors.py`, `coordinator.py`, `zones.py`, `display.py`).
 - **Texte nach dem Code:** Der Integral-Decay greift laut PI-Hilfetext immer, wenn die Entladeregelung nicht schreibt; die Überschussleistung ist auch bis zum ersten Regelzyklus unbekannt; Hard-Limit-Werte über der Gerätegrenze werden abgewiesen statt gedeckelt. Im Options-Schritt heißt der Ist-Sensor wie beim Einrichten, PV- und Entladestrom-Feld nennen alle Verwendungen. Englisch: „Control active“ statt „Regulation active“, die Prognose-Unterdrückung betrifft Tarif-Laden und Tarifsperre, Instanzname mit Vorbelegung „Speicher 1“ (`README.md`, `panel.*.json`, `strings.json`, `translations/*.json`, `index.html`).
 - **Rückkehr in Modus 1 als ein Übergang:** Ruhezustand, Zyklusende und 0 W bei Sperre bildet die Rückkehr selbst, statt dass 0B, Fall I und das Lade-Ende sie je einzeln setzen. Die Obergrenze der Entladeregelung kennt keinen Sonderfall für Modus 3 mehr (`zones.py`, `limits.py`, `paths.py`).
 

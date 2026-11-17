@@ -135,6 +135,7 @@ def couple_target(settings: dict[str, Any], changes: dict[str, Any]) -> dict[str
         coupled[S_TARGET_GRID_CHARGE] = False
     return coupled
 
+
 class InvalidSettings(HomeAssistantError):
     """Änderungen verletzen das Schema; `findings` nennt je Schlüssel den Grund."""
 

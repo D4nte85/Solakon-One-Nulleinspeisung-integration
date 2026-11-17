@@ -24,7 +24,7 @@ def _display():
 ])
 def test_update_anzeigezone(soc, surplus, cycle, zone):
     d = _display()
-    d.update("de", soc, 20, "1", False, surplus, cycle)
+    d.update("de", soc, 20, "1", False, surplus, cycle, True)
     assert d.zone == zone
     assert d.zone_label == i18n.translate("de", f"zone_{zone}")
 
@@ -39,7 +39,7 @@ def test_update_anzeigezone(soc, surplus, cycle, zone):
 ])
 def test_update_modusschluessel(mode, at_rest, key):
     d = _display()
-    d.update("de", 60, 20, mode, at_rest, False, False)
+    d.update("de", 60, 20, mode, at_rest, False, False, True)
     assert d.mode_key == key
 
 
