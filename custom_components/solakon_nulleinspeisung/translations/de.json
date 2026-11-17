@@ -16,7 +16,7 @@
         "title": "Solakon ONE — Entitäten zuordnen",
         "description": "Ordne die Solakon ONE Entitäten zu.\n\nAlle weiteren Parameter (PI, Zonen, AC Laden, Tarif, Überschuss …) werden **im Sidebar-Panel** konfiguriert.\n\n[Dokumentation]({hint})",
         "data": {
-          "instance_name": "📛 Instanzname (z.B. Speicher 1)",
+          "instance_name": "📛 Instanzname (Standard: Gerätename, ohne Gerät Speicher 1)",
           "grid_power_sensor": "🔌 Netz-Leistungssensor (z.B. Shelly 3EM)",
           "actual_power_sensor": "⚡ Ist-Leistung des Wechselrichters",
           "solar_power_sensor": "☀️ Solarleistung (PV-Erzeugung)",
@@ -52,7 +52,7 @@
     "step": {
       "init": {
         "title": "Solakon ONE — Gerät wählen",
-        "description": "Wähle das Solakon-Gerät dieser Instanz. Ersetzt werden nur Zuweisungen, deren Entität es nicht gibt; bestehende bleiben. Für einen Gerätewechsel die Felder im nächsten Schritt von Hand ändern oder eine neue Instanz anlegen.",
+        "description": "Wähle das Solakon-Gerät dieser Instanz. Ersetzt werden nur Zuweisungen, deren Entität es nicht gibt; bestehende bleiben. Für einen Gerätewechsel die Felder im nächsten Schritt von Hand ändern oder eine neue Instanz anlegen.\n\n[Dokumentation]({hint})",
         "data": {
           "device": "🔆 Solakon-Gerät"
         }

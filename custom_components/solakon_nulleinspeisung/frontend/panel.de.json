@@ -119,7 +119,7 @@
     },
     "zone3_limit": {
       "l": "Zone 3 SOC-Schwelle (%)",
-      "d": "SOC unterschreitet diesen Wert → Zone 3 (Sicherheitsstopp): Ausgangsleistung 0 W, Ruhemodus. Muss kleiner als Zone-1-Schwelle sein. AC Laden bleibt trotz Zone 3 möglich."
+      "d": "SOC auf oder unter diesem Wert → Zone 3 (Sicherheitsstopp): Ausgangsleistung 0 W, Ruhemodus. Muss kleiner als Zone-1-Schwelle sein. AC Laden bleibt trotz Zone 3 möglich."
     },
     "pv_reserve": {
       "l": "PV-Ladereserve (W)",
@@ -135,7 +135,7 @@
     },
     "discharge_max": {
       "l": "Max. Entladestrom Zone 1 (A)",
-      "d": "Entladestrom in Zone 1 und in der Ruhe in Modus 0. Zone 2, AC Laden und Tarif-Laden setzen automatisch 0 A. Surplus setzt 2 A."
+      "d": "Entladestrom in Zone 1 und in der Ruhe in Modus 0. Zone 2, die Ruhe in Modus 1, AC Laden, Tarif-Laden und Netz-Laden setzen automatisch 0 A. Surplus setzt 2 A."
     },
     "offset_1": {
       "l": "Offset Zone 1 (W)",
@@ -236,7 +236,7 @@
     },
     "tariff_cheap_entity": {
       "l": "Günstig-Schwelle dynamisch (optional lokal)",
-      "d": "Optionale input_number-Entität, überschreibt die statische Günstig-Schwelle. Speist die Tarif-Arbitrage (Tarif-Tab)."
+      "d": "Optionale Entität (sensor, input_number oder number), überschreibt die statische Günstig-Schwelle. Speist die Tarif-Arbitrage (Tarif-Tab)."
     },
     "tariff_exp_threshold": {
       "l": "Teuer-Schwelle (ct/kWh)",
@@ -244,7 +244,7 @@
     },
     "tariff_exp_entity": {
       "l": "Teuer-Schwelle dynamisch (optional lokal)",
-      "d": "Optionale input_number-Entität, überschreibt die statische Teuer-Schwelle. Speist die Tarif-Arbitrage (Tarif-Tab)."
+      "d": "Optionale Entität (sensor, input_number oder number), überschreibt die statische Teuer-Schwelle. Speist die Tarif-Arbitrage (Tarif-Tab)."
     },
     "tariff_dynamic_entities_note": {
       "d": "🔌 Optionale Entitäten „Günstig-Schwelle dynamisch“ / „Teuer-Schwelle dynamisch“ (Entitäten-Tab) überschreiben die Zahlenwerte oben, wenn gesetzt. Liefert eine solche Entität keine Zahl, gilt der Wert oben, mit Meldung."
@@ -468,7 +468,7 @@
     "zone1_state":"Zone 1 (Zyklus aktiv)",
     "zone2_state":"Zone 2",
     "rest_hdr":   "⚠️ Ruhezustand in Modus 1",
-    "rest_desc":  "Ruht die Regelung (Zone 3, Nacht, Tarifsperre, Batterievorrang, Lade-Ende oder Fall I ohne Zyklus, Rückkehr in Modus 1 in Tarifsperre oder Batterievorrang, Rücknahme bei Stillstand), steht das Gerät dann in Modus '1' mit 0 W statt in Modus '0'. Nur für Geräte, die in Modus '0' trotz App-Einstellung (0 W Standard-Ausgangsleistung, kein Smart Meter) nicht laden.",
+    "rest_desc":  "Ruht die Regelung (Zone 3, Nacht, Tarifsperre, Batterievorrang, Lade-Ende ohne Zyklus, Fall I bei Modus '3' ohne Lade-Session und ohne Zyklus, Rückkehr in Modus 1 in Tarifsperre oder Batterievorrang, Rücknahme bei Stillstand), steht das Gerät dann in Modus '1' mit 0 W statt in Modus '0'. Nur für Geräte, die in Modus '0' trotz App-Einstellung (0 W Standard-Ausgangsleistung, kein Smart Meter) nicht laden.",
     "rest_warn":  "Nicht empfohlener Hack: Das Gerät verlässt die Fernsteuerung nur noch bei ausgeschalteter Regelung.",
     "rest_toggle":"Ruhezustand in Modus 1 (0 W)"
   },
@@ -517,7 +517,7 @@
     "soc_switch_divergence_lbl":   "Divergenz-Schwelle (Prozentpunkte)",
     "soc_switch_divergence_desc":  "Die aktive Instanz entlädt exklusiv, bis ihr SOC seit Übernahme um diesen Wert gefallen ist — dann übernimmt die Instanz mit dem höchsten verbleibenden SOC. Kleinere Werte = häufigerer Wechsel, feinere Angleichung; größere Werte = seltenerer Wechsel, jede Instanz entlädt am Stück weiter runter. War die aktive Instanz zwischendurch in Zone 0 (Surplus), wird die Schwelle beim Verlassen von Zone 0 auf den aktuellen SOC neu verankert — zählt also nicht doppelt gegen das Budget.",
     "global_sensors_hdr":  "🌍 Globale Sensoren",
-    "global_sensors_desc": "Instanzübergreifende Vorgabe für Sensoren, die typischerweise für den ganzen Haushalt gelten (ein Wetter-/Solcast-Account, ein Stromtarif) — jede Instanz kann im jeweiligen Tab optional lokal überschreiben, sonst gilt dieser Wert. Der Punkt neben jedem Feld zeigt die Gültigkeit der Entity live (grün/gelb/rot).",
+    "global_sensors_desc": "Instanzübergreifende Vorgabe für Sensoren, die typischerweise für den ganzen Haushalt gelten (ein Wetter-/Solcast-Account, ein Stromtarif) — jede Instanz kann im Entitäten-Tab optional lokal überschreiben, sonst gilt dieser Wert. Der Punkt neben jedem Feld zeigt die Gültigkeit der Entity live (grün/gelb/rot).",
     "global_pv_today_lbl":     "PV-Vorhersage heute (kWh)",
     "global_pv_today_desc":   "Speist Surplus-Forecast-Erzwingung (Überschuss-Tab), Prognose-Unterdrückung (Tarif-Tab) und, zwischen 0–12 Uhr, die Zone-1-Nacht-Forcierung (Zonen-Tab), sofern keine Instanz lokal überschreibt.",
     "global_pv_today_ph":      "sensor.pv_forecast_today",
@@ -531,10 +531,10 @@
     "global_tariff_price_desc":"Speist die Tarif-Arbitrage (Tarif-Tab), sofern keine Instanz lokal überschreibt.",
     "global_tariff_price_ph":   "sensor.strompreis_ct_kwh",
     "global_tariff_cheap_lbl":  "Günstig-Schwelle dynamisch",
-    "global_tariff_cheap_desc":"Optionale input_number-Entität, überschreibt die statische Günstig-Schwelle, sofern keine Instanz lokal überschreibt.",
+    "global_tariff_cheap_desc":"Optionale Entität (sensor, input_number oder number), überschreibt die statische Günstig-Schwelle, sofern keine Instanz lokal überschreibt.",
     "global_tariff_cheap_ph":   "input_number.tarif_guenstig",
     "global_tariff_exp_lbl":    "Teuer-Schwelle dynamisch",
-    "global_tariff_exp_desc":  "Optionale input_number-Entität, überschreibt die statische Teuer-Schwelle, sofern keine Instanz lokal überschreibt.",
+    "global_tariff_exp_desc":  "Optionale Entität (sensor, input_number oder number), überschreibt die statische Teuer-Schwelle, sofern keine Instanz lokal überschreibt.",
     "global_tariff_exp_ph":     "input_number.tarif_teuer",
     "unsaved":            "Ungespeicherte Änderungen",
     "save":               "💾 Speichern"

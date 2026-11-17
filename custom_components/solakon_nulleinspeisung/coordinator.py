@@ -845,7 +845,8 @@ class SolakonCoordinator:
         blocked = False
         if mode in (MODE_DISCHARGE, MODE_AC_CHARGE):
             blocked = await self._run_pi_phase(cs, soc, mode, core.timer, pos, limits, ac_offset)
-            # Die Rücknahme bei Stillstand nimmt die Instanz aus dem Entlade-Pool.
+            # Die Rücknahme bei Stillstand nimmt die Instanz aus dem Entlade-Pool: mit Ruhe in Modus 1
+            # sofort über `resting`, mit Ruhemodus 0 erst, wenn der Select den neuen Modus meldet.
             self._refresh_position(pos, limits, cs, soc)
 
         # ── 12. Anzeige und Flag-Speicherung ─────────────────────────────────

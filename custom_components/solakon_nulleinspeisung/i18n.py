@@ -144,8 +144,8 @@ _TEXTS: dict[str, dict[str, str]] = {
         "en": "Case H: AC charging end",
     },
     "act_fall_i": {
-        "de": "Fall I: Safety-Korrektur (Modus 3 ohne Session)",
-        "en": "Case I: safety correction (mode 3 without session)",
+        "de": "Fall I: Safety-Korrektur (Modus 3 ohne Lade-Session)",
+        "en": "Case I: safety correction (mode 3 without charging session)",
     },
     "act_fall_i_session": {
         "de": "Fall I: Safety-Korrektur (Lade-Session ohne Modus 3)",
@@ -190,8 +190,8 @@ _TEXTS: dict[str, dict[str, str]] = {
         "en": "SOC limits invalid (surplus threshold must be > Zone 1)",
     },
     "err_soc_zone1_force": {
-        "de": "SOC-Limits ungültig (Zone-1-Forcierung-Mindest-SOC muss zwischen Zone3 und Zone1 liegen)",
-        "en": "SOC limits invalid (Zone 1 forcing minimum SOC must lie between Zone 3 and Zone 1)",
+        "de": "SOC-Limits ungültig (Nacht-Forcierung-Mindest-SOC muss zwischen Zone3 und Zone1 liegen)",
+        "en": "SOC limits invalid (Night forcing minimum SOC must lie between Zone 3 and Zone 1)",
     },
     "err_core_sensor": {
         "de": "Sensor {sensor!r} nicht verfügbar oder ohne Zahlenwert",
@@ -252,20 +252,20 @@ _TEXTS: dict[str, dict[str, str]] = {
         "en": "PV forecast: sensor {sensor!r} has no numeric value (allowed are sensor, input_number, number) — function inactive",
     },
     "err_zone1_force_no_sensor": {
-        "de": "Zone-1-Forcierung: Kein PV-Vorhersage-Sensor konfiguriert — Funktion inaktiv",
-        "en": "Zone 1 forcing: no PV forecast sensor configured — function inactive",
+        "de": "Nacht-Forcierung: Kein PV-Vorhersage-Sensor konfiguriert — Funktion inaktiv",
+        "en": "Night forcing: no PV forecast sensor configured — function inactive",
     },
     "err_zone1_force_sensor_unavailable": {
-        "de": "Zone-1-Forcierung: Sensor {sensor!r} nicht verfügbar",
-        "en": "Zone 1 forcing: sensor {sensor!r} unavailable",
+        "de": "Nacht-Forcierung: Sensor {sensor!r} nicht verfügbar",
+        "en": "Night forcing: sensor {sensor!r} unavailable",
     },
     "err_zone1_force_sensor_not_numeric": {
-        "de": "Zone-1-Forcierung: Sensor {sensor!r} liefert keinen Zahlenwert — Funktion inaktiv",
-        "en": "Zone 1 forcing: sensor {sensor!r} has no numeric value — function inactive",
+        "de": "Nacht-Forcierung: Sensor {sensor!r} liefert keinen Zahlenwert — Funktion inaktiv",
+        "en": "Night forcing: sensor {sensor!r} has no numeric value — function inactive",
     },
     "err_zone1_force_sensor_wrong_domain": {
-        "de": "Zone-1-Forcierung: Sensor {sensor!r} liefert keinen Zahlenwert (erlaubt sind sensor, input_number, number) — Funktion inaktiv",
-        "en": "Zone 1 forcing: sensor {sensor!r} has no numeric value (allowed are sensor, input_number, number) — function inactive",
+        "de": "Nacht-Forcierung: Sensor {sensor!r} liefert keinen Zahlenwert (erlaubt sind sensor, input_number, number) — Funktion inaktiv",
+        "en": "Night forcing: sensor {sensor!r} has no numeric value (allowed are sensor, input_number, number) — function inactive",
     },
     "err_tariff_no_sensor": {
         "de": "Tarif: Kein Preis-Sensor konfiguriert — Tarif-Funktion inaktiv",

@@ -236,7 +236,7 @@ async def _ws_save_distribution_config(
 async def _ws_get_schema(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
 ) -> None:
-    """WS: Typ, Bereich und Schrittweite aller Settings, der Verteilung und ihrer Felder je Instanz, Domains der Entitätsfelder."""
+    """WS: Typ, Bereich und Schrittweite aller Settings und Verteilungsschlüssel, dazu die Domains, aus denen Zahlenwerte gelesen werden."""
     connection.send_result(msg["id"], {
         "settings":        {key: field._asdict() for key, field in SETTINGS_SCHEMA.items()},
         "distribution":    {key: field._asdict() for key, field in DIST_SCHEMA.items()},

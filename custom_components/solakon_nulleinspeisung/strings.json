@@ -16,7 +16,7 @@
         "title": "Solakon ONE — Entity Assignment",
         "description": "Assign your Solakon ONE entities.\n\nAll further parameters (PI, zones, AC charging, tariff, surplus …) are configured in the **sidebar panel**.\n\n[Documentation]({hint})",
         "data": {
-          "instance_name": "📛 Instance name (default: Speicher 1)",
+          "instance_name": "📛 Instance name (default: device name, without device Speicher 1)",
           "grid_power_sensor": "🔌 Grid power sensor (e.g. Shelly 3EM)",
           "actual_power_sensor": "⚡ Actual inverter output power",
           "solar_power_sensor": "☀️ Solar power (PV generation)",
@@ -52,7 +52,7 @@
     "step": {
       "init": {
         "title": "Solakon ONE — Select device",
-        "description": "Select the Solakon device of this instance. Only assignments whose entity does not exist are replaced; existing ones stay. To switch devices, change the fields in the next step by hand or create a new instance.",
+        "description": "Select the Solakon device of this instance. Only assignments whose entity does not exist are replaced; existing ones stay. To switch devices, change the fields in the next step by hand or create a new instance.\n\n[Documentation]({hint})",
         "data": {
           "device": "🔆 Solakon device"
         }
@@ -159,7 +159,7 @@
           "discharge": "INV Discharge PV Priority (PV-first discharge)",
           "ac_charge": "AC Charge",
           "disabled_regulation_off": "Disabled (control inactive)",
-          "rest_discharge": "Idle in INV Discharge (0 W, remote control stays active)",
+          "rest_discharge": "Rest in INV Discharge (0 W, remote control stays active)",
           "unknown": "Unknown mode"
         }
       },

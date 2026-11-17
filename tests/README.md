@@ -54,8 +54,8 @@ npm install --prefix tests/panel        # nur für den Panel-Vergleich (jsdom)
 ```
 
 Die Geräteseite der Attrappe folgt der offiziellen Geräte-Integration (Stand 1.7.0).
-`geraet.py` hält je genutzter Entity Default-ID (de/en), Einheit, `device_class`,
-`min`/`max`/`step` und Select-Optionen mit Beleg; es ist die einzige Quelle dafür und wird
+`geraet.py` hält je genutzter Entity Schlüssel, Domain, Einheit, `device_class`,
+`min`/`max`/`step`, `mode` und Select-Optionen, belegt im Klon; es ist die einzige Quelle dafür und wird
 eingecheckt. Die Attribute stehen als Standard an den Zuständen, ein Szenario kann sie
 überschreiben. `number.set_value` außerhalb `min`/`max` und unbekannte Select-Optionen
 bleiben ohne Wirkung, wie in HA ohne `blocking`. Geschrieben wird `int(value)`, auf `step`
@@ -97,7 +97,7 @@ titel: Kurzbeschreibung
 bezug: fix-2026-09-12-sollwert-ueber-entity-max   # Bugfix-Seite
 offen: true           # optional: Fehler noch nicht behoben, Szenario muss rot sein
 sprache: de           # de | en
-stunde: 3             # Uhrzeit (UTC) für Nachtlogik
+stunde: 3             # Stunde (UTC) für den Wechsel der Prognosequelle um 12 Uhr; ohne Angabe 12
 netz: 50              # sensor.grid; Zahl in W oder {wert, einheit, alter}
 sensoren:             # gemeinsame Entities mit voller ID
   sensor.preis: {wert: 8.0, einheit: ct/kWh}
