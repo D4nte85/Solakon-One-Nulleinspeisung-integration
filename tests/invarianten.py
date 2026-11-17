@@ -641,10 +641,10 @@ def k1(c: Ctx):
 def k2(c: Ctx):
     if not c.normal() or c.flags["allocated_power"] is None:
         return None
-    # Außerhalb des Pools vor und nach dem Regelzyklus; nach einem Poolwechsel zählt die Lage danach.
+    # Außerhalb des Pools nach dem Regelzyklus: Die Lage wird nach den Falls und nach der
+    # PI-Phase (Rücknahme bei Stillstand) neu übernommen.
     modus = c.modus()
-    vorher = (c.vorher.get(c.e(C.CONF_MODE_SELECT)) or {}).get("state")
-    draussen = (vorher == C.MODE_DISABLED or c.flags_vorher.get("resting")) and (modus == C.MODE_DISABLED or c.flags["resting"])
+    draussen = modus == C.MODE_DISABLED or c.flags["resting"]
     if draussen and c.flags["allocated_power"] > 0:
         return f"Instanz in Modus {modus!r}/Ruhe mit zugeteilter Leistung {c.flags['allocated_power']}"
 
