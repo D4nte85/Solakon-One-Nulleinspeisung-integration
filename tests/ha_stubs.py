@@ -7,6 +7,7 @@ jeweiligen FakeHass (siehe harness.py).
 from __future__ import annotations
 
 import copy
+import inspect
 import sys
 import types
 from datetime import datetime, timezone
@@ -108,7 +109,8 @@ class Store:
         self._write(data)
 
     def async_delay_save(self, data_func, delay=0):
-        self.hass.log_store("store_delay_save", self.key, data_func(), delay)
+        # Protokoll ohne Seiteneffekt: HA ruft `data_func` erst beim Schreiben auf.
+        self.hass.log_store("store_delay_save", self.key, inspect.unwrap(data_func)(), delay)
         self._pending = data_func
         self.due = self.hass.clock_now() + delay
         self.hass.pending_stores.add(self)

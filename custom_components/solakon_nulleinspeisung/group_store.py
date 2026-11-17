@@ -71,8 +71,8 @@ def store_for(hass: Any) -> GroupStore | None:
 def require_store(hass: Any) -> GroupStore:
     """Geladener Speicher aus dem Laufzeitzustand; RuntimeError, wenn er fehlt.
 
-    Der Speicher lebt, solange mindestens eine Instanz geladen ist (`async_load` im Setup,
-    Abräumen mit der letzten entladenen Instanz). Aufrufer außerhalb dieser Spanne laden ihn selbst.
+    Der Speicher lebt, solange ein Halter ihn hält (`runtime.acquire` im Setup und beim Löschen,
+    Abräumen mit dem letzten `runtime.release`). Aufrufer außerhalb dieser Spanne laden ihn selbst.
     """
     store = store_for(hass)
     if store is None:
@@ -199,7 +199,7 @@ class GroupStore:
             if reset:
                 scope = translate(self.hass.config.language, "dist_scope", grid=grid)
                 notify_reset(self.hass, f"{DOMAIN}_dist_reset_{grid}", scope, reset)
-        if groups != stored:
+        if groups != stored and self._dist_store is not None:
             self._dist_store.async_delay_save(lambda: groups, 0)
         return groups
 

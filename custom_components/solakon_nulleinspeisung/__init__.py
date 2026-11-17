@@ -30,7 +30,7 @@ _LOGGER = logging.getLogger(__name__)
 
 PANEL_JS_URL = f"/{DOMAIN}/panel.js"
 
-# Keine YAML-Konfiguration; async_setup liefert nur Panel und Übersetzungen aus.
+# Keine YAML-Konfiguration; async_setup registriert die WebSocket-Commands und liefert Panel-Skript und Übersetzungen aus.
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 # ── WebSocket Commands ───────────────────────────────────────────────────────
@@ -254,29 +254,12 @@ WS_COMMANDS = (
 
 # ── Setup / Teardown ─────────────────────────────────────────────────────────
 
-async def _drop_shared_data(hass: HomeAssistant) -> None:
-    """Ausstehendes Speichern der Netzgruppen schreiben, Instanzliste und Laufzeitzustand entfernen; nur ohne geladene Instanz aufrufen."""
-    if (store := group_store.store_for(hass)) is not None:
-        await store.async_write_pending()
-    hass.data.pop(DOMAIN, None)
-    runtime.drop(hass)
-
-
 async def _teardown(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Coordinator der Instanz beenden und austragen, Träger abgeben; mit der letzten Instanz Panel und Laufzeitzustand entfernen."""
-    from homeassistant.components.frontend import async_remove_panel
-
+    """Coordinator der Instanz beenden und austragen, dann den Laufzeitzustand freigeben (`runtime.release`)."""
     if (coord := hass.data.get(DOMAIN, {}).get(entry.entry_id)) is not None:
         await coord.async_shutdown()
         hass.data[DOMAIN].pop(entry.entry_id)
-    if (rt := runtime.peek(hass)) is None:
-        return
-    if rt.carriers is not None:
-        await rt.carriers.release(entry.entry_id)
-    if not hass.data.get(DOMAIN):
-        if rt.panel_registered:
-            async_remove_panel(hass, DOMAIN)
-        await _drop_shared_data(hass)
+    await runtime.release(hass, entry.entry_id)
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
@@ -307,11 +290,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Gruppen-Stores vor dem Coordinator laden: seine Trigger lesen globale Sensoren der Verteilung.
     # Kapazitätssensoren folgen dem Netzsensor ihres Eintrags.
+    # Scheitert das Setup nach dem Laden, gibt die Instanz den Laufzeitzustand wieder frei.
     try:
-        store = await group_store.async_load(hass)
-        await store.tidy_capacity()
-        coordinator = SolakonCoordinator(hass, entry)
-        await coordinator.async_setup()
+        store = await runtime.acquire(hass, entry.entry_id)
+        try:
+            await store.tidy_capacity()
+            coordinator = SolakonCoordinator(hass, entry)
+            await coordinator.async_setup()
+        except BaseException:
+            await runtime.release(hass, entry.entry_id)
+            raise
     except (HomeAssistantError, OSError) as ex:
         raise ConfigEntryNotReady(f"Solakon: Setup fehlgeschlagen: {ex}") from ex
 
@@ -364,8 +352,11 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
         await group_store.async_remove(hass)
         return
     # Läuft keine Instanz mehr (die übrigen sind deaktiviert), ist der Gruppenspeicher
-    # schon abgeräumt: für die Träger-Verwaltung laden und danach wieder entfernen.
-    await (await group_store.async_load(hass)).tidy_capacity()
-    await number.carriers(hass).assign(entry.data.get(CONF_GRID_SENSOR, ""))
-    if not hass.data.get(DOMAIN):
-        await _drop_shared_data(hass)
+    # schon abgeräumt: für die Träger-Verwaltung laden und danach wieder freigeben.
+    holder = f"remove:{entry.entry_id}"
+    store = await runtime.acquire(hass, holder)
+    try:
+        await store.tidy_capacity()
+        await number.carriers(hass).assign(entry.data.get(CONF_GRID_SENSOR, ""))
+    finally:
+        await runtime.release(hass, holder)

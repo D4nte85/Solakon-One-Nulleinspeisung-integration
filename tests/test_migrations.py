@@ -118,3 +118,19 @@ def test_entry_migration_nacht_forcierung_neue_unique_id_gleiche_entity_id():
     assert reg.entities == {eid: ("binary_sensor", DOMAIN, "entry_a_forecast_zone1_forced")}
     assert reg.async_get_entity_id("binary_sensor", DOMAIN, "entry_a_zone1_forced") is None
     assert entry.minor_version == 3
+
+
+def test_direktes_speichern_ueberholt_den_ausstehenden_auftrag():
+    hass, store = _setup()
+    store.async_delay_save(lambda: {"stand": "alt"}, 5)
+    asyncio.run(store.async_save({"stand": "neu"}))
+    asyncio.run(store.async_write_pending())
+    assert h.stored(hass, f"{DOMAIN}_entry_a") == {"stand": "neu"}
+
+
+def test_loeschen_verwirft_den_ausstehenden_auftrag():
+    hass, store = _setup()
+    store.async_delay_save(lambda: {"stand": "alt"}, 5)
+    asyncio.run(store.async_remove())
+    asyncio.run(store.async_write_pending())
+    assert f"{DOMAIN}_entry_a" not in hass.storage

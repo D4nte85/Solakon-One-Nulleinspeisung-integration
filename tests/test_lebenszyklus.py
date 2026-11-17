@@ -474,6 +474,25 @@ def test_programmierfehler_im_setup_bleibt_ein_fehler(monkeypatch):
         _run(u.setup("a"))
 
 
+
+def test_geloeschte_instanz_nach_gescheitertem_setup_hinterlaesst_keinen_gruppenspeicher(monkeypatch):
+    """F3: Scheitert das Setup nach dem Laden des Gruppenspeichers, darf er das Löschen nicht überleben."""
+    u = Umgebung("ab")
+    u.hass.config_entries.entries.remove(u.entries["b"])   # b wird erst nach dem Löschen von a angelegt
+    h.put_store(u.hass, DIST_KEY, {"sensor.grid": {"global_max_power": 500}})
+
+    async def kaputt(self):
+        raise h.ha_stubs.HomeAssistantError("Sensor fehlt")
+    with monkeypatch.context() as m:
+        m.setattr(h.coordinator_mod.SolakonCoordinator, "async_setup", kaputt)
+        with pytest.raises(h.ha_stubs.ConfigEntryNotReady):
+            _run(u.setup("a"))
+    _run(u.remove("a"))
+    assert DIST_KEY not in u.hass.storage
+    u.hass.config_entries.entries.append(u.entries["b"])
+    _run(u.setup("b"))
+    assert u.coord("b").group.dist_cfg()["global_max_power"] == C.DIST_SCHEMA["global_max_power"].default
+
 def test_gescheitertes_entladen_der_plattformen_laesst_die_instanz_laufen(monkeypatch):
     u = Umgebung("a")
     _run(u.setup("a"))

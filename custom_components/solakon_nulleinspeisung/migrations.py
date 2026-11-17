@@ -1,6 +1,8 @@
 """Speichermigrationen: je Speicher eine Store-Klasse, je Version ein Schritt."""
 from __future__ import annotations
 
+import functools
+
 import logging
 
 from homeassistant.core import HomeAssistant
@@ -103,23 +105,34 @@ class SolakonStore(Store):
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self._pending = None
+        self._queued = None
 
     def async_delay_save(self, data_func, delay: float = 0) -> None:
         """Wie `Store.async_delay_save`; merkt den Auftrag bis zu seinem Schreiben vor."""
 
+        @functools.wraps(data_func)
         def write():
             """Auftrag als geschrieben vermerken und die Daten liefern."""
-            self._pending = None
+            self._queued = None
             return data_func()
 
-        self._pending = write
+        self._queued = write
         super().async_delay_save(write, delay)
+
+    async def async_save(self, data) -> None:
+        """Wie `Store.async_save`; ein ausstehender Auftrag ist damit überholt."""
+        self._queued = None
+        await super().async_save(data)
+
+    async def async_remove(self) -> None:
+        """Wie `Store.async_remove`; ein ausstehender Auftrag entfällt mit der Datei."""
+        self._queued = None
+        await super().async_remove()
 
     async def async_write_pending(self) -> None:
         """Ausstehenden Auftrag jetzt schreiben; ohne Auftrag nichts."""
-        if self._pending is not None:
-            await self.async_save(self._pending())
+        if self._queued is not None:
+            await self.async_save(self._queued())
 
 
 class SolakonSettingsStore(SolakonStore):
