@@ -130,7 +130,12 @@ class FakeStates:
             self._states.pop(entity_id, None)
             return
         attrs = {**self.defaults.get(entity_id, {}), **(attributes or {})}
-        self._states[entity_id] = FakeState(entity_id, state, attrs, last_updated)
+        new = FakeState(entity_id, state, attrs, last_updated)
+        # Wie HA: Gleicher Zustand mit gleichen Attributen rückt nur `last_reported` vor.
+        old = self._states.get(entity_id)
+        if last_updated is None and old is not None and (old.state, old.attributes) == (new.state, new.attributes):
+            new.last_updated = old.last_updated
+        self._states[entity_id] = new
 
 
 class FakeServices:
@@ -150,7 +155,7 @@ class FakeServices:
             # Geräte-Integration schreibt int(value) ins Register, Rückmeldung per Poll
             self.hass.states.set(eid, _num(int(float(value)) if geraet else value), attrs)
             for follower, sign in self.hass.followers.get(eid, ()):
-                # sign 0: Sensor meldet frisch, bleibt aber auf seinem Wert stehen
+                # sign 0: Sensor meldet neu (last_reported), bleibt aber auf seinem Wert stehen
                 prev = self.hass.states.get(follower)
                 new = prev.state if sign == 0 and prev else _num(sign * float(value))
                 self.hass.states.set(follower, new, prev.attributes if prev else {})

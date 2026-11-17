@@ -20,12 +20,14 @@ class Actual(NamedTuple):
     """Schnappschuss des Ist-Sensors.
 
     `power`: Ist-Leistung in W, 0 ohne Zahl. `ok`: State vorhanden und nicht
-    unknown/unavailable. `updated`: `last_updated` als Unix-Zeit, None ohne State.
+    unknown/unavailable. `updated`: `last_updated` (letzte Wertänderung), `reported`:
+    `last_reported` (letzte Meldung, auch mit gleichem Wert), je als Unix-Zeit, None ohne State.
     """
 
     power: float
     ok: bool
     updated: float | None
+    reported: float | None
 
 
 class Stall(enum.Enum):
@@ -76,9 +78,9 @@ class Output:
         return actual, abs(actual - (-target if ac_charge_mode else target))
 
     def _polled_since_write(self) -> bool:
-        """True, wenn der Ist-Sensor seit dem letzten Schreibbefehl neu gepollt hat."""
-        updated = self._read().updated
-        return updated is not None and updated >= self.last_ts
+        """True, wenn der Ist-Sensor seit dem letzten Schreibbefehl neu gemeldet hat, auch mit gleichem Wert."""
+        reported = self._read().reported
+        return reported is not None and reported >= self.last_ts
 
     # ── Schreiben: Ausgangsleistung ──────────────────────────────────────────
 

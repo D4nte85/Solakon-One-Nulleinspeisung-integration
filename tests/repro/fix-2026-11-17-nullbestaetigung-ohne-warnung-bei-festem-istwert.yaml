@@ -1,0 +1,26 @@
+titel: Nullbestätigung ohne Warnung, wenn die Ist-Leistung nach 0 W auf festem Wert stehen bleibt
+bezug: fix-2026-11-17-nullbestaetigung-ohne-warnung-bei-festem-istwert
+# Einzelbetrieb, Zyklus in Zone 1 mit 300 W. SOC fällt unter die Zone-3-Schwelle → Fall B schreibt 0 W.
+# Das Gerät folgt nicht und meldet bei jedem Poll weiter 300 W (folgt_ist 0): in HA rückt dann nur
+# last_reported vor, last_updated bleibt stehen.
+# Erwartet: zwei Nachschreibversuche mit Warnung, danach warn_output_zero_unconfirmed.
+stunde: 12
+netz: 0
+instanzen:
+  - prefix: a
+    settings:
+      regulation_enabled: true
+      zone3_limit: 20
+    flags: {cycle_active: true}
+    sensoren: {soc: 15, solar: 0, ist: 300, modus: "1", leistung: 300}
+    folgt_ist: 0
+schritte:
+  - nach: 0
+erwartet:
+  - schritt: 1
+    aufruf: {entity: a.leistung, wert: 0}
+  - schritt: 1
+    log: erneuter Schreibversuch 2/2
+  - schritt: 1
+    instanz: a
+    zustand_nicht: {last_error: ""}

@@ -225,6 +225,7 @@ class SolakonCoordinator:
         return Actual(
             self.actual_power(), self._entity_ok(eid),
             state.last_updated.timestamp() if state is not None else None,
+            state.last_reported.timestamp() if state is not None else None,
         )
 
     # ── Lesen: Sensor-Vorgaben ───────────────────────────────────────────────

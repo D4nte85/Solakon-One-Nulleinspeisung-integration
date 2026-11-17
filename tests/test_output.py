@@ -15,7 +15,7 @@ def _output(written: list[float]):
     async def write(value):
         written.append(value)
 
-    actual = output_mod.Actual(power=500.0, ok=True, updated=h.CLOCK.now)
+    actual = output_mod.Actual(power=500.0, ok=True, updated=h.CLOCK.now, reported=h.CLOCK.now)
     return output_mod.Output(write, lambda: actual, lambda key, params: None)
 
 
@@ -43,11 +43,13 @@ def test_adaptive_wartezeit_wartet_hoechstens_die_wartezeit():
 class Ist:
     """Veränderlicher Ist-Sensor für `Output`."""
 
-    def __init__(self, power: float, ok: bool = True, updated: float | None = None):
+    def __init__(self, power: float, ok: bool = True, updated: float | None = None,
+                 reported: float | None = None):
         self.power, self.ok, self.updated = power, ok, updated
+        self.reported = updated if reported is None else reported
 
     def __call__(self):
-        return output_mod.Actual(self.power, self.ok, self.updated)
+        return output_mod.Actual(self.power, self.ok, self.updated, self.reported)
 
 
 def _output_mit(ist: Ist, written: list[float], warnings: list | None = None):
@@ -106,12 +108,13 @@ def test_nullung_ohne_ist_sensor_wird_nicht_geprueft():
 
 @pytest.mark.parametrize("frisch, warnung", [(True, ["warn_output_zero_unconfirmed"]), (False, [])])
 def test_nullung_nicht_bestaetigt_schreibt_zweimal_neu(frisch, warnung):
+    """Frisch ist eine Meldung nach dem Schreibbefehl (`last_reported`), auch wenn der Wert seit langem steht."""
     written: list[float] = []
     warnings: list = []
-    ist = Ist(300.0, True, None)
+    ist = Ist(300.0, True, h.CLOCK.now - 1000)
     out = _output_mit(ist, written, warnings)
     out.begin_cycle(0, False, 2)
-    ist.updated = h.CLOCK.now + (1 if frisch else -1000)
+    ist.reported = h.CLOCK.now + (1 if frisch else -1000)
     asyncio.run(out.set_and_wait(0))
     assert written == [0, 0, 0]
     assert warnings == warnung

@@ -11,6 +11,10 @@ importiert. Drei Schichten nutzen das:
 | Reproduktion | einen Fehlervorgang als benanntes Szenario abspielen | `python tests/repro.py tests/repro/<name>.yaml` |
 | Panel | Render-Vergleich von `solakon-panel.js` gegen einen git-Stand | `python tests/panel/vergleich.py [REV]` |
 
+Zustände folgen Home Assistant: Setzen mit gleichem Zustand und gleichen Attributen rückt nur
+`last_reported` vor, `last_updated` bleibt stehen. Ein Ist-Sensor mit `folgt_ist: 0` meldet also
+neu, gilt für die Stillstandserkennung aber als unverändert.
+
 `Store` und Tasks folgen Home Assistant (`helpers/storage.py`). `hass.storage[key]` hält den
 Umschlag wie die Datei in `.storage` (`version`, `minor_version`, `data`): Tests legen Stände
 über `h.put_store` ab und lesen sie über `h.stored`. Laden migriert ältere Versionen über

@@ -8,6 +8,7 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 ### Behoben
 
 - **Surplus-Ende bei von außen gesetztem Modus 3:** Stand der Modus beim Ende von Surplus ohne Lade-Session auf '3', behielt 0B ihn. Die Instanz blieb einen Regelzyklus mit 0 W in Modus 3, erst Fall I kehrte im nächsten Regelzyklus in Modus 1 zurück. Jetzt schreibt 0B in diesem Fall sofort Modus 1 (`zones.py`).
+- **Nullbestätigung ohne Warnung bei festem Ist-Wert:** Blieb die Ist-Leistung nach dem Schreiben von 0 W auf demselben Wert stehen, rückte in HA nur `last_reported` vor. Die Prüfung, ob der Ist-Sensor seit dem Schreibbefehl neu gemeldet hat, las `last_updated` und hielt den Wert für veraltet: Die Integration schrieb nach, meldete aber nie `warn_output_zero_unconfirmed`. Jetzt zählt jede Meldung des Sensors, auch mit gleichem Wert; die Stillstandserkennung prüft weiter die letzte Wertänderung (`output.py`, `coordinator.py`).
 - **Timer bei Fall I ohne Moduswechsel:** Beendete Fall I eine Lade-Session, deren Modus nicht '3' war, schaltete er auch ohne Sperre den Timer um. Das kostete einen Schreibbefehl und eine Sekunde Wartezeit. Jetzt schaltet die Rückkehr in Modus 1 den Timer nur, wenn sie einen Modus schreibt (`zones.py`).
 
 ### Geändert
