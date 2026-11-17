@@ -1,6 +1,7 @@
 """Zonenentscheidung: Regelzustand, Ruhezustand, Prognoselage, Surplus und Nachtabschaltung als Eingaben, dann welcher Fall in diesem Regelzyklus greift, ohne ihn auszuführen."""
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass, field
 
 from .const import (
@@ -133,34 +134,39 @@ def _rest(inp: ZoneInputs, otherwise: str | None = None, when: bool = True) -> d
 
 
 def _return_to_discharge(
-    inp: ZoneInputs, cycle: bool, surplus: bool, otherwise: str | None = MODE_DISCHARGE,
-    session: bool = False,
-) -> tuple[bool, dict]:
-    """Rückkehr in Modus 1 nach einem Fall: (gesperrt, Ziel für `Transition`).
+    inp: ZoneInputs, flags: FlagUpdate | None = None, *, surplus: bool, session: bool = False,
+    output: float | None = 0, keep_mode: bool = False,
+) -> Transition:
+    """Rückkehr in Modus 1 nach einem Fall: Übergang mit Integral-Reset, Ziel, Timer und Folgen der Sperre.
 
-    Gesperrt bei Tarifsperre oder Batterievorrang nach dem Fall; dann Ruhezustand.
-    Sonst Ruhezustand, wenn `cycle` False ist, und `otherwise` mit laufendem Zyklus.
-    `surplus` und `session` sind Surplus und Lade-Session nach dem Fall; eine laufende
-    Lade-Session sperrt nicht.
+    Gesperrt bei Tarifsperre oder Batterievorrang nach dem Fall: Ruhezustand, Zyklus aus,
+    Ausgangsleistung 0. Sonst mit `keep_mode` der bisherige Modus, außer Modus '3' ohne
+    Lade-Session, der in Modus 1 zurückführt; ohne `keep_mode` Ruhezustand ohne Zyklus,
+    mit Zyklus Modus 1. Der Timer schaltet nur mit einem geschriebenen Modus.
+    `flags`, `surplus` und `session` sind die Flags, Surplus und Lade-Session nach dem Fall;
+    eine laufende Lade-Session sperrt nicht.
     """
     locked = not session and (
         inp.tariff.discharge_locked(False, surplus)
         or (inp.charging_to_target and inp.cs.battery_priority)
     )
-    return locked, _rest(inp, otherwise, locked or not cycle)
+    if locked:
+        target = _rest(inp)
+        flags = dataclasses.replace(flags or FlagUpdate(), cycle_active=False)
+        output = 0
+    elif keep_mode:
+        stray_ac = inp.mode == MODE_AC_CHARGE and not session
+        target = {"mode": MODE_DISCHARGE if stray_ac else None}
+    else:
+        target = _rest(inp, MODE_DISCHARGE, not inp.cycle_active)
+    return Transition(reset_integral=True, flags=flags, output=output,
+                      timer=target["mode"] is not None, **target)
 
 
 def _end_charge(name: str, action_key: str, inp: ZoneInputs) -> FallDecision:
-    """Lade-Session beenden: Integral, Session, Output 0, Rückkehrmodus, Aktionstext.
-
-    Ziel aus `_return_to_discharge`; gesperrt endet auch der Zyklus.
-    """
-    locked, target = _return_to_discharge(inp, inp.cycle_active, inp.surplus_active)
-    return FallDecision(name, Transition(
-        reset_integral=True,
-        flags=FlagUpdate(session=SESSION_NONE, cycle_active=False if locked else None),
-        output=0,
-        **target,
+    """Lade-Session beenden: Rückkehr in Modus 1 mit Ausgangsleistung 0, Aktionstext."""
+    return FallDecision(name, _return_to_discharge(
+        inp, FlagUpdate(session=SESSION_NONE), surplus=inp.surplus_active,
     ), action_key)
 
 
@@ -349,11 +355,9 @@ def decide(inp: ZoneInputs) -> FallDecision | None:
     # Austritt bei erfüllter Austritts-Bedingung, deaktivierter Überschuss-Option oder Aufladen.
     if inp.surplus_active and (not inp.cs.surplus_enabled or not inp.new_surplus or charging):
         # Gesperrt in den Ruhezustand, sonst Zone nach Overlay-Ende aus dem SOC ableiten
-        locked, target = _return_to_discharge(inp, True, False, otherwise=None, session=session)
-        return FallDecision("0B", Transition(
-            reset_integral=True,
-            flags=FlagUpdate(surplus_active=False, cycle_active=False if locked else soc > zone1),
-            output=0, timer=locked, **target,
+        return FallDecision("0B", _return_to_discharge(
+            inp, FlagUpdate(surplus_active=False, cycle_active=soc > zone1),
+            surplus=False, session=session, keep_mode=True,
         ), "act_surplus_off")
 
     # ── Fall A: Zone 1 Start ─────────────────────────────────────────────────
@@ -525,21 +529,15 @@ def decide(inp: ZoneInputs) -> FallDecision | None:
         return _end_charge("H", "act_fall_h", inp)
 
     # ── Fall I: Safety — Modus und Lade-Session widersprechen sich ───────────
-    # Zwei Richtungen: Modus '3' ohne Session, und Session ohne Modus '3'.
-    # Im ersten Zweig endet die Session; der Modus bleibt, außer gesperrt (Ruhezustand).
+    # Zwei Richtungen: Lade-Session ohne Modus '3', und Modus '3' ohne Session.
+    # Bei Lade-Session ohne Modus '3' endet die Session; der Modus bleibt, außer gesperrt (Ruhezustand).
     if session and mode != MODE_AC_CHARGE:
-        locked, target = _return_to_discharge(inp, True, inp.surplus_active, otherwise=None)
-        return FallDecision("I", Transition(
-            reset_integral=True,
-            flags=FlagUpdate(session=SESSION_NONE, cycle_active=False if locked else None),
-            output=0 if locked else None, **target,
+        return FallDecision("I", _return_to_discharge(
+            inp, FlagUpdate(session=SESSION_NONE), surplus=inp.surplus_active,
+            output=None, keep_mode=True,
         ), "act_fall_i_session")
     if mode == MODE_AC_CHARGE and not session:
-        locked, target = _return_to_discharge(inp, inp.cycle_active, inp.surplus_active)
-        return FallDecision("I", Transition(
-            reset_integral=True, output=0,
-            flags=FlagUpdate(cycle_active=False) if locked else None, **target,
-        ), "act_fall_i")
+        return FallDecision("I", _return_to_discharge(inp, surplus=inp.surplus_active), "act_fall_i")
 
     # ── Fall E: Zone 2 Start ─────────────────────────────────────────────────
     if (

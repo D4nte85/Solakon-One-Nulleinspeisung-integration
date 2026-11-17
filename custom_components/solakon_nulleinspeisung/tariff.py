@@ -45,7 +45,7 @@ class TariffState:
         return not self.below_exp
 
     def discharge_locked(self, charging: bool, surplus: bool) -> bool:
-        """Tarifsperre für D, TM und die Anzeige: Preis unter der Teuer-Schwelle, keine Lade-Session, kein Überschuss."""
+        """Tarifsperre für D, TM, die Rückkehr in Modus 1 und die Anzeige: Preis unter der Teuer-Schwelle, keine Lade-Session, kein Überschuss."""
         return self.below_exp and not charging and not surplus
 
 

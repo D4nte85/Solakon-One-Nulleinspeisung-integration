@@ -1,0 +1,24 @@
+titel: Surplus-Austritt bei von außen gesetztem Modus 3 ohne Lade-Session — Modus 3 bleibt einen Regelzyklus stehen
+bezug: fix-2026-11-16-ladeende-in-tarifsperre-entlaedt
+# Einzelbetrieb, Surplus aktiv, Modus von außen auf '3' gestellt, keine Lade-Session.
+# Im selben Regelzyklus endet Surplus (Überschuss-Option aus) → 0B greift vor Fall I.
+# Vorher behielt 0B den Modus; die Entladeregelung schrieb in Modus 3 nur 0 W (Fehler-Anteil 0
+# außerhalb des Entlade-Pools), erst Fall I im nächsten Regelzyklus kehrte in Modus 1 zurück.
+# Erwartet: 0B kehrt im selben Regelzyklus in Modus 1 zurück.
+stunde: 12
+netz: 300
+instanzen:
+  - prefix: a
+    settings:
+      regulation_enabled: true
+      surplus_enabled: false
+      hard_limit_z0: 800
+      hard_limit_z1: 800
+    flags: {cycle_active: true, surplus_active: true}
+    sensoren: {soc: 96, solar: 400, ist: 0, modus: "3", leistung: 0}
+    folgt_ist: 1
+schritte:
+  - nach: 0
+erwartet:
+  - schritt: 1
+    aufruf: {entity: a.modus, wert: "1"}

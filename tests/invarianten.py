@@ -401,8 +401,8 @@ def f3(c: Ctx):
     if c.prefix != "a" or len(c.alle) < 2 or not c.dist or not c.runde_vollstaendig:
         return None
     gesamt = c.dist["global_max_power"]
-    summe = sum((fl.get("allocated_power") or 0) for cfg, fl, nach in c.alle.values()
-                if (nach.get(cfg[C.CONF_MODE_SELECT]) or {}).get("state") == C.MODE_DISCHARGE)
+    # Verteilt wird nur auf Mitglieder im Entlade-Pool; ein ruhendes Mitglied in Modus 1 zählt nicht.
+    summe = sum((c.alle[p][1].get("allocated_power") or 0) for p in c.alle if _im_entlade_pool(c, p))
     if summe > gesamt + 1e-6:
         return f"Σ Limits {summe} > Gesamtleistung {gesamt}"
 
@@ -565,6 +565,21 @@ def j6(c: Ctx):
         return None
     if c.modus() == C.MODE_DISCHARGE and (c.leistung() or 0) > 0:
         return f"Batterievorrang bei SOC {c.soc()}: Modus 1 mit {c.leistung()} W (Fall {c.flags['active_fall']!r})"
+
+
+def j7(c: Ctx):
+    # Rückkehr in Modus 1 in Tarifsperre oder Batterievorrang: Ruhezustand ohne Zyklus, nichts über 0 W.
+    # Die Tarifsperre gilt wie gemeldet, damit auch Schwellen-Entitäten und globale Preise zählen.
+    if not c.normal() or c.aus_seit is not None or not _fall_neu(c, "H", "HT", "HN", "0B", "I"):
+        return None
+    if c.flags["surplus_active"] or c.lade_session():
+        return None
+    if not (c.flags["discharge_locked"] or _batterievorrang(c)):
+        return None
+    ueber_null = [a[4] for a in c.schreibt(c.e(C.CONF_ACTIVE_POWER)) if float(a[4]) > 0]
+    if not c.flags["resting"] or c.flags["cycle_active"] or ueber_null:
+        return (f"Fall {c.flags['active_fall']} gesperrt: resting={c.flags['resting']}, "
+                f"cycle_active={c.flags['cycle_active']}, Schreibbefehle über 0 W {ueber_null}")
 
 
 def j3(c: Ctx):

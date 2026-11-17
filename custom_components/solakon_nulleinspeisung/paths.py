@@ -89,7 +89,7 @@ def decide(inp: PathInputs) -> PathDecision:
         return PathDecision(FIXED, cs.grid_charge_power, "act_grid_charge_power", ac_charge_mode=True)
 
     capped = inp.cap_reason if inp.cycle_active and inp.mode == MODE_DISCHARGE else ""
-    dynamic_max = limits.pi_max(inp.mode, inp.cycle_active, inp.solar, bool(inp.cap_reason))
+    dynamic_max = limits.pi_max(inp.cycle_active, inp.solar, bool(inp.cap_reason))
     gate = gate_discharge(inp.grid, inp.current_power, inp.target_offset, dynamic_max, cs.tolerance)
     if gate == STEP and not cs.pi_enabled:
         value = setpoint.value(inp.grid - inp.target_offset, inp.discharge, inp.discharge_pool,

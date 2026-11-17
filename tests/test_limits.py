@@ -50,9 +50,8 @@ def test_surplus_power(surplus, solar, actual, erwartet):
 @pytest.mark.parametrize("ac, erwartet", [(700, 700), (MAX, MAX), (1500, MAX)])
 def test_ac_grenze_gedeckelt(ac, erwartet):
     lim = _limits(ac_power_limit=ac, allocated=300.0)
-    assert lim.ac == erwartet
     # Die Zuteilung des Entlade-Pools begrenzt das AC-Laden nicht
-    assert lim.pi_max(const.MODE_AC_CHARGE, cycle_active=True, solar=0.0) == erwartet
+    assert lim.ac == erwartet
 
 
 @pytest.mark.parametrize("z0, z1, erwartet", [(800, 600, 800), (500, 900, 900), (1500, 600, 1500)])
@@ -63,7 +62,7 @@ def test_export_aus_panel_werten(z0, z1, erwartet):
 
 def test_zone1_ohne_pv_bezug():
     lim = _limits(allocated=500.0)
-    assert lim.pi_max(const.MODE_DISCHARGE, cycle_active=True, solar=0.0) == 500
+    assert lim.pi_max(cycle_active=True, solar=0.0) == 500
 
 
 @pytest.mark.parametrize("solar, erwartet", [
@@ -74,13 +73,13 @@ def test_zone1_ohne_pv_bezug():
     (2000.0, 600),     # Zone-1/2-Limit deckelt die PV-Grenze
 ])
 def test_zone2_pv_minus_reserve(solar, erwartet):
-    assert _limits().pi_max(const.MODE_DISCHARGE, cycle_active=False, solar=solar) == erwartet
+    assert _limits().pi_max(cycle_active=False, solar=solar) == erwartet
 
 
 @pytest.mark.parametrize("solar, erwartet", [(0.0, 0), (300.0, 250.0), (2000.0, 600)])
 def test_zone1_bei_ladender_schwester_wie_zone2(solar, erwartet):
     lim = _limits()
-    assert lim.pi_max(const.MODE_DISCHARGE, cycle_active=True, solar=solar, pv_capped=True) == erwartet
+    assert lim.pi_max(cycle_active=True, solar=solar, pv_capped=True) == erwartet
 
 
 
@@ -99,4 +98,4 @@ def test_pv_cap_reason(sister, charging, priority, erwartet):
 
 def test_zone2_durch_zuteilung_gedeckelt():
     lim = _limits(allocated=300.0)
-    assert lim.pi_max(const.MODE_DISCHARGE, cycle_active=False, solar=2000.0) == 300
+    assert lim.pi_max(cycle_active=False, solar=2000.0) == 300

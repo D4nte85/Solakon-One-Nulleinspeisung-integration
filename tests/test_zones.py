@@ -170,7 +170,8 @@ def test_gt_startet_nicht_neben_laufender_ac_session():
 
 def test_i_loescht_flags_und_laesst_modus_stehen():
     d = _decide(ac_enabled=True, session="ac_charge", mode="1", at_rest=False)
-    assert d.transition == zones.Transition(reset_integral=True, flags=zones.FlagUpdate(session="none"))
+    assert d.transition == zones.Transition(reset_integral=True, flags=zones.FlagUpdate(session="none"),
+                                            timer=False)
     assert d.action == "act_fall_i_session"
 
 
@@ -527,3 +528,36 @@ def test_i_session_ohne_modus_3_gesperrt_ruht_ohne_zyklus(lock):
 def test_i_modus_3_ohne_session_ungesperrt_kehrt_in_modus_1_zurueck():
     d = _decide(mode="3", at_rest=False, cycle_active=True, soc=65)
     assert d.transition == zones.Transition(reset_integral=True, output=0, mode="1")
+
+
+END_CHARGE = [
+    pytest.param(dict(ac_enabled=False, session="ac_charge"), "H", id="H"),
+    pytest.param(dict(tariff_enabled=False, session="tariff_charge"), "HT", id="HT"),
+    pytest.param(dict(grid_charge_enabled=False, session="grid_charge"), "HN", id="HN"),
+]
+
+
+@pytest.mark.parametrize("lock", LOCKS)
+@pytest.mark.parametrize("end, name", END_CHARGE)
+def test_end_charge_gesperrt_ruht_ohne_zyklus(lock, end, name):
+    d = _decide(**{**lock, **end}, mode="3", at_rest=False, cycle_active=True, soc=65)
+    assert d.name == name
+    assert d.transition == zones.Transition(
+        reset_integral=True, flags=zones.FlagUpdate(session="none", cycle_active=False),
+        output=0, mode="0", rest=True)
+
+
+def test_0b_modus_3_ohne_session_kehrt_in_modus_1_zurueck():
+    """0B bei von außen gesetztem Modus 3 ohne Lade-Session behält den Modus nicht."""
+    d = _decide(surplus_active=True, cycle_active=True, mode="3", at_rest=False, soc=70)
+    assert d.name == "0B"
+    assert d.transition == zones.Transition(
+        reset_integral=True, flags=zones.FlagUpdate(surplus_active=False, cycle_active=True),
+        output=0, mode="1")
+
+
+def test_0b_ungesperrt_behaelt_modus_ohne_timer():
+    d = _decide(surplus_active=True, cycle_active=True, mode="1", at_rest=False, soc=70)
+    assert d.transition == zones.Transition(
+        reset_integral=True, flags=zones.FlagUpdate(surplus_active=False, cycle_active=True),
+        output=0, timer=False)

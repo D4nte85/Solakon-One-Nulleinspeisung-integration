@@ -5,6 +5,15 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+### Behoben
+
+- **Surplus-Ende bei von außen gesetztem Modus 3:** Stand der Modus beim Ende von Surplus ohne Lade-Session auf '3', behielt 0B ihn. Die Instanz blieb einen Regelzyklus mit 0 W in Modus 3, erst Fall I kehrte im nächsten Regelzyklus in Modus 1 zurück. Jetzt schreibt 0B in diesem Fall sofort Modus 1 (`zones.py`).
+- **Timer bei Fall I ohne Moduswechsel:** Beendete Fall I eine Lade-Session, deren Modus nicht '3' war, schaltete er auch ohne Sperre den Timer um. Das kostete einen Schreibbefehl und eine Sekunde Wartezeit. Jetzt schaltet die Rückkehr in Modus 1 den Timer nur, wenn sie einen Modus schreibt (`zones.py`).
+
+### Geändert
+
+- **Rückkehr in Modus 1 als ein Übergang:** Ruhezustand, Zyklusende und 0 W bei Sperre bildet die Rückkehr selbst, statt dass 0B, Fall I und das Lade-Ende sie je einzeln setzen. Die Obergrenze der Entladeregelung kennt keinen Sonderfall für Modus 3 mehr (`zones.py`, `limits.py`, `paths.py`).
+
 ## [3.9.2] – 2026-11-16
 
 ### Behoben
