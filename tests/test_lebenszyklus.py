@@ -217,6 +217,50 @@ def test_entladen_schreibt_ausstehendes_speichern_nach_der_frist():
     assert h.stored(u.hass, _key(u.entries["a"]))["cycle_active"] is True
 
 
+def _haengender_regelzyklus(coord, tor: asyncio.Event):
+    """Regelzyklus, der schreibt, an `tor` wartet wie in `set_and_wait`, dann weiterschreibt und speichert."""
+    power = coord.entry.data[C.CONF_ACTIVE_POWER]
+
+    async def zyklus():
+        await coord.hass.services.async_call("number", "set_value", {"entity_id": power, "value": 100})
+        await tor.wait()
+        await coord.hass.services.async_call("number", "set_value", {"entity_id": power, "value": 200})
+        coord.cycle_active = True
+        coord.schedule_save()
+    coord._run_regulation_cycle = zyklus
+
+
+@pytest.mark.parametrize("loeschen", [False, True])
+def test_entladen_wartet_den_laufenden_regelzyklus_ab(loeschen):
+    u = Umgebung("ab")
+    tor = asyncio.Event()
+
+    async def lauf():
+        await u.setup("a", "b")
+        coord = u.coord("a")
+        _haengender_regelzyklus(coord, tor)
+        regel = asyncio.ensure_future(coord._async_regulate())
+        await asyncio.sleep(0)
+        weg = asyncio.ensure_future(u.remove("a") if loeschen else u.unload("a"))
+        for _ in range(5):
+            await asyncio.sleep(0)
+        tor.set()
+        await weg
+        marke = len(u.hass.events)
+        await regel
+        await coord._async_regulate()
+        await u.frist_abwarten()
+        return marke
+
+    marke = _run(lauf())
+    danach = [e for e in u.hass.events[marke:] if e[0] in ("call", "store_delay_save", "store_write")]
+    assert danach == []
+    if loeschen:
+        assert _key(u.entries["a"]) not in u.hass.storage
+    else:
+        assert h.stored(u.hass, _key(u.entries["a"]))["cycle_active"] is True
+
+
 # ── Löschen ──────────────────────────────────────────────────────────────────
 
 def test_loeschen_entfernt_settings_store_der_instanz():

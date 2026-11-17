@@ -184,6 +184,7 @@ class SolakonCoordinator:
             lambda: self._entity_ok(self.entry.data[CONF_TIMEOUT_COUNTDOWN]),
         )
         self._lock = asyncio.Lock()
+        self._stopped = False   # gesetzt von async_shutdown; danach startet kein Regelzyklus mehr
         self._listeners: list[Callable[[], None]] = []
         self.trackers = Trackers(
             hass, lambda: self.settings, self._effective, self._on_trigger,
@@ -602,12 +603,14 @@ class SolakonCoordinator:
         self._unsub_dist = require_store(self.hass).listen_dist(self.grid_sensor, self.apply_group_change)
 
     async def async_shutdown(self) -> None:
-        """Listener abräumen, ausstehendes Speichern sofort schreiben."""
-        self.trackers.stop()
-        if self._unsub_dist is not None:
-            self._unsub_dist()
-            self._unsub_dist = None
-        await self._store.async_write_pending()
+        """Keinen Regelzyklus mehr starten, den laufenden abwarten, Listener abräumen, ausstehendes Speichern sofort schreiben."""
+        self._stopped = True
+        async with self._lock:
+            self.trackers.stop()
+            if self._unsub_dist is not None:
+                self._unsub_dist()
+                self._unsub_dist = None
+            await self._store.async_write_pending()
 
     async def async_update_settings(self, changes: dict[str, Any]) -> None:
         """Änderungen prüfen, mit der Kopplung von Zielladen und Regelung übernehmen und speichern.
@@ -690,11 +693,11 @@ class SolakonCoordinator:
         self.request_regulation()
 
     async def _async_regulate(self) -> None:
-        """Regelzyklus unter dem Lock; läuft bereits einer, entfällt dieser Aufruf.
+        """Regelzyklus unter dem Lock; läuft bereits einer oder ist die Instanz beendet, entfällt dieser Aufruf.
 
-        Eine Exception wird geloggt und beendet nur diesen Zyklus.
+        Eine Exception wird geloggt und beendet nur diesen Regelzyklus.
         """
-        if self._lock.locked():
+        if self._stopped or self._lock.locked():
             return
         async with self._lock:
             try:
