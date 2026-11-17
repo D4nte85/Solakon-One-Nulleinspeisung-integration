@@ -382,7 +382,6 @@ class SolakonPanel extends HTMLElement {
       this._loadTranslations().then(() => {
         this._build();
         this._loadInstances();
-        this._polling = setInterval(() => this._loadStatus(), 1000);
       });
     }
   }
@@ -476,11 +475,14 @@ class SolakonPanel extends HTMLElement {
       this._groupInfo = [];
       this._computeGroups();
       this._renderInstBar();
+      this._setInstanceChrome(false);
       const c = this.shadowRoot.getElementById("content");
       if (c) c.innerHTML = `<p style="font-size:.88em;color:var(--error-color,#db4437);padding:12px 0">${this._t.status?.instances_load_error || ""}</p>`;
       return;
     }
     this._computeGroups();
+    // Abfrage im Sekundentakt erst mit geladener Instanzliste, sonst fehlt ihr die entry_id.
+    this._polling ??= setInterval(() => this._loadStatus(), 1000);
     if (this._instances.length > 0 && !this._activeInstance) {
       this._activeInstance = this._instances[0].entry_id;
       this._entryId        = this._instances[0].entry_id;
@@ -506,8 +508,9 @@ class SolakonPanel extends HTMLElement {
   }
 
   // Netzgruppen aus get_groups; Instanzen in der Reihenfolge der Instanzliste. Eine Instanz,
-  // die dort fehlt (Rückfall ohne WS), bildet eine eigene Gruppe. Anzeigename ist der Bereich
-  // des Netzsensors, sonst sein Anzeigename, sonst die Entity-ID — der Schlüssel bleibt die Entity-ID.
+  // die dort fehlt (zwischen den beiden parallelen Abfragen geladen), bildet eine eigene Gruppe.
+  // Anzeigename ist der Bereich des Netzsensors, sonst sein Anzeigename, sonst die Entity-ID —
+  // der Schlüssel bleibt die Entity-ID.
   // `isGroup`: mindestens zwei eingerichtete Instanzen, auch nicht geladene (deaktivierte).
   _computeGroups() {
     const info = (this._groupInfo || []).map(g => ({ ...g, members: new Set(g.members) }));
@@ -1724,12 +1727,12 @@ ${this._textsMissing ? `
   async _saveDistConfig() {
     const gk      = this._distGroupKey();
     const buf     = this._distBuf(gk);
-    const changes = { ...buf.dirty };
-    const merged  = buf.merged();
+    const sent    = { ...buf.dirty };
+    const saved   = buf.merged();
     const toast   = this._t.toast || {};
     await this._wsAction(async () => {
-      await this._hass.callWS({ type: `${DOMAIN}/save_distribution_config`, grid_sensor: gk, distribution: changes });
-      buf.reset(merged, true);
+      await this._hass.callWS({ type: `${DOMAIN}/save_distribution_config`, grid_sensor: gk, distribution: sent });
+      buf.commit(saved, sent);
       this._showToast(toast.dist_saved || "");
       this._rerenderDist();
     });

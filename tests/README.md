@@ -173,8 +173,9 @@ Regellauf einer Instanz: Eingänge davor, Schreibbefehle, Zustand danach.
 `tests/panel/render.cjs` lädt `index.html` mit dem echten Panel in jsdom und nimmt über eine
 feste Aktionsfolge rund 500 Schnappschüsse des Shadow-DOM auf: 4 Szenarien × 2 Sprachen,
 alle Tabs, Eingaben, Validierungspunkt (Zahl, Text, fehlende Entity), Speichern, Debug-Schalter,
-Verteilung, Wettläufe mit Instanzwechsel, Eingabe während des Speicherns, Fehlerpfade und
-ein scheiterndes Laden der Instanzliste beim Start. Überlappende Statusabfragen stehen als
-Liste der WS-Aufrufe im Schnappschuss `status/ueberlappend`. `vergleich.py` rendert einen git-Stand
+Verteilung, Wettläufe mit Instanzwechsel, Eingabe während des Speicherns (Einstellungen und
+Verteilung), Fehlerpfade und ein scheiterndes Laden der Instanzliste beim Start. Überlappende
+Statusabfragen stehen als Liste der WS-Aufrufe im Schnappschuss `status/ueberlappend`, ob nach dem
+gescheiterten Start die Sekundenabfrage läuft, in `start-fehler/sekundenabfrage`. `vergleich.py` rendert einen git-Stand
 und den Arbeitsstand, jeweils mit den Panel- und Entity-Texten dieses Stands, und zeigt die
 Unterschiede; `--ignoriere REGEX` blendet bewusste Änderungen aus.

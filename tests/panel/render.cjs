@@ -2,7 +2,7 @@
 // schreibt je Schritt das normalisierte Shadow-DOM:  node render.cjs <panel.js> <out.json> [textwurzel]
 // Textwurzel: Verzeichnis, aus dem fetch Panel- und Entity-Texte lädt (Standard: Repo).
 // Abgedeckt: 4 Szenarien × 2 Sprachen, alle Tabs, Eingaben, Speichern, Debug-Schalter,
-// Verteilung, Wettläufe mit Instanzwechsel, Eingabe während des Speicherns, überlappende
+// Verteilung, Wettläufe mit Instanzwechsel, Eingabe während des Speicherns (Einstellungen und Verteilung), überlappende
 // Statusabfragen, Fehlerpfade, scheiterndes Laden der Instanzliste. Poll-Timer und Toast-Timer sind
 // abgeschaltet, WS-Antworten im Wettlauf laufen über eine Warteschlange — deterministisch.
 const fs = require("fs"), path = require("path");
@@ -46,7 +46,7 @@ async function run(scenario, lang, startFehler = false) {
     url: `http://localhost/?scenario=${scenario}&lang=${lang}`, runScripts: "dangerously", pretendToBeVisual: true,
     beforeParse(win) {
       win.Date.now = () => 1_800_000_000_000;
-      win.setInterval = () => 0;
+      win.setInterval = () => { win.__intervalle = (win.__intervalle || 0) + 1; return 0; };
       const st = win.setTimeout.bind(win); win.setTimeout = (fn, ms, ...a) => ms === 3000 ? 0 : st(fn, ms, ...a);
       win.fetch = async (url) => {
         let rel = url.replace(/^\//, "");
@@ -80,6 +80,7 @@ async function run(scenario, lang, startFehler = false) {
   if (startFehler) {
     await settle(); clearInterval(p._polling);
     await shot("start-fehler");
+    shots.push([`${scenario}/${lang}/start-fehler/sekundenabfrage`, `gestartet: ${win.__intervalle ? "ja" : "nein"}`]);
     win.close();
     return shots;
   }
@@ -214,6 +215,19 @@ async function run(scenario, lang, startFehler = false) {
   const dist = instTabs().find(t => t.textContent.includes("⚖"));
   if (dist) { click(dist); await settle(); const sel = sr.querySelector('#content select'); if (sel) { sel.value = "soc"; fire(sel, "change"); await settle(); click([...sr.querySelectorAll("#content button")].pop()); await shot("err/dist-save"); } }
   p._hass.callWS = okWS;
+  // Eingabe während eines laufenden Speicherns der Verteilung (zuletzt: bleibt auf der Verteilungsseite)
+  const distTab = instTabs().find(t => t.textContent.includes("⚖"));
+  if (distTab) {
+    const q = queueWS();
+    click(distTab); await q.flush();
+    const modus = sr.querySelector('#content select[data-dist-key="distribution_mode"]');
+    if (modus) { modus.value = "soc"; fire(modus, "change"); }
+    click([...sr.querySelectorAll("#content button")].pop()); await settle();
+    const zahl = sr.querySelector('#content input[type="number"][data-dist-key]');
+    if (zahl) { zahl.value = "12"; fire(zahl, "change"); }
+    await q.flush(); await shot("save/verteilung-eingabe-waehrend-speichern");
+    q.restore();
+  }
   win.close();
   return shots;
 }
