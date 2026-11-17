@@ -5,6 +5,8 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+## [3.9.4] – 2026-11-17
+
 ### Behoben
 
 - **Gleichzeitiger Wechsel in die Entladung bei mehreren Instanzen (Issue #58):** Wechselten mehrere Instanzen einer Netzgruppe im selben Moment per Fall in Modus 1, rechnete jede ihren ersten PI-Schritt sofort mit der Netzmeldung von vor dem Wechsel. Weil die Selects nacheinander '1' meldeten, sah jede einen anderen Entlade-Pool, die Fehler-Anteile summierten sich über 1, und `pi_base` zählte die Sollwerte, die Schwestern auf dieselbe Netzmeldung hin schon geschrieben hatten, ein zweites Mal. Die Gruppe gab etwa das 2,7-Fache des Bedarfs ab, mit Stellwertrechnung das 1,8-Fache. Jetzt regelt eine Instanz nach einem Moduswechsel erst mit der nächsten Netzmeldung (über der Obergrenze senkt sie sofort), und `pi_base` zählt die Schwestern mit ihrem Sollwert zum Zeitpunkt der Netzmeldung, auch im Dauerbetrieb (`paths.py`, `coordinator.py`, `grid_group.py`, `output.py`).
