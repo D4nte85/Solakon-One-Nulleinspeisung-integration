@@ -20,7 +20,6 @@ from .coordinator import SolakonCoordinator
 from .entity_base import SolakonEntity, device_info
 
 
-
 class SettingNumber(SolakonEntity, NumberEntity):
     """Setzt einen ganzzahligen Settings-Eintrag der Instanz; Bereich und Schritt aus dem Panelfeld."""
 

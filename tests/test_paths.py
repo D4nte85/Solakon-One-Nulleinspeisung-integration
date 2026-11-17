@@ -32,10 +32,12 @@ def _decide(**over):
     return paths.decide(paths.PathInputs(**{**BASE, "cs": cs, **over}))
 
 
-def test_deckel_nur_im_zyklus_in_modus_1():
-    for over in (dict(cycle_active=False), dict(mode="3")):
-        d = _decide(grid=200.0, cap_reason="sister_charging", **over)
-        assert d.kind == paths.PI_STEP and d.step.action == "act_pi"
+def test_deckel_hinweis_folgt_der_grenze():
+    # Ohne Zyklus deckelt die PV schon ohne Grund: kein Hinweis. Im Zyklus deckelt erst der Grund,
+    # auch bei veraltetem Modus '3' nach Fall I.
+    for over, action in ((dict(cycle_active=False), "act_pi"), (dict(mode="3"), "act_pi_sister_charging")):
+        d = _decide(grid=200.0, cap_reason="sister_charging", solar=450.0, current_power=300.0, **over)
+        assert (d.kind, d.step.limit, d.step.action) == (paths.PI_STEP, 400.0, action)
 
 
 def test_deckel_begrenzt_auf_pv_minus_reserve():

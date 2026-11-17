@@ -23,6 +23,7 @@ STORAGE_KEY_SOC_SWITCH     = f"{DOMAIN}_soc_switch_state"
 STORAGE_VERSION_NUMBERS = 1
 STORAGE_KEY_NUMBERS     = f"{DOMAIN}_group_numbers"
 
+
 def _soc_switch_group_state(stored: dict) -> dict:
     """Laufzeitzustand einer Netzgruppe im Modus `soc_switch` aus dem gespeicherten Stand."""
     return {

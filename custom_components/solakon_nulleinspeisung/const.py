@@ -259,7 +259,6 @@ class Field(NamedTuple):
     choices: tuple[str, ...] = ()
 
 
-
 def _int(default: int, hard: tuple, lo: int, hi: int, step: int) -> Field:
     """Ganzzahl-Setting mit harten Grenzen und Anzeigebereich."""
     return Field(default, "int", *hard, (lo, hi, step))

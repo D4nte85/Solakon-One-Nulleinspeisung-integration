@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from . import setpoint
-from .const import MODE_DISCHARGE, SESSION_AC, SESSION_GRID, SESSION_TARIFF
+from .const import SESSION_AC, SESSION_GRID, SESSION_TARIFF
 from .limits import PowerLimits
 from .pi import SATURATED, STEP, PiStep, gate_discharge
 from .schema import CycleSettings
@@ -23,7 +23,7 @@ class PathInputs:
     """Schnappschuss, Grenzen, Zustand, Messwerte, Offsets und Anteile der PI-Phase.
 
     `cap_reason` ist der Grund des PV-Deckels laut `limits.pv_cap_reason`, leer ohne Deckel;
-    `decide` schaltet ihn auf Zyklus und Modus '1'.
+    `decide` nennt ihn im Aktionstext nur im Zyklus, wo erst er die Grenze auf PV minus Reserve setzt.
     """
 
     cs: CycleSettings
@@ -67,7 +67,7 @@ def decide(inp: PathInputs) -> PathDecision:
 
     Entladen schreibt nach dem Gate einen PI-Schritt, bei ausgeschaltetem `pi_enabled`
     stattdessen den Stellwert auf Ist-Basis (Bedarf Netz − Offset, ohne Mindestleistung).
-    Obergrenze ist `limits.pi_max`. Der PV-Deckel gilt im Zyklus in Modus '1' und wählt
+    Obergrenze ist `limits.pi_max`. Mit Grund gilt der PV-Deckel auch im Zyklus und wählt dort
     über seinen Grund (`sister_charging`, `house_priority`) den Aktionstext.
     """
     cs, limits = inp.cs, inp.limits
@@ -88,7 +88,7 @@ def decide(inp: PathInputs) -> PathDecision:
     if inp.session == SESSION_GRID:
         return PathDecision(FIXED, cs.grid_charge_power, "act_grid_charge_power", ac_charge_mode=True)
 
-    capped = inp.cap_reason if inp.cycle_active and inp.mode == MODE_DISCHARGE else ""
+    capped = inp.cap_reason if inp.cycle_active else ""
     dynamic_max = limits.pi_max(inp.cycle_active, inp.solar, bool(inp.cap_reason))
     gate = gate_discharge(inp.grid, inp.current_power, inp.target_offset, dynamic_max, cs.tolerance)
     if gate == STEP and not cs.pi_enabled:
