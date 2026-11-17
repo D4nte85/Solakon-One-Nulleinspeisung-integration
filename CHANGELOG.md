@@ -19,6 +19,7 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ### Geändert
 
+- **Texte nach dem Code:** Der Integral-Decay greift laut PI-Hilfetext immer, wenn die Entladeregelung nicht schreibt; die Überschussleistung ist auch bis zum ersten Regelzyklus unbekannt; Hard-Limit-Werte über der Gerätegrenze werden abgewiesen statt gedeckelt. Im Options-Schritt heißt der Ist-Sensor wie beim Einrichten, PV- und Entladestrom-Feld nennen alle Verwendungen. Englisch: „Control active“ statt „Regulation active“, die Prognose-Unterdrückung betrifft Tarif-Laden und Tarifsperre, Instanzname mit Vorbelegung „Speicher 1“ (`README.md`, `panel.*.json`, `strings.json`, `translations/*.json`, `index.html`).
 - **Rückkehr in Modus 1 als ein Übergang:** Ruhezustand, Zyklusende und 0 W bei Sperre bildet die Rückkehr selbst, statt dass 0B, Fall I und das Lade-Ende sie je einzeln setzen. Die Obergrenze der Entladeregelung kennt keinen Sonderfall für Modus 3 mehr (`zones.py`, `limits.py`, `paths.py`).
 
 ## [3.9.2] – 2026-11-16

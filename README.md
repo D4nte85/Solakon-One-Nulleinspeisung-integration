@@ -337,7 +337,7 @@ SOC-Zonenlogik mit allen Leistungs- und Offset-Parametern.
 | Zone 1 SOC-Schwelle (%) | SOC über diesem Wert → Zone 1 (aggressiv) | 40–60 |
 | Zone 3 SOC-Schwelle (%) | SOC auf oder unter diesem Wert → Zone 3 (Stopp) | 15–25 |
 | Max. Entladestrom (A) | Entladestrom in Zone 1 und in der Ruhe in Modus `'0'` (Zone 2 = 0 A, Surplus = 2 A) | 25–40 |
-| Hard Limit Z0 — Surplus (W) | Ausgangsleistungs-Obergrenze in Zone 0 (Surplus). Typisch: gesetzliches Maximum (z. B. 800 W). Höhere Werte als die Gerätegrenze des Solakon ONE (1200 W, `DEVICE_MAX_POWER`) werden darauf gedeckelt — auch als Entität `number.solakon_one_zone_0_limit` | 800 |
+| Hard Limit Z0 — Surplus (W) | Ausgangsleistungs-Obergrenze in Zone 0 (Surplus). Typisch: gesetzliches Maximum (z. B. 800 W). Höhere Werte als die Gerätegrenze des Solakon ONE (1200 W, `DEVICE_MAX_POWER`) werden beim Speichern abgewiesen — auch als Entität `number.solakon_one_zone_0_limit` | 800 |
 | Hard Limit Z1 — Entladung (W) | Ausgangsleistungs-Obergrenze in Zone 1 und Zone 2. In Zone 2 gilt `min(Z1, max(0, PV − Reserve))`. Wird als `max(Z0, Z1)` in die optionale Export-Limit-Entität geschrieben — auch als Entität `number.solakon_one_zone_1_2_limit` | 800 |
 | Zone 1 Offset (W) | Statischer Zielwert in Zone 1. Bei aktivem Dyn. Offset überschrieben, bei Dunkelheit mit aktiviertem Nacht-Offset ersetzt | 20–50 |
 | Zone 2 Offset (W) | Statischer Zielwert in Zone 2 | 10–30 |
@@ -705,7 +705,7 @@ Alle Entitätsnamen kommen aus den Übersetzungen und erscheinen in der Sprache 
 | `sensor.solakon_one_netz_standardabweichung` | Sensor | Netz-Stabw. in W über das konfigurierte Fenster (getrimmt, falls konfiguriert); Rohwert als Attribut `stddev_raw` |
 | `sensor.solakon_one_aktiver_fall` | Sensor | Zuletzt ausgeführter Fall als übersetzter Enum-Sensor — der Zustandswert ist der kleingeschriebene Fall-Schlüssel (`0a`, `a`, `b`, … `tm`, `ze`, `gn`, `hn`, `zb`), die Anzeige kommt aus den Übersetzungen |
 | `sensor.solakon_one_pi_integral` | Sensor | Aktueller I-Anteil des PI-Reglers |
-| `sensor.solakon_one_uberschussleistung` | Sensor | Verwertbarer PV-Überschuss in W — `min(aktuell geltendes Hard-Limit, PV-Leistung) − Ist-Leistung`, geklemmt auf ≥0. Zeigt die Leistung, die bis zum aktuellen Hard-Limit bzw. zur verfügbaren Sonne noch ausgegeben werden könnte, ohne den Akku zu belasten — z. B. für eine Automation, die bei Überschuss einen Zusatzverbraucher schaltet. Bei ausgeschalteter Regelung unbekannt |
+| `sensor.solakon_one_uberschussleistung` | Sensor | Verwertbarer PV-Überschuss in W — `min(aktuell geltendes Hard-Limit, PV-Leistung) − Ist-Leistung`, geklemmt auf ≥0. Zeigt die Leistung, die bis zum aktuellen Hard-Limit bzw. zur verfügbaren Sonne noch ausgegeben werden könnte, ohne den Akku zu belasten — z. B. für eine Automation, die bei Überschuss einen Zusatzverbraucher schaltet. Bei ausgeschalteter Regelung und bis zum ersten Regelzyklus unbekannt |
 | `switch.solakon_one_regelung_aktiv` | Switch | Hauptschalter — aktiviert/deaktiviert den Schreibteil |
 | `switch.solakon_one_tarif_steuerung_aktiv` | Switch | Tarif-Steuerung ein/aus — derselbe Schalter wie im **Tarif**-Tab des Panels, aus Dashboard, Skript und Automation heraus bedienbar. Beim Ausschalten endet eine laufende Tarif-Lade-Session im nächsten Regelzyklus (Fall HT) |
 | `switch.solakon_one_zielladen` | Switch | Zielladen ein/aus — derselbe Schalter wie im **Zielladen**-Tab. Gekoppelt mit „Regelung aktiv“, siehe [Zielladen](#-zielladen) |
@@ -883,7 +883,7 @@ Instanzen werden automatisch nach ihrem Netz-Leistungssensor in [Netzgruppen](#n
 Die Auswahl filtert auf `device_class: power`. Template- und Hilfssensoren, die erst eine Summe bilden (z. B. die drei Phasen eines Shelly 3EM), tragen diese Geräteklasse häufig nicht und erscheinen deshalb nicht in der Liste. Im Template-Sensor `device_class: power` und `unit_of_measurement: W` ergänzen, danach ist er auswählbar.
 
 **Im Formular steht „Unbekannte Entität ausgewählt“**
-Die zugewiesene Entität gibt es in HA nicht, etwa nach einer Umbenennung oder weil die Instanz vor dieser Version mit fest vorgegebenen IDs angelegt wurde. Unter *Entitäten anpassen* das Solakon-Gerät wählen; fehlende Zuweisungen werden aus dem Gerät ersetzt. Bietet die Liste kein Gerät an, ist die Solakon-ONE-Integration nicht eingerichtet (siehe Hinweis ganz oben).
+Die zugewiesene Entität gibt es in HA nicht, etwa nach einer Umbenennung oder weil die Instanz vor v3.8.0 (Geräteauswahl) mit fest vorgegebenen IDs angelegt wurde. Unter *Entitäten anpassen* das Solakon-Gerät wählen; fehlende Zuweisungen werden aus dem Gerät ersetzt. Bietet die Liste kein Gerät an, ist die Solakon-ONE-Integration nicht eingerichtet (siehe Hinweis ganz oben).
 
 **Zone 1 aktiv, aber die Instanz entlädt nicht („Batterieentladung gesperrt — Schwesterinstanz lädt“)**
 Eine andere Instanz am selben Netzsensor lädt gerade (AC Laden, Tarif-Laden oder Netz-Laden). Bis dahin speist diese Instanz nur PV − Reserve ein, damit keine Batterie die andere lädt. Endet das Laden, entlädt sie wieder normal.

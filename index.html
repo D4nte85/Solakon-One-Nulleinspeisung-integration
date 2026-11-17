@@ -40,7 +40,7 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
   Demo-Daten über ein Mock-hass-Objekt. Keine hartkodierte Nachbildung mehr —
   jede Änderung am echten Panel erscheint hier automatisch. Optional ?lang=en
   für die englische Übersetzung (real genutzte panel.en.json), ?scenario=
-  wählt eine der drei Instanz-Konfigurationen (siehe Schalter unten rechts).
+  wählt eine der vier Instanz-Konfigurationen (siehe Schalter unten rechts).
 -->
 <solakon-panel id="panel"></solakon-panel>
 <div id="scenario-switcher"></div>
@@ -105,8 +105,8 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
   // Demo-Instanzen regeln.
   const DEMO_SETTINGS = { ...DEFAULT_SETTINGS, regulation_enabled: true };
 
-  // Szenario-Auswahl für die Live-Vorschau — deckt die drei strukturell
-  // unterschiedlichen Panel-Zustände ab: "single" (1 Instanz, keine Instanz-
+  // Szenario-Auswahl für die Live-Vorschau — deckt die vier strukturell
+  // unterschiedlichen Panel-Zustände ab (dazu "single-sister" unten): "single" (1 Instanz, keine Instanz-
   // Leiste, kein Übersicht-/Verteilungs-Tab), "single-group" (Standard, 2
   // Instanzen an einem gemeinsamen Netzsensor) und "multi-group" (zusätzlich
   // eine dritte Instanz an einem zweiten Netzsensor — einzige Möglichkeit,
@@ -130,7 +130,7 @@ html,body{margin:0;padding:0;background:var(--primary-background-color);min-heig
       settings: { ...DEMO_SETTINGS, tariff_enabled: true, tariff_price_sensor: "sensor.tibber_price_current" },
       // Lädt per Tarif, damit der Lade-Chip im Status-Tab eingeschaltet zu sehen ist.
       status: mkStatus({ zone: 1, soc: 58, actual_power: -800, grid: 795, active_fall: "GT", cycle_active: true,
-                         charge_session: "tariff_charge", mode_key: "ac_charge", mode_label: "INV Charge" }),
+                         charge_session: "tariff_charge", mode_key: "ac_charge", mode_label: "AC Charge" }),
     },
     ...(!["single", "single-sister"].includes(SCENARIO) ? {
       demo_b: {
