@@ -5,6 +5,9 @@ import pytest
 
 from tests import harness as h
 
+# Klon der Geräteintegration (tests/README.md): eigene Tests, nicht Teil dieser Suite.
+collect_ignore = ["geraet-integration"]
+
 
 @pytest.fixture(autouse=True)
 def _offene_tasks_schliessen():

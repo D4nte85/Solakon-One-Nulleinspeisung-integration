@@ -2,11 +2,12 @@
 
 Die Regeln stammen aus der Verhaltensbeschreibung, nicht aus dem Code. Jede Regel ist eine
 Funktion `(ctx) -> str | None`, die nach einem Regelzyklus einer Instanz einen Verstoß meldet.
-`python tests/invarianten.py [regel ...]` zählt Verstöße je Regel mit Beispielszenarien.
+`python -m tests.invarianten [regel ...]` zählt Verstöße je Regel mit Beispielszenarien.
 """
 from __future__ import annotations
 
 import copy
+import math
 import sys
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -42,7 +43,7 @@ def zahl(snap: dict, eid: str, leistung: bool = False) -> float | None:
         val = float(st["state"])
     except ValueError:
         return None
-    if val != val:
+    if not math.isfinite(val):
         return None
     if leistung and st["attrs"].get("unit_of_measurement") == "kW":
         val *= 1000.0
@@ -72,9 +73,11 @@ class Ctx:
     aus_seit: int | None = None                    # Schritt, in dem die Regelung abgeschaltet wurde
     abgeschaltet_jetzt: bool = False
     runde_vollstaendig: bool = True                # alle Instanzen haben in dieser Runde geregelt
-    geregelt: dict = field(default_factory=dict)   # prefix -> Regelung an, vor diesem Zyklus
-    laedt: dict = field(default_factory=dict)      # prefix -> AC- oder Tarif-Laden aktiv, vor diesem Zyklus
-    im_pool: dict = field(default_factory=dict)    # prefix -> im Entlade-Pool, vor diesem Zyklus
+    # Je prefix erfasst nach dem Regelzyklus dieser Instanz: Schwestern, die in dieser Runde
+    # schon geregelt haben, im Stand danach, die übrigen im Stand davor.
+    geregelt: dict = field(default_factory=dict)   # prefix -> Regelung an
+    laedt: dict = field(default_factory=dict)      # prefix -> Lade-Session läuft
+    im_pool: dict = field(default_factory=dict)    # prefix -> im Entlade-Pool
 
     def e(self, key: str) -> str:
         return self.cfg[key]
@@ -398,13 +401,16 @@ def f2(c: Ctx):
 
 
 def f3(c: Ctx):
+    # Seit 2da9e27 bekommt auch ein einzelnes Mitglied im Entlade-Pool eine Zuteilung; es zählt mit.
     if c.prefix != "a" or len(c.alle) < 2 or not c.dist or not c.runde_vollstaendig:
         return None
     gesamt = c.dist["global_max_power"]
-    # Verteilt wird nur auf Mitglieder im Entlade-Pool; ein ruhendes Mitglied in Modus 1 zählt nicht.
-    summe = sum((c.alle[p][1].get("allocated_power") or 0) for p in c.alle if _im_entlade_pool(c, p))
-    if summe > gesamt + 1e-6:
-        return f"Σ Limits {summe} > Gesamtleistung {gesamt}"
+    pool = [p for p in c.alle if _im_entlade_pool(c, p)]
+    # Die geschriebene Ausgangsleistung prüft k8 je Instanz gegen ihre Zuteilung; Instanzen, die nach
+    # C2/C3 nicht schreiben, behalten ihren Wert und zählen dort bewusst nicht.
+    zugeteilt = sum((c.alle[p][1].get("allocated_power") or 0) for p in pool)
+    if zugeteilt > gesamt + 1e-6:
+        return f"Σ Zuteilungen {zugeteilt} > Gesamtleistung {gesamt}"
 
 
 def f4(c: Ctx):
@@ -753,6 +759,29 @@ def _im_entlade_pool(c: Ctx, p: str) -> bool:
         return False
     danach = (nach.get(cfg[C.CONF_MODE_SELECT]) or {}).get("state") == C.MODE_DISCHARGE and not fl.get("resting")
     return danach if p == c.prefix else danach and c.im_pool.get(p, False)
+
+
+def k9(c: Ctx):
+    # Allein im Entlade-Pool einer Netzgruppe mit mindestens zwei geladenen Instanzen.
+    if not c.normal() or not c.runde_vollstaendig or not _im_entlade_pool(c, c.prefix):
+        return None
+    gruppe = [p for p, (cfg, _, _) in c.alle.items() if cfg[C.CONF_GRID_SENSOR] == c.e(C.CONF_GRID_SENSOR)]
+    if len(gruppe) < 2:
+        return None
+    for p in gruppe:
+        cfg, fl, nach = c.alle[p]
+        danach = (nach.get(cfg[C.CONF_MODE_SELECT]) or {}).get("state") == C.MODE_DISCHARGE and not fl.get("resting")
+        # Eine Schwester, die in dieser Runde den Pool verlässt oder betritt, zählt für die Zuteilung mit.
+        if p != c.prefix and c.geregelt.get(p) and (danach or c.im_pool.get(p)):
+            return None
+    gesamt = (c.dist or C.DIST_DEFAULTS)[C.DIST_GLOBAL_MAX]
+    hard = c.settings[C.S_HARD_LIMIT_Z0 if c.flags["surplus_active"] else C.S_HARD_LIMIT_Z1]
+    soll = min(gesamt, hard, C.DEVICE_MAX_POWER)
+    zug, out = c.flags["allocated_power"], c.leistung() or 0
+    if zug is None or abs(zug - soll) > 1:
+        return f"allein im Entlade-Pool: zugeteilt {zug} statt {soll} W"
+    if out > zug + 1e-6:
+        return f"allein im Entlade-Pool: Ausgangsleistung {out} W > Zuteilung {zug} W"
 
 
 def k8(c: Ctx):

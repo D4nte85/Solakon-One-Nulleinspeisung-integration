@@ -13,6 +13,8 @@ import pytest
 from tests import invarianten as inv
 
 OFFEN = {
+    # F1: Im Regelzyklus von 0A/0B gilt die Zuteilung der alten Zone; Behebung in V3 der Design-Seite.
+    "k9": "2026-11-16-integration-architektur-review-14 (F1)",
 }
 
 
@@ -53,3 +55,34 @@ def test_j7_haelt_im_repro_und_schlaegt_bei_verstoss_an():
     assert inv.j7(dataclasses.replace(c, flags={**c.flags, "resting": False}))
     schreiben = ("call", "number", "set_value", c.e(inv.C.CONF_ACTIVE_POWER), 300)
     assert inv.j7(dataclasses.replace(c, aufrufe=[*c.aufrufe, schreiben]))
+
+
+def _mit_flags(c: inv.Ctx, **kw) -> inv.Ctx:
+    return dataclasses.replace(c, flags={**c.flags, **kw})
+
+
+def _mit_zuteilung_aller(c: inv.Ctx, wert: float) -> inv.Ctx:
+    alle = {p: (cfg, {**fl, "allocated_power": wert} if fl.get("allocated_power") is not None else fl, nach)
+            for p, (cfg, fl, nach) in c.alle.items()}
+    return dataclasses.replace(c, alle=alle)
+
+
+def _erster(regel, verstoss):
+    """Erster Regellauf aus `multi`, in dem `regel` hält und nach `verstoss` anschlägt."""
+    from tests import scenarios
+    for spec in scenarios.generate("multi"):
+        for c in inv.kontexte("multi", spec):
+            if inv.REGELN[regel](c) is None and inv.REGELN[regel](verstoss(c)):
+                return c
+    raise AssertionError(f"kein Regellauf, in dem {regel} greift")
+
+
+@pytest.mark.parametrize("regel, verstoss", [
+    ("f3", lambda c: _mit_zuteilung_aller(c, 10_000)),
+    ("k1", lambda c: _mit_flags(c, allocated_power=10_000)),
+    ("k2", lambda c: dataclasses.replace(_mit_flags(c, resting=True, allocated_power=100),
+                                         flags_vorher={**c.flags_vorher, "resting": True})),
+    ("k9", lambda c: _mit_flags(c, allocated_power=(c.flags["allocated_power"] or 0) + 50)),
+])
+def test_regel_schlaegt_an(regel, verstoss):
+    _erster(regel, verstoss)

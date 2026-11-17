@@ -76,9 +76,26 @@ def entity_id(schluessel: str, prefixe: list[str]) -> tuple[str, str | None]:
     raise SzenarioFehler(f"unbekannter Sensorschlüssel {schluessel!r}")
 
 
+SZENARIO_FELDER = {"titel", "bezug", "offen", "sprache", "stunde", "netz", "sensoren", "verteilung",
+                   "verteilung_netz", "instanzen", "schritte", "erwartet"}
+INSTANZ_FELDER = {"prefix", "netzsensor", "settings", "flags", "gespeichert", "sensoren", "integral",
+                  "folgt_ist", "export_limit", "vorheriger_ist"}
+ERWARTUNG_FELDER = {"schritt", "instanz", "zustand", "zustand_nicht", "aufruf", "kein_aufruf", "log"}
+BEDINGUNG_FELDER = {"entity", "wert", "wert_min", "wert_max"}
+
+
+def _nur_bekannte(feld: dict, erlaubt: set, wo: str) -> None:
+    """Unbekannte Schlüssel sind ein Szenariofehler, kein stilles Ignorieren."""
+    if unbekannt := set(feld) - erlaubt:
+        raise SzenarioFehler(f"{wo}: unbekannte Felder {sorted(unbekannt)}")
+
+
 def spec_aus(szenario: dict) -> dict:
     """Szenario-YAML in das Spec-Format von tests/scenarios.py übersetzen."""
+    _nur_bekannte(szenario, SZENARIO_FELDER, "Szenario")
     instanzen = szenario.get("instanzen") or [{"prefix": "a"}]
+    for inst in instanzen:
+        _nur_bekannte(inst, INSTANZ_FELDER, f"Instanz {inst.get('prefix', 'a')}")
     prefixe = [i.get("prefix", "a") for i in instanzen]
     if prefixe[0] != "a":
         raise SzenarioFehler("die erste Instanz braucht prefix a")
@@ -182,7 +199,10 @@ def pruefe(erwartung: dict, rec: dict) -> tuple[bool, str]:
         nummern = [auswahl]
     else:
         raise SzenarioFehler(f"ungültiger Schritt {auswahl!r}")
+    _nur_bekannte(erwartung, ERWARTUNG_FELDER, "Erwartung")
     instanz = erwartung.get("instanz", "a")
+    if instanz not in schritte[0]["state"]:
+        raise SzenarioFehler(f"unbekannte Instanz {instanz!r}")
     ort = f"Schritt {auswahl}" if auswahl != "alle" else "alle Schritte"
     ergebnisse: list[tuple[bool, str]] = []
 
@@ -204,6 +224,7 @@ def pruefe(erwartung: dict, rec: dict) -> tuple[bool, str]:
         if art not in erwartung:
             continue
         bed = erwartung[art]
+        _nur_bekannte(bed, BEDINGUNG_FELDER, art)
         entity = entity_id(bed["entity"], list(rec["steps"][0]["state"]))[0]
         werte = [w for nr in nummern for w in _aufrufe(schritte[nr - 1], entity)]
         passend = [w for w in werte

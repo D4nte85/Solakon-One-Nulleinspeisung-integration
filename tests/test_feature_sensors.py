@@ -73,3 +73,11 @@ def test_tariff_price_mit_einheit():
     hass.states.set("sensor.preis", "28.5", {"unit_of_measurement": "ct/kWh"})
     assert fs.tariff_price(hass, True, "sensor.preis") == (28.5, "ct/kwh", None)
     assert fs.tariff_price(hass, True, "") == (None, "", ("err_tariff_no_sensor", {}))
+
+
+def test_sensor_quellen_decken_die_globalen_sensoren_der_verteilung():
+    """Jeder globale Sensor der Verteilung hat genau eine lokale Quelle, und umgekehrt."""
+    global_keys = {g for _, g in fs.SENSOR_SOURCES.values()}
+    schema_keys = {k for k in h.const.DIST_SCHEMA if k.startswith("global_") and k.endswith(("_sensor", "_entity"))}
+    assert global_keys == schema_keys
+    assert len(global_keys) == len(fs.SENSOR_SOURCES)

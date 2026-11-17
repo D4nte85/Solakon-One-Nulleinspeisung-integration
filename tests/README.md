@@ -2,7 +2,7 @@
 
 Home Assistant läuft hier nicht. `harness.py` stellt ein `FakeHass` mit Zustandsspeicher,
 virtueller Uhr und Aufrufprotokoll bereit, `ha_stubs.py` die HA-Module, die die Integration
-importiert. Drei Schichten nutzen das:
+importiert. Vier Schichten nutzen das:
 
 | Schicht | Zweck | Aufruf |
 |---|---|---|
@@ -46,7 +46,8 @@ Die Geräteseite der Attrappe folgt der offiziellen Geräte-Integration (Stand 1
 eingecheckt. Die Attribute stehen als Standard an den Zuständen, ein Szenario kann sie
 überschreiben. `number.set_value` außerhalb `min`/`max` und unbekannte Select-Optionen
 bleiben ohne Wirkung, wie in HA ohne `blocking`. Geschrieben wird `int(value)`, auf `step`
-wird nicht gerundet. Den Klon selbst lesen die Tests nicht; er dient beim Nachziehen einer
+wird nicht gerundet. Den Klon selbst lesen die Tests nicht (`conftest.py` schließt ihn von
+`pytest tests` aus); er dient beim Nachziehen einer
 neuen Version als Referenz:
 
 ```bash
@@ -71,10 +72,12 @@ und `en` prüft `test_translations.py`.
 ## Reproduktionsszenarien
 
 Eine Datei je Fehlervorgang unter `tests/repro/`, benannt wie die Bugfix-Seite
-(`issue-NN-slug.yaml` bzw. `fix-YYYY-MM-DD-slug.yaml`). Ablauf: Szenario schreiben, am
+(`issue-NN-slug.yaml`, `fix-YYYY-MM-DD-slug.yaml`, für neue Funktionen `feat-…`, aus Reviews
+`review-…`). Ablauf: Szenario schreiben, am
 Stand vor dem Fix rot sehen, Fix, grün — danach bleibt es als Regressionstest in
 `pytest tests` (über `test_repro.py`). Ein noch nicht behobener Fehler bekommt
-`offen: true` und muss dann rot sein.
+`offen: true` und muss dann rot sein. Unbekannte Felder in Szenario, Instanz, Schritt, Erwartung
+und Bedingung sowie eine unbekannte `instanz` sind ein Szenariofehler.
 
 ```yaml
 titel: Kurzbeschreibung
@@ -102,7 +105,7 @@ schritte:             # je Schritt: Uhr vor, Sensoren setzen, regeln
     setzen: {netz: 250, a.soc: 39, sensor.preis: 30.0}
     settings: {tariff_enabled: false}   # optional: über async_update_settings der Instanz a
     wer: a            # a | all
-    nach_aufruf: {entity: a.export, setzen: {a.solar: unavailable}}   # optional: einmalig nach dem ersten Schreibbefehl auf entity
+    nach_aufruf: {entity: a.export, setzen: {a.solar: unavailable}}   # optional: einmalig nach dem ersten Schreibbefehl auf entity, auch wenn HA ihn abweist
 erwartet:
   - schritt: alle     # Nummer ab 1, letzter (Standard) oder alle
     kein_aufruf: {entity: a.leistung, wert_min: 1201}
@@ -113,7 +116,7 @@ erwartet:
   - log: Teiltext einer WARNING
 ```
 
-`nach_aufruf` setzt Sensoren mitten im Regelzyklus, sobald die Integration zum ersten Mal auf `entity` schreibt. So lässt sich ein Ausfall zwischen zwei Lesungen desselben Regelzyklus nachstellen. Der Eintrag gilt nur für seinen Schritt.
+`nach_aufruf` setzt Sensoren mitten im Regelzyklus, sobald die Integration zum ersten Mal auf `entity` schreibt, auch wenn HA den Wert abweist. So lässt sich ein Ausfall zwischen zwei Lesungen desselben Regelzyklus nachstellen. Der Eintrag gilt nur für seinen Schritt.
 
 `zustand` prüft Attribute aus `COORD_ATTRS` in `harness.py` auf Gleichheit; der Schlüssel ist der Pfad am Coordinator (`display.operating_state`, `surplus.prev_actual`, `dyn.offsets.z1_night`). `zustand_nicht` auf Ungleichheit (z. B. `last_error: ""` für „Fehlermeldung gesetzt"). `aufruf`/`kein_aufruf` prüfen
 die Schreibbefehle eines Schritts auf eine Entity, optional mit `wert`, `wert_min`,
@@ -137,7 +140,7 @@ festes Raster in Sekunden (`--takt 5`). Einheiten, die der Export nicht enthält
 ## Invarianten
 
 `invarianten.py` hält die Regeln für gewolltes Verhalten als Funktionen `(ctx) -> str | None`,
-eine je Regel mit der Nummer aus der Regelbeschreibung (`a1` … `k6`; `d2` ist entfallen). Jede prüft einen
+eine je Regel mit der Nummer aus der Regelbeschreibung (`a1` … `k9`; `d2` ist entfallen). Jede prüft einen
 Regellauf einer Instanz: Eingänge davor, Schreibbefehle, Zustand danach.
 
 - Gezählt werden nur Läufe mit konsistentem Startzustand; Treffer aus widersprüchlichen
@@ -152,7 +155,7 @@ Regellauf einer Instanz: Eingänge davor, Schreibbefehle, Zustand danach.
 ## Panel-Vergleich
 
 `tests/panel/render.cjs` lädt `index.html` mit dem echten Panel in jsdom und nimmt über eine
-feste Aktionsfolge rund 300 Schnappschüsse des Shadow-DOM auf: 3 Szenarien × 2 Sprachen,
+feste Aktionsfolge rund 300 Schnappschüsse des Shadow-DOM auf: 4 Szenarien × 2 Sprachen,
 alle Tabs, Eingaben, Validierungspunkt (Zahl, Text, fehlende Entity), Speichern, Debug-Schalter,
 Verteilung, Wettläufe mit Instanzwechsel und Fehlerpfade. `vergleich.py` rendert einen git-Stand
 und den Arbeitsstand, jeweils mit den Panel- und Entity-Texten dieses Stands, und zeigt die

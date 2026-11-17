@@ -149,21 +149,21 @@ class FakeServices:
         old = self.hass.states.get(eid)
         attrs = old.attributes if old else {}
         geraet = self.hass.geraet.get(eid)
+        # HA weist Werte außerhalb des Bereichs ab; ohne blocking erreicht der Fehler den Aufrufer nicht
         if domain == "number" and service == "set_value":
-            if geraet and not geraet.min <= float(value) <= geraet.max:
-                return  # HA weist ab; ohne blocking erreicht der Fehler den Aufrufer nicht
-            # Geräte-Integration schreibt int(value) ins Register, Rückmeldung per Poll
-            self.hass.states.set(eid, _num(int(float(value)) if geraet else value), attrs)
-            for follower, sign in self.hass.followers.get(eid, ()):
-                # sign 0: Sensor meldet neu (last_reported), bleibt aber auf seinem Wert stehen
-                prev = self.hass.states.get(follower)
-                new = prev.state if sign == 0 and prev else _num(sign * float(value))
-                self.hass.states.set(follower, new, prev.attributes if prev else {})
+            if not geraet or geraet.min <= float(value) <= geraet.max:
+                # Geräte-Integration schreibt int(value) ins Register, Rückmeldung per Poll
+                self.hass.states.set(eid, _num(int(float(value)) if geraet else value), attrs)
+                for follower, sign in self.hass.followers.get(eid, ()):
+                    # sign 0: Sensor meldet neu (last_reported), bleibt aber auf seinem Wert stehen
+                    prev = self.hass.states.get(follower)
+                    new = prev.state if sign == 0 and prev else _num(sign * float(value))
+                    self.hass.states.set(follower, new, prev.attributes if prev else {})
         elif domain == "select" and service == "select_option":
-            if geraet and value not in geraet.optionen:
-                return
-            self.hass.states.set(eid, value, attrs)
-        # Szenario-Schlüssel `nach_aufruf`: Zustände einmalig nach dem ersten Schreibbefehl auf `eid` setzen
+            if not geraet or value in geraet.optionen:
+                self.hass.states.set(eid, value, attrs)
+        # Szenario-Schlüssel `nach_aufruf`: Zustände einmalig nach dem ersten Schreibbefehl auf `eid`
+        # setzen, auch wenn HA ihn abweist
         for other, st in self.hass.on_call.pop(eid, {}).items():
             self.hass.states.set(other, st.get("state"), st.get("attrs"),
                                  last_updated=CLOCK.now - st.get("age", 0))

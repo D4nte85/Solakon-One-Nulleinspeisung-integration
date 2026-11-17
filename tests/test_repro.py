@@ -30,3 +30,23 @@ def test_unbekanntes_flag_ist_ein_szenariofehler():
                 "schritte": [{"nach": 0}], "erwartet": []}
     with pytest.raises(repro.SzenarioFehler, match="cycle_activ"):
         repro.spec_aus(szenario)
+
+
+@pytest.mark.parametrize("szenario, falsch", [
+    ({"titel": "x", "erwatet": []}, "erwatet"),
+    ({"titel": "x", "instanzen": [{"prefix": "a", "folgt": 0}]}, "folgt"),
+])
+def test_unbekanntes_feld_im_szenario_ist_ein_szenariofehler(szenario, falsch):
+    with pytest.raises(repro.SzenarioFehler, match=falsch):
+        repro.spec_aus(szenario)
+
+
+@pytest.mark.parametrize("erwartung, falsch", [
+    ({"schritt": 1, "zustant": {"cycle_active": True}}, "zustant"),
+    ({"schritt": 1, "aufruf": {"entity": "a.leistung", "wer": 0}}, "wer"),
+    ({"schritt": 1, "instanz": "z", "zustand": {"cycle_active": True}}, "'z'"),
+])
+def test_unbekanntes_feld_in_erwartung_ist_ein_szenariofehler(erwartung, falsch):
+    rec, _ = repro.spiele({"titel": "x", "schritte": [{"nach": 0}], "erwartet": []})
+    with pytest.raises(repro.SzenarioFehler, match=falsch):
+        repro.pruefe(erwartung, rec)
