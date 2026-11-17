@@ -1,6 +1,7 @@
 """Number platform — Settings-Zahlenwerte der Instanz und Gesamtlimit der Netzgruppe."""
 from __future__ import annotations
 
+import asyncio
 from typing import Any, Callable
 
 from homeassistant.components.number import NumberEntity, NumberMode
@@ -111,7 +112,9 @@ def _drop_group_limit(hass: Any, grid_sensor: str) -> None:
 class Carriers:
     """Träger der Gesamtlimit-Entitäten: Hinzufüge-Funktion und Netzsensor je geladenem Eintrag, Entität je Netzsensor.
 
-    Kandidaten sind die Mitglieder der Netzgruppe, deren number-Plattform geladen ist.
+    Kandidaten sind die Mitglieder der Netzgruppe, deren number-Plattform geladen ist. Zuordnungen
+    laufen nacheinander: Zwischen dem Prüfen des Trägers und dem Eintragen der Entität liegen
+    Wartepunkte (Entfernen, Vergabe der Gruppennummer).
     """
 
     def __init__(self, hass: Any) -> None:
@@ -119,6 +122,7 @@ class Carriers:
         self._adders: dict[str, AddEntitiesCallback] = {}
         self._grid_sensors: dict[str, str] = {}
         self._entities: dict[str, GroupLimitNumber] = {}
+        self._lock = asyncio.Lock()
 
     async def add(self, entry_id: str, add: AddEntitiesCallback, grid_sensor: str) -> None:
         """Geladenen Eintrag mit dem Netzsensor, mit dem er geladen wurde, als möglichen Träger eintragen und den Träger seiner Gruppe bestimmen."""
@@ -133,6 +137,11 @@ class Carriers:
         Gerät werden entfernt. Trägt schon die richtige Instanz, bleibt alles, wie es ist. Sonst entfernt
         sie die Entität des bisherigen Trägers und legt sie mit derselben unique_id beim neuen an.
         """
+        async with self._lock:
+            await self._assign(grid_sensor)
+
+    async def _assign(self, grid_sensor: str) -> None:
+        """Zuordnung aus `assign`, nur unter dem Lock aufrufen."""
         store = group_store.require_store(self.hass)
         members = sorted(eid for eid in store.group(grid_sensor).members() if eid in self._adders)
         current = self._entities.get(grid_sensor)

@@ -7,6 +7,8 @@ Setup des Eintrags geladen, weil sie den Träger des Gesamtlimits verwaltet. Wie
 """
 from __future__ import annotations
 
+import asyncio
+
 
 import pytest
 
@@ -406,6 +408,23 @@ def _registriertes_gesamtlimit(u, number: int) -> tuple:
     devs.devices[f"dev_{number}"] = h.ha_stubs.DeviceEntry(f"dev_{number}", {(DOMAIN, f"group_{number}")})
     return ents, devs
 
+
+
+def test_paralleles_laden_ohne_gruppennummer_legt_ein_gesamtlimit_an(monkeypatch):
+    """O3: Zwei Einträge laden gleichzeitig, die Gruppennummer wird erst gespeichert (Wartepunkt)."""
+    u = Umgebung("ab")
+    vergeben = h.group_store_mod.GroupStore.group_number
+
+    async def mit_wartepunkt(self, grid_sensor):
+        await asyncio.sleep(0)
+        return await vergeben(self, grid_sensor)
+    monkeypatch.setattr(h.group_store_mod.GroupStore, "group_number", mit_wartepunkt)
+
+    async def lauf():
+        await u.setup()
+        await asyncio.gather(u.setup("a"), u.setup("b"))
+    _run(lauf())
+    assert _gesamtlimits(u) == {"sensor.grid": ["entry_a"]}
 
 def test_netzsensor_wechsel_der_traegerin_gibt_das_gesamtlimit_der_alten_netzgruppe_weiter():
     u = Umgebung("abc")
