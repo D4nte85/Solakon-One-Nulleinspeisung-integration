@@ -330,10 +330,14 @@ class SolakonCoordinator:
 
     # ── Ableiten: Verteilung ─────────────────────────────────────────────────
 
-    def _clear_cycle_values(self) -> None:
-        """Überschussleistung, Zuteilung, Prognoseflags und angewandten Verteilungsmodus leeren."""
+    def _clear_cycle_values(self, keep_allocation: bool = False) -> None:
+        """Überschussleistung, Zuteilung, Prognoseflags und angewandten Verteilungsmodus leeren.
+
+        `keep_allocation`: Zuteilung stehen lassen, weil die Schwestern im Entlade-Pool damit rechnen.
+        """
         self.surplus_power = None
-        self.allocated_power = None
+        if not keep_allocation:
+            self.allocated_power = None
         self.forecast = ForecastFlags(False, False, False)
         self.dist_mode_effective = ""
 
@@ -731,6 +735,7 @@ class SolakonCoordinator:
         if isinstance(core, str):
             _LOGGER.debug("Solakon: Kernsensor %s ohne Zahlenwert, Zyklus übersprungen", core)
             self._messages.fail(("err_core_sensor", {"sensor": core}))
+            self._clear_cycle_values(keep_allocation=True)
             self._end_cycle(blocked=True, notify_on_change=True)
             return
         soc, grid, solar, actual, mode = core.soc, core.grid, core.solar, core.actual, core.mode

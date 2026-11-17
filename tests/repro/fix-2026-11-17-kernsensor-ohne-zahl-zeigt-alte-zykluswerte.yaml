@@ -1,0 +1,30 @@
+titel: Kernsensor ohne Zahl lässt Überschussleistung des vorigen Regelzyklus stehen
+bezug: fix-2026-11-17-kernsensor-ohne-zahl-zeigt-alte-zykluswerte
+# a entlädt in Zone 1 mit Zuteilung (b ruht), PV 600 W: Schritt 1 setzt Überschussleistung und Zuteilung.
+# In Schritt 2 liefert der PV-Sensor keine Zahl, der Regelzyklus bricht ab.
+# Erwartet: Überschussleistung unbekannt, Zuteilung bleibt für die Schwestern stehen.
+stunde: 12
+netz: 200
+verteilung: {global_max_power: 800, distribution_mode: equal}
+instanzen:
+  - prefix: a
+    settings: {regulation_enabled: true}
+    flags: {cycle_active: true}
+    sensoren: {soc: 60, solar: 600, modus: "1", ist: 300, leistung: 300}
+    folgt_ist: 1
+  - prefix: b
+    settings: {regulation_enabled: true}
+    sensoren: {soc: 15, solar: 600, ist: 0, modus: "0", leistung: 0}
+schritte:
+  - nach: 0
+    wer: a
+  - nach: 5
+    wer: a
+    setzen: {a.solar: unavailable}
+erwartet:
+  - schritt: 1
+    instanz: a
+    zustand_nicht: {surplus_power: null, allocated_power: null}
+  - schritt: 2
+    instanz: a
+    zustand: {surplus_power: null, allocated_power: 800, dist_mode_effective: ""}
