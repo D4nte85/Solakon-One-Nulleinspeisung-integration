@@ -535,6 +535,48 @@ def test_geloeschte_instanz_nach_gescheitertem_setup_hinterlaesst_keinen_gruppen
     _run(u.setup("b"))
     assert u.coord("b").group.dist_cfg()["global_max_power"] == C.DIST_SCHEMA["global_max_power"].default
 
+def test_setup_waehrend_des_letzten_freigebens_behaelt_den_laufzeitzustand():
+    """F2: Lädt b, während das Entladen der letzten Instanz a das Gruppen-Speichern schreibt, bleibt b Halter."""
+    u = Umgebung("ab")
+    tor = asyncio.Event()
+
+    async def lauf():
+        await u.setup("a")
+        rt = h.runtime_mod.runtime(u.hass)
+        schreiben = rt.store.async_write_pending
+
+        async def haengt():
+            await tor.wait()
+            await schreiben()
+        rt.store.async_write_pending = haengt
+        weg = asyncio.ensure_future(u.unload("a"))
+        for _ in range(5):
+            await asyncio.sleep(0)
+        await u.setup("b")
+        tor.set()
+        await weg
+        return rt
+
+    rt = _run(lauf())
+    assert h.runtime_mod.peek(u.hass) is rt
+    assert rt.holders == {"entry_b"}
+    assert list(u.hass.data[DOMAIN]) == ["entry_b"]
+
+
+def test_gescheitertes_setup_nach_angemeldeten_triggern_meldet_sie_ab(monkeypatch):
+    """F2: Scheitert `async_setup` des Coordinators nach `trackers.start`, bleiben keine Trigger angemeldet."""
+    u = Umgebung("a")
+
+    def fehlt(hass):
+        raise h.ha_stubs.HomeAssistantError("Gruppenspeicher fehlt")
+    monkeypatch.setattr(h.coordinator_mod, "require_store", fehlt)
+    with pytest.raises(h.ha_stubs.ConfigEntryNotReady):
+        _run(u.setup("a"))
+    angemeldet = {e[3] for e in u.hass.events if e[0] == "track"}
+    assert angemeldet
+    assert {e[1] for e in u.hass.events if e[0] == "untrack"} >= angemeldet
+
+
 def test_gescheitertes_entladen_der_plattformen_laesst_die_instanz_laufen(monkeypatch):
     u = Umgebung("a")
     _run(u.setup("a"))

@@ -289,14 +289,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Gruppen-Stores vor dem Coordinator laden: seine Trigger lesen globale Sensoren der Verteilung.
     # Kapazitätssensoren folgen dem Netzsensor ihres Eintrags.
-    # Scheitert das Setup nach dem Laden, gibt die Instanz den Laufzeitzustand wieder frei.
+    # Scheitert das Setup nach dem Laden, meldet der Coordinator seine Trigger ab und die Instanz
+    # gibt den Laufzeitzustand wieder frei.
     try:
         store = await runtime.acquire(hass, entry.entry_id)
+        coordinator = None
         try:
             await store.tidy_capacity()
             coordinator = SolakonCoordinator(hass, entry)
             await coordinator.async_setup()
         except BaseException:
+            if coordinator is not None:
+                await coordinator.async_shutdown()
             await runtime.release(hass, entry.entry_id)
             raise
     except (HomeAssistantError, OSError) as ex:
