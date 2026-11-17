@@ -2,7 +2,8 @@
 // schreibt je Schritt das normalisierte Shadow-DOM:  node render.cjs <panel.js> <out.json> [textwurzel]
 // Textwurzel: Verzeichnis, aus dem fetch Panel- und Entity-Texte lädt (Standard: Repo).
 // Abgedeckt: 4 Szenarien × 2 Sprachen, alle Tabs, Eingaben, Speichern, Debug-Schalter,
-// Verteilung, Wettläufe mit Instanzwechsel, Fehlerpfade. Poll-Timer und Toast-Timer sind
+// Verteilung, Wettläufe mit Instanzwechsel, Eingabe während des Speicherns, überlappende
+// Statusabfragen, Fehlerpfade, scheiterndes Laden der Instanzliste. Poll-Timer und Toast-Timer sind
 // abgeschaltet, WS-Antworten im Wettlauf laufen über eine Warteschlange — deterministisch.
 const fs = require("fs"), path = require("path");
 const { JSDOM } = require(__dirname + "/node_modules/jsdom");
@@ -39,7 +40,7 @@ function norm(root, win) {
   return clone.innerHTML.replace(/></g, ">\n<");
 }
 
-async function run(scenario, lang) {
+async function run(scenario, lang, startFehler = false) {
   const shots = [];
   const dom = new JSDOM(html, {
     url: `http://localhost/?scenario=${scenario}&lang=${lang}`, runScripts: "dangerously", pretendToBeVisual: true,
@@ -57,11 +58,31 @@ async function run(scenario, lang) {
     },
   });
   const win = dom.window;
-  await tick(50);
   const p = win.document.getElementById("panel");
+  if (startFehler) {
+    const realWS = p._hass.callWS.bind(p._hass);
+    p._hass.callWS = (msg) => msg.type.endsWith("/get_all_instances") ? Promise.reject(new Error("WS kaputt")) : realWS(msg);
+  }
+  await tick(50);
   const sr = p.shadowRoot;
   const settle = async () => { for (let i = 0; i < 5; i++) await tick(5); };
   const shot = async (name) => { await settle(); const tst = sr.getElementById("toast"); shots.push([`${scenario}/${lang}/${name}`, norm(sr, win)]); if (tst) tst.textContent = ""; };
+  // WS-Antworten in einer Warteschlange; flush arbeitet sie ab, restore stellt den direkten Aufruf her
+  const queueWS = () => {
+    const realWS = p._hass.callWS;
+    const q = { pending: [], calls: [] };
+    p._hass.callWS = (msg) => { q.calls.push(msg.type); return new Promise((res, rej) => q.pending.push(() => realWS.call(p._hass, msg).then(res, rej))); };
+    q.flush = async () => { for (let i = 0; i < 8; i++) { const w = q.pending; q.pending = []; w.forEach(f => f()); await settle(); } };
+    q.restore = () => { p._hass.callWS = realWS; };
+    return q;
+  };
+  const tabBtn = id => [...sr.querySelectorAll(".tab")].find(t => t.dataset.id === id);
+  if (startFehler) {
+    await settle(); clearInterval(p._polling);
+    await shot("start-fehler");
+    win.close();
+    return shots;
+  }
   const poll = async () => { await p._loadStatus(); await settle(); };
   const fire = (el, type) => el && el.dispatchEvent(new win.Event(type, { bubbles: true }));
   const click = el => el && el.click();
@@ -134,11 +155,7 @@ async function run(scenario, lang) {
   // Wettlauf: Antworten warten in einer Warteschlange, dazwischen Instanzwechsel
   const plain = instTabs().filter(t => !t.textContent.includes(":") && !t.textContent.includes("⚖") && t.textContent !== instTabs()[0].textContent);
   if (plain.length >= 2) {
-    const realWS = p._hass.callWS.bind(p._hass);
-    let pending = [];
-    p._hass.callWS = (msg) => new Promise((res, rej) => pending.push(() => realWS(msg).then(res, rej)));
-    const flush = async () => { for (let i = 0; i < 8; i++) { const q = pending; pending = []; q.forEach(f => f()); await settle(); } };
-    const tabBtn = id => [...sr.querySelectorAll(".tab")].find(t => t.dataset.id === id);
+    const q = queueWS(), flush = q.flush;
     click(plain[1]); click(plain[0]); await flush(); await shot("race/load");
     click(tabBtn("pi")); await flush();
     const inp = sr.querySelector('#content input[type="number"]'); inp.value = "4"; fire(inp, "change");
@@ -147,8 +164,28 @@ async function run(scenario, lang) {
     click(tabBtn("debug")); await flush();
     click([...sr.querySelectorAll("#content button")][1]); click(plain[1]); await flush();
     click(tabBtn("debug")); await flush(); await shot("race/cycle");
-    p._loadStatus(); click(plain[0]); await flush(); await shot("race/poll");
-    p._hass.callWS = realWS;
+    const laeuft = p._loadStatus(); click(plain[0]); await flush(); await laeuft; await shot("race/poll");
+    q.restore();
+  }
+
+  // Eingabe während eines laufenden Speicherns der Einstellungen
+  if (tabBtn("pi")) {
+    const q = queueWS();
+    click(tabBtn("pi")); await q.flush();
+    const erstes = sr.querySelector('#content input[type="number"]'); erstes.value = "4.5"; fire(erstes, "change");
+    click(sr.querySelector("#save-bar button")); await settle();
+    const zweites = sr.querySelectorAll('#content input[type="number"]')[1];
+    if (zweites) { zweites.value = "0.07"; fire(zweites, "change"); }
+    await q.flush(); await shot("save/eingabe-waehrend-speichern");
+    q.restore();
+  }
+  // Überlappende Statusabfragen: die zweite beginnt nicht, solange die erste läuft
+  {
+    const q = queueWS();
+    const erste = p._loadStatus(), zweite = p._loadStatus();
+    await q.flush(); await erste; await zweite;
+    shots.push([`${scenario}/${lang}/status/ueberlappend`, `WS-Aufrufe: ${q.calls.join(", ")}`]);
+    q.restore();
   }
 
   // Fehlerpfade: jeder WS-Aufruf schlägt fehl
@@ -184,6 +221,7 @@ async function run(scenario, lang) {
 (async () => {
   const all = [];
   for (const sc of ["single", "single-group", "multi-group", "single-sister"]) for (const lang of ["de", "en"]) all.push(...await run(sc, lang));
+  for (const lang of ["de", "en"]) all.push(...await run("single", lang, true));
   fs.writeFileSync(process.argv[3], JSON.stringify(all, null, 1));
   console.log(`${all.length} Schnappschüsse`);
   process.exit(0);

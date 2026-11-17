@@ -42,6 +42,17 @@ def test_gruppe_bekommt_gespeicherten_zustand():
         "active_id": "a", "start_soc": 60, "was_zone0": False}
 
 
+def test_ungueltige_verteilung_wird_beim_laden_bereinigt_gemeldet_und_gespeichert():
+    hass = _hass()
+    h.put_store(hass, DIST_KEY, {"sensor.grid": {"global_max_power": -5, "distribution_mode": "soc"}})
+    store = _load(hass)
+    bereinigt = {"global_max_power": h.const.DIST_DEFAULTS["global_max_power"], "distribution_mode": "soc"}
+    assert store.dist == {"sensor.grid": bereinigt}
+    assert [e[1] for e in hass.events if e[0] == "notify"] == [f"{DOMAIN}_dist_reset_sensor.grid"]
+    asyncio.run(store.async_write_pending())
+    assert h.stored(hass, DIST_KEY) == {"sensor.grid": bereinigt}
+
+
 def test_paralleles_laden_einmal_und_alle_warten():
     hass = _hass()
     h.put_store(hass, DIST_KEY, {"sensor.grid": SWITCH})

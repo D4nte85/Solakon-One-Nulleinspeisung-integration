@@ -22,7 +22,7 @@ def _device(hass, dev_id, prefix, name="Solakon ONE", name_by_user=None, disable
                                      "integration" if key in disabled else None))
         ids[field] = eid
     ents.add(stubs.RegistryEntry(f"sensor.{prefix}_fremd", "solakon_one", f"ce_{dev_id}_grid_frequency",
-                                 f"ce_{dev_id}", dev_id))
+                                 f"ce_{dev_id}", dev_id, "integration"))
     return ids
 
 
@@ -115,7 +115,7 @@ def test_deaktivierte_zuweisung_wird_beim_absenden_aktiviert():
     assert result["type"] == "create_entry" and "enable_disabled" not in result["data"]
     assert stubs.entity_registry_get(fh).async_get(ids[C.CONF_DISCHARGE_CURRENT]).disabled_by is None
     sensor = stubs.entity_registry_get(fh).async_get("sensor.s_fremd")
-    assert sensor.disabled_by is None
+    assert sensor.disabled_by == "integration"
 
 
 def test_ohne_haken_bleibt_deaktiviert():

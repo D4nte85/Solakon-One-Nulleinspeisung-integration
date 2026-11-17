@@ -33,3 +33,13 @@ def test_ruhe_endet_nur_bei_geaendertem_ruhemodus():
     assert coord.resting is True
     asyncio.run(coord.async_update_settings({C.S_REST_IN_DISCHARGE: True}))
     assert coord.resting is False
+
+
+def test_integral_nur_bei_umgeschaltetem_entlade_pi_auf_null():
+    _, coord = _coord("de")
+    an = C.SETTINGS_DEFAULTS[C.S_PI_ENABLED]
+    coord.pi.integral = 12.5
+    asyncio.run(coord.async_update_settings({C.S_PI_ENABLED: an}))
+    assert coord.pi.integral == 12.5
+    asyncio.run(coord.async_update_settings({C.S_PI_ENABLED: not an}))
+    assert coord.pi.integral == 0

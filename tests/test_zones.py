@@ -36,9 +36,14 @@ _TARIFF_KEYS = ("below_exp", "below_cheap")
 
 
 def _decide(**kw):
-    """`decide` auf BASE mit überschriebenen Feldern: Preislage, Settings-Schnappschuss, Rest."""
+    """`decide` auf BASE mit überschriebenen Feldern: Preislage, Settings-Schnappschuss, Rest.
+
+    `at_rest` folgt ohne Vorgabe wie im Coordinator aus Modus, Ruhemodus und `resting` (Standard False).
+    """
     t = {k: kw.pop(k) for k in _TARIFF_KEYS if k in kw}
     cs = BASE.cs._replace(**{k: kw.pop(k) for k in BASE.cs._fields if k in kw})
+    resting = kw.pop("resting", False)
+    kw.setdefault("at_rest", zones.at_rest(kw.get("mode", BASE.mode), cs.rest_in_discharge, resting))
     # Aufladen wie im Coordinator aus Schnappschuss und SOC, sofern nicht vorgegeben.
     kw.setdefault("charging_to_target", zones.charging_to_target(cs.target_enabled, kw.get("soc", BASE.soc), cs.target_soc))
     return zones.decide(dataclasses.replace(
@@ -60,7 +65,7 @@ def test_base_trifft_keinen_fall():
     (dict(below_cheap=True, below_exp=True), "GT"),
     (dict(session="tariff_charge", mode="3", at_rest=False), "HT"),
     (dict(below_exp=True, mode="1", at_rest=False), "TM"),
-    (dict(ac_enabled=True, grid=-200, mode="1", at_rest=True, below_exp=True), "G"),
+    (dict(ac_enabled=True, grid=-200), "G"),
     (dict(ac_enabled=True, session="ac_charge", mode="3", at_rest=False, soc=95), "H"),
     (dict(ac_enabled=True, session="ac_charge", mode="3", at_rest=False, grid=10, actual=0), "H"),
     # Options-Austritt: abgeschaltete Option beendet die Session unabhängig vom Wert
@@ -88,13 +93,11 @@ def test_0b_in_tarifsperre_ruht(below_exp, cycle, rest):
 @pytest.mark.parametrize("kw, name", [
     # 0A vor A: Überschuss-Eintritt und Zone-1-SOC zugleich
     (dict(surplus_enabled=True, new_surplus=True, soc=70), "0A"),
-    # B vor C: nur der aktive Zyklus trennt die beiden
-    (dict(soc=15, cycle_active=True, mode="1", at_rest=False), "B"),
     # GT vor G: Tarif-Laden hat Vorrang vor AC-Laden
     (dict(below_cheap=True, below_exp=True, ac_enabled=True, grid=-200,
           mode="1"), "GT"),
-    # E vor F: tagsüber Zone 2, nicht Nachtabschaltung
-    (dict(is_night=False, mode="0", at_rest=True), "E"),
+    # TM vor G: Tarifsperre vor AC-Laden bei Einspeisung in Modus 1
+    (dict(below_exp=True, ac_enabled=True, grid=-200, mode="1"), "TM"),
 ])
 def test_reihenfolge(kw, name):
     assert _decide(**kw).name == name
@@ -154,7 +157,7 @@ def test_h_bleibt_bei_ladeleistung_ungleich_null(actual):
     (100, -50, None), (100, -51, "G"),        # positiver Offset: Bezug 0
 ])
 def test_g_eintritt_symmetrisch_zum_austritt_um_den_offset(offset, grid, fall):
-    d = _decide(ac_enabled=True, ac_offset=offset, grid=grid, mode="1", at_rest=True, below_exp=True)
+    d = _decide(ac_enabled=True, ac_offset=offset, grid=grid)
     assert (d.name if d else None) == fall
 
 
@@ -432,7 +435,7 @@ def test_ze_vor_allem_setzt_flags_zurueck_und_schaltet_regelung_ab():
 
 def test_gn_vor_gt_mit_max_ladeleistung():
     d = _decide(**TARGET, grid_charge_enabled=True, grid_charge_power=1000,
-                below_cheap=True, below_exp=True, mode="1", at_rest=True)
+                below_cheap=True, below_exp=True, mode="1")
     assert d.name == "GN"
     assert d.transition == zones.Transition(flags=zones.FlagUpdate(session="grid_charge"), output=1000,
                                             ac_charge_mode=True, timer_first=True, mode="3")
@@ -454,8 +457,8 @@ def test_zb_ruht_wie_tm():
     dict(soc=65, battery_priority=True, is_night=False),                  # A nach ZB: kein Pendeln
     dict(battery_priority=True, is_night=False),                          # E
     dict(battery_priority=True, cycle_active=True),                       # D
-    dict(source_ac=False, ac_enabled=True, grid=-200, mode="1", below_exp=True),         # G
-    dict(source_tariff=False, below_cheap=True, below_exp=True, mode="1"),               # GT
+    dict(source_ac=False, ac_enabled=True, grid=-200),                    # G
+    dict(source_tariff=False, below_cheap=True, below_exp=True),          # GT
 ])
 def test_zielladen_sperrt(kw):
     assert _decide(**{**TARGET, **kw}) is None

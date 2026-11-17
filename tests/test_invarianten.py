@@ -77,6 +77,9 @@ def _erster(regel, verstoss):
 @pytest.mark.parametrize("regel, verstoss", [
     ("f3", lambda c: _mit_zuteilung_aller(c, 10_000)),
     ("k1", lambda c: _mit_flags(c, allocated_power=10_000)),
+    ("k1", lambda c: dataclasses.replace(
+        _mit_flags(c, surplus_active=False, allocated_power=c.settings[inv.C.S_HARD_LIMIT_Z0]),
+        flags_vorher={**c.flags_vorher, "surplus_active": True})),
     ("k2", lambda c: _mit_flags(c, resting=True, allocated_power=100)),
     ("k9", lambda c: _mit_flags(c, allocated_power=(c.flags["allocated_power"] or 0) + 50)),
 ])

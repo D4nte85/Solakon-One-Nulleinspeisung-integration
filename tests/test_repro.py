@@ -35,6 +35,9 @@ def test_unbekanntes_flag_ist_ein_szenariofehler():
 @pytest.mark.parametrize("szenario, falsch", [
     ({"titel": "x", "erwatet": []}, "erwatet"),
     ({"titel": "x", "instanzen": [{"prefix": "a", "folgt": 0}]}, "folgt"),
+    ({"titel": "x", "verteilung": {"distributon_mode": "equal"}}, "distributon_mode"),
+    ({"titel": "x", "verteilung_netz": {"sensor.grid_other": {"inst_a_kapazitaet": 2}}}, "inst_a_kapazitaet"),
+    ({"titel": "x", "schritte": [{"nach": 0, "wer": "b"}]}, "'b'"),
 ])
 def test_unbekanntes_feld_im_szenario_ist_ein_szenariofehler(szenario, falsch):
     with pytest.raises(repro.SzenarioFehler, match=falsch):

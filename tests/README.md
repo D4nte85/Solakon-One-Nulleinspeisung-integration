@@ -101,7 +101,7 @@ stunde: 3             # Uhrzeit (UTC) für Nachtlogik
 netz: 50              # sensor.grid; Zahl in W oder {wert, einheit, alter}
 sensoren:             # gemeinsame Entities mit voller ID
   sensor.preis: {wert: 8.0, einheit: ct/kWh}
-verteilung: {}        # optional: Verteilungs-Config der Netzgruppe sensor.grid
+verteilung: {}        # optional: Verteilungs-Config der Netzgruppe sensor.grid; Schlüssel aus DIST_SCHEMA oder inst_<id>_capacity_sensor
 verteilung_netz: {}   # optional: Configs weiterer Netzgruppen, {sensor.grid_other: {...}}
 instanzen:
   - prefix: a         # erste Instanz immer a; weitere b, c …
@@ -149,7 +149,8 @@ python tests/repro_import.py verlauf.csv --map netz=sensor.shelly_power \
 ```
 
 Standard ist ein Regelschritt je Änderung des Netzsensors (`--takt netz`), alternativ ein
-festes Raster in Sekunden (`--takt 5`). Einheiten, die der Export nicht enthält, gibt
+festes Raster in Sekunden (`--takt 5`). PV, SOC und Modus lösen in der Integration ebenfalls
+Regelzyklen aus; der Import legt dafür keine Schritte an. Einheiten, die der Export nicht enthält, gibt
 `--einheit netz=kW` an.
 
 ## Invarianten
@@ -170,8 +171,10 @@ Regellauf einer Instanz: Eingänge davor, Schreibbefehle, Zustand danach.
 ## Panel-Vergleich
 
 `tests/panel/render.cjs` lädt `index.html` mit dem echten Panel in jsdom und nimmt über eine
-feste Aktionsfolge rund 300 Schnappschüsse des Shadow-DOM auf: 4 Szenarien × 2 Sprachen,
+feste Aktionsfolge rund 500 Schnappschüsse des Shadow-DOM auf: 4 Szenarien × 2 Sprachen,
 alle Tabs, Eingaben, Validierungspunkt (Zahl, Text, fehlende Entity), Speichern, Debug-Schalter,
-Verteilung, Wettläufe mit Instanzwechsel und Fehlerpfade. `vergleich.py` rendert einen git-Stand
+Verteilung, Wettläufe mit Instanzwechsel, Eingabe während des Speicherns, Fehlerpfade und
+ein scheiterndes Laden der Instanzliste beim Start. Überlappende Statusabfragen stehen als
+Liste der WS-Aufrufe im Schnappschuss `status/ueberlappend`. `vergleich.py` rendert einen git-Stand
 und den Arbeitsstand, jeweils mit den Panel- und Entity-Texten dieses Stands, und zeigt die
 Unterschiede; `--ignoriere REGEX` blendet bewusste Änderungen aus.

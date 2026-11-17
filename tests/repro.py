@@ -85,6 +85,13 @@ def _nur_bekannte(feld: dict, erlaubt: set, wo: str) -> None:
         raise SzenarioFehler(f"{wo}: unbekannte Felder {sorted(unbekannt)}")
 
 
+def _pruefe_verteilung(dist: dict, wo: str) -> None:
+    """Verteilungsschlüssel müssen in `DIST_SCHEMA` stehen oder Kapazitätsschlüssel sein."""
+    unbekannt = {k for k in dist if k not in C.DIST_SCHEMA and not C.CAPACITY_KEY.fullmatch(k)}
+    if unbekannt:
+        raise SzenarioFehler(f"{wo}: unbekannte Verteilungsschlüssel {sorted(unbekannt)}")
+
+
 def spec_aus(szenario: dict) -> dict:
     """Szenario-YAML in das Spec-Format von tests/scenarios.py übersetzen."""
     _nur_bekannte(szenario, SZENARIO_FELDER, "Szenario")
@@ -94,6 +101,9 @@ def spec_aus(szenario: dict) -> dict:
     prefixe = [i.get("prefix", "a") for i in instanzen]
     if prefixe[0] != "a":
         raise SzenarioFehler("die erste Instanz braucht prefix a")
+    _pruefe_verteilung(szenario.get("verteilung") or {}, "verteilung")
+    for netz, dist in (szenario.get("verteilung_netz") or {}).items():
+        _pruefe_verteilung(dist, f"verteilung_netz {netz}")
     spec = {
         "language": szenario.get("sprache", "de"),
         "hour": szenario.get("stunde", 12),
@@ -147,6 +157,8 @@ def spec_aus(szenario: dict) -> dict:
         unbekannt = set(schritt) - {"nach", "setzen", "settings", "wer", "nach_aufruf"}
         if unbekannt:
             raise SzenarioFehler(f"Schritt {nr}: unbekannte Felder {sorted(unbekannt)}")
+        if schritt.get("wer", "a") not in ("a", "all"):
+            raise SzenarioFehler(f"Schritt {nr}: wer ist a oder all, nicht {schritt['wer']!r}")
         setzen = {}
         for schluessel, wert in (schritt.get("setzen") or {}).items():
             eid, einheit = entity_id(schluessel, prefixe)

@@ -8,8 +8,9 @@ Aufruf:
 Eingabe ist der CSV-Export des HA-Verlaufs (Spalten `entity_id,state,last_changed`).
 `--map` ordnet einer Szenario-Größe (`netz`, `<prefix>.<kurzname>` oder eine volle
 Entity-ID) die Entity des Reporters zu. Startwerte sind die letzten Werte vor `--von`.
-`--takt netz` (Standard) legt einen Regelschritt je Änderung des Netzsensors an, wie
-der Trigger der Integration; eine Zahl legt Schritte im festen Sekundenraster an.
+`--takt netz` (Standard) legt einen Regelschritt je Änderung des Netzsensors an; PV, SOC
+und Modus lösen in der Integration ebenfalls Regelzyklen aus, hier nicht. Eine Zahl legt
+Schritte im festen Sekundenraster an.
 Settings, Flags und Erwartungen trägt man danach von Hand ein.
 """
 from __future__ import annotations

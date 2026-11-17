@@ -630,10 +630,8 @@ def k1(c: Ctx):
     zug = c.flags["allocated_power"]
     if zug is None or not c.normal():
         return None
-    # Zugeteilt wird nach der Lage vor den Falls, nach einem Poolwechsel nach der Lage danach.
-    schluessel = {C.S_HARD_LIMIT_Z0 if f.get("surplus_active") else C.S_HARD_LIMIT_Z1
-                  for f in (c.flags_vorher, c.flags)}
-    grenze = min(max(c.settings[k] for k in schluessel), C.DEVICE_MAX_POWER)
+    schluessel = C.S_HARD_LIMIT_Z0 if c.flags.get("surplus_active") else C.S_HARD_LIMIT_Z1
+    grenze = min(c.settings[schluessel], C.DEVICE_MAX_POWER)
     if zug > grenze + 1e-6:
         return f"zugeteilt {zug} W > Hard Limit {grenze} W"
 
