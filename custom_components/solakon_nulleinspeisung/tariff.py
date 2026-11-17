@@ -52,7 +52,8 @@ class TariffState:
 class Tariff:
     """Tariflage je Zyklus; hält die Prognose-Unterdrückung und den Verdacht auf einen €/kWh-Preis über Zyklen.
 
-    `suppressed` gilt ab `forecast` und bleibt auch in Zyklen stehen, die vor der Tariflage abbrechen.
+    `suppressed` gilt ab `forecast`; bei ausgeschalteter Regelung und nach einem Kernsensor ohne Zahl
+    leert ihn der Coordinator mit der Prognoselage.
     """
 
     def __init__(self) -> None:

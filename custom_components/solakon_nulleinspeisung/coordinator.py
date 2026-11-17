@@ -332,7 +332,7 @@ class SolakonCoordinator:
     # ── Ableiten: Verteilung ─────────────────────────────────────────────────
 
     def _clear_cycle_values(self, keep_allocation: bool = False) -> None:
-        """Überschussleistung, Zuteilung, Prognoseflags und angewandten Verteilungsmodus leeren.
+        """Überschussleistung, Zuteilung, Prognoselage, Prognose-Unterdrückung und angewandten Verteilungsmodus leeren.
 
         `keep_allocation`: Zuteilung stehen lassen, weil die Schwestern im Entlade-Pool damit rechnen.
         """
@@ -340,6 +340,7 @@ class SolakonCoordinator:
         if not keep_allocation:
             self.allocated_power = None
         self.forecast = ForecastFlags(False, False, False)
+        self.tariff.suppressed = False
         self.dist_mode_effective = ""
 
     def _adopt_position(
