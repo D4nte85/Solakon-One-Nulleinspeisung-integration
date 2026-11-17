@@ -1,4 +1,4 @@
-"""AC-Laden im rückgekoppelten Streckensimulator: früherer AC-PI und Stellwertrechnung am gemessenen Gerät."""
+"""AC-Laden im rückgekoppelten Streckensimulator: Stellwertrechnung am gemessenen Gerät."""
 from __future__ import annotations
 
 import importlib
@@ -8,7 +8,6 @@ import pytest
 from tests import harness as h
 from tests.strecke_ac import Geraet, bewertung, simulieren, stufen
 
-pi = importlib.import_module(h.PKG + ".pi")
 sp = importlib.import_module(h.PKG + ".setpoint")
 
 OFFSET = -50.0
@@ -16,18 +15,6 @@ TOLERANZ = 15.0
 LIMIT = 800.0
 # Hauslast je Abschnitt (ab Sekunde, W); nötige Ladeleistung = Offset − Hauslast
 HAUSLAST = ((0, -600.0), (60, -300.0), (120, -800.0), (180, -150.0), (240, -500.0))
-
-
-def _ac_pi(p_factor: float, i_factor: float = 0.0):
-    """Früherer AC-PI: Sollwert-Basis, Fehler Offset − Netz, Gate nur Totband."""
-    c = pi.PIController()
-
-    def regler(netz, ist, sollwert):
-        if abs(netz - OFFSET) <= TOLERANZ:
-            c.decay()
-            return None
-        return c.calculate(pi.PiStep(sollwert, -OFFSET, LIMIT, p_factor, i_factor), -netz)
-    return regler
 
 
 def _stellwert(netz, ist, sollwert):
@@ -60,17 +47,6 @@ def test_geraet_senken_als_sprung():
     for n in range(25):
         g.schritt(round(n * 0.1, 3))
     assert g.leistung == pytest.approx(200.0 - 15.0 + 34.0 * 0.4, abs=4)
-
-
-def test_ac_pi_klein_ueberschwingt_nicht_ist_aber_langsam():
-    ergebnis = _abschnitte(_ac_pi(0.3))
-    assert max(e["ueberschwingen"] for e in ergebnis) < 40
-    assert ergebnis[0]["einschwingzeit"] > 30
-
-
-def test_ac_pi_mit_p_1_ueberschwingt():
-    ergebnis = _abschnitte(_ac_pi(1.0))
-    assert ergebnis[0]["ueberschwingen"] > 150
 
 
 def test_stellwertrechnung_trifft_ohne_ueberschwingen():

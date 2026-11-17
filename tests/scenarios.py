@@ -15,8 +15,7 @@ from custom_components.solakon_nulleinspeisung.migrations import SolakonSettings
 from custom_components.solakon_nulleinspeisung.schema import InvalidSettings
 
 C = h.const
-# Literal statt Konstante, damit die Referenz auch vom Stand ohne das Setting erzeugbar ist.
-REST_KEY = "rest_in_discharge"
+REST_KEY = C.S_REST_IN_DISCHARGE
 
 COUNTS = {"cycle": 1500, "multi": 400, "stall": 120, "tariff": 160, "settings": 200, "wiring": 1, "derive": 1, "domain": 60, "rest": 300,
           "gridcharge": 160}
@@ -774,16 +773,11 @@ async def _run_derive() -> dict:
         args = (rng.choice([-900, -300, -16, 0, 14, 40, 600]), rng.choice([0, 100, 799, 800, 1200, 1300]),
                 rng.choice([-50, 0, 30]), rng.choice([0, 300, 800, 1500]), rng.choice([0.3, 1.3]),
                 rng.choice([0.0, 0.05, 0.3]))
-        ac, share, integ = rng.choice([False, True]), rng.choice([1.0, 0.5, 0.0]), rng.choice([0.0, 400.0, -2000.0])
+        share, integ = rng.choice([1.0, 0.5, 0.0]), rng.choice([0.0, 400.0, -2000.0])
         coord.pi.integral = integ
-        if ac:
-            # früherer AC-Modus: Fehlerrichtung invertiert, über negiertes Netz und Offset
-            grid, cur, off, *rest = args
-            out = coord.pi.calculate(h.pi_mod.PiStep(cur, -off, *rest, share), -grid)
-        else:
-            grid, cur, *rest = args
-            out = coord.pi.calculate(h.pi_mod.PiStep(cur, *rest, share), grid)
-        pi.append([list(args), ac, share, integ, out, round(coord.integral, 6)])
+        grid, cur, *rest = args
+        out = coord.pi.calculate(h.pi_mod.PiStep(cur, *rest, share), grid)
+        pi.append([list(args), share, integ, out, round(coord.integral, 6)])
     dyn = []
     for sd in (-1.0, 0.0, 10.0, 40.0, 500.0):
         for mn, mx in ((30, 250), (250, 30), (0, 0)):

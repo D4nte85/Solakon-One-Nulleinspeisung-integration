@@ -101,6 +101,8 @@ instanzen:
     gespeichert: false   # optional: Settings am Laden vorbei, ohne Rücksetzen auf den Standard; ohne flags
     sensoren: {soc: 40, modus: "1"}   # soc solar ist countdown leistung entladestrom timeout modus export kapazitaet
     integral: 0.0
+    vorheriger_ist: 0.0   # Ist-Leistung des vorigen Regelzyklus (`surplus.prev_actual`)
+    export_limit: true    # false: Instanz ohne Export-Limit-Entität
     folgt_ist: 1      # Ist-Sensor folgt dem Sollwert: 1, -1, 0 (meldet, bleibt stehen), null (gar nicht)
 schritte:             # je Schritt: Uhr vor, Sensoren setzen, regeln
   - nach: 0
