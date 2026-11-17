@@ -90,6 +90,20 @@ def test_stillstand_erst_nach_der_frist_dann_neu_schreiben_dann_ruhezustand():
     assert written == [400] and out.stall_actions == 2
 
 
+def test_bewegter_ist_wert_beendet_die_episode():
+    """Rückt der Ist-Wert nach dem Neuschreiben vor, beginnt das nächste Einfrieren wieder mit REWRITTEN."""
+    written: list[float] = []
+    ist = Ist(100.0, True, h.CLOCK.now - STALL_S)
+    out = _output_mit(ist, written)
+    assert asyncio.run(out.check_stall(400.0)) == (output_mod.Stall.REWRITTEN, 100.0)
+    h.CLOCK.now += 60
+    ist.power, ist.updated = 150.0, h.CLOCK.now
+    assert asyncio.run(out.check_stall(400.0)) is None
+    assert (out.stall_actions, out.stall_last_ts) == (0, 0.0)
+    h.CLOCK.now += STALL_S
+    assert asyncio.run(out.check_stall(400.0)) == (output_mod.Stall.REWRITTEN, 150.0)
+    assert written == [400, 400] and out.stall_actions == 1
+
 def test_nullung_bestaetigt_ohne_neues_schreiben():
     written: list[float] = []
     out = _output_mit(Ist(0.0, True, h.CLOCK.now + 1), written)

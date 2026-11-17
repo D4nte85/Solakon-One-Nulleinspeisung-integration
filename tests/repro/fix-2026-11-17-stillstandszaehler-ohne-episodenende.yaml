@@ -1,0 +1,27 @@
+titel: Nach einem bewegten Ist-Wert beginnt das nächste Einfrieren mit dem Neuschreiben
+bezug: fix-2026-11-17-stillstandszaehler-ohne-episodenende
+# a entlädt in Zone 1 gesättigt am Limit 800 W, die Ist-Leistung steht seit 400 s auf 0 W:
+# erste Stufe, der Sollwert wird neu geschrieben.
+# Danach meldet der Ist-Sensor 100 W (weiter außerhalb des Bands) und friert erneut ein.
+# Erwartet: Das zweite Einfrieren beginnt wieder mit dem Neuschreiben, nicht mit dem Ruhezustand.
+netz: 900
+instanzen:
+  - prefix: a
+    settings: {regulation_enabled: true}
+    flags: {cycle_active: true}
+    sensoren: {soc: 80, modus: "1", leistung: 800, ist: {wert: 0, alter: 400}}
+    folgt_ist: null
+schritte:
+  - nach: 0
+  - nach: 60
+    setzen: {a.ist: 100}
+  - nach: 310
+erwartet:
+  - schritt: 1
+    instanz: a
+    zustand: {last_action_key: act_output_rewritten}
+  - schritt: 3
+    instanz: a
+    zustand: {last_action_key: act_output_rewritten, out.stall_actions: 1}
+  - schritt: alle
+    kein_aufruf: {entity: select.a_mode}

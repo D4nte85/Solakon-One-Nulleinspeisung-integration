@@ -176,7 +176,7 @@ class Output:
     # ── Schreiben: Stillstand ────────────────────────────────────────────────
 
     def reset_stall(self) -> None:
-        """Stillstandszähler zurücksetzen: der Ausgang folgt dem Limit oder ist nicht prüfbar."""
+        """Stillstandszähler zurücksetzen: der Ausgang folgt dem Limit, bewegt sich oder ist nicht prüfbar."""
         self.stall_actions = 0
         self.stall_last_ts = 0.0
 
@@ -186,7 +186,9 @@ class Output:
         Kriterium: Limit ab `OUTPUT_STALL_MIN_LIMIT`, Abweichung über `OUTPUT_STALL_DEVIATION`
         bei einem Ist-Wert, dessen `last_updated` seit `OUTPUT_STALL_SECONDS` nicht vorrückt.
         Erster Treffer schreibt den Sollwert neu (`REWRITTEN`), jeder weitere liefert
-        `RECOVERY`. Mindestabstand zweier Urteile: `OUTPUT_STALL_SECONDS`.
+        `RECOVERY`. Mindestabstand zweier Urteile: `OUTPUT_STALL_SECONDS`. Rückt der Ist-Wert
+        binnen der Frist vor, ist die Episode beendet; das nächste Einfrieren beginnt wieder
+        mit dem Neuschreiben.
         """
         actual = self._read()
         if (limit < OUTPUT_STALL_MIN_LIMIT or not actual.ok or actual.updated is None
@@ -196,6 +198,7 @@ class Output:
 
         now = time.time()
         if now - actual.updated < OUTPUT_STALL_SECONDS:
+            self.reset_stall()
             return None
         if self.stall_last_ts and now - self.stall_last_ts < OUTPUT_STALL_SECONDS:
             return None
