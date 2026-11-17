@@ -61,8 +61,9 @@ async def release(hass: Any, holder: str) -> None:
     """`holder` austragen und seine Träger abgeben; mit dem letzten Halter alles abräumen.
 
     Abräumen: ausstehendes Speichern schreiben, Panel entfernen, Instanzliste und Laufzeitzustand
-    aus `hass.data` nehmen. Kommt während des Schreibens ein Halter dazu, bleibt alles stehen. Eine Instanz steht beim Aufruf nicht mehr in `hass.data[DOMAIN]`,
-    weil die Netzgruppe ihre Mitglieder dort liest.
+    aus `hass.data` nehmen. Kommt während des Schreibens ein Halter dazu, bleibt alles stehen.
+    Eine Instanz steht beim Aufruf nicht mehr in `hass.data[DOMAIN]`, weil die Netzgruppe ihre
+    Mitglieder dort liest.
     """
     if (rt := peek(hass)) is None:
         return
