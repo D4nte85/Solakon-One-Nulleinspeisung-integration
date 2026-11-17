@@ -5,6 +5,8 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+## [3.9.3] – 2026-11-17
+
 ### Behoben
 
 - **Laden einer Instanz während die letzte entladen wird:** Lud eine zweite Instanz, während das Entladen der letzten noch den Gruppenspeicher schrieb, räumte das Entladen danach den Laufzeitzustand trotzdem ab. Die zweite Instanz blieb mit Setup-Fehler stehen, ihre Trigger liefen weiter. Jetzt prüft das Freigeben nach dem Schreiben erneut, ob noch eine Instanz den Laufzeitzustand hält, und ein gescheitertes Setup meldet die Trigger des Coordinators ab (`runtime.py`, `__init__.py`).
