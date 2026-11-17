@@ -329,6 +329,15 @@ class ConfigBuffer {
   // Gespeicherten Stand setzen und Puffer leeren; `loaded` erst nach einem erfolgreichen Laden.
   reset(saved = {}, loaded = false) { this.saved = saved; this.dirty = {}; this.loaded = loaded; this.loadError = false; }
 
+  // Gespeicherten Stand nach dem Speichern von `sent` übernehmen; Änderungen, die während der
+  // Anfrage hinzukamen oder ein gesendetes Feld erneut änderten, bleiben im Puffer.
+  commit(saved, sent) {
+    this.saved = saved;
+    for (const [key, value] of Object.entries(sent)) {
+      if (key in this.dirty && this.dirty[key] === value) delete this.dirty[key];
+    }
+  }
+
   // Gespeicherter Stand mit den Änderungen darüber.
   merged() { return { ...this.saved, ...this.dirty }; }
 }
@@ -362,7 +371,6 @@ class SolakonPanel extends HTMLElement {
 
   set panel(val) {
     this._panel = val;
-    if (val?.config?.entry_id) { this._entryId = val.config.entry_id; }
     if (val?.config !== undefined) { this._checkInit(); }
   }
 
@@ -464,10 +472,13 @@ class SolakonPanel extends HTMLElement {
       this._instances = res.instances || [];
       this._groupInfo = grp.groups || [];
     } catch (_) {
-      this._instances = this._entryId
-        ? [{ entry_id: this._entryId, instance_name: "Solakon ONE", grid_sensor: "" }]
-        : [];
+      this._instances = [];
       this._groupInfo = [];
+      this._computeGroups();
+      this._renderInstBar();
+      const c = this.shadowRoot.getElementById("content");
+      if (c) c.innerHTML = `<p style="font-size:.88em;color:var(--error-color,#db4437);padding:12px 0">${this._t.status?.instances_load_error || ""}</p>`;
+      return;
     }
     this._computeGroups();
     if (this._instances.length > 0 && !this._activeInstance) {
@@ -830,7 +841,18 @@ class SolakonPanel extends HTMLElement {
     return changed;
   }
 
+  // Abfrage im Sekundentakt; eine neue beginnt erst, wenn die vorige fertig ist.
   async _loadStatus() {
+    if (this._statusBusy) return;
+    this._statusBusy = true;
+    try {
+      await this._loadStatusOnce();
+    } finally {
+      this._statusBusy = false;
+    }
+  }
+
+  async _loadStatusOnce() {
     if (this._activeInstance === "__overview__") {
       for (const inst of this._instances) {
         try {
@@ -1606,8 +1628,9 @@ ${this._textsMissing ? `
     if (!this._cfg.isDirty) return;
     const toast = this._t.toast || {};
     await this._wsAction(async () => {
-      await this._forInstance(() => this._ws("save_config", { changes: this._cfg.dirty }), res => {
-        this._cfg.reset(res.settings);
+      const sent = { ...this._cfg.dirty };
+      await this._forInstance(() => this._ws("save_config", { changes: sent }), res => {
+        this._cfg.commit(res.settings, sent);
         this._renderActiveTab();
       });
       this._showToast(toast.settings_saved || "");

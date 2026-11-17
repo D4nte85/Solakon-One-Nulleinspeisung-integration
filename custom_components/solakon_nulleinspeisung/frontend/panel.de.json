@@ -406,6 +406,7 @@
     "save":    "💾 Speichern"
   },
   "status": {
+    "instances_load_error": "Instanzen konnten nicht geladen werden — Seite erneut öffnen.",
     "loading":           "Lade…",
     "measurements_hdr":  "⚡ Messwerte",
     "ctrl_hdr":          "📈 Regelzustand",

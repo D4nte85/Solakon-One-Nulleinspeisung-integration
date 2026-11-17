@@ -406,6 +406,7 @@
     "save":    "💾 Save"
   },
   "status": {
+    "instances_load_error": "Instances could not be loaded — reopen the page.",
     "loading":           "Loading…",
     "measurements_hdr":  "⚡ Measurements",
     "ctrl_hdr":          "📈 Control State",
