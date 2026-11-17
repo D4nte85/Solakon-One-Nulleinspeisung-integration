@@ -27,7 +27,7 @@ def test_wartezeit_null_wartet_nicht(self_adjust):
     start = h.CLOCK.now
     asyncio.run(out.set_and_wait(100))
     assert written == [100]
-    assert h.CLOCK.now == start
+    assert h.CLOCK.now == pytest.approx(start, abs=1e-3)
 
 
 

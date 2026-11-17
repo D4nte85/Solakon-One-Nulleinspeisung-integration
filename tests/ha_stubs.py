@@ -7,7 +7,6 @@ jeweiligen FakeHass (siehe harness.py).
 from __future__ import annotations
 
 import copy
-import inspect
 import sys
 import types
 from datetime import datetime, timezone
@@ -58,8 +57,8 @@ class Store:
     `minor_version`, `key`, `data`. Laden migriert ältere Stände über
     `_async_migrate_func` und speichert das Ergebnis. `async_delay_save` merkt den
     Schreibauftrag dieser Instanz vor; `data_func` läuft erst beim Schreiben, das
-    `FakeHass.async_block_till_done` nach Ablauf der Frist auslöst. `async_remove`
-    verwirft nur den Auftrag der eigenen Instanz.
+    `FakeHass.write_due_stores` nach Ablauf der Frist auslöst, und erst dort wird der Inhalt
+    protokolliert. `async_remove` verwirft nur den Auftrag der eigenen Instanz.
     """
 
     def __init__(self, hass, version, key, *args, minor_version=1, **kwargs):
@@ -109,8 +108,8 @@ class Store:
         self._write(data)
 
     def async_delay_save(self, data_func, delay=0):
-        # Protokoll ohne Seiteneffekt: HA ruft `data_func` erst beim Schreiben auf.
-        self.hass.log_store("store_delay_save", self.key, inspect.unwrap(data_func)(), delay)
+        # HA ruft `data_func` erst beim Schreiben auf; den Inhalt protokolliert `write_pending`.
+        self.hass.log("store_delay_save", self.key, delay)
         self._pending = data_func
         self.due = self.hass.clock_now() + delay
         self.hass.pending_stores.add(self)
@@ -120,7 +119,9 @@ class Store:
         data_func = self._pending
         self._cancel()
         if data_func is not None:
-            self._write(data_func())
+            data = data_func()
+            self.hass.log_store("store_write", self.key, data)
+            self._write(data)
 
     async def _async_migrate_func(self, old_major_version, old_minor_version, old_data):
         raise NotImplementedError

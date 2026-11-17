@@ -53,10 +53,11 @@ def test_set_mode_zeitstempel_nur_bei_wechsel():
     d = _display()
     h.CLOCK.now += 10
     d.set_mode("discharge", "de")
-    assert d.mode_ts == h.Clock.START + 10
+    first = d.mode_ts
+    assert first == pytest.approx(h.Clock.START + 10, abs=1e-3)
     h.CLOCK.now += 10
     d.set_mode("discharge", "de")
-    assert d.mode_ts == h.Clock.START + 10
+    assert d.mode_ts == first
 
 
 @pytest.mark.parametrize("kw, zone, state", [

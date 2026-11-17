@@ -9,13 +9,12 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import importlib
-import itertools
 import json
 import logging
 import sys
 import weakref
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -56,7 +55,11 @@ class Clock:
         self.now = self.START
         self.hass = None
 
+    TICK = 1e-6
+
     def time(self):
+        """Jede Lesung rückt die Uhr um eine Mikrosekunde vor, wie in HA liegt jede Lesung echt nach der vorigen."""
+        self.now += self.TICK
         return self.now
 
     def monotonic(self):
@@ -65,6 +68,7 @@ class Clock:
     async def sleep(self, seconds):
         if self.hass is not None:
             self.hass.log("sleep", round(float(seconds), 3))
+            self.hass.states.deliver()
         self.now += float(seconds)
 
 
@@ -104,7 +108,9 @@ _patch_modules()
 
 # ── Zustände und Services ────────────────────────────────────────────────────
 
-_REPORT_SEQ = itertools.count()
+def age_ts(st: dict):
+    """`last_updated` aus dem Szenario-Schlüssel `age`; ohne `age` gilt die HA-Regel in `FakeStates.set`."""
+    return CLOCK.now - st["age"] if "age" in st else None
 
 
 class FakeState:
@@ -112,21 +118,35 @@ class FakeState:
         self.entity_id = entity_id
         self.state = str(state)
         self.attributes = dict(attributes or {})
-        ts = CLOCK.now if last_updated is None else last_updated
-        self.last_updated = datetime.fromtimestamp(ts, tz=timezone.utc)
-        # Eigener Meldezeitpunkt je Setzen, auch bei gleicher Uhrzeit.
-        self.last_reported = self.last_updated + timedelta(microseconds=next(_REPORT_SEQ))
+        now = datetime.fromtimestamp(CLOCK.time(), tz=timezone.utc)
+        self.last_reported = now
+        self.last_updated = now if last_updated is None else datetime.fromtimestamp(last_updated, tz=timezone.utc)
 
 
 class FakeStates:
     def __init__(self):
         self._states: dict[str, FakeState] = {}
         self.defaults: dict[str, dict] = {}   # Standardattribute je Entity, s. tests/geraet.py
+        self._reports: list[tuple] = []        # Meldungen nach einem Schreibbefehl, eingetroffen bei der nächsten Lesung
 
     def get(self, entity_id):
+        self.deliver()
         return self._states.get(entity_id)
 
+    def report_later(self, entity_id, state, attributes=None):
+        """Meldung, die wie ein Poll nach dem Service-Call eintrifft: bei der nächsten Lesung, dem nächsten Setzen oder zu Beginn des nächsten Wartens."""
+        self._reports.append((entity_id, state, attributes))
+
+    def deliver(self):
+        reports, self._reports = self._reports, []
+        for entity_id, state, attributes in reports:
+            self._set(entity_id, state, attributes)
+
     def set(self, entity_id, state, attributes=None, last_updated=None):
+        self.deliver()
+        self._set(entity_id, state, attributes, last_updated)
+
+    def _set(self, entity_id, state, attributes=None, last_updated=None):
         if state is None:
             self._states.pop(entity_id, None)
             return
@@ -159,15 +179,14 @@ class FakeServices:
                     # sign 0: Sensor meldet neu (last_reported), bleibt aber auf seinem Wert stehen
                     prev = self.hass.states.get(follower)
                     new = prev.state if sign == 0 and prev else _num(sign * float(value))
-                    self.hass.states.set(follower, new, prev.attributes if prev else {})
+                    self.hass.states.report_later(follower, new, prev.attributes if prev else {})
         elif domain == "select" and service == "select_option":
             if not geraet or value in geraet.optionen:
                 self.hass.states.set(eid, value, attrs)
         # Szenario-Schlüssel `nach_aufruf`: Zustände einmalig nach dem ersten Schreibbefehl auf `eid`
         # setzen, auch wenn HA ihn abweist
         for other, st in self.hass.on_call.pop(eid, {}).items():
-            self.hass.states.set(other, st.get("state"), st.get("attrs"),
-                                 last_updated=CLOCK.now - st.get("age", 0))
+            self.hass.states.set(other, st.get("state"), st.get("attrs"), last_updated=age_ts(st))
 
 
 def _num(value):
@@ -184,6 +203,7 @@ class FakeConfigEntries:
     def __init__(self, hass):
         self.hass = hass
         self.entries = []
+        self.entities: dict[str, list] = {}   # entry_id -> hinzugefügte Entitäten, auch entfernte
 
     def async_entries(self, domain=None):
         return list(self.entries)
@@ -199,8 +219,26 @@ class FakeConfigEntries:
         self.hass.log("forward_setups", entry.entry_id, list(platforms))
 
     async def async_unload_platforms(self, entry, platforms):
+        """Wie HA: Die Entitäten des Eintrags werden samt `async_will_remove_from_hass` entfernt."""
         self.hass.log("unload_platforms", entry.entry_id, list(platforms))
+        for entity in self.entities.get(entry.entry_id, []):
+            if not entity.__dict__.get("removed"):
+                await entity.async_remove()
         return True
+
+    def adder(self, entry_id):
+        """Hinzufüge-Funktion wie in HA: Entitäten dem Eintrag zuordnen und `async_added_to_hass` ausführen.
+
+        HA weist eine Entität ab, deren unique_id eine lebende Entität schon trägt.
+        """
+        def add(entities):
+            for entity in entities:
+                live = {e.unique_id for ents in self.entities.values() for e in ents if not e.__dict__.get("removed")}
+                if entity.unique_id in live:
+                    raise AssertionError(f"unique_id {entity.unique_id} ist schon vergeben")
+                self.entities.setdefault(entry_id, []).append(entity)
+                _run_sync(entity.async_added_to_hass())
+        return add
 
     async def async_reload(self, entry_id):
         self.hass.log("reload", entry_id)
@@ -290,11 +328,15 @@ class FakeHass:
             if self.tasks:
                 await self.tasks.pop(0)
                 continue
-            due = sorted((s for s in self.pending_stores if s.due <= CLOCK.now), key=lambda s: s.due)
-            if not due:
+            if not self.write_due_stores():
                 return
-            for store in due:
-                store.write_pending()
+
+    def write_due_stores(self, everything: bool = False) -> bool:
+        """Schreibaufträge nach Ablauf ihrer Frist ausführen, mit `everything` alle; True, wenn einer lief."""
+        due = sorted((s for s in self.pending_stores if everything or s.due <= CLOCK.now), key=lambda s: s.due)
+        for store in due:
+            store.write_pending()
+        return bool(due)
 
     def close_tasks(self) -> None:
         """Nicht abgearbeitete Tasks schließen (Testende ohne `async_block_till_done`)."""
@@ -451,10 +493,12 @@ def capture_logs() -> LogCapture:
 
 
 def build_entities(hass, coord) -> list:
-    entities: list = []
+    """Plattformen der Instanz laden; liefert die dabei hinzugefügten Entitäten."""
+    added = hass.config_entries.entities.setdefault(coord.entry.entry_id, [])
+    start = len(added)
     for mod in (sensor_mod, binary_mod, switch_mod, number_mod):
-        _run_sync(mod.async_setup_entry(hass, coord.entry, entities.extend))
-    return entities
+        _run_sync(mod.async_setup_entry(hass, coord.entry, hass.config_entries.adder(coord.entry.entry_id)))
+    return added[start:]
 
 
 def _run_sync(coro):
@@ -466,12 +510,7 @@ def _run_sync(coro):
     raise RuntimeError("Coroutine suspendiert unerwartet")
 
 
-STATIC_ENTITY_ATTRS = (
-    "unique_id", "translation_key", "entity_category", "device_class", "state_class",
-    "native_unit_of_measurement", "suggested_display_precision", "options",
-    "has_entity_name", "should_poll", "device_info",
-    "native_min_value", "native_max_value", "native_step", "mode",
-)
+STATIC_ENTITY_ATTRS = tuple(a for a in ha_stubs._ENTITY_ATTRS if a != "icon")
 
 
 def mask_version(rec: dict) -> dict:

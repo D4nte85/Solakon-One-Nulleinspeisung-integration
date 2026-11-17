@@ -21,15 +21,6 @@ SWITCH_KEY = f"{DOMAIN}_soc_switch_state"
 NUMBERS_KEY = f"{DOMAIN}_group_numbers"
 
 
-def _sofort(coro) -> None:
-    """Hook ohne Wartepunkt im Aufrufer zu Ende führen; die Hinzufüge-Funktion von HA ist synchron."""
-    try:
-        coro.send(None)
-    except StopIteration:
-        return
-    raise AssertionError("Hook mit Wartepunkt")
-
-
 def _key(entry) -> str:
     return f"{DOMAIN}_{entry.entry_id}"
 
@@ -41,7 +32,7 @@ class Umgebung:
         self.hass = h.FakeHass("de")
         self.entries = {p: h.FakeEntry(f"entry_{p}", h.entry_data(p)) for p in prefixes}
         self.hass.config_entries.entries = list(self.entries.values())
-        self.added: dict[str, list] = {}
+        self.added = self.hass.config_entries.entities
         self._integration_setup = False
 
     def coord(self, p):
@@ -56,24 +47,12 @@ class Umgebung:
             entry = self.entries[p]
             await h.integration.async_setup_entry(self.hass, entry)
             for platform in (h.sensor_mod, h.binary_mod, h.switch_mod, h.number_mod):
-                await platform.async_setup_entry(self.hass, entry, self._adder(entry.entry_id))
-
-    def _adder(self, entry_id):
-        """Hinzufüge-Funktion wie in HA: Entitäten eintragen und `async_added_to_hass` ausführen."""
-        def add(entities):
-            for entity in entities:
-                self.added.setdefault(entry_id, []).append(entity)
-                _sofort(entity.async_added_to_hass())
-        return add
+                await platform.async_setup_entry(self.hass, entry, self.hass.config_entries.adder(entry.entry_id))
 
     async def unload(self, *prefixes):
         """Entladen wie in HA: mit der Plattform verschwinden auch die Entitäten des Eintrags."""
         for p in prefixes:
-            entry = self.entries[p]
-            assert await h.integration.async_unload_entry(self.hass, entry)
-            for entity in self.added.get(entry.entry_id, []):
-                if not entity.__dict__.get("removed"):
-                    await entity.async_remove()
+            assert await h.integration.async_unload_entry(self.hass, self.entries[p])
 
     async def remove(self, *prefixes):
         """Löschen wie in HA: entladen, aus der Registrierung austragen, dann `async_remove_entry`."""

@@ -477,8 +477,7 @@ def generate(kind: str) -> list[dict]:
 
 def _apply_states(hass, states: dict) -> None:
     for eid, st in states.items():
-        age = st.get("age", 0)
-        hass.states.set(eid, st.get("state"), st.get("attrs"), last_updated=h.CLOCK.now - age)
+        hass.states.set(eid, st.get("state"), st.get("attrs"), last_updated=h.age_ts(st))
 
 
 def _setup_env(spec, dist_store: bool = False):
@@ -541,11 +540,12 @@ class Lauf:
             coord.surplus.prev_actual = inst["prev_actual"]
 
     async def schritte(self):
-        """Je Schritt: Uhr vor, Protokoll leer, Zustände und `on_call` setzen; liefert (Index, Schritt)."""
+        """Je Schritt: Uhr vor, Protokoll leer, fällige Schreibaufträge, Zustände und `on_call` setzen; liefert (Index, Schritt)."""
         hass = self.hass
         for idx, step in enumerate(self.spec["steps"]):
             h.CLOCK.now += step["advance"]
             hass.events = []
+            hass.write_due_stores()
             _apply_states(hass, step["set"])
             hass.on_call = {eid: dict(states) for eid, states in step.get("on_call", {}).items()}
             yield idx, step
@@ -581,6 +581,9 @@ async def _run_cycle_spec(spec) -> dict:
             "state": {p: h.coord_state(c) for p, c in coords.items()},
             "groups": h.groups_state(hass),
         })
+    hass.events = []
+    hass.write_due_stores(everything=True)
+    rec["writes_end"] = hass.events
     primary = coords["a"]
     rec["ws_status"] = await h.ws_status(hass, primary.entry.entry_id)
     rec["entities"] = [h.entity_state(e) for e in h.build_entities(hass, primary)]

@@ -74,7 +74,8 @@ def test_soc_switch_zustand_je_gruppe_und_gespeichert():
     _load(hass)
     gs.require_store(hass).group("sensor.grid").soc_switch_shares({"a": a, "b": b}, a, 50)
     gs.require_store(hass).group("sensor.other").soc_switch_shares({"x": x}, x, 90.0)
-    saves = [e for e in hass.events if e[0] == "store_delay_save" and e[1] == SWITCH_KEY]
+    hass.write_due_stores(everything=True)
+    saves = [e for e in hass.events if e[0] == "store_write" and e[1] == SWITCH_KEY]
     assert {g: st["active_id"] for g, st in saves[-1][2]["rest"].items()} == {
         "sensor.grid": "b", "sensor.other": "x"}
 

@@ -22,23 +22,18 @@ from tests import scenarios  # noqa: E402
 
 C = h.const
 
-# Kurzname → (Entity-Muster, Standardeinheit, Standardwert) je Instanz
-_G = {k: geraet.ENTITIES[c].einheit for k, c in (
-    ("soc", h.const.CONF_SOC_SENSOR), ("solar", h.const.CONF_SOLAR_SENSOR), ("ist", h.const.CONF_ACTUAL_SENSOR),
-    ("countdown", h.const.CONF_TIMEOUT_COUNTDOWN), ("leistung", h.const.CONF_ACTIVE_POWER),
-    ("entladestrom", h.const.CONF_DISCHARGE_CURRENT), ("timeout", h.const.CONF_TIMEOUT_SET),
-    ("export", h.const.CONF_EXPORT_LIMIT))}
-# Einheiten der Geräteseite aus tests/geraet.py; die Kapazität liefert die Geräte-Integration nicht
+# Kurzname → Config-Schlüssel der Geräteseite und Standardwert
+_GERAET = {
+    "soc": (C.CONF_SOC_SENSOR, 50), "solar": (C.CONF_SOLAR_SENSOR, 0), "ist": (C.CONF_ACTUAL_SENSOR, 0),
+    "countdown": (C.CONF_TIMEOUT_COUNTDOWN, 3000), "leistung": (C.CONF_ACTIVE_POWER, 0),
+    "entladestrom": (C.CONF_DISCHARGE_CURRENT, 40), "timeout": (C.CONF_TIMEOUT_SET, 3599),
+    "modus": (C.CONF_MODE_SELECT, "1"), "export": (C.CONF_EXPORT_LIMIT, 800),
+}
+_MUSTER = h.entry_data("{p}")
+# Kurzname → (Entity-Muster, Standardeinheit, Standardwert) je Instanz; Muster aus harness.entry_data,
+# Einheiten aus tests/geraet.py; die Kapazität liefert die Geräte-Integration nicht
 INSTANZ_SENSOREN = {
-    "soc":          ("sensor.{p}_soc", _G["soc"], 50),
-    "solar":        ("sensor.{p}_solar", _G["solar"], 0),
-    "ist":          ("sensor.{p}_actual", _G["ist"], 0),
-    "countdown":    ("sensor.{p}_countdown", _G["countdown"], 3000),
-    "leistung":     ("number.{p}_power", _G["leistung"], 0),
-    "entladestrom": ("number.{p}_discharge", _G["entladestrom"], 40),
-    "timeout":      ("number.{p}_timeout", _G["timeout"], 3599),
-    "modus":        ("select.{p}_mode", None, "1"),
-    "export":       ("number.{p}_export", _G["export"], 800),
+    **{k: (_MUSTER[c], geraet.ENTITIES[c].einheit, std) for k, (c, std) in _GERAET.items()},
     "kapazitaet":   ("sensor.{p}_capacity", "kWh", 2.0),
 }
 FLAGS = ("cycle_active", "surplus_active", "solar_zero_entry_armed")

@@ -1,8 +1,6 @@
 """Speichermigrationen: je Speicher eine Store-Klasse, je Version ein Schritt."""
 from __future__ import annotations
 
-import functools
-
 import logging
 
 from homeassistant.core import HomeAssistant
@@ -110,7 +108,6 @@ class SolakonStore(Store):
     def async_delay_save(self, data_func, delay: float = 0) -> None:
         """Wie `Store.async_delay_save`; merkt den Auftrag bis zu seinem Schreiben vor."""
 
-        @functools.wraps(data_func)
         def write():
             """Auftrag als geschrieben vermerken und die Daten liefern."""
             self._queued = None

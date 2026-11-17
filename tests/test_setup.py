@@ -93,14 +93,14 @@ def _group_setup(entries: list[h.FakeEntry]) -> tuple[h.FakeHass, dict[str, list
     """Instanzen anlegen und ihre number-Plattform in Reihenfolge von `entries` laden; Entitäten je Eintrag."""
     hass = h.FakeHass("de")
     hass.config_entries.entries = list(entries)
-    added: dict[str, list] = {e.entry_id: [] for e in entries}
+    added = hass.config_entries.entities
 
     async def run():
         await h.integration.async_setup(hass, {})
         for entry in entries:
             await h.integration.async_setup_entry(hass, entry)
         for entry in entries:
-            await h.number_mod.async_setup_entry(hass, entry, added[entry.entry_id].extend)
+            await h.number_mod.async_setup_entry(hass, entry, hass.config_entries.adder(entry.entry_id))
 
     asyncio.run(run())
     return hass, added
@@ -127,6 +127,7 @@ def test_gesamtlimit_setzen_speichert_nur_das_feld_und_stoesst_regelung_an():
                                 h.FakeEntry("entry_b", h.entry_data("b"))])
     entity = _group_limits(added)["entry_a"][0]
     writes = []
+    asyncio.run(entity.async_will_remove_from_hass())
     entity.async_write_ha_state = lambda: writes.append(entity.native_value)
     asyncio.run(entity.async_added_to_hass())
     hass.events.clear()

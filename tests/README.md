@@ -12,11 +12,19 @@ importiert. Vier Schichten nutzen das:
 | Panel | Render-Vergleich von `solakon-panel.js` gegen einen git-Stand | `python tests/panel/vergleich.py [REV]` |
 
 Zustände folgen Home Assistant: Setzen mit gleichem Zustand und gleichen Attributen rückt nur
-`last_reported` vor, `last_updated` bleibt stehen. Ein Ist-Sensor mit `folgt_ist: 0` meldet also
-neu, gilt für die Stillstandserkennung aber als unverändert.
+`last_reported` vor, `last_updated` bleibt stehen. Das gilt auch für Szenario-Zustände und
+Repro-`setzen`; nur ein ausdrückliches `age` (`alter`) setzt `last_updated`. Ein Ist-Sensor mit
+`folgt_ist: 0` meldet also neu, gilt für die Stillstandserkennung aber als unverändert.
+`last_reported` ist der Zeitpunkt des Setzens. Jede Lesung der Uhr (`time.time()`) rückt sie um
+eine Mikrosekunde vor, so liegt eine Meldung vor einem Schreibbefehl echt davor. Folger-Sensoren
+melden nach dem Service-Call wie ein Poll: bei der nächsten Lesung, dem nächsten Setzen oder zu
+Beginn des nächsten Wartens.
 
 Entitäten folgen Home Assistant im Lebenszyklus (`test_lebenszyklus.py`): Die Hinzufüge-Funktion
-führt `async_added_to_hass` aus, `Entity.async_remove` und das Entladen `async_will_remove_from_hass`.
+`hass.config_entries.adder(entry_id)` führt die Entitäten je Eintrag, weist eine zweite lebende
+Entität mit gleicher `unique_id` ab und führt `async_added_to_hass` aus. `Entity.async_remove`
+führt `async_will_remove_from_hass` aus, `async_unload_platforms` entfernt so die Entitäten des
+Eintrags, bevor `async_unload_entry` die Instanz abräumt.
 
 `Store` und Tasks folgen Home Assistant (`helpers/storage.py`). `hass.storage[key]` hält den
 Umschlag wie die Datei in `.storage` (`version`, `minor_version`, `data`): Tests legen Stände
@@ -25,8 +33,10 @@ Umschlag wie die Datei in `.storage` (`version`, `minor_version`, `data`): Tests
 der Frist, und zwar den Stand zum Schreibzeitpunkt. `async_remove` verwirft nur den
 Schreibauftrag der eigenen Instanz. `async_create_task` plant die Koroutine ein, statt sie im
 Aufrufer auszuführen. `await hass.async_block_till_done()` arbeitet die eingeplanten Tasks ab
-und danach die fälligen Schreibaufträge. Szenarioläufe rufen `_async_regulate` je Schritt
-selbst auf und schließen angestoßene Zyklen am Ende ungelaufen (`h.run`, `conftest.py`).
+und danach die fälligen Schreibaufträge. Den Inhalt protokolliert die Attrappe erst beim
+Schreiben (`store_write`). Szenarioläufe rufen `_async_regulate` je Schritt selbst auf, schreiben
+zu Beginn jedes Schritts die fälligen Aufträge, am Ende des Laufs alle übrigen, und schließen
+angestoßene Zyklen am Ende ungelaufen (`h.run`, `conftest.py`).
 
 Der Szenariogenerator (`scenarios.py`) zieht aus einem Zufallsstrom je Szenarioart. Neue
 Settings kommen über `gen_settings_ext` aus einem zweiten Strom (`solakon-<art>-ext`) dazu; so
