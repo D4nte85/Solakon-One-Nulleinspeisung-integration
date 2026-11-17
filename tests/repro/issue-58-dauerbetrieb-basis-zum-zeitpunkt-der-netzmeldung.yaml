@@ -1,0 +1,26 @@
+titel: Dauerbetrieb — pi_base zählt Sollwerte, die Schwestern auf dieselbe Netzmeldung hin geschrieben haben, nicht mit
+bezug: issue-58-gleichzeitiger-fall-a-erster-pi-schritt
+# Drei Instanzen im Entlade-Pool bei je 191 W, Netz +10 W, Ziel −50 W, Fehler 60 W, Integral 0.
+# Gruppenschritt richtig: 60 × 0,93 = 55,8 W, je Instanz +18,6 W → 209,6 W.
+netz: 10
+verteilung: {global_max_power: 2400}
+instanzen:
+  - prefix: a
+    settings: {regulation_enabled: true, p_factor: 0.9, i_factor: 0.03, offset_1: -50}
+    flags: {cycle_active: true}
+    sensoren: {soc: 60, modus: "1", ist: 191, leistung: 191}
+  - prefix: b
+    settings: {regulation_enabled: true, p_factor: 0.9, i_factor: 0.03, offset_1: -50}
+    flags: {cycle_active: true}
+    sensoren: {soc: 60, modus: "1", ist: 191, leistung: 191}
+  - prefix: c
+    settings: {regulation_enabled: true, p_factor: 0.9, i_factor: 0.03, offset_1: -50}
+    flags: {cycle_active: true}
+    sensoren: {soc: 60, modus: "1", ist: 191, leistung: 191}
+schritte:
+  - nach: 0
+    wer: all
+erwartet:
+  - aufruf: {entity: a.leistung, wert_min: 205, wert_max: 214}
+  - aufruf: {entity: b.leistung, wert_min: 205, wert_max: 214}
+  - aufruf: {entity: c.leistung, wert_min: 205, wert_max: 214}

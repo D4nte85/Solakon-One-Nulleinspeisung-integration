@@ -19,7 +19,7 @@ CS = schema.cycle_settings(h.const.SETTINGS_DEFAULTS)._replace(
 LIMITS = limits.PowerLimits(zone0=1200, zone12=800, ac=800, export=1200, pv_reserve=50)
 BASE = dict(
     cs=CS, limits=LIMITS, mode="1", cycle_active=True, surplus_active=False, session="none", cap_reason="",
-    grid=30.0, solar=5000.0, current_power=400.0,
+    grid=30.0, grid_fresh=True, solar=5000.0, current_power=400.0,
     ac_offset=-50.0, target_offset=30.0, ac_share=1.0, share=1.0,
     ac_charge=300.0, ac_pool_charge=300.0, discharge=390.0, discharge_pool=390.0, discharge_base=400.0,
 )
@@ -120,3 +120,13 @@ def test_entladen_stellwert_rampe_nichts():
     # Ist 200 W unter der Ausgangsleistung 400 W, Stellwert höher: nichts schreiben
     d = _decide(grid=400.0, pi_enabled=False, discharge=200.0, discharge_pool=200.0)
     assert d.kind == paths.IDLE
+
+
+def test_netzmeldung_vor_modus_schreibbefehl_ohne_schritt():
+    """Entladen und AC-Stellwert warten auf eine Netzmeldung nach dem Modus-Schreibbefehl, außer über der Obergrenze; Festwerte nicht."""
+    assert _decide(grid=200.0, grid_fresh=False).kind == paths.IDLE
+    assert _decide(grid=200.0, grid_fresh=False, pi_enabled=False).kind == paths.IDLE
+    assert _decide(session="ac_charge", grid=-50.0, current_power=300.0, grid_fresh=False).kind == paths.IDLE
+    assert _decide(grid=200.0, grid_fresh=False, current_power=900.0).kind == paths.PI_STEP
+    assert _decide(session="tariff_charge", grid_fresh=False).kind == paths.FIXED
+    assert _decide(surplus_active=True, grid_fresh=False).kind == paths.FIXED

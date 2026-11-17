@@ -95,7 +95,7 @@ def test_pi_base_pool_mal_anteil():
     a, b = M("a", setpoint=999), M("b", setpoint=100)
     c = M("c", setpoint=50, discharge=False, charge_session="ac_charge")
     _, g = _group(a, b, c)
-    assert g.pi_base(a, 10, 0.5) == (10 + 100) * 0.5
+    assert g.pi_base(a, 10, 0.5, 0.0) == (10 + 100) * 0.5
 
 
 def test_config_mit_defaults():

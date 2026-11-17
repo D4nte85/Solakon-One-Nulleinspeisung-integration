@@ -1,0 +1,41 @@
+titel: Gleichzeitiger Fall A mit Stellwertrechnung — erster Stellwert erst mit frischer Netzmeldung und vollem Entlade-Pool
+bezug: issue-58-gleichzeitiger-fall-a-erster-pi-schritt
+# Wie der PI-Fall, Entlade-PI aus: Stellwert = Fehler-Anteil × (Pool-Ist + Bedarf), Bedarf 616 W,
+# je Instanz 205 W. Ist-Sensoren folgen nicht (Totzeit länger als der Abstand der Regelzyklen).
+netz: 566
+verteilung: {global_max_power: 2400}
+instanzen:
+  - prefix: a
+    settings: {regulation_enabled: true, pi_enabled: false, offset_1: -50}
+    flags: {cycle_active: false}
+    sensoren: {soc: 60, modus: "0", ist: 0, leistung: 0}
+    folgt_ist: null
+  - prefix: b
+    settings: {regulation_enabled: true, pi_enabled: false, offset_1: -50}
+    flags: {cycle_active: false}
+    sensoren: {soc: 60, modus: "0", ist: 0, leistung: 0}
+    folgt_ist: null
+  - prefix: c
+    settings: {regulation_enabled: true, pi_enabled: false, offset_1: -50}
+    flags: {cycle_active: false}
+    sensoren: {soc: 60, modus: "0", ist: 0, leistung: 0}
+    folgt_ist: null
+schritte:
+  - nach: 0
+    wer: all
+  - nach: 5
+    setzen: {netz: 566}
+    wer: all
+erwartet:
+  - schritt: 1
+    kein_aufruf: {entity: a.leistung, wert_min: 1}
+  - schritt: 1
+    kein_aufruf: {entity: b.leistung, wert_min: 1}
+  - schritt: 1
+    kein_aufruf: {entity: c.leistung, wert_min: 1}
+  - schritt: 2
+    aufruf: {entity: a.leistung, wert_min: 200, wert_max: 210}
+  - schritt: 2
+    aufruf: {entity: b.leistung, wert_min: 200, wert_max: 210}
+  - schritt: 2
+    aufruf: {entity: c.leistung, wert_min: 200, wert_max: 210}

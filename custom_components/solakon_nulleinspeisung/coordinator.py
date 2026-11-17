@@ -152,10 +152,12 @@ class SolakonCoordinator:
         self.discharge_locked: bool = False
         # Zyklus an einem Guard abgebrochen (Kernsensor fehlt, SOC-Limits ungültig)
         self._cycle_blocked: bool = False
+        # Meldezeitpunkt des Netzsensors beim letzten Modus-Schreibbefehl, der den Modus geändert hat (Unix-Sekunden)
+        self._mode_grid_ts: float = 0.0
 
         self.out = Output(
             lambda value: self._set_number(self.entry.data[CONF_ACTIVE_POWER], value),
-            self._read_actual, self._warn_hardware,
+            self._read_actual, self.output_setpoint, self._warn_hardware,
         )
 
         self.dyn = DynamicOffset()
@@ -300,6 +302,12 @@ class SolakonCoordinator:
     def output_setpoint(self) -> float:
         """Gesetzte Ausgangsleistung."""
         return self._core(CONF_ACTIVE_POWER)
+
+    def setpoint_at(self, ts: float) -> float:
+        """Gesetzte Ausgangsleistung zum Zeitpunkt der Netzmeldung `ts` laut `Output.setpoint_at`; 0 W, wenn der Moduswechsel nicht vor `ts` lag."""
+        if ts <= self._mode_grid_ts:
+            return 0.0
+        return self.out.setpoint_at(ts)
 
     def live_values(self) -> dict[str, float | None]:
         """Netz, Ist-Leistung und PV in W, SOC in %; ohne Zahl `None`."""
@@ -464,9 +472,12 @@ class SolakonCoordinator:
         return True
 
     async def _set_mode(self, mode: str) -> None:
-        """select.select_option — nur wenn Regulation aktiviert."""
+        """select.select_option — nur wenn Regulation aktiviert; merkt bei einem Moduswechsel den Meldezeitpunkt des Netzsensors."""
         if not self.regulating:
             return
+        if self._str(self.entry.data[CONF_MODE_SELECT]) != mode:
+            grid_state = self.hass.states.get(self.entry.data[CONF_GRID_SENSOR])
+            self._mode_grid_ts = grid_state.last_reported.timestamp() if grid_state is not None else 0.0
         await self.hass.services.async_call(
             "select", "select_option",
             {"entity_id": self.entry.data[CONF_MODE_SELECT], "option": mode},
@@ -908,6 +919,7 @@ class SolakonCoordinator:
             self._messages.fail(("err_core_sensor", {"sensor": second}))
             return True
         grid, solar = second[CONF_GRID_SENSOR], second[CONF_SOLAR_SENSOR]
+        grid_ts = self.hass.states.get(cfg[CONF_GRID_SENSOR]).last_reported.timestamp()
 
         # Eine Energierichtung je Netzgruppe: lädt eine Schwester, entlädt Zone 1 nur PV.
         # Ebenso beim Aufladen mit Hausvorrang.
@@ -924,11 +936,11 @@ class SolakonCoordinator:
         d = decide_path(PathInputs(
             cs=cs, limits=limits, mode=mode, cycle_active=self.cycle_active,
             surplus_active=self.surplus_active, session=self.charge_session, cap_reason=cap_reason,
-            grid=grid, solar=solar, current_power=current_power,
+            grid=grid, grid_fresh=grid_ts > self._mode_grid_ts, solar=solar, current_power=current_power,
             ac_offset=ac_offset, target_offset=target_offset, ac_share=pos.ac_share, share=pos.share,
             ac_charge=-actual, ac_pool_charge=-self.group.ac_actual(self, actual),
             discharge=actual, discharge_pool=self.group.discharge_actual(self, actual),
-            discharge_base=self.group.pi_base(self, current_power, pos.share),
+            discharge_base=self.group.pi_base(self, current_power, pos.share, grid_ts),
         ))
         if d.decay:
             self.pi.decay()

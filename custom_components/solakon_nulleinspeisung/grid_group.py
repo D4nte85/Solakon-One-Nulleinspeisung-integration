@@ -41,6 +41,7 @@ class Member(Protocol):
     def capacity_kwh(self, entity_id: str) -> float | None: ...
     def actual_power(self) -> float: ...
     def output_setpoint(self) -> float: ...
+    def setpoint_at(self, ts: float) -> float: ...
 
 
 class GroupState(Protocol):
@@ -223,9 +224,9 @@ class NetGroup:
         """Summe der Ist-Leistung im AC-Pool; der eigene Wert zählt immer."""
         return pool_sum(self.ac_pool(), me, own_actual, lambda m: m.actual_power())
 
-    def pi_base(self, me: Member, own_setpoint: float, share: float) -> float:
-        """Grundwert des PI-Schritts: Summe der Sollwerte im Entlade-Pool mal `share`."""
-        return pool_sum(self.discharge_pool(), me, own_setpoint, lambda m: m.output_setpoint()) * share
+    def pi_base(self, me: Member, own_setpoint: float, share: float, grid_ts: float) -> float:
+        """Grundwert des PI-Schritts: Summe der Sollwerte im Entlade-Pool zum Zeitpunkt der Netzmeldung `grid_ts` mal `share`."""
+        return pool_sum(self.discharge_pool(), me, own_setpoint, lambda m: m.setpoint_at(grid_ts)) * share
 
     def sister_charging(self, me: Member) -> bool:
         """Ein anderes regelndes Mitglied lädt (AC, Tarif oder Netz-Laden)."""

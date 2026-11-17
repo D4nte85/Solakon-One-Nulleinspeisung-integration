@@ -22,6 +22,7 @@ IDLE = "idle"                # nichts tun
 class PathInputs:
     """Schnappschuss, Grenzen, Zustand, Messwerte, Offsets und Anteile der PI-Phase.
 
+    `grid_fresh`: die Netzmeldung kam nach dem letzten Modus-Schreibbefehl der Instanz, der den Modus geändert hat.
     `cap_reason` ist der Grund des PV-Deckels laut `limits.pv_cap_reason`, leer ohne Deckel;
     `decide` nennt ihn im Aktionstext nur im Zyklus, wo erst er die Grenze auf PV minus Reserve setzt.
     """
@@ -34,6 +35,7 @@ class PathInputs:
     session: str
     cap_reason: str
     grid: float
+    grid_fresh: bool
     solar: float
     current_power: float
     ac_offset: float
@@ -65,6 +67,8 @@ class PathDecision:
 def decide(inp: PathInputs) -> PathDecision:
     """Pfad nach Regelzustand: Zone-0-Festwert, AC-Stellwert, Tarif- oder Netz-Lade-Festwert oder Entladen.
 
+    AC-Stellwert und Entladen warten auf eine Netzmeldung nach dem letzten Moduswechsel,
+    außer die Ausgangsleistung liegt über ihrer Obergrenze.
     Entladen schreibt nach dem Gate einen PI-Schritt, bei ausgeschaltetem `pi_enabled`
     stattdessen den Stellwert auf Ist-Basis (Bedarf Netz − Offset, ohne Mindestleistung).
     Obergrenze ist `limits.pi_max`. Mit Grund gilt der PV-Deckel auch im Zyklus und wählt dort
@@ -74,7 +78,15 @@ def decide(inp: PathInputs) -> PathDecision:
     if inp.surplus_active:
         return PathDecision(FIXED, limits.zone0, "act_zone0_output")
 
+    if inp.session == SESSION_TARIFF:
+        return PathDecision(FIXED, cs.tariff_power, "act_tariff_power", ac_charge_mode=True)
+
+    if inp.session == SESSION_GRID:
+        return PathDecision(FIXED, cs.grid_charge_power, "act_grid_charge_power", ac_charge_mode=True)
+
     if inp.session == SESSION_AC:
+        if not inp.grid_fresh and inp.current_power <= limits.ac:
+            return PathDecision(IDLE)
         value = setpoint.ac(inp.grid, inp.ac_charge, inp.ac_pool_charge, inp.current_power,
                             inp.ac_offset, limits.ac, cs.ac_min_power, inp.ac_share,
                             cs.tolerance)
@@ -82,14 +94,10 @@ def decide(inp: PathInputs) -> PathDecision:
             return PathDecision(IDLE)
         return PathDecision(SETPOINT, value, "act_ac_setpoint", ac_charge_mode=True)
 
-    if inp.session == SESSION_TARIFF:
-        return PathDecision(FIXED, cs.tariff_power, "act_tariff_power", ac_charge_mode=True)
-
-    if inp.session == SESSION_GRID:
-        return PathDecision(FIXED, cs.grid_charge_power, "act_grid_charge_power", ac_charge_mode=True)
-
     capped = inp.cap_reason if inp.cycle_active else ""
     dynamic_max = limits.pi_max(inp.cycle_active, inp.solar, bool(inp.cap_reason))
+    if not inp.grid_fresh and inp.current_power <= dynamic_max:
+        return PathDecision(IDLE)
     gate = gate_discharge(inp.grid, inp.current_power, inp.target_offset, dynamic_max, cs.tolerance)
     if gate == STEP and not cs.pi_enabled:
         value = setpoint.value(inp.grid - inp.target_offset, inp.discharge, inp.discharge_pool,

@@ -5,6 +5,7 @@ import asyncio
 import enum
 import logging
 import time
+from collections import deque
 from typing import Any, Awaitable, Callable, NamedTuple
 
 from .const import (
@@ -14,6 +15,9 @@ from .const import (
 from .pi import clamp as _clamp
 
 _LOGGER = logging.getLogger(__name__)
+
+# Gemerkte Schreibbefehle für `Output.setpoint_at`.
+HISTORY_LEN = 8
 
 
 class Actual(NamedTuple):
@@ -41,7 +45,8 @@ class Output:
     """Ausgangsleistung eines Geräts mit Schreibzeitpunkt und Stillstandszählern.
 
     `write` schreibt den Sollwert (Guard beim Aufrufer), `read_actual` liefert einen
-    frischen `Actual`, `warn(key, params)` meldet eine Schreibwarnung in die Fehlerkette.
+    frischen `Actual`, `read_setpoint` den gesetzten Sollwert, `warn(key, params)` meldet
+    eine Schreibwarnung in die Fehlerkette.
     Wartezeit, Selbstanpassung und ihre Toleranz setzt `begin_cycle` je Regelzyklus.
     """
 
@@ -49,12 +54,16 @@ class Output:
         self,
         write: Callable[[float], Awaitable[Any]],
         read_actual: Callable[[], Actual],
+        read_setpoint: Callable[[], float],
         warn: Callable[[str, dict], None],
     ) -> None:
         self._write = write
         self._read = read_actual
+        self._read_setpoint = read_setpoint
         self._warn = warn
         self.last_ts: float = time.time()
+        # Je Schreibbefehl (Zeitpunkt, gesetzter Sollwert unmittelbar davor), die jüngsten zuletzt.
+        self._history: deque[tuple[float, float]] = deque(maxlen=HISTORY_LEN)
         self.stall_actions: int = 0
         self.stall_last_ts: float = 0.0
         self._wait_time = float(SETTINGS_DEFAULTS[S_WAIT_TIME])
@@ -89,8 +98,17 @@ class Output:
 
         `last_ts` wird auch gesetzt, wenn der Guard den Schreibbefehl unterdrückt.
         """
+        before = self._read_setpoint()
         await self._write(_clamp(round(value), 0, DEVICE_MAX_POWER))
         self.last_ts = time.time()
+        self._history.append((self.last_ts, before))
+
+    def setpoint_at(self, ts: float) -> float:
+        """Sollwert zum Zeitpunkt `ts`: der vor dem ersten Schreibbefehl nach `ts`, sonst der gesetzte."""
+        for written, before in self._history:
+            if written > ts:
+                return before
+        return self._read_setpoint()
 
     async def set_and_wait(self, value: float, ac_charge_mode: bool = False) -> None:
         """Ausgangsleistung setzen und auf reale Konvergenz warten (_wait_for_target).

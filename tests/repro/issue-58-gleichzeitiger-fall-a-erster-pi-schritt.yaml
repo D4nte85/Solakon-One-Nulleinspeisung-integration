@@ -1,0 +1,39 @@
+titel: Gleichzeitiger Fall A — erster PI-Schritt erst mit frischer Netzmeldung und vollem Entlade-Pool
+bezug: issue-58-gleichzeitiger-fall-a-erster-pi-schritt
+# Drei gleich volle Instanzen wechseln im selben Moment per Fall A in Modus 1. Netz +566 W,
+# Ziel −50 W, Fehler 616 W, P + I = 0,93: der Gruppenschritt ist 573 W, je Instanz 191 W.
+# Schritt 1 ist der Regelzyklus von Fall A, Schritt 2 die nächste Netzmeldung.
+netz: 566
+verteilung: {global_max_power: 2400}
+instanzen:
+  - prefix: a
+    settings: {regulation_enabled: true, p_factor: 0.9, i_factor: 0.03, offset_1: -50}
+    flags: {cycle_active: false}
+    sensoren: {soc: 60, modus: "0", ist: 0, leistung: 0}
+  - prefix: b
+    settings: {regulation_enabled: true, p_factor: 0.9, i_factor: 0.03, offset_1: -50}
+    flags: {cycle_active: false}
+    sensoren: {soc: 60, modus: "0", ist: 0, leistung: 0}
+  - prefix: c
+    settings: {regulation_enabled: true, p_factor: 0.9, i_factor: 0.03, offset_1: -50}
+    flags: {cycle_active: false}
+    sensoren: {soc: 60, modus: "0", ist: 0, leistung: 0}
+schritte:
+  - nach: 0
+    wer: all
+  - nach: 5
+    setzen: {netz: 566}
+    wer: all
+erwartet:
+  - schritt: 1
+    kein_aufruf: {entity: a.leistung, wert_min: 1}
+  - schritt: 1
+    kein_aufruf: {entity: b.leistung, wert_min: 1}
+  - schritt: 1
+    kein_aufruf: {entity: c.leistung, wert_min: 1}
+  - schritt: 2
+    aufruf: {entity: a.leistung, wert_min: 186, wert_max: 196}
+  - schritt: 2
+    aufruf: {entity: b.leistung, wert_min: 186, wert_max: 196}
+  - schritt: 2
+    aufruf: {entity: c.leistung, wert_min: 186, wert_max: 196}

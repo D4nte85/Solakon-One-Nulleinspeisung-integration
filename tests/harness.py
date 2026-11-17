@@ -600,6 +600,9 @@ class FakeMember:
     def output_setpoint(self):
         return self.setpoint
 
+    def setpoint_at(self, ts):
+        return self.setpoint
+
 
 def hass_with_members(*members) -> FakeHass:
     """FakeHass, dessen `hass.data[DOMAIN]` die Mitglieder nach `member_id` hält."""

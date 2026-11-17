@@ -16,7 +16,7 @@ def _output(written: list[float]):
         written.append(value)
 
     actual = output_mod.Actual(power=500.0, ok=True, updated=h.CLOCK.now, reported=h.CLOCK.now)
-    return output_mod.Output(write, lambda: actual, lambda key, params: None)
+    return output_mod.Output(write, lambda: actual, lambda: 0.0, lambda key, params: None)
 
 
 @pytest.mark.parametrize("self_adjust", [True, False])
@@ -56,7 +56,7 @@ def _output_mit(ist: Ist, written: list[float], warnings: list | None = None):
     async def write(value):
         written.append(value)
 
-    return output_mod.Output(write, ist, lambda key, params: (warnings if warnings is not None else []).append(key))
+    return output_mod.Output(write, ist, lambda: 0.0, lambda key, params: (warnings if warnings is not None else []).append(key))
 
 
 STALL_S = h.const.OUTPUT_STALL_SECONDS
@@ -132,3 +132,21 @@ def test_nullung_nicht_bestaetigt_schreibt_zweimal_neu(frisch, warnung):
     asyncio.run(out.set_and_wait(0))
     assert written == [0, 0, 0]
     assert warnings == warnung
+
+
+def test_sollwert_zum_zeitpunkt_vor_spaeterem_schreibbefehl():
+    """Gilt der Sollwert vor dem ersten Schreibbefehl nach `ts`, ohne späteren Schreibbefehl der gesetzte."""
+    gesetzt = {"wert": 100.0}
+
+    async def write(value):
+        gesetzt["wert"] = value
+
+    out = output_mod.Output(write, lambda: output_mod.Actual(0.0, True, None, None), lambda: gesetzt["wert"],
+                            lambda key, params: None)
+    vorher = h.CLOCK.now
+    asyncio.run(out.set(300))
+    zwischen = h.CLOCK.now
+    asyncio.run(out.set(500))
+    assert out.setpoint_at(vorher) == 100.0
+    assert out.setpoint_at(zwischen) == 300.0
+    assert out.setpoint_at(out.last_ts) == 500.0
