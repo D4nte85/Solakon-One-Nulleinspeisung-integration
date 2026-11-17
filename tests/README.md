@@ -15,6 +15,9 @@ Zustände folgen Home Assistant: Setzen mit gleichem Zustand und gleichen Attrib
 `last_reported` vor, `last_updated` bleibt stehen. Ein Ist-Sensor mit `folgt_ist: 0` meldet also
 neu, gilt für die Stillstandserkennung aber als unverändert.
 
+Entitäten folgen Home Assistant im Lebenszyklus (`test_lebenszyklus.py`): Die Hinzufüge-Funktion
+führt `async_added_to_hass` aus, `Entity.async_remove` und das Entladen `async_will_remove_from_hass`.
+
 `Store` und Tasks folgen Home Assistant (`helpers/storage.py`). `hass.storage[key]` hält den
 Umschlag wie die Datei in `.storage` (`version`, `minor_version`, `data`): Tests legen Stände
 über `h.put_store` ab und lesen sie über `h.stored`. Laden migriert ältere Versionen über

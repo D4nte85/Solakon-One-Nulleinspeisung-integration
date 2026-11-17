@@ -2,7 +2,8 @@
 
 Setup, Entladen, Löschen, Deaktivieren (entladen, aber eingerichtet) und Neu laden mit den
 Store- und Task-Attrappen aus `ha_stubs.py`. Die number-Plattform wird wie in HA nach dem
-Setup des Eintrags geladen, weil sie den Träger des Gesamtlimits verwaltet.
+Setup des Eintrags geladen, weil sie den Träger des Gesamtlimits verwaltet. Wie in HA laufen
+`async_added_to_hass` beim Hinzufügen und `async_will_remove_from_hass` beim Entfernen.
 """
 from __future__ import annotations
 
@@ -16,6 +17,15 @@ DOMAIN = C.DOMAIN
 DIST_KEY = f"{DOMAIN}_distribution"
 SWITCH_KEY = f"{DOMAIN}_soc_switch_state"
 NUMBERS_KEY = f"{DOMAIN}_group_numbers"
+
+
+def _sofort(coro) -> None:
+    """Hook ohne Wartepunkt im Aufrufer zu Ende führen; die Hinzufüge-Funktion von HA ist synchron."""
+    try:
+        coro.send(None)
+    except StopIteration:
+        return
+    raise AssertionError("Hook mit Wartepunkt")
 
 
 def _key(entry) -> str:
@@ -43,7 +53,16 @@ class Umgebung:
         for p in prefixes:
             entry = self.entries[p]
             await h.integration.async_setup_entry(self.hass, entry)
-            await h.number_mod.async_setup_entry(self.hass, entry, self.added.setdefault(entry.entry_id, []).extend)
+            for platform in (h.sensor_mod, h.binary_mod, h.switch_mod, h.number_mod):
+                await platform.async_setup_entry(self.hass, entry, self._adder(entry.entry_id))
+
+    def _adder(self, entry_id):
+        """Hinzufüge-Funktion wie in HA: Entitäten eintragen und `async_added_to_hass` ausführen."""
+        def add(entities):
+            for entity in entities:
+                self.added.setdefault(entry_id, []).append(entity)
+                _sofort(entity.async_added_to_hass())
+        return add
 
     async def unload(self, *prefixes):
         """Entladen wie in HA: mit der Plattform verschwinden auch die Entitäten des Eintrags."""
@@ -51,7 +70,8 @@ class Umgebung:
             entry = self.entries[p]
             assert await h.integration.async_unload_entry(self.hass, entry)
             for entity in self.added.get(entry.entry_id, []):
-                entity.__dict__["removed"] = True
+                if not entity.__dict__.get("removed"):
+                    await entity.async_remove()
 
     async def remove(self, *prefixes):
         """Löschen wie in HA: entladen, aus der Registrierung austragen, dann `async_remove_entry`."""
@@ -156,6 +176,41 @@ def test_entladen_meldet_alle_trigger_ab():
     _run(u.unload("a"))
     assert {e[1] for e in u.hass.events if e[0] == "untrack"} >= angemeldet
 
+
+
+def test_entitaeten_melden_sich_beim_coordinator_an_und_beim_entladen_ab():
+    u = Umgebung("a")
+    _run(u.setup("a"))
+    coord = u.coord("a")
+    assert len(coord._listeners) == sum(isinstance(e, h.entity_base_mod.SolakonEntity) for e in u.added["entry_a"])
+    assert coord._listeners
+    _run(u.unload("a"))
+    assert coord._listeners == []
+
+
+def test_gesamtlimit_meldet_sich_bei_der_verteilung_an_und_beim_traegerwechsel_ab():
+    u = Umgebung("ab")
+    _run(u.setup("a", "b"))
+    store = h.group_store_mod.require_store(u.hass)
+
+    def angemeldet():
+        return [getattr(cb, "__self__", None).carrier for cb in store._dist_listeners["sensor.grid"]
+                if isinstance(getattr(cb, "__self__", None), h.number_mod.GroupLimitNumber)]
+    assert angemeldet() == ["entry_a"]
+    _run(u.unload("a"))
+    assert _gesamtlimits(u) == {"sensor.grid": ["entry_b"]}
+    assert angemeldet() == ["entry_b"]
+
+
+def test_schalter_setzen_ihr_setting():
+    u = Umgebung("a")
+    _run(u.setup("a"))
+    schalter = next(e for e in u.added["entry_a"]
+                    if isinstance(e, h.switch_mod.SettingSwitch) and e._key == C.S_TARIFF_ENABLED)
+    _run(schalter.async_turn_on())
+    assert u.coord("a").settings[C.S_TARIFF_ENABLED] is True and schalter.is_on
+    _run(schalter.async_turn_off())
+    assert u.coord("a").settings[C.S_TARIFF_ENABLED] is False and not schalter.is_on
 
 def test_entladen_der_letzten_instanz_raeumt_panel_und_hass_data_ab():
     u = Umgebung("ab")

@@ -176,6 +176,10 @@ class Entity:
         pass
 
     async def async_remove(self):
+        """Wie HA: Hook `async_will_remove_from_hass`, dann entfernt."""
+        hook = getattr(type(self), "async_will_remove_from_hass", None)
+        if hook is not None:
+            await hook(self)
         self.__dict__["removed"] = True
 
 
