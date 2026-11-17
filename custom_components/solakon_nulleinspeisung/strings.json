@@ -63,6 +63,7 @@
       },
       "entities": {
         "title": "Solakon ONE — Update Entities",
+        "description": "Adjust the assignment of your Solakon ONE entities.\n\nAll further parameters (PI, zones, AC charging, tariff, surplus …) are configured in the **sidebar panel**.\n\n[Documentation]({hint})",
         "data": {
           "instance_name": "📛 Instance name",
           "grid_power_sensor": "🔌 Grid power sensor",

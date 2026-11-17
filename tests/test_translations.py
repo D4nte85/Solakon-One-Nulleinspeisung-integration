@@ -56,3 +56,11 @@ def test_enum_optionen_uebersetzt(sensor, optionen):
     zustaende = zustaende["entity"]["sensor"][sensor]["state"]
     assert set(getattr(h.const, optionen)) == set(zustaende)
 
+
+
+@pytest.mark.parametrize("datei", ["strings.json", "translations/de.json", "translations/en.json"])
+@pytest.mark.parametrize("flow", ["config", "options"])
+def test_entitaeten_schritt_mit_doku_link(datei, flow):
+    """Beide Flows zeigen den Schritt `entities` mit `hint` aus `description_placeholders`."""
+    schritt = json.loads((KOMPONENTE / datei).read_text(encoding="utf-8"))[flow]["step"]["entities"]
+    assert "{hint}" in schritt.get("description", "")

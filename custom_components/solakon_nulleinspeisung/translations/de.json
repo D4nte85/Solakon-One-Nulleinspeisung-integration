@@ -63,6 +63,7 @@
       },
       "entities": {
         "title": "Solakon ONE — Entitäten anpassen",
+        "description": "Passe die Zuordnung der Solakon ONE Entitäten an.\n\nAlle weiteren Parameter (PI, Zonen, AC Laden, Tarif, Überschuss …) werden **im Sidebar-Panel** konfiguriert.\n\n[Dokumentation]({hint})",
         "data": {
           "instance_name": "📛 Instanzname",
           "grid_power_sensor": "🔌 Netz-Leistungssensor",
