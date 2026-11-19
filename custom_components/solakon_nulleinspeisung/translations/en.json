@@ -31,7 +31,7 @@
         },
         "data_description": {
           "grid_power_sensor": "Sensor measuring current grid power. Positive = consumption, negative = feed-in.",
-          "actual_power_sensor": "Actual inverter power (positive when delivering, negative when charging) — core sensor for setpoint calculation, surplus, AC charging, self-adjusting wait and stall detection.",
+          "actual_power_sensor": "Actual inverter power (positive when delivering, negative when charging) — core sensor for setpoint calculation, surplus, AC charging, self-adjusting wait, zero confirmation and stall detection.",
           "solar_power_sensor": "PV generation power — used for surplus, night, PV cap, Zone 2 output limit and surplus power.",
           "soc_sensor": "Battery state of charge in percent — controls zone transitions.",
           "remote_timeout_countdown_sensor": "Remaining time until the remote control mode resets automatically.",
@@ -80,7 +80,7 @@
         },
         "data_description": {
           "grid_power_sensor": "Sensor measuring current grid power. Positive = consumption, negative = feed-in.",
-          "actual_power_sensor": "Actual inverter power (positive when delivering, negative when charging) — core sensor for setpoint calculation, surplus, AC charging, self-adjusting wait and stall detection.",
+          "actual_power_sensor": "Actual inverter power (positive when delivering, negative when charging) — core sensor for setpoint calculation, surplus, AC charging, self-adjusting wait, zero confirmation and stall detection.",
           "solar_power_sensor": "PV generation power — used for surplus, night, PV cap, Zone 2 output limit and surplus power.",
           "soc_sensor": "Battery state of charge in percent — controls zone transitions.",
           "remote_timeout_countdown_sensor": "Remaining time until the remote control mode resets automatically.",

@@ -60,6 +60,13 @@ OUTPUT_STALL_SECONDS = 300
 OUTPUT_STALL_DEVIATION = 0.05
 OUTPUT_STALL_MIN_LIMIT = 15
 
+# -- Nullbestätigung ----------------------------------------------------------
+# Eine Meldung des Ist-Sensors belegt die Nullung erst ab OUTPUT_ZERO_REACTION Sekunden nach
+# dem Schreibbefehl (Reaktionszeit des Geräts). Gewartet wird höchstens bis dahin plus das
+# gemessene Meldeintervall des Ist-Sensors, gedeckelt auf OUTPUT_REPORT_INTERVAL_MAX.
+OUTPUT_ZERO_REACTION = 5.0
+OUTPUT_REPORT_INTERVAL_MAX = 30.0
+
 # -- Tarif-Einheitenplausibilität ---------------------------------------------
 # Die Preisschwellen sind ct/kWh. Liegt der Preis im Fenster
 # [0, TARIFF_UNIT_SUSPECT_PRICE) bei einer Günstig-Schwelle ab

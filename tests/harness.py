@@ -128,6 +128,7 @@ class FakeStates:
         self._states: dict[str, FakeState] = {}
         self.defaults: dict[str, dict] = {}   # Standardattribute je Entity, s. tests/geraet.py
         self._reports: list[tuple] = []        # Meldungen nach einem Schreibbefehl, eingetroffen bei der nächsten Lesung
+        self._due: list[tuple] = []            # Meldungen, fällig ab einem Zeitpunkt der virtuellen Uhr
 
     def get(self, entity_id):
         self.deliver()
@@ -137,8 +138,14 @@ class FakeStates:
         """Meldung, die wie ein Poll nach dem Service-Call eintrifft: bei der nächsten Lesung, dem nächsten Setzen oder zu Beginn des nächsten Wartens."""
         self._reports.append((entity_id, state, attributes))
 
+    def report_at(self, ts, entity_id, state, attributes=None):
+        """Meldung, die wie ein späterer Poll ab `ts` eintrifft: bei der ersten Lesung, dem ersten Setzen oder Warten danach."""
+        self._due.append((ts, entity_id, state, attributes))
+
     def deliver(self):
         reports, self._reports = self._reports, []
+        reports += [r[1:] for r in self._due if r[0] <= CLOCK.now]
+        self._due = [r for r in self._due if r[0] > CLOCK.now]
         for entity_id, state, attributes in reports:
             self._set(entity_id, state, attributes)
 
@@ -175,11 +182,17 @@ class FakeServices:
             if not geraet or geraet.min <= float(value) <= geraet.max:
                 # Geräte-Integration schreibt int(value) ins Register, Rückmeldung per Poll
                 self.hass.states.set(eid, _num(int(float(value)) if geraet else value), attrs)
-                for follower, sign in self.hass.followers.get(eid, ()):
+                for follower, sign, delay in self.hass.followers.get(eid, ()):
                     # sign 0: Sensor meldet neu (last_reported), bleibt aber auf seinem Wert stehen
                     prev = self.hass.states.get(follower)
+                    attrs_f = prev.attributes if prev else {}
                     new = prev.state if sign == 0 and prev else _num(sign * float(value))
-                    self.hass.states.report_later(follower, new, prev.attributes if prev else {})
+                    if delay and prev:
+                        # Refresh direkt nach dem Schreiben meldet den alten Wert, der neue kommt mit dem Poll nach `delay` s
+                        self.hass.states.report_later(follower, prev.state, attrs_f)
+                        self.hass.states.report_at(CLOCK.now + delay, follower, new, attrs_f)
+                    else:
+                        self.hass.states.report_later(follower, new, attrs_f)
         elif domain == "select" and service == "select_option":
             if not geraet or value in geraet.optionen:
                 self.hass.states.set(eid, value, attrs)
@@ -287,7 +300,7 @@ class FakeHass:
         self.config_entries = FakeConfigEntries(self)
         self.http = FakeHttp(self)
         self.events: list = []
-        self.followers: dict[str, list[tuple[str, float]]] = {}
+        self.followers: dict[str, list[tuple[str, float, float]]] = {}
         self.on_call: dict[str, dict] = {}   # entity_id -> Zustände, gesetzt nach dem ersten Schreibbefehl darauf
         self.geraet: dict = {}   # entity_id -> tests.geraet.Entity
         self._tracker_seq = 0

@@ -74,8 +74,8 @@ def entity_id(schluessel: str, prefixe: list[str]) -> tuple[str, str | None]:
 SZENARIO_FELDER = {"titel", "bezug", "offen", "sprache", "stunde", "netz", "sensoren", "verteilung",
                    "verteilung_netz", "instanzen", "schritte", "erwartet"}
 INSTANZ_FELDER = {"prefix", "netzsensor", "settings", "flags", "gespeichert", "sensoren", "integral",
-                  "folgt_ist", "export_limit", "vorheriger_ist"}
-ERWARTUNG_FELDER = {"schritt", "instanz", "zustand", "zustand_nicht", "aufruf", "kein_aufruf", "log"}
+                  "folgt_ist", "folgt_ist_nach", "export_limit", "vorheriger_ist"}
+ERWARTUNG_FELDER = {"schritt", "instanz", "zustand", "zustand_nicht", "aufruf", "kein_aufruf", "log", "kein_log"}
 BEDINGUNG_FELDER = {"entity", "wert", "wert_min", "wert_max"}
 
 
@@ -151,6 +151,7 @@ def spec_aus(szenario: dict) -> dict:
             "integral": float(inst.get("integral", 0.0)),
             "prev_actual": float(inst.get("vorheriger_ist", 0.0)),
             "follow_actual": inst.get("folgt_ist", 1),
+            "follow_delay": float(inst.get("folgt_ist_nach", 0)),
             "states": states,
         })
     for nr, schritt in enumerate(szenario.get("schritte") or [{}], 1):
@@ -246,9 +247,12 @@ def pruefe(erwartung: dict, rec: dict) -> tuple[bool, str]:
     if "log" in erwartung:
         treffer = [r for r in rec["logs"] if erwartung["log"] in r[1]]
         ergebnisse.append((bool(treffer), f"Log enthält {erwartung['log']!r}" + ("" if treffer else " — nicht gefunden")))
+    if "kein_log" in erwartung:
+        treffer = [r for r in rec["logs"] if erwartung["kein_log"] in r[1]]
+        ergebnisse.append((not treffer, f"Log ohne {erwartung['kein_log']!r}" + ("" if not treffer else " — gefunden")))
     if ergebnisse:
         return all(ok for ok, _ in ergebnisse), "; ".join(text for _, text in ergebnisse)
-    raise SzenarioFehler(f"Erwartung ohne zustand/zustand_nicht/aufruf/kein_aufruf/log: {erwartung}")
+    raise SzenarioFehler(f"Erwartung ohne zustand/zustand_nicht/aufruf/kein_aufruf/log/kein_log: {erwartung}")
 
 
 def lade(pfad: Path) -> dict:

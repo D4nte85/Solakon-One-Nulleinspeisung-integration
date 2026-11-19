@@ -1,0 +1,26 @@
+titel: Nullbestätigung wartet bei langsamer Meldung auf den Beleg, statt ohne Warnung zu enden
+bezug: issue-60-nullbestaetigung-refresh-meldung
+# Einzelbetrieb, Zyklus in Zone 1 mit 300 W. SOC fällt unter die Zone-3-Schwelle → Fall B schreibt 0 W.
+# Das Gerät folgt nicht. Der Refresh direkt nach dem Schreiben meldet 300 W, der nächste Poll erst
+# 25 s später, wieder mit 300 W (Wartezeit 4 s).
+# Erwartet: zwei Nachschreibversuche mit Warnung, danach warn_output_zero_unconfirmed.
+stunde: 12
+netz: 0
+instanzen:
+  - prefix: a
+    settings:
+      regulation_enabled: true
+      zone3_limit: 20
+      wait_time: 4
+    flags: {cycle_active: true}
+    sensoren: {soc: 15, solar: 0, ist: 300, modus: "1", leistung: 300}
+    folgt_ist: 0
+    folgt_ist_nach: 25
+schritte:
+  - nach: 0
+erwartet:
+  - schritt: 1
+    log: erneuter Schreibversuch 2/2
+  - schritt: 1
+    instanz: a
+    zustand_nicht: {last_error: ""}

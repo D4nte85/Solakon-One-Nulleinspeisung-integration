@@ -10,6 +10,7 @@ from typing import Any, Awaitable, Callable, NamedTuple
 
 from .const import (
     DEVICE_MAX_POWER, OUTPUT_STALL_SECONDS, OUTPUT_STALL_DEVIATION, OUTPUT_STALL_MIN_LIMIT,
+    OUTPUT_ZERO_REACTION, OUTPUT_REPORT_INTERVAL_MAX,
     S_WAIT_TIME, S_SELF_ADJUST, S_SELF_ADJUST_TOL, SETTINGS_DEFAULTS,
 )
 from .pi import clamp as _clamp
@@ -18,6 +19,8 @@ _LOGGER = logging.getLogger(__name__)
 
 # Gemerkte Schreibbefehle für `Output.setpoint_at`.
 HISTORY_LEN = 8
+# Gemerkte Meldezeitpunkte des Ist-Sensors für `Output.report_interval`.
+REPORTS_LEN = 8
 
 
 class Actual(NamedTuple):
@@ -44,7 +47,7 @@ class Stall(enum.Enum):
 class Output:
     """Ausgangsleistung eines Geräts mit Schreibzeitpunkt und Stillstandszählern.
 
-    `write` schreibt den Sollwert (Guard beim Aufrufer), `read_actual` liefert einen
+    `write` schreibt den Sollwert (Guard beim Aufrufer, `False` = unterdrückt), `read_actual` liefert einen
     frischen `Actual`, `read_setpoint` den gesetzten Sollwert, `warn(key, params)` meldet
     eine Schreibwarnung in die Fehlerkette.
     Wartezeit, Selbstanpassung und ihre Toleranz setzt `begin_cycle` je Regelzyklus.
@@ -62,6 +65,9 @@ class Output:
         self._read_setpoint = read_setpoint
         self._warn = warn
         self.last_ts: float = time.time()
+        self.last_written: bool = True
+        # Meldezeitpunkte (`last_reported`) des Ist-Sensors, die jüngsten zuletzt.
+        self._reports: deque[float] = deque(maxlen=REPORTS_LEN)
         # Je Schreibbefehl (Zeitpunkt, gesetzter Sollwert unmittelbar davor), die jüngsten zuletzt.
         self._history: deque[tuple[float, float]] = deque(maxlen=HISTORY_LEN)
         self.stall_actions: int = 0
@@ -71,10 +77,11 @@ class Output:
         self._tolerance = float(SETTINGS_DEFAULTS[S_SELF_ADJUST_TOL])
 
     def begin_cycle(self, wait_time: float, self_adjust: bool, tolerance: float) -> None:
-        """Wartezeit, Selbstanpassung und Toleranz aus dem Schnappschuss des Regelzyklus übernehmen."""
+        """Wartezeit, Selbstanpassung und Toleranz aus dem Schnappschuss des Regelzyklus übernehmen und den Ist-Sensor einmal lesen."""
         self._wait_time = float(wait_time)
         self._self_adjust = self_adjust
         self._tolerance = float(tolerance)
+        self._actual()
 
     # ── Lesen: Ist-Leistung ──────────────────────────────────────────────────
 
@@ -83,13 +90,22 @@ class Output:
 
         Im AC-Lademodus meldet der Ist-Sensor negativ; verglichen wird dann gegen `-target`.
         """
-        actual = self._read().power
+        actual = self._actual().power
         return actual, abs(actual - (-target if ac_charge_mode else target))
 
-    def _polled_since_write(self) -> bool:
-        """True, wenn der Ist-Sensor seit dem letzten Schreibbefehl neu gemeldet hat, auch mit gleichem Wert."""
-        reported = self._read().reported
-        return reported is not None and reported >= self.last_ts
+    def _actual(self) -> Actual:
+        """Ist-Sensor lesen und einen neuen Meldezeitpunkt merken."""
+        actual = self._read()
+        if actual.reported is not None and (not self._reports or actual.reported > self._reports[-1]):
+            self._reports.append(actual.reported)
+        return actual
+
+    def report_interval(self) -> float:
+        """Meldeintervall des Ist-Sensors: längster Abstand der `REPORTS_LEN` gemerkten Meldungen, höchstens `OUTPUT_REPORT_INTERVAL_MAX`; mit weniger Meldungen `OUTPUT_REPORT_INTERVAL_MAX`."""
+        if len(self._reports) < REPORTS_LEN:
+            return OUTPUT_REPORT_INTERVAL_MAX
+        ts = list(self._reports)
+        return min(max(b - a for a, b in zip(ts, ts[1:])), OUTPUT_REPORT_INTERVAL_MAX)
 
     # ── Schreiben: Ausgangsleistung ──────────────────────────────────────────
 
@@ -99,7 +115,7 @@ class Output:
         `last_ts` wird auch gesetzt, wenn der Guard den Schreibbefehl unterdrückt.
         """
         before = self._read_setpoint()
-        await self._write(_clamp(round(value), 0, DEVICE_MAX_POWER))
+        self.last_written = await self._write(_clamp(round(value), 0, DEVICE_MAX_POWER)) is not False
         self.last_ts = time.time()
         self._history.append((self.last_ts, before))
 
@@ -119,7 +135,7 @@ class Output:
         ohne diesen Wait noch den alten Wert.
 
         Nullung (`value == 0`) gilt als sicherheitskritisch und wird zusätzlich
-        über `_confirm_zero()` verifiziert und bei Bedarf erneut geschrieben.
+        über `_confirm_zero()` verifiziert und bei Beleg erneut geschrieben.
         """
         value = _clamp(value, 0, DEVICE_MAX_POWER)
         await self.set(value)
@@ -158,38 +174,64 @@ class Output:
 
         _LOGGER.debug(
             "Solakon: Max-Wartezeit (%.0fs), actual=%.0f, target=%.0f",
-            wait_max, self._read().power, compare_target,
+            wait_max, self._actual().power, compare_target,
         )
 
     async def _confirm_zero(self, ac_charge_mode: bool, max_retries: int = 2) -> None:
         """Bestätigt, dass die Ausgangsleistung real auf 0 gefallen ist, auch ohne S_SELF_ADJUST.
 
-        Schreibt bei fehlender Konvergenz bis zu `max_retries`-mal erneut und meldet
-        danach eine Schreibwarnung in der Fehlerkette. CONF_ACTUAL_SENSOR pollt in einem
-        fremden Intervall (1–300 s): ein Wert, der älter ist als der letzte Schreibbefehl,
-        belegt weder Erfolg noch Fehlschlag; dann unterbleibt nur die Warnung, Schreib-
-        und Retry-Verhalten bleibt gleich.
+        Schreibt bei einem Beleg gegen die Nullung (`_zero_evidence`) bis zu `max_retries`-mal
+        erneut und meldet danach eine Schreibwarnung in der Fehlerkette. Ohne Beleg bis zur
+        Frist bleibt es beim geschriebenen Sollwert, ohne Warnung.
         """
-        if not self._read().ok:
+        if not self._actual().ok:
             return  # kein Sensor zur Verifikation verfügbar — nichts zu prüfen
 
-        tolerance = self._tolerance
-
-        for attempt in range(max_retries):
-            actual, deviation = self._vs(0)
-            if deviation <= tolerance:
+        for attempt in range(max_retries + 1):
+            evidence = await self._zero_evidence()
+            if evidence is None:
                 return
-            if self._polled_since_write():
+            kind, value = evidence
+            if attempt == max_retries:
+                self._warn("warn_output_zero_unconfirmed", {"attempts": max_retries, "actual": self._actual().power})
+                return
+            if kind == "setpoint":
+                _LOGGER.warning(
+                    "Solakon: Sollwert 0 W nicht übernommen (Sollwert: %.0f W) — erneuter Schreibversuch %d/%d",
+                    value, attempt + 1, max_retries,
+                )
+            else:
                 _LOGGER.warning(
                     "Solakon: Output-Nullung nicht bestätigt (Ist: %.0f W) — erneuter Schreibversuch %d/%d",
-                    actual, attempt + 1, max_retries,
+                    value, attempt + 1, max_retries,
                 )
             await self.set(0)
             await self._wait_for_target(0, ac_charge_mode=ac_charge_mode)
 
-        actual, deviation = self._vs(0)
-        if deviation > tolerance and self._polled_since_write():
-            self._warn("warn_output_zero_unconfirmed", {"attempts": max_retries, "actual": actual})
+    async def _zero_evidence(self) -> tuple[str, float] | None:
+        """Wartet auf einen Beleg gegen die Nullung seit dem letzten Schreibbefehl.
+
+        Ab `OUTPUT_ZERO_REACTION` nach dem Schreibbefehl: `("setpoint", Sollwert)`, wenn der
+        geschriebene Sollwert nicht 0 zeigt; `("actual", Ist-Leistung)`, wenn eine Meldung aus
+        dieser Zeit außerhalb der Toleranz um 0 liegt. None, sobald die Ist-Leistung in der
+        Toleranz liegt, oder ohne Beleg bis `OUTPUT_ZERO_REACTION` plus `report_interval`.
+        """
+        settled = self.last_ts + OUTPUT_ZERO_REACTION
+        deadline = settled + self.report_interval()
+        while True:
+            actual = self._actual()
+            if abs(actual.power) <= self._tolerance:
+                return None
+            now = time.time()
+            if now >= settled:
+                setpoint = self._read_setpoint()
+                if self.last_written and setpoint != 0:
+                    return "setpoint", setpoint
+                if actual.reported is not None and actual.reported >= settled:
+                    return "actual", actual.power
+            if now >= deadline:
+                return None
+            await asyncio.sleep(min(1.0, deadline - now))
 
     # ── Schreiben: Stillstand ────────────────────────────────────────────────
 
@@ -208,7 +250,7 @@ class Output:
         binnen der Frist vor, ist die Episode beendet; das nächste Einfrieren beginnt wieder
         mit dem Neuschreiben.
         """
-        actual = self._read()
+        actual = self._actual()
         if (limit < OUTPUT_STALL_MIN_LIMIT or not actual.ok or actual.updated is None
                 or abs(actual.power - limit) <= limit * OUTPUT_STALL_DEVIATION):
             self.reset_stall()

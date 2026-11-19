@@ -18,7 +18,10 @@ Repro-`setzen`; nur ein ausdrückliches `age` (`alter`) setzt `last_updated`. Ei
 `last_reported` ist der Zeitpunkt des Setzens. Jede Lesung der Uhr (`time.time()`) rückt sie um
 eine Mikrosekunde vor, so liegt eine Meldung vor einem Schreibbefehl echt davor. Folger-Sensoren
 melden nach dem Service-Call wie ein Poll: bei der nächsten Lesung, dem nächsten Setzen oder zu
-Beginn des nächsten Wartens.
+Beginn des nächsten Wartens. Mit `folgt_ist_nach: <s>` meldet der Folger wie die Geräteintegration
+erst den alten Wert (Refresh direkt nach dem Schreiben) und den neuen mit dem Poll `<s>` Sekunden
+später. In den Zufallsszenarien gilt das mit 6 s für Ist-Sensoren mit `folgt_ist: 0`
+(`scenarios.py::FOLLOW_DELAY`).
 
 Entitäten folgen Home Assistant im Lebenszyklus (`test_lebenszyklus.py`): Die Hinzufüge-Funktion
 `hass.config_entries.adder(entry_id)` führt die Entitäten je Eintrag, weist eine zweite lebende
@@ -114,6 +117,7 @@ instanzen:
     vorheriger_ist: 0.0   # Ist-Leistung des vorigen Regelzyklus (`surplus.prev_actual`)
     export_limit: true    # false: Instanz ohne Export-Limit-Entität
     folgt_ist: 1      # Ist-Sensor folgt dem Sollwert: 1, -1, 0 (meldet, bleibt stehen), null (gar nicht)
+    folgt_ist_nach: 6 # optional: Refresh mit altem Wert, neuer Wert erst nach 6 s
 schritte:             # je Schritt: Uhr vor, Sensoren setzen, regeln
   - nach: 0
   - nach: 5
@@ -129,6 +133,7 @@ erwartet:
     zustand: {charge_session: tariff_charge}
   - aufruf: {entity: select.a_mode, wert: "3"}
   - log: Teiltext einer WARNING
+  - kein_log: Teiltext, der in keiner WARNING vorkommen darf
 ```
 
 `nach_aufruf` setzt Sensoren mitten im Regelzyklus, sobald die Integration zum ersten Mal auf `entity` schreibt, auch wenn HA den Wert abweist. So lässt sich ein Ausfall zwischen zwei Lesungen desselben Regelzyklus nachstellen. Der Eintrag gilt nur für seinen Schritt.

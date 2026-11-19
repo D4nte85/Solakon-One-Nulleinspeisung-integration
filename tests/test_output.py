@@ -120,18 +120,88 @@ def test_nullung_ohne_ist_sensor_wird_nicht_geprueft():
     assert written == [0]
 
 
-@pytest.mark.parametrize("frisch, warnung", [(True, ["warn_output_zero_unconfirmed"]), (False, [])])
-def test_nullung_nicht_bestaetigt_schreibt_zweimal_neu(frisch, warnung):
-    """Frisch ist eine Meldung nach dem Schreibbefehl (`last_reported`), auch wenn der Wert seit langem steht."""
+@pytest.mark.parametrize("beleg, geschrieben, warnung", [
+    (True, [0, 0, 0], ["warn_output_zero_unconfirmed"]),
+    (False, [0], []),
+])
+def test_nullung_nicht_bestaetigt_schreibt_nur_mit_beleg_neu(beleg, geschrieben, warnung):
+    """Beleg ist eine Meldung ab `OUTPUT_ZERO_REACTION` nach dem Schreibbefehl (`last_reported`), auch wenn der Wert seit langem steht."""
     written: list[float] = []
     warnings: list = []
     ist = Ist(300.0, True, h.CLOCK.now - 1000)
     out = _output_mit(ist, written, warnings)
     out.begin_cycle(0, False, 2)
-    ist.reported = h.CLOCK.now + (1 if frisch else -1000)
+    ist.reported = h.CLOCK.now + (1000 if beleg else -1000)
+    asyncio.run(out.set_and_wait(0))
+    assert written == geschrieben
+    assert warnings == warnung
+
+
+def test_nullung_meldung_vor_der_reaktionszeit_ist_kein_beleg():
+    """Die Meldung aus dem Refresh direkt nach dem Schreiben zeigt den alten Wert, der Poll 6 s danach 0 W."""
+    written: list[float] = []
+    warnings: list = []
+    start = h.CLOCK.now
+
+    def ist():
+        if h.CLOCK.now >= start + 6:
+            return output_mod.Actual(0.0, True, start + 6, start + 6)
+        return output_mod.Actual(300.0, True, start - 1000, start + 0.5)
+
+    out = output_mod.Output(lambda v: _schreibe(written, v), ist, lambda: 0.0,
+                            lambda key, params: warnings.append(key))
+    out.begin_cycle(4, True, 2)
+    asyncio.run(out.set_and_wait(0))
+    assert written == [0]
+    assert warnings == []
+    assert h.CLOCK.now - start == pytest.approx(6.0, abs=1.0)
+
+
+async def _schreibe(written: list[float], value: float) -> None:
+    written.append(value)
+
+
+def test_nullung_verlorener_schreibbefehl_wird_nachgeschrieben():
+    """Zeigt der Sollwert nach der Reaktionszeit nicht 0, wird ohne Meldung des Ist-Sensors neu geschrieben."""
+    written: list[float] = []
+    warnings: list = []
+    ist = Ist(300.0, True, h.CLOCK.now - 1000, h.CLOCK.now - 1000)
+
+    async def write(value):
+        written.append(value)
+
+    out = output_mod.Output(write, ist, lambda: 300.0, lambda key, params: warnings.append(key))
+    out.begin_cycle(0, False, 2)
     asyncio.run(out.set_and_wait(0))
     assert written == [0, 0, 0]
-    assert warnings == warnung
+    assert warnings == ["warn_output_zero_unconfirmed"]
+
+
+def test_nullung_unterdrueckter_schreibbefehl_ist_kein_verlust():
+    written: list[float] = []
+    ist = Ist(300.0, True, h.CLOCK.now - 1000, h.CLOCK.now - 1000)
+
+    async def write(value):
+        written.append(value)
+        return False
+
+    out = output_mod.Output(write, ist, lambda: 300.0, lambda key, params: None)
+    out.begin_cycle(0, False, 2)
+    asyncio.run(out.set_and_wait(0))
+    assert written == [0]
+
+
+def test_meldeintervall_erst_mit_voller_reihe_gemessen():
+    ist = Ist(0.0, True, h.CLOCK.now, h.CLOCK.now)
+    out = _output_mit(ist, [])
+    assert out.report_interval() == output_mod.OUTPUT_REPORT_INTERVAL_MAX
+    for abstand in [10.0, 10.0, 0.5, 9.5, 10.0, 10.0, 10.0, 10.0]:
+        ist.reported += abstand
+        out.begin_cycle(0, False, 2)
+    assert out.report_interval() == pytest.approx(10.0)
+    ist.reported += 120.0
+    out.begin_cycle(0, False, 2)
+    assert out.report_interval() == output_mod.OUTPUT_REPORT_INTERVAL_MAX
 
 
 def test_sollwert_zum_zeitpunkt_vor_spaeterem_schreibbefehl():

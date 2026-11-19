@@ -1,0 +1,30 @@
+titel: Nullbestätigung wertet die Meldung aus dem Refresh direkt nach dem Schreiben als Beleg
+bezug: issue-60-nullbestaetigung-refresh-meldung
+# Einzelbetrieb, Zyklus in Zone 1 mit 300 W. SOC fällt unter die Zone-3-Schwelle → Fall B schreibt 0 W.
+# Die Geräteintegration fragt direkt nach dem Schreiben ab und meldet noch 300 W; das Gerät folgt,
+# der nächste reguläre Poll meldet 0 W erst 6 s nach dem Schreiben (Wartezeit 4 s, Selbstanpassung an).
+# Erwartet: keine Warnung, kein zweiter Schreibbefehl.
+stunde: 12
+netz: 0
+instanzen:
+  - prefix: a
+    settings:
+      regulation_enabled: true
+      zone3_limit: 20
+      wait_time: 4
+      self_adjust_enabled: true
+      self_adjust_tolerance: 2
+    flags: {cycle_active: true}
+    sensoren: {soc: 15, solar: 0, ist: 300, modus: "1", leistung: 300}
+    folgt_ist: 1
+    folgt_ist_nach: 6
+schritte:
+  - nach: 0
+erwartet:
+  - schritt: 1
+    aufruf: {entity: a.leistung, wert: 0}
+  - schritt: 1
+    instanz: a
+    zustand: {last_error: ""}
+  - schritt: 1
+    kein_log: Output-Nullung nicht bestätigt

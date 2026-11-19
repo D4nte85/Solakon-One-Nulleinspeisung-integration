@@ -213,9 +213,15 @@ def gen_instance(rng, prefix, grid_sensor="sensor.grid") -> dict:
                       + (["charge_session"] if drop.get(session) else []),
         "integral": _pick(rng, [0.0, 50.0, -30.0, 5.0]),
         "prev_actual": _pick(rng, [0.0, 100.0]),
-        "follow_actual": _pick(rng, [None, 1, -1, 0]),
+        "follow_actual": (follow := _pick(rng, [None, 1, -1, 0])),
+        # Gerät folgt nicht: die Meldung mit Wert kommt wie ein Poll nach dem Refresh
+        "follow_delay": FOLLOW_DELAY if follow == 0 else 0.0,
         "states": states,
     }
+
+
+# Abstand des Polls nach einem Schreibbefehl für Ist-Sensoren, die dem Sollwert nicht folgen.
+FOLLOW_DELAY = 6.0
 
 
 def _perturb(rng, prefix) -> dict:
@@ -503,7 +509,7 @@ def _setup_env(spec, dist_store: bool = False):
         _apply_states(hass, inst["states"])
         if inst["follow_actual"] is not None:
             hass.followers[entry.data[C.CONF_ACTIVE_POWER]] = [
-                (entry.data[C.CONF_ACTUAL_SENSOR], inst["follow_actual"])]
+                (entry.data[C.CONF_ACTUAL_SENSOR], inst["follow_actual"], inst.get("follow_delay", 0))]
         if inst["stored"]:
             flags = {k: v for k, v in inst["flags"].items() if k not in inst.get("drop_flags", ())}
             h.put_store(hass, f"{C.DOMAIN}_{entry.entry_id}", {**inst["settings"], **flags})
