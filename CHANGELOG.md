@@ -5,6 +5,8 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+## [3.9.5] – 2026-11-20
+
 ### Behoben
 
 - **Nullbestätigung warnt mit der Meldung direkt nach dem Schreiben (Issue #60):** Die Geräteintegration fragt das Gerät direkt nach jedem Schreibbefehl ab, bevor der Wechselrichter reagiert hat. Die Nullbestätigung hielt diese Meldung für einen Beleg, warnte „Schreibversuch 1/2“ und schrieb 0 W erneut, obwohl das Gerät folgte. Ohne Beleg schrieb sie blind nach. Jetzt belegt eine Meldung des Ist-Sensors die Nullung erst ab 5 s nach dem Schreibbefehl (Reaktionszeit des Geräts). Gewartet wird auf sie höchstens 5 s plus das gemessene Meldeintervall des Ist-Sensors (bis 30 s). Nachgeschrieben wird nur mit Beleg: eine solche Meldung weicht von 0 ab, oder der Sollwert zeigt nach 5 s nicht 0 (`output.py`, `const.py`).
