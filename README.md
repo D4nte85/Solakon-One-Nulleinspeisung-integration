@@ -15,7 +15,9 @@ Die Integration regelt die Ausgangsleistung des Wechselrichters über einen **PI
 >
 > **Repository:** https://github.com/solakon-de/solakon-one-homeassistant
 >
-> Sie ist **nicht im HACS-Standardstore** enthalten und muss als benutzerdefiniertes Repository hinzugefügt werden: HACS → Integrationen → ⋮ → *Benutzerdefiniertes Repository hinzufügen* → obige URL, Kategorie **Integration**.
+> Sie ist **nicht im Katalog** enthalten und muss über ihren GitHub-Link hinzugefügt werden:
+> - **ab HA 2026.11:** Einstellungen → Marketplace → *Über Link hinzufügen* → obige URL als *GitHub-Link* → *Hinzufügen* (verlangt eine GitHub-Verbindung)
+> - **bis HA 2026.10:** HACS → Integrationen → ⋮ → *Benutzerdefiniertes Repository hinzufügen* → obige URL, Kategorie **Integration**
 >
 > **Max. Entladestrom:** Die Entität `number.solakon_one_maximaler_entladestrom` ist dort **standardmäßig deaktiviert**. Ohne sie kann der Entladestrom nicht gesteuert werden. Das Einrichtungsformular erkennt das und aktiviert sie beim Absenden (Ankreuzfeld *Deaktivierte Entitäten aktivieren*, siehe [Einrichtung](#einrichtung)).
 
@@ -33,7 +35,7 @@ Die Integration regelt die Ausgangsleistung des Wechselrichters über einen **PI
   - [Leistungsverteilung konfigurieren](#leistungsverteilung-konfigurieren)
 - [Voraussetzungen](#voraussetzungen)
 - [Installation](#installation)
-  - [Über HACS (empfohlen)](#über-hacs-empfohlen)
+  - [Über den Marketplace (empfohlen)](#über-den-marketplace-empfohlen)
   - [Manuell](#manuell)
 - [Einrichtung](#einrichtung)
 - [Konfiguration im Sidebar-Panel](#konfiguration-im-sidebar-panel)
@@ -214,7 +216,7 @@ Im Panel wird bei mehreren Instanzen ein zusätzlicher **Verteilungs-Tab** einge
 ## Voraussetzungen
 
 - Home Assistant 2024.12 oder neuer
-- [HACS](https://hacs.xyz) installiert
+- ab HA 2026.11 der eingebaute Marketplace, bis 2026.10 [HACS](https://hacs.xyz)
 - Solakon ONE Wechselrichter mit der offiziellen [Solakon-ONE-Integration](https://github.com/solakon-de/solakon-one-homeassistant) in HA (siehe Hinweis ganz oben)
 - Sensor für die Netzleistung (z. B. Shelly 3EM, Shelly PM) — **positiv = Bezug, negativ = Einspeisung**
 
@@ -247,21 +249,15 @@ Die folgenden Solakon-Entitäten müssen in HA vorhanden sein und werden beim Ei
 
 ## Installation
 
-### Über HACS (empfohlen)
+### Über den Marketplace (empfohlen)
 
-Die Integration steht im HACS-Standardkatalog.
+Die Integration steht im Katalog, den ab HA 2026.11 der eingebaute Marketplace und davor HACS anzeigt.
 
-1. HACS öffnen und nach **Solakon ONE Nulleinspeisung** suchen
-2. Die Integration öffnen → **Herunterladen**
-3. Home Assistant neu starten
+1. **Einstellungen → Marketplace** öffnen und nach **Solakon ONE Nulleinspeisung** suchen
+2. Die Integration öffnen → **Installieren**
+3. Fordert Home Assistant einen Neustart an, neu starten
 
-Erscheint sie in der Suche nicht, etwa bei einer älteren HACS-Version, als benutzerdefiniertes Repository hinzufügen:
-
-1. HACS öffnen → **Integrationen** → drei Punkte oben rechts → **Benutzerdefiniertes Repository hinzufügen**
-2. URL eintragen: `https://github.com/D4nte85/Solakon-One-Nulleinspeisung-integration`
-3. Kategorie: **Integration** → **Hinzufügen**
-4. Die Integration **Solakon ONE Nulleinspeisung** erscheint in der Liste → **Herunterladen**
-5. Home Assistant neu starten
+Bis HA 2026.10: HACS öffnen, nach **Solakon ONE Nulleinspeisung** suchen → **Herunterladen** → Home Assistant neu starten.
 
 ### Manuell
 
@@ -932,7 +928,7 @@ Kühlgeräte oder Pumpen mit wiederkehrendem Anlaufstrom füllen jedes Stabw.-Fe
 Der Modus-Reset-Timer läuft ab bevor der Regler ihn zurücksetzen kann. Solakon-Integration auf Polling-Intervall prüfen.
 
 **Integration taucht nach Installation nicht auf**
-Home Assistant vollständig neu starten (nicht nur neu laden). HACS-Download-Status überprüfen.
+Home Assistant vollständig neu starten (nicht nur neu laden). Installationsstatus im Marketplace (bis 2026.10 in HACS) überprüfen.
 
 **SOC der Instanzen läuft bei mehreren Solakons auseinander**
 Bei unterschiedlich großen Batterien muss der Verteilungs-Modus auf **Kapazitätsgewichtet** stehen — „SOC-gewichtet“ rechnet bewusst ohne Kapazität und lässt ungleiche Batterien auseinanderlaufen. Danach die Kapazitätssensoren prüfen: ein **roter Validierungspunkt** heißt, die Entity existiert nicht (meist ein Tippfehler). Ohne gültige Kapazität bei allen Instanzen degradiert der Modus automatisch, mit Meldung im Status-Feld.
