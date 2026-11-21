@@ -366,6 +366,42 @@ class DeviceRegistry:
         self.hass.log("device_remove", device_id)
         self.devices.pop(device_id, None)
 
+    def async_get(self, device_id):
+        return self.devices.get(device_id)
+
+
+class _DeviceItems(dict):
+    """`DeviceRegistry.devices` ab HA 2026.8: Iterieren liefert die Einträge, Mapping-Lesezugriffe sind veraltet."""
+
+    def __iter__(self):
+        return iter(dict.values(self))
+
+    def _veraltet(self, *args, **kwargs):
+        raise AssertionError("device_registry.devices als Mapping ist ab HA 2026.8 veraltet")
+
+    values = get = __getitem__ = _veraltet
+
+
+class DeviceRegistry2026_8(DeviceRegistry):
+    """Geräteregistrierung ab HA 2026.8: async_get_devices statt des veralteten async_get_device."""
+
+    def __init__(self, hass):
+        super().__init__(hass)
+        self.devices = _DeviceItems()
+
+    def async_get_device(self, identifiers):
+        raise AssertionError("async_get_device ist ab HA 2026.8 veraltet")
+
+    def async_get_devices(self, *, identifiers=None, connections=None, config_entry_id=None):
+        return [d for d in self.devices if d.identifiers & (identifiers or set())]
+
+    def async_get(self, device_id):
+        return dict.get(self.devices, device_id)
+
+    def async_remove_device(self, device_id):
+        self.hass.log("device_remove", device_id)
+        dict.pop(self.devices, device_id, None)
+
 
 def device_registry_get(hass):
     if getattr(hass, "device_registry", None) is None:

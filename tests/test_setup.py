@@ -182,7 +182,7 @@ def test_einzelinstanz_bekommt_kein_gesamtlimit():
     assert "sensor.grid" not in h.stored(hass, f"{DOMAIN}_group_numbers", {})
 
 
-def test_einzelinstanz_raeumt_gesamtlimit_frueherer_laeufe_ab():
+def test_einzelinstanz_raeumt_gesamtlimit_frueherer_laeufe_ab(geraeteregistrierung):
     hass = h.FakeHass("de")
     h.put_store(hass, f"{DOMAIN}_group_numbers", {"sensor.grid": 1, "sensor.grid_other": 2})
     ents, devs = _register_group_limit(hass, 1)
@@ -200,10 +200,10 @@ def test_einzelinstanz_raeumt_gesamtlimit_frueherer_laeufe_ab():
 
     asyncio.run(run())
     assert list(ents.entities) == ["number.netzgruppe_2"]
-    assert list(devs.devices) == ["dev_2"]
+    assert list(dict.keys(devs.devices)) == ["dev_2"]
 
 
-def test_loeschen_der_zweiten_instanz_entfernt_gesamtlimit_und_geraet():
+def test_loeschen_der_zweiten_instanz_entfernt_gesamtlimit_und_geraet(geraeteregistrierung):
     hass, added = _group_setup([h.FakeEntry("entry_a", h.entry_data("a")),
                                 h.FakeEntry("entry_b", h.entry_data("b"))])
     ents, devs = _register_group_limit(hass, 1)
@@ -228,7 +228,7 @@ def test_gesamtlimit_bei_zwei_eintraegen_auch_wenn_nur_einer_geladen():
     assert [e.carrier for e in _group_limits(added)["entry_a"]] == ["entry_a"]
 
 
-def test_loeschen_bei_deaktivierter_schwester_entfernt_gesamtlimit_und_geraet():
+def test_loeschen_bei_deaktivierter_schwester_entfernt_gesamtlimit_und_geraet(geraeteregistrierung):
     """Die gelöschte Instanz war die einzige geladene; die Schwester ist eingerichtet, aber nicht geladen."""
     entries = [h.FakeEntry("entry_a", h.entry_data("a")), h.FakeEntry("entry_b", h.entry_data("b"))]
     hass, added = _group_setup(entries[:1])

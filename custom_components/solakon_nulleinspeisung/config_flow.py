@@ -74,8 +74,10 @@ def _device_entities(hass: HomeAssistant, device_id: str) -> dict:
 
 def _free_devices(hass: HomeAssistant, exclude_entry_id: str | None = None) -> list:
     """Solakon-Geräte, deren Modus-Select keine andere Instanz nutzt."""
-    devices = [d for d in dr.async_get(hass).devices.values()
-               if any(ident[0] == DEVICE_DOMAIN for ident in d.identifiers)]
+    registry = dr.async_get(hass)
+    # Ab HA 2026.8 liefert das Iterieren die Einträge; `.values()` ist dort veraltet (bricht in 2027.9).
+    entries = registry.devices if hasattr(registry, "async_get_devices") else registry.devices.values()
+    devices = [d for d in entries if any(ident[0] == DEVICE_DOMAIN for ident in d.identifiers)]
     return [d for d in devices
             if not _mode_select_taken(hass, _device_entities(hass, d.id).get(CONF_MODE_SELECT, ""), exclude_entry_id)]
 
@@ -153,7 +155,7 @@ class _EntityFlow:
 
     def _apply_device(self, device_id: str) -> None:
         """Vorbelegung aus dem Gerät; fehlt die bisherige Entität eines Felds, ersetzt sie die des Geräts."""
-        device = dr.async_get(self.hass).devices.get(device_id)
+        device = dr.async_get(self.hass).async_get(device_id)
         for key, entity_id in _device_entities(self.hass, device_id).items():
             if not _entity_exists(self.hass, self._values.get(key, "")):
                 self._values[key] = entity_id

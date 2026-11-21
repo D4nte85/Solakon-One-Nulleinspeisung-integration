@@ -1,11 +1,14 @@
 """Config-Flow: Geräteauswahl, Auflösung der Solakon-Entitäten, Aktivieren deaktivierter Zuweisungen."""
 import asyncio
 
+import pytest
+
 from tests import geraet, harness as h
 
 C = h.const
 cf = h.config_flow_mod
 stubs = h.ha_stubs
+pytestmark = pytest.mark.usefixtures("geraeteregistrierung")
 
 KEYS = {field: (e.domain, e.key) for field, e in geraet.ENTITIES.items()}
 

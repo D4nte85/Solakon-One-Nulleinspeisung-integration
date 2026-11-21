@@ -5,6 +5,10 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+### Geändert
+
+- **Geräteregistrierung für HA 2027.8 und 2027.9 vorbereitet:** HA meldete beim Start, dass die Integration `device_registry.async_get_device` aufruft. Der Aufruf ist veraltet und funktioniert ab HA 2027.8 nicht mehr. Zwei weitere Zugriffe nutzten `device_registry.devices` als Mapping, das bricht ab HA 2027.9. Ab HA 2026.8 nutzt die Integration jetzt `async_get_devices` und iteriert die Geräteliste, auf älteren Versionen bleiben die bisherigen Aufrufe. Beim Entfernen der Netzgruppe räumt sie dabei alle Geräte der Netzgruppe ab, nicht nur das erste (`number.py`, `config_flow.py`).
+
 ## [3.9.5] – 2026-11-20
 
 ### Behoben

@@ -104,7 +104,13 @@ def _drop_group_limit(hass: Any, grid_sensor: str) -> None:
     if entity_id := entities.async_get_entity_id("number", DOMAIN, _group_limit_uid(number)):
         entities.async_remove(entity_id)
     devices = dr.async_get(hass)
-    if device := devices.async_get_device(identifiers={(DOMAIN, _group_device(number))}):
+    identifiers = {(DOMAIN, _group_device(number))}
+    # Ab HA 2026.8 async_get_devices; async_get_device ist dort veraltet (bricht in 2027.8).
+    if hasattr(devices, "async_get_devices"):
+        found = devices.async_get_devices(identifiers=identifiers)
+    else:
+        found = [device] if (device := devices.async_get_device(identifiers=identifiers)) else []
+    for device in found:
         devices.async_remove_device(device.id)
 
 
