@@ -5,6 +5,12 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+## [3.9.7] – 2026-11-21
+
+### Geändert
+
+- **Panel-Texte gekürzt:** Die Feldtexte nennen nur noch Wirkung, Standardwert und Grenzen; Fallbedingungen und Formeln stehen in der README. Die Hilfetexte oben in den Tabs Regelung, Überschuss, AC Laden, Zielladen, Dynamischer Offset und Tarif fassen die Aufgabe des Tabs zusammen, statt jedes Feld zu beschreiben. Die README beschreibt Anti-Windup und Integral-Decay jetzt im Abschnitt zur Entladeregelung (`panel.de.json`, `panel.en.json`, `README.md`).
+
 ## [3.9.6] – 2026-11-21
 
 ### Hinzugefügt
