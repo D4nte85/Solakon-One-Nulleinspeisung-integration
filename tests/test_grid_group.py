@@ -1,6 +1,7 @@
 """Netzgruppe ohne Coordinator: Mitglieder, Pools, Anteile je Modus, soc_switch, Zuteilung."""
 from __future__ import annotations
 
+import asyncio
 import importlib
 from pathlib import Path
 
@@ -364,3 +365,27 @@ def test_schwester_laedt_bei_jeder_art_der_lade_session():
         assert g.sister_charging(b) is False
     b.regulating = False
     assert g.sister_charging(a) is False
+
+
+def test_schwester_mit_moduswechsel_nach_der_netzmeldung_zaehlt_null():
+    """`SolakonCoordinator.setpoint_at`: 0 W nur, wenn der letzte Moduswechsel nicht vor der Netzmeldung lag."""
+    hass = h.FakeHass("de")
+    h.install_groups(hass)
+    coord = h.make_coord(hass)
+    coord.settings[h.const.S_REGULATION_ENABLED] = True
+    hass.states.set("number.a_power", "300")
+    hass.states.set("sensor.grid", "100")
+    vor_dem_wechsel = hass.states.get("sensor.grid").last_reported.timestamp()
+    assert coord.setpoint_at(vor_dem_wechsel) == 300.0  # nie gewechselt: zählt mit dem Sollwert
+
+    hass.states.set("select.a_mode", "0")
+    asyncio.run(coord._set_mode(h.const.MODE_DISCHARGE))
+    assert coord.setpoint_at(vor_dem_wechsel) == 0.0  # Meldung lag vor dem Wechsel
+
+    h.CLOCK.now += 1
+    hass.states.set("sensor.grid", "120")
+    assert coord.setpoint_at(hass.states.get("sensor.grid").last_reported.timestamp()) == 300.0
+
+    hass.states.set("select.a_mode", h.const.MODE_DISCHARGE)
+    asyncio.run(coord._set_mode(h.const.MODE_DISCHARGE))  # kein Wechsel: Zeitpunkt bleibt
+    assert coord.setpoint_at(hass.states.get("sensor.grid").last_reported.timestamp()) == 300.0

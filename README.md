@@ -174,7 +174,7 @@ error_share_i     = w_i        → Anteil am Netzfehler im PI-Regler
 power_base_i = (Σ kommandierte Leistung aller Instanzen in Pool 1 zum Zeitpunkt der Netzmeldung) × error_share_i
 neuer_output_i = power_base_i + PI-Korrektur
 ```
-Dadurch gleicht sich die Aufteilung zwischen den Instanzen bei jedem Stelleingriff automatisch wieder an die Gewichtung `w_i` an, statt eine einmal entstandene Schieflage (z. B. durch zeitversetzte Rückkehr aus einem Zonenwechsel) über beliebig viele Zyklen fortzuschreiben. Eine Schwester zählt mit dem Wert, den sie vor der Netzmeldung kommandiert hatte; was sie danach auf dieselbe Meldung hin schreibt, zählt nicht, und ohne Moduswechsel vor der Meldung zählt sie mit 0 W. Im Einzelbetrieb (`error_share = 1,0`, nur eine Instanz im Pool) ist `power_base_i` identisch zum eigenen kommandierten Wert — kein Unterschied zum bisherigen Verhalten.
+Dadurch gleicht sich die Aufteilung zwischen den Instanzen bei jedem Stelleingriff automatisch wieder an die Gewichtung `w_i` an, statt eine einmal entstandene Schieflage (z. B. durch zeitversetzte Rückkehr aus einem Zonenwechsel) über beliebig viele Zyklen fortzuschreiben. Eine Schwester zählt mit dem Wert, den sie vor der Netzmeldung kommandiert hatte; was sie danach auf dieselbe Meldung hin schreibt, zählt nicht, und kam ihr letzter Moduswechsel erst nach der Meldung, zählt sie mit 0 W. Im Einzelbetrieb (`error_share = 1,0`, nur eine Instanz im Pool) ist `power_base_i` identisch zum eigenen kommandierten Wert — kein Unterschied zum bisherigen Verhalten.
 
 ### Eine Energierichtung je Netzgruppe
 
