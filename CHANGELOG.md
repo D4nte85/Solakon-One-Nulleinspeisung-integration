@@ -5,6 +5,8 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+## [3.9.6] – 2026-11-21
+
 ### Hinzugefügt
 
 - **Fernsteuerungs-Timeout einstellbar:** Bisher schrieb der Timer-Toggle fest 3598 ↔ 3599 s. Neues Setting „Fernsteuerungs-Timeout“ (300–3599 s, Standard 3599) im Panel-Tab Regelung, Karte „Fernsteuerung“. Der Timer-Toggle wechselt zwischen T und T − 1, der Timeout-Reset bleibt bei Countdown < 120 s. Steht im Gerät weder T noch T − 1, schreibt der nächste Regelzyklus T, auch ohne Countdown-Zahl (`const.py`, `timeout.py`, `coordinator.py`, Panel).
