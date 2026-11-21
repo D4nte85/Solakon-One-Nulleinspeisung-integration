@@ -174,7 +174,7 @@ error_share_i     = w_i        → Anteil am Netzfehler im PI-Regler
 power_base_i = (Σ kommandierte Leistung aller Instanzen in Pool 1 zum Zeitpunkt der Netzmeldung) × error_share_i
 neuer_output_i = power_base_i + PI-Korrektur
 ```
-Dadurch gleicht sich die Aufteilung zwischen den Instanzen bei jedem Stelleingriff automatisch wieder an die Gewichtung `w_i` an, statt eine einmal entstandene Schieflage (z. B. durch zeitversetzte Rückkehr aus einem Zonenwechsel) über beliebig viele Zyklen fortzuschreiben. Eine Schwester zählt mit dem Wert, den sie vor der Netzmeldung kommandiert hatte; was sie danach auf dieselbe Meldung hin schreibt, zählt nicht, und kam ihr letzter Moduswechsel erst nach der Meldung, zählt sie mit 0 W. Im Einzelbetrieb (`error_share = 1,0`, nur eine Instanz im Pool) ist `power_base_i` identisch zum eigenen kommandierten Wert — kein Unterschied zum bisherigen Verhalten.
+Dadurch gleicht sich die Aufteilung zwischen den Instanzen bei jedem Stelleingriff automatisch wieder an die Gewichtung `w_i` an, statt eine einmal entstandene Schieflage (z. B. durch zeitversetzte Rückkehr aus einem Zonenwechsel) über beliebig viele Zyklen fortzuschreiben. Eine Schwester zählt mit dem Wert, den sie vor der Netzmeldung kommandiert hatte; was sie danach auf dieselbe Meldung hin schreibt, zählt nicht, und kam ihr letzter Moduswechsel erst nach der Meldung, zählt sie mit 0 W. Im Einzelbetrieb (`error_share = 1,0`, nur eine Instanz im Pool) ist `power_base_i` identisch zum eigenen kommandierten Wert.
 
 ### Eine Energierichtung je Netzgruppe
 
@@ -540,7 +540,7 @@ Gilt für alle Zonen gemeinsam (Zeitfenster-Ebene, nicht pro Zone):
 | Stabw.-Fenster (s) | Zeitfenster, über das die Netz-Standardabweichung gebildet wird; jede Meldung des Netzsensors zählt einmal, Regelzyklen ohne neue Meldung nehmen nichts auf | 30–300 |
 | Trim (Anzahl Werte pro Seite) | Schließt die N höchsten UND N niedrigsten Einzelmesswerte im Stabw.-Fenster vor der Berechnung aus — pro Seite, nicht insgesamt (N=5 → 10 Samples ausgeschlossen). Trennt kurze, seltene Lastspitzen (Kompressor-/Pumpen-Anlaufstrom) von echter Dauerunruhe anhand des betroffenen Fensteranteils, nicht der Ereignisdauer. Wert als Anzahl Samples, nicht Prozent, da die Sample-Zahl im Fenster von der Update-Rate des Netzsensors abhängt. Wirkung live vergleichbar über den ungetrimmten Rohwert (`stddev_raw`). | 0 (Standard, kein Trimmen); vorsichtig erhöhen |
 
-**Mehrere Instanzen am selben Netzsensor:** Der StdDev-Ringpuffer gehört der Netzgruppe. Nur der Gruppen-Leader (kleinste entry_id unter den aktiv regelnden Instanzen) fügt Messwerte hinzu, jede Meldung des Netzsensors einmal, alle anderen übernehmen seinen Wert. Wechselt der Leader, läuft der Puffer ohne Neustart weiter. Verhindert, dass mehrere unabhängig berechnete, leicht phasenversetzte StdDev-Historien sich gegenseitig hochschaukeln (siehe Troubleshooting). Bei Einzelbetrieb ist die Instanz immer ihr eigener Leader — kein Unterschied zum bisherigen Verhalten.
+**Mehrere Instanzen am selben Netzsensor:** Der StdDev-Ringpuffer gehört der Netzgruppe. Nur der Gruppen-Leader (kleinste entry_id unter den aktiv regelnden Instanzen) fügt Messwerte hinzu, jede Meldung des Netzsensors einmal, alle anderen übernehmen seinen Wert. Wechselt der Leader, läuft der Puffer ohne Neustart weiter. Verhindert, dass mehrere unabhängig berechnete, leicht phasenversetzte StdDev-Historien sich gegenseitig hochschaukeln (siehe Troubleshooting). Bei Einzelbetrieb ist die Instanz immer ihr eigener Leader.
 
 ---
 
