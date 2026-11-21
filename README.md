@@ -243,7 +243,7 @@ Die folgenden Solakon-Entitäten müssen in HA vorhanden sein und werden beim Ei
 | `select` | Betriebsmodus |
 | `number` *(optional)* | Netz-Ausgangsleistungsgrenze — für Export-Limit-Feature |
 
-> **Hinweis zu Timeout-Countdown & Modus-Reset-Timer:** Die Solakon-Fernsteuerung läuft ab, wenn der Countdown-Sensor abläuft. Die Integration hält sie aktiv, indem sie den Modus-Reset-Timer rechtzeitig togglet (Countdown < 120 s). Derselbe Toggle-Mechanismus erzwingt zusätzlich bei jedem Moduswechsel die sichere Übernahme durch den Solakon (siehe Stichwort „Timer-Toggle" in der Falls-Tabelle weiter unten).
+> **Hinweis zu Timeout-Countdown & Modus-Reset-Timer:** Die Solakon-Fernsteuerung läuft ab, wenn der Countdown-Sensor abläuft. Die Integration hält sie aktiv, indem sie den Modus-Reset-Timer rechtzeitig togglet (Countdown < 120 s), abwechselnd auf den eingestellten Fernsteuerungs-Timeout T und T − 1 (Standard 3599/3598 s, Panel-Tab Regelung, Karte „Fernsteuerung“). Steht im Gerät weder T noch T − 1, etwa nach einer Änderung von T, schreibt der nächste Regelzyklus T. Derselbe Toggle-Mechanismus erzwingt zusätzlich bei jedem Moduswechsel die sichere Übernahme durch den Solakon (siehe Stichwort „Timer-Toggle" in der Falls-Tabelle weiter unten).
 
 ---
 
@@ -313,6 +313,7 @@ Kern des Regelkreises. Oben die für beide Entladeverfahren geltenden Werte (Tot
 | Zielwert-Toleranz (W) | Abweichung, ab der der Zielwert als erreicht gilt (nur bei adaptiver Wartezeit) | 2–5 |
 | Periodischer Trigger | Startet die Regelschleife im konfigurierten Intervall neu — auch ohne Sensor-Änderung. Sinnvoll bei stabilen Haushalten, in denen der Netzbezug selten springt, und in Aufbauten ohne eigene PV am Gerät, in denen der Solar-Sensor als Trigger-Quelle ausfällt. | Aus |
 | Trigger-Intervall (s) | Abstand zwischen zwei periodischen Regelläufen. Bereich: 5–300 s. | 10–60 |
+| Fernsteuerungs-Timeout (s) | Zeit, nach der das Gerät laut Spezifikation ohne neuen Fernsteuerbefehl auf die App-Einstellungen zurückfällt, etwa bei einem Ausfall von Home Assistant. Bereich: 300–3599 s; die Untergrenze lässt nach der Reset-Schwelle von 120 s drei Minuten für Countdown-Poll und Regelzyklus. Eine Änderung greift im nächsten Regelzyklus. | 3599 |
 
 
 **Stellwertrechnung im Entladen (Entlade-PI aus):** Der neue Sollwert entsteht in einem Schritt aus der Ist-Leistung, ohne Integral:
@@ -581,7 +582,7 @@ Ziel-SOC und Ladequellen lassen sich auch bei ausgeschaltetem Zielladen einstell
 | AC Laden als Ladequelle | AC Laden darf während des Aufladens starten | An |
 | Tarif-Laden als Ladequelle | Tarif-Laden darf während des Aufladens starten | An |
 | Netz-Laden | Lädt sofort mit der Netz-Ladeleistung aus dem Netz — auch als Entität `switch.solakon_one_netz_laden`; geht mit dem Ende des Zielladens aus | Aus |
-| Netz-Ladeleistung (W) | Feste Ladeleistung des Netz-Ladens, unabhängig von der Max. Ladeleistung des AC-Ladens. 800 W wie Max. Ladeleistung und Tarif-Ladeleistung, mit Standardwerten lädt das Netz-Laden wie bisher — auch als Entität `number.solakon_one_netz_ladeleistung` | 800 |
+| Netz-Ladeleistung (W) | Feste Ladeleistung des Netz-Ladens, unabhängig von der Max. Ladeleistung des AC-Ladens. 800 W wie Max. Ladeleistung und Tarif-Ladeleistung, mit Standardwerten lädt das Netz-Laden mit derselben Leistung wie AC- und Tarif-Laden — auch als Entität `number.solakon_one_netz_ladeleistung` | 800 |
 
 ---
 

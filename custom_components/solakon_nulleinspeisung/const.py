@@ -211,6 +211,11 @@ S_REST_IN_DISCHARGE = "rest_in_discharge"
 S_PERIODIC_ENABLED  = "periodic_enabled"
 S_PERIODIC_INTERVAL = "periodic_interval"
 
+# Fernsteuerungs-Timeout T in s; der Timer-Toggle wechselt zwischen T und T − 1.
+S_REMOTE_TIMEOUT = "remote_timeout"
+# Timeout-Reset bei einem Countdown unter diesem Wert in s.
+TIMEOUT_RESET_BELOW = 120
+
 # Zielladen: Aufladen bis zum Ziel-SOC, danach Entladepause (Regelung aus).
 S_TARGET_CHARGE_ENABLED   = "target_charge_enabled"
 S_TARGET_SOC              = "target_soc"
@@ -367,6 +372,8 @@ SETTINGS_SCHEMA: dict[str, Field] = {
 
     S_PERIODIC_ENABLED:  _bool(),
     S_PERIODIC_INTERVAL: _int(10, (5, None), 5, 300, 5),
+
+    S_REMOTE_TIMEOUT: _int(3599, (300, 3599), 300, 3599, 1),
 
     S_TARGET_CHARGE_ENABLED:   _bool(),
     S_TARGET_SOC:              _int(70, PERCENT, 10, 100, 1),

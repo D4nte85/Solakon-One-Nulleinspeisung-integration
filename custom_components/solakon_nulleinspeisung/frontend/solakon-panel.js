@@ -122,6 +122,12 @@ const TAB_LAYOUT = {
           { k: "periodic_interval", t: "num" },
         ],
       },
+      {
+        tk: "remote", icon: "📡", color: "#0f766e",
+        fields: [
+          { k: "remote_timeout", t: "num" },
+        ],
+      },
     ],
   },
 

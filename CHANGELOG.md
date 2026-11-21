@@ -5,6 +5,10 @@ Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+### Hinzugefügt
+
+- **Fernsteuerungs-Timeout einstellbar:** Bisher schrieb der Timer-Toggle fest 3598 ↔ 3599 s. Neues Setting „Fernsteuerungs-Timeout“ (300–3599 s, Standard 3599) im Panel-Tab Regelung, Karte „Fernsteuerung“. Der Timer-Toggle wechselt zwischen T und T − 1, der Timeout-Reset bleibt bei Countdown < 120 s. Steht im Gerät weder T noch T − 1, schreibt der nächste Regelzyklus T, auch ohne Countdown-Zahl (`const.py`, `timeout.py`, `coordinator.py`, Panel).
+
 ### Geändert
 
 - **Geräteregistrierung für HA 2027.8 und 2027.9 vorbereitet:** HA meldete beim Start, dass die Integration `device_registry.async_get_device` aufruft. Der Aufruf ist veraltet und funktioniert ab HA 2027.8 nicht mehr. Zwei weitere Zugriffe nutzten `device_registry.devices` als Mapping, das bricht ab HA 2027.9. Ab HA 2026.8 nutzt die Integration jetzt `async_get_devices` und iteriert die Geräteliste, auf älteren Versionen bleiben die bisherigen Aufrufe. Beim Entfernen der Netzgruppe räumt sie dabei alle Geräte der Netzgruppe ab, nicht nur das erste (`number.py`, `config_flow.py`).

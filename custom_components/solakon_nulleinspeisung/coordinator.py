@@ -41,7 +41,7 @@ from .const import (
     CONF_EXPORT_LIMIT, MODE_DISABLED, MODE_DISCHARGE, MODE_AC_CHARGE, S_REGULATION_ENABLED,
     S_ZONE3_LIMIT, DEVICE_MAX_CURRENT, WRITE_DEADBAND,
     S_AC_SOC_TARGET, S_REST_IN_DISCHARGE, S_PI_ENABLED,
-    S_TARGET_CHARGE_ENABLED, CHARGE_SESSION_KEY, CHARGE_SESSIONS, SESSION_AC, SESSION_NONE,
+    S_TARGET_CHARGE_ENABLED, S_REMOTE_TIMEOUT, CHARGE_SESSION_KEY, CHARGE_SESSIONS, SESSION_AC, SESSION_NONE,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -182,8 +182,9 @@ class SolakonCoordinator:
         # Interne Mechanik
         self.timeout = Timeout(
             lambda value: self._set_number(self.entry.data[CONF_TIMEOUT_SET], value),
-            lambda: self._flt(self.entry.data[CONF_TIMEOUT_SET], 3599),
+            lambda: self._flt(self.entry.data[CONF_TIMEOUT_SET], self._setting(S_REMOTE_TIMEOUT, int)),
             lambda: self._entity_ok(self.entry.data[CONF_TIMEOUT_COUNTDOWN]),
+            lambda: self._setting(S_REMOTE_TIMEOUT, int),
         )
         self._lock = asyncio.Lock()
         self._stopped = False   # gesetzt von async_shutdown; danach startet kein Regelzyklus mehr
@@ -906,9 +907,8 @@ class SolakonCoordinator:
         cfg = self.entry.data
 
         # ── 11a. Timeout-Reset ───────────────────────────────────────────────
-        # Entfällt, wenn ein Fall in diesem Zyklus bereits getoggelt hat oder der Countdown keine Zahl liefert
-        if timer_val is not None:
-            await self.timeout.reset_if_due(timer_val)
+        # Entfällt, wenn ein Fall in diesem Regelzyklus bereits getoggelt hat
+        await self.timeout.reset_if_due(timer_val)
 
         if at_rest(mode, cs.rest_in_discharge, self.resting):
             return False

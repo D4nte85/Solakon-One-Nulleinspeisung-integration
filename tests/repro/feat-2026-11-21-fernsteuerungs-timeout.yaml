@@ -1,0 +1,20 @@
+titel: Einstellbarer Fernsteuerungs-Timeout greift im nächsten Regelzyklus, der Timeout-Reset wechselt T und T − 1
+bezug: 2026-11-21-fernsteuerungs-timeout-design
+# a regelt in Zone 1, im Gerät steht noch 3599 aus der Zeit vor der Einstellung 300.
+# Schritt 1 schreibt 300, obwohl der Countdown hoch ist. Schritt 2: Countdown unter 120,
+# der Timeout-Reset wechselt auf 299.
+netz: 50
+instanzen:
+  - prefix: a
+    settings: {regulation_enabled: true, remote_timeout: 300}
+    flags: {cycle_active: true}
+    sensoren: {soc: 80, modus: "1", leistung: 200, ist: 200, solar: 0, countdown: 3000, timeout: 3599}
+schritte:
+  - nach: 0
+  - nach: 30
+    setzen: {a.countdown: 100}
+erwartet:
+  - schritt: 1
+    aufruf: {entity: a.timeout, wert: 300}
+  - schritt: 2
+    aufruf: {entity: a.timeout, wert: 299}
