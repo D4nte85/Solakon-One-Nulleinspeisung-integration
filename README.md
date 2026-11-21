@@ -316,6 +316,8 @@ Kern des Regelkreises. Oben die für beide Entladeverfahren geltenden Werte (Tot
 | Fernsteuerungs-Timeout (s) | Zeit, nach der das Gerät laut Spezifikation ohne neuen Fernsteuerbefehl auf die App-Einstellungen zurückfällt, etwa bei einem Ausfall von Home Assistant. Bereich: 300–3599 s; die Untergrenze lässt nach der Reset-Schwelle von 120 s drei Minuten für Countdown-Poll und Regelzyklus. Eine Änderung greift im nächsten Regelzyklus. | 3599 |
 
 
+**Integral des Entlade-PI:** Anti-Windup per Back-Calculation — nach jedem Stelleingriff wird das Integral auf den Wert korrigiert, der den tatsächlichen, gegebenenfalls geklemmten Ausgang erzeugt. Mit I-Faktor 0 bleibt es 0. Integral-Decay: −5 % je Regelzyklus, wenn die Entladeregelung nicht schreibt (Totband, Sättigung, Untergrenze) und |Integral| > 10. In Zone 0 ist es eingefroren; bei welchen Fällen es auf 0 gesetzt wird, steht in der Falltabelle.
+
 **Stellwertrechnung im Entladen (Entlade-PI aus):** Der neue Sollwert entsteht in einem Schritt aus der Ist-Leistung, ohne Integral:
 ```
 Stellwert_i = Fehler-Anteil_i × (Σ Ist-Entladeleistung des Entlade-Pools + grid − Offset)
