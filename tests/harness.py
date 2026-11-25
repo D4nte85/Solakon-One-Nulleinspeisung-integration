@@ -304,6 +304,7 @@ class FakeHass:
         self.on_call: dict[str, dict] = {}   # entity_id -> Zustände, gesetzt nach dem ersten Schreibbefehl darauf
         self.geraet: dict = {}   # entity_id -> tests.geraet.Entity
         self._tracker_seq = 0
+        self._tracker_actions: dict[int, tuple[str, object, object]] = {}   # Handle -> (Art, Ziel, Callback)
         CLOCK.hass = self
 
     def log(self, *event):
@@ -317,14 +318,25 @@ class FakeHass:
         digest = hashlib.sha1(json.dumps(settings, sort_keys=True).encode()).hexdigest()[:12]
         self.log(kind, key, {"settings_sha": digest, "rest": rest}, *extra)
 
-    def log_tracker(self, kind, target):
+    def log_tracker(self, kind, target, action=None):
         self._tracker_seq += 1
         handle = self._tracker_seq
         self.log("track", kind, target, handle)
+        self._tracker_actions[handle] = (kind, target, action)
 
         def unsub():
             self.log("untrack", handle)
+            self._tracker_actions.pop(handle, None)
         return unsub
+
+    def fire_trackers(self, kind, entity_id=None) -> int:
+        """Callbacks der angemeldeten Trigger einer Art auslösen, bei "state" nur die auf `entity_id`; Zahl der Aufrufe."""
+        fired = 0
+        for k, target, action in list(self._tracker_actions.values()):
+            if k == kind and (entity_id is None or entity_id in target):
+                action(None)
+                fired += 1
+        return fired
 
     def clock_now(self) -> float:
         return CLOCK.now
@@ -365,11 +377,13 @@ class FakeEntry:
         self.title = title
         self.options = {}
         self.unloads = []
+        self.update_listener = None
 
     def async_on_unload(self, func):
         self.unloads.append(func)
 
     def add_update_listener(self, listener):
+        self.update_listener = listener
         return lambda: None
 
 

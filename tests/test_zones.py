@@ -464,6 +464,20 @@ def test_zielladen_sperrt(kw):
     assert _decide(**{**TARGET, **kw}) is None
 
 
+@pytest.mark.parametrize("kw, name", [
+    (dict(ac_enabled=True, grid=-200), "G"),
+    (dict(below_cheap=True, below_exp=True), "GT"),
+])
+def test_zugeschaltete_quelle_startet_beim_aufladen(kw, name):
+    assert _decide(**{**TARGET, "source_ac": True, "source_tariff": True, **kw}).name == name
+
+
+def test_zugeschaltete_tarifquelle_haelt_tarif_laden_beim_aufladen():
+    d = _decide(**TARGET, source_tariff=True, session="tariff_charge", below_cheap=True, below_exp=True,
+                mode="3", at_rest=False)
+    assert d is None
+
+
 def test_ohne_zielladen_keine_sperre():
     assert _decide(surplus_enabled=True, new_surplus=True, source_ac=False,
                    battery_priority=True).name == "0A"

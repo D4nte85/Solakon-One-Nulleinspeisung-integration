@@ -103,6 +103,18 @@ def test_speichern_erreicht_gruppe_und_behaelt_gruppe_ohne_instanz():
     assert store.dist_view("sensor.frei")["distribution_mode"] == "soc"
 
 
+def test_zweites_speichern_behaelt_felder_und_zaehlt_revision():
+    hass = _hass()
+    store = _load(hass)
+    g = gs.require_store(hass).group("sensor.grid")
+    asyncio.run(store.save_dist("sensor.grid", {"distribution_mode": "capacity"}))
+    asyncio.run(store.save_dist("sensor.grid", {"global_max_power": 600}))
+    expected = {"distribution_mode": "capacity", "global_max_power": 600}
+    assert h.stored(hass, DIST_KEY) == {"sensor.grid": expected}
+    assert {k: g.dist_cfg()[k] for k in expected} == expected
+    assert g.dist_rev == 2
+
+
 def test_speichern_mit_befund_aendert_nichts():
     hass = _hass()
     store = _load(hass)

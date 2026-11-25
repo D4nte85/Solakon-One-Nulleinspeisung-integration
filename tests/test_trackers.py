@@ -78,3 +78,16 @@ def test_periodischer_trigger_im_eingestellten_intervall():
     coord.settings[C.S_PERIODIC_INTERVAL] = 60
     coord.trackers.refresh_changed()
     assert _intervals(hass) == [60.0]
+
+
+def test_ausgeloester_trigger_startet_regelzyklus(monkeypatch):
+    """Kern-Trigger, Trigger einer Funktion mit Sensor und periodischer Trigger stoßen je einen Regelzyklus an."""
+    hass, coord = _coord("de")
+    coord.settings.update({C.S_TARIFF_ENABLED: True, C.S_TARIFF_PRICE_SENSOR: "sensor.preis",
+                           C.S_PERIODIC_ENABLED: True, C.S_PERIODIC_INTERVAL: 30})
+    calls = []
+    monkeypatch.setattr(coord, "request_regulation", lambda: calls.append(1))
+    coord.trackers.start()
+    assert hass.fire_trackers("state", coord.entry.data[C.CONF_GRID_SENSOR]) == 1 and len(calls) == 1
+    assert hass.fire_trackers("state", "sensor.preis") == 1 and len(calls) == 2
+    assert hass.fire_trackers("interval") == 1 and len(calls) == 3

@@ -37,11 +37,11 @@ def callback(func):
 # ── helpers.event ────────────────────────────────────────────────────────────
 
 def async_track_state_change_event(hass, entity_ids, action):
-    return hass.log_tracker("state", list(entity_ids))
+    return hass.log_tracker("state", list(entity_ids), action)
 
 
 def async_track_time_interval(hass, action, interval):
-    return hass.log_tracker("interval", interval.total_seconds())
+    return hass.log_tracker("interval", interval.total_seconds(), action)
 
 
 # ── helpers.storage ──────────────────────────────────────────────────────────

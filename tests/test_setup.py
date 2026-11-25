@@ -269,3 +269,15 @@ def test_instanzname_ohne_eintrag_faellt_auf_titel_zurueck():
     assert sensor.device_info["name"] == "Keller"
     sent = asyncio.run(h.ws_call(h.integration._ws_get_all_instances, hass, 1))
     assert h.jsonable(sent)[0][2]["instances"][0]["instance_name"] == "Keller"
+
+
+def test_update_listener_laedt_den_eintrag_neu():
+    hass, entries = _hass("a")
+
+    async def run():
+        await h.integration.async_setup(hass, {})
+        await h.integration.async_setup_entry(hass, entries[0])
+        await entries[0].update_listener(hass, entries[0])
+
+    asyncio.run(run())
+    assert ["reload", "entry_a"] in hass.events

@@ -269,6 +269,8 @@ R, T, N = "regulation_enabled", "target_charge_enabled", "target_grid_charge"
     ({R: True, T: True}, {T: False}, {T: False, R: True, N: False}),
     # Regelung an in der Entladepause → Zielladen aus, Netz-Laden aus
     ({R: False, T: True}, {R: True}, {R: True, T: False, N: False}),
+    # Regelung erneut an während des Aufladens: Zielladen bleibt an
+    ({R: True, T: True}, {R: True}, {R: True}),
     # Regelung aus während des Aufladens: vorgezogene Entladepause, keine Kopplung
     ({R: True, T: True}, {R: False}, {R: False}),
     # Vollständige Settings ohne Wechsel: keine Kopplung
